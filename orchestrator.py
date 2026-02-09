@@ -1,7 +1,8 @@
+import os
 import argparse
 import sys
 import subprocess
-import os
+from tools import logger
 
 def run_command(cmd, cwd=None):
     """Run a subprocess command and exit with its return code."""
@@ -22,12 +23,12 @@ def run_command(cmd, cwd=None):
         if cmd[0] == "python":
             cmd[0] = sys.executable
 
-        print(f"--> Running: {' '.join(cmd)}")
+        logger.info(f"--> Running: {' '.join(cmd)}")
         result = subprocess.run(cmd, cwd=cwd, env=env)
         if result.returncode != 0:
             sys.exit(result.returncode)
     except Exception as e:
-        print(f"Error running command: {e}")
+        logger.error(f"Error running command: {e}")
         sys.exit(1)
 
 def handle_aws(args):
@@ -40,21 +41,28 @@ def handle_aws(args):
     
     if args.command == "doctor":
         script = f"{base_path}/doctor.py"
-        run_command(["python", script] + cmd_args)
+        with logger.Heartbeat("Preflight checks"):
+            run_command(["python", script] + cmd_args)
         
     elif args.command == "deploy":
         if not args.scope:
-            print("Error: --scope required for deploy")
+            logger.error("Error: --scope required for deploy")
             sys.exit(1)
         script = f"{base_path}/deploy.py"
         cmd_args.extend(["--scope", args.scope])
         if args.skip_doctor:
             cmd_args.append("--skip-doctor")
-        run_command(["python", script] + cmd_args)
+        with logger.Heartbeat(f"Deployment scope={args.scope} env={args.env}"):
+            run_command(["python", script] + cmd_args)
+        
+        # Auto-verify after successful deploy
+        logger.step("Initiating automatic plumbing verification...")
+        verify_script = f"{base_path}/verify_plumbing.py"
+        run_command(["python", verify_script] + cmd_args)
         
     elif args.command == "teardown":
         if not args.scope:
-            print("Error: --scope required for teardown")
+            logger.error("Error: --scope required for teardown")
             sys.exit(1)
         script = f"{base_path}/teardown.py"
         cmd_args.extend(["--scope", args.scope])
@@ -63,10 +71,21 @@ def handle_aws(args):
         if args.non_interactive or args.force:
             cmd_args.append("--non-interactive")
             
-        run_command(["python", script] + cmd_args)
+        with logger.Heartbeat(f"Teardown scope={args.scope} env={args.env}"):
+            run_command(["python", script] + cmd_args)
+        
+    elif args.command == "verify":
+        if not args.scope:
+            logger.error("Error: --scope required for verify")
+            sys.exit(1)
+        script = f"{base_path}/verify_plumbing.py"
+        cmd_args.extend(["--scope", args.scope])
+        # verify_plumbing.py itself polls, so we wrap it here for a top-level heartbeat
+        with logger.Heartbeat(f"Plumbing verification scope={args.scope} env={args.env}"):
+            run_command(["python", script] + cmd_args)
         
     else:
-        print(f"Unknown command for AWS: {args.command}")
+        logger.error(f"Unknown command for AWS: {args.command}")
         sys.exit(1)
 
 def handle_gcp(args):
@@ -83,7 +102,7 @@ def main():
     parser = argparse.ArgumentParser(description="Unified Orchestrator for FRU GenAI Analytics")
     
     # Core arguments
-    parser.add_argument("command", choices=["deploy", "teardown", "doctor"], help="Action to perform")
+    parser.add_argument("command", choices=["deploy", "teardown", "doctor", "verify"], help="Action to perform")
     parser.add_argument("--provider", choices=["aws", "gcp", "local"], default="aws", help="Target infrastructure provider")
     
     # Passthrough arguments (common across providers)

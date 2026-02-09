@@ -29,22 +29,23 @@ from tools._env import load_dotenv, require
 from tools.tofu_runner import tofu
 from tools.aws._backend import backend_config
 
+from tools import logger
 from tools.aws._aws_vars import get_base_vars
 
 load_dotenv()
 
 def init_stack(stack_dir: str, env: str):
     cfg = backend_config(stack_dir, env)
-    args = ["init","-upgrade"]
+    args = ["init","-upgrade","-reconfigure"]
     for c in cfg:
         args += ["-backend-config", c]
     tofu(args, cwd=stack_dir, check=True)
 
 def apply_stack(stack_dir: str, env: str, extra_vars: list[str]):
-    init_stack(stack_dir, env)
-    base = get_base_vars(env)
-    # Note: we use check=True for fail-fast
-    tofu(["apply","-auto-approve"] + base + extra_vars, cwd=stack_dir, check=True)
+    with logger.Heartbeat(f"Applying stack: {stack_dir}"):
+        init_stack(stack_dir, env)
+        base = get_base_vars(env)
+        tofu(["apply","-auto-approve"] + base + extra_vars, cwd=stack_dir, check=True)
 
 def tofu_output_json(stack_dir: str, env: str):
     init_stack(stack_dir, env)
@@ -57,49 +58,54 @@ def aws_json(cmd):
 
 def run_ecs_bootstrap(env: str):
     region = require("AWS_REGION")
-    cluster = require("ECS_CLUSTER_NAME")
+    
+    with logger.Heartbeat("Executing ECS analytics bootstrap"):
+        # discover outputs from terraform
+        out = tofu_output_json("deploy-aws/nonkube", env)
+        
+        # Resolve Cluster and Service names
+        cluster = out.get("ecs_cluster_name", {}).get("value")
+        if not cluster:
+             cluster = os.getenv("ECS_CLUSTER_NAME") or f"{require('FRU_PREFIX')}-{env}-ecs"
+             
+        svc = out.get("ecs_service_name", {}).get("value") or f"{require('FRU_PREFIX')}-{env}-api-svc"
 
-    # discover service name from terraform output (preferred)
-    out = tofu_output_json("deploy-aws/nonkube", env)
-    svc = out.get("ecs_service_name", {}).get("value") or f"{require('FRU_PREFIX')}-{env}-api-svc"
+        svc_desc = aws_json(["aws","ecs","describe-services","--cluster",cluster,"--services",svc,"--region",region])
+        service = svc_desc["services"][0]
+        task_def_arn = service["taskDefinition"]
+        net = service.get("networkConfiguration",{}).get("awsvpcConfiguration",{})
+        subnets = net.get("subnets",[])
+        sgs = net.get("securityGroups",[])
 
-    svc_desc = aws_json(["aws","ecs","describe-services","--cluster",cluster,"--services",svc,"--region",region])
-    service = svc_desc["services"][0]
-    task_def_arn = service["taskDefinition"]
-    net = service.get("networkConfiguration",{}).get("awsvpcConfiguration",{})
-    subnets = net.get("subnets",[])
-    sgs = net.get("securityGroups",[])
+        if not subnets:
+            raise SystemExit("Could not determine ECS service subnets for bootstrap.")
 
-    if not subnets:
-        raise SystemExit("Could not determine ECS service subnets for bootstrap.")
+        # Container name: first container in task def (legacy approach)
+        td = aws_json(["aws","ecs","describe-task-definition","--task-definition",task_def_arn,"--region",region])
+        container_name = td["taskDefinition"]["containerDefinitions"][0]["name"]
 
-    # Container name: first container in task def (legacy approach)
-    td = aws_json(["aws","ecs","describe-task-definition","--task-definition",task_def_arn,"--region",region])
-    container_name = td["taskDefinition"]["containerDefinitions"][0]["name"]
+        # Override command to run analytics once (legacy working pattern)
+        overrides = {
+          "containerOverrides": [{
+            "name": container_name,
+            "command": ["python", "/app/spark_jobs/utils/run_analytics_once.py"]
+          }]
+        }
 
-    # Override entrypoint/command to run analytics once (legacy working pattern)
-    overrides = {
-      "containerOverrides": [{
-        "name": container_name,
-        "entryPoint": ["python"],
-        "command": ["/app/spark_jobs/utils/run_analytics_once.py"]
-      }]
-    }
+        net_cfg = {"awsvpcConfiguration": {"subnets": subnets, "assignPublicIp":"DISABLED"}}
+        if sgs:
+            net_cfg["awsvpcConfiguration"]["securityGroups"] = sgs
 
-    net_cfg = {"awsvpcConfiguration": {"subnets": subnets, "assignPublicIp":"DISABLED"}}
-    if sgs:
-        net_cfg["awsvpcConfiguration"]["securityGroups"] = sgs
-
-    print("Running one-off ECS analytics bootstrap task (non-blocking)...")
-    subprocess.run([
-        "aws","ecs","run-task",
-        "--cluster",cluster,
-        "--task-definition",task_def_arn,
-        "--launch-type","FARGATE",
-        "--network-configuration", json.dumps(net_cfg),
-        "--overrides", json.dumps(overrides),
-        "--region", region,
-    ], check=True)
+        logger.info("Running one-off ECS analytics bootstrap task (non-blocking)...")
+        subprocess.run([
+            "aws","ecs","run-task",
+            "--cluster",cluster,
+            "--task-definition",task_def_arn,
+            "--launch-type","FARGATE",
+            "--network-configuration", json.dumps(net_cfg),
+            "--overrides", json.dumps(overrides),
+            "--region", region,
+        ], check=True)
 
 def main():
     ap = argparse.ArgumentParser()
@@ -125,7 +131,9 @@ def main():
     apply_stack("deploy-aws/shared/nondurable", args.env, [])
 
     subprocess.run(["python","tools/aws/ensure_secrets.py","--env",args.env], check=True)
-    subprocess.run(["python","tools/aws/build_and_push_images.py","--env",args.env], check=True)
+    
+    with logger.Heartbeat("Building and pushing images"):
+        subprocess.run(["python","tools/aws/build_and_push_images.py","--env",args.env], check=True)
 
     if args.scope == "kube":
         apply_stack("deploy-aws/kube", args.env, [
@@ -146,7 +154,7 @@ def main():
 
         run_ecs_bootstrap(args.env)
 
-    print("\nDone.")
+    logger.success("Deployment sequence complete.")
 
 if __name__ == "__main__":
     main()
