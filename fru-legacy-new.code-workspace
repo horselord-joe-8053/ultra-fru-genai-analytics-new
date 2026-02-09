@@ -1,0 +1,11 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../fru-genai-analytics-legacy"
+		}
+	],
+	"settings": {}
+}

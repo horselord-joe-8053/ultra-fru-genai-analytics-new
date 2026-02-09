@@ -1,0 +1,89 @@
+
+import os
+from tools._env import require
+
+# Map .env keys to Terraform variable names
+MAP = {
+    "FRU_ENV": "env",
+    "FRU_PREFIX": "prefix",
+    "AWS_REGION": "aws_region",
+    "TF_STATE_BUCKET": "tf_state_bucket",
+    "TF_LOCK_TABLE": "tf_lock_table",
+    "VPC_CIDR": "vpc_cidr",
+    "S3_DELTA_BUCKET": "delta_bucket",
+    "S3_ARTIFACT_BUCKET": "artifacts_bucket",
+    "ECR_REPO_APP": "ecr_repo_app",
+    "ECR_REPO_SPARK": "ecr_repo_spark",
+    "ECS_CLUSTER_NAME": "ecs_cluster_name",
+    "EKS_CLUSTER_NAME": "eks_cluster_name",
+    "ALB_NAME": "alb_name",
+    "APP_IMAGE_TAG": "app_image_tag",
+    "SPARK_IMAGE_TAG": "spark_image_tag",
+    "LOG_LEVEL": "log_level",
+    "ALLOWED_ORIGINS": "allowed_origins",
+    "USE_AGENT_QUERY": "use_agent_query",
+    "OPENAI_EMBED_MODEL": "openai_embed_model",
+    "ENABLE_ANALYTICS_SCHEDULER": "enable_analytics_scheduler",
+    "ANALYTICS_SCHEDULER_INTERVAL_SECONDS": "analytics_scheduler_interval_seconds",
+    "DELTA_TABLE_PATH": "delta_table_path",
+}
+
+def get_base_vars(env: str):
+    """
+    Set TF_VAR_ environment variables for OpenTofu.
+    Returns an empty list to maintain compatibility with existing script signatures.
+    """
+    prefix = os.getenv("FRU_PREFIX", "fru")
+    
+    # helper to set TF_VAR
+    def set_tf(name, val):
+        os.environ[f"TF_VAR_{name}"] = str(val)
+
+    set_tf("env", env)
+    set_tf("prefix", prefix)
+    
+    # TF State Prefix logic
+    tf_state_prefix = os.getenv("TF_STATE_PREFIX") or prefix
+    set_tf("tf_state_prefix", tf_state_prefix)
+
+    # Map everything else from env
+    for env_key, tf_key in MAP.items():
+        val = os.getenv(env_key)
+        if val:
+            set_tf(tf_key, val)
+            
+    # CRITICAL: Ensure aws_region is explicitly set
+    if not os.getenv("TF_VAR_aws_region"):
+        set_tf("aws_region", require('AWS_REGION'))
+
+    # DEFAULTS for names if missing
+    if not os.getenv("TF_VAR_ecs_cluster_name"):
+        set_tf("ecs_cluster_name", f"{prefix}-{env}-ecs")
+    if not os.getenv("TF_VAR_eks_cluster_name"):
+        set_tf("eks_cluster_name", f"{prefix}-{env}-eks")
+    if not os.getenv("TF_VAR_alb_name"):
+        set_tf("alb_name", f"{prefix}-{env}-alb")
+    if not os.getenv("TF_VAR_delta_bucket"):
+        set_tf("delta_bucket", f"{prefix}-{env}-delta")
+    if not os.getenv("TF_VAR_artifacts_bucket"):
+        set_tf("artifacts_bucket", f"{prefix}-{env}-artifacts")
+    if not os.getenv("TF_VAR_tf_lock_table"):
+        set_tf("tf_lock_table", f"{prefix}-{env}-lock")
+    if not os.getenv("TF_VAR_ecr_repo_app"):
+        set_tf("ecr_repo_app", f"{prefix}-{env}-api")
+    if not os.getenv("TF_VAR_ecr_repo_spark"):
+        set_tf("ecr_repo_spark", f"{prefix}-{env}-spark")
+
+    # Construct full images if component vars are present
+    repo_app = os.getenv("ECR_REPO_APP") or os.getenv("TF_VAR_ecr_repo_app")
+    tag_app = os.getenv("APP_IMAGE_TAG", "latest")
+    if repo_app and not os.getenv("TF_VAR_app_image"):
+        set_tf("app_image", f"{repo_app}:{tag_app}")
+
+    repo_spark = os.getenv("ECR_REPO_SPARK") or os.getenv("TF_VAR_ecr_repo_spark")
+    tag_spark = os.getenv("SPARK_IMAGE_TAG", "latest")
+    if repo_spark and not os.getenv("TF_VAR_spark_image"):
+        set_tf("spark_image", f"{repo_spark}:{tag_spark}")
+
+    print(f"[_aws_vars] Exported {len([k for k in os.environ if k.startswith('TF_VAR_')])} TF_VARs for env={env}")
+    return []

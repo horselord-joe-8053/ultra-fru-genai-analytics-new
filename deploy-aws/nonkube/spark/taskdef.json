@@ -1,0 +1,19 @@
+
+{
+  "family": "fru-spark",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "containerDefinitions": [
+    {
+      "name": "spark",
+      "image": "${SPARK_IMAGE}",
+      "essential": true,
+      "command": ["spark-submit", "/opt/fru/jobs/periodic.py"],
+      "environment": [
+        { "name": "SPARK_EXTRA_CONF", "value": "spark.fru.delta_root=${DELTA_ROOT}" }
+      ]
+    }
+  ]
+}
