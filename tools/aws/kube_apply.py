@@ -61,21 +61,21 @@ def main():
             "AWS_SECRET_ACCESS_KEY": require("AWS_ADMIN_SECRET_ACCESS_KEY"),
             "AWS_REGION": require("AWS_REGION")
         }
-        txt = render("deploy-aws/kube/k8s/bootstrap-job.yaml", subs)
+        txt = render("infra-modules/shared/k8s/bootstrap-job.yaml", subs)
         # Delete existing job to handle immutable field updates
         kubectl(["delete","job","fru-analytics-bootstrap","--ignore-not-found","-n","fru"])
         kubectl(["apply","-f","-"], input_text=txt)
         
         # Deploy API
         try:
-            txt = render("deploy-aws/kube/k8s/api-deployment.yaml", {"APP_IMAGE": app_image})
+            txt = render("infra-modules/shared/k8s/api-deployment.yaml", {"APP_IMAGE": app_image})
             kubectl(["apply","-f","-"], input_text=txt)
-            txt = render("deploy-aws/kube/k8s/api-service.yaml", {})
+            txt = render("infra-modules/shared/k8s/api-service.yaml", {})
             kubectl(["apply","-f","-"], input_text=txt)
         except FileNotFoundError:
             print("WARN: API manifests not found, skipping API deployment.")
     else:
-        txt = render("deploy-aws/kube/k8s/spark-cronjob.yaml", {"SPARK_IMAGE": spark_image, "DELTA_ROOT": delta_root})
+        txt = render("infra-modules/shared/k8s/spark-cronjob.yaml", {"SPARK_IMAGE": spark_image, "DELTA_ROOT": delta_root})
         kubectl(["apply","-f","-"], input_text=txt)
 
 if __name__ == "__main__":

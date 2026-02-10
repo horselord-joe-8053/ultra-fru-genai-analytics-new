@@ -2,11 +2,22 @@
 """Shared runner with common flags and clear logs."""
 import subprocess, os, shlex
 
+def _shared_tofu_data_dir():
+    """Single shared dir for OpenTofu data (providers, etc.) so we don't duplicate per stack."""
+    if os.environ.get("TF_DATA_DIR"):
+        return os.environ["TF_DATA_DIR"]
+    # Default: repo root / tofu_data (run tools from repo root)
+    root = os.environ.get("REPO_ROOT") or os.getcwd()
+    return os.path.join(root, "tofu_data")
+
 def run(cmd, cwd=None, check=False):
     print(f"[run] cwd={cwd} :: {' '.join(shlex.quote(x) for x in cmd)}")
     
-    # Map AWS Admin credentials to standard keys if present
+    # One shared OpenTofu data dir for all stacks (so provider binaries aren't duplicated)
+    shared = os.path.abspath(_shared_tofu_data_dir())
+    os.environ["TF_DATA_DIR"] = shared
     env = os.environ.copy()
+    env["TF_DATA_DIR"] = shared
     if env.get("AWS_ADMIN_ACCESS_KEY_ID"):
         env["AWS_ACCESS_KEY_ID"] = env["AWS_ADMIN_ACCESS_KEY_ID"]
     if env.get("AWS_ADMIN_SECRET_ACCESS_KEY"):

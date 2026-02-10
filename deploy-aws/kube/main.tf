@@ -20,7 +20,7 @@ data "terraform_remote_state" "shared_durable" {
 }
 
 module "tags" {
-  source = "../../infra-modules/primitives/tags"
+  source = "../../infra-modules/shared/primitives/tags"
   extra_tags = {
     environment = var.env
     scope = "kube"

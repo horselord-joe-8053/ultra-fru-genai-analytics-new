@@ -8,7 +8,7 @@ terraform {
 provider "aws" { region = var.aws_region }
 
 module "tags" {
-  source = "../../../infra-modules/primitives/tags"
+  source = "../../../infra-modules/shared/primitives/tags"
   extra_tags = {
     environment = var.env
     scope = "shared"
@@ -17,7 +17,7 @@ module "tags" {
 }
 
 module "vpc" {
-  source = "../../../infra-modules/primitives/vpc"
+  source = "../../../infra-modules/aws/primitives/vpc"
   name  = "${var.prefix}-${var.env}"
   cidr  = var.vpc_cidr
   azs   = var.azs

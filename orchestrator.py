@@ -14,8 +14,8 @@ def run_command(cmd, cwd=None):
         project_root = os.getcwd()
         env["PYTHONPATH"] = f"{project_root}:{env.get('PYTHONPATH', '')}"
         
-        # Bypass dotfile permission issues by using a non-dot directory for Terraform data
-        env["TF_DATA_DIR"] = "tofu_data"
+        # Single shared OpenTofu data dir (providers, etc.) for all stacks; absolute path
+        env["TF_DATA_DIR"] = os.path.abspath(os.path.join(project_root, "tofu_data"))
 
         # If we are in the orchestrator, we might assume the python executable 
         # is the one running this script (if run via venv) or we explicitly call python.
@@ -48,17 +48,35 @@ def handle_aws(args):
         if not args.scope:
             logger.error("Error: --scope required for deploy")
             sys.exit(1)
+            
+        # Preempt logic: Teardown -> Verify Teardown
+        if args.preempt:
+            logger.step("Executing Preempt Sequence: Teardown -> Verify Teardown -> Deploy -> Verify Deploy")
+            
+            # 1. Teardown
+            teardown_script = f"{base_path}/teardown.py"
+            # Ensure non-interactive for preempt
+            teardown_args = cmd_args + ["--non-interactive", "--scope", args.scope]
+            with logger.Heartbeat(f"Preempt Teardown scope={args.scope} env={args.env}"):
+                run_command(["python", teardown_script] + teardown_args)
+                
+            # 2. Verify Teardown
+            verify_teardown_script = f"{base_path}/verify_all_teardown.py"
+            run_command(["python", verify_teardown_script] + cmd_args + ["--scope", args.scope])
+            
+        # 3. Deploy
         script = f"{base_path}/deploy.py"
-        cmd_args.extend(["--scope", args.scope])
+        deploy_args = cmd_args + ["--scope", args.scope]
         if args.skip_doctor:
-            cmd_args.append("--skip-doctor")
+            deploy_args.append("--skip-doctor")
+            
         with logger.Heartbeat(f"Deployment scope={args.scope} env={args.env}"):
-            run_command(["python", script] + cmd_args)
+            run_command(["python", script] + deploy_args)
         
-        # Auto-verify after successful deploy
+        # 4. Auto-verify after successful deploy (Verify Deploy)
         logger.step("Initiating automatic verification...")
-        verify_script = f"{base_path}/verify_all.py"
-        run_command(["python", verify_script] + cmd_args)
+        verify_script = f"{base_path}/verify_all_deploy.py"
+        run_command(["python", verify_script] + deploy_args)
         
     elif args.command == "teardown":
         if not args.scope:
@@ -78,9 +96,9 @@ def handle_aws(args):
         if not args.scope:
             logger.error("Error: --scope required for verify")
             sys.exit(1)
-        script = f"{base_path}/verify_all.py"
+        script = f"{base_path}/verify_all_deploy.py"
         cmd_args.extend(["--scope", args.scope])
-        # verify_all.py itself polls, so we wrap it here for a top-level heartbeat
+        # verify_all_deploy.py itself polls, so we wrap it here for a top-level heartbeat
         with logger.Heartbeat(f"Verification scope={args.scope} env={args.env}"):
             run_command(["python", script] + cmd_args)
         
@@ -111,6 +129,7 @@ def main():
     parser.add_argument("--non-interactive", action="store_true", help="Skip confirmation prompts")
     parser.add_argument("--force", action="store_true", help="Legacy alias for --non-interactive")
     parser.add_argument("--skip-doctor", action="store_true", help="Skip preflight checks (deploy only)")
+    parser.add_argument("--preempt", action="store_true", help="Run full teardown and verification before deploy")
 
     # Parse args
     args = parser.parse_args()
