@@ -45,39 +45,76 @@ def verify_api_endpoints(base_url, timeout_secs=300):
     ]
     
     results = {e["name"]: False for e in endpoints}
+    last_status = {e["name"]: None for e in endpoints}
+    last_error = {e["name"]: None for e in endpoints}
     
     while (time.time() - start_time) < timeout_secs:
+        elapsed = int(time.time() - start_time)
         for e in endpoints:
             if results[e["name"]]: continue
             
             url = base_url.rstrip("/") + e["path"]
             try:
                 resp = requests.get(url, timeout=10)
+                last_status[e["name"]] = resp.status_code
+                last_error[e["name"]] = None
+                
                 if e["check"](resp):
                     logger.success(f"✓ {e['name']} endpoint is UP: {url}")
                     results[e["name"]] = True
                 else:
-                    if (int(time.time() - start_time) % 30) == 0:
-                        logger.info(f"  ... {e['name']} returned {resp.status_code}, waiting ...")
+                    # Got a response but it doesn't match expected result
+                    if resp.status_code >= 500:
+                        # 5xx errors are server errors - fail fast
+                        logger.error(f"✗ {e['name']} endpoint returned {resp.status_code} (Server Error) - failing immediately")
+                        logger.error(f"  URL: {url}")
+                        logger.error(f"  Response body: {resp.text[:200]}")
+                        return False
+                    elif resp.status_code >= 400:
+                        # 4xx errors are client errors - fail fast
+                        logger.error(f"✗ {e['name']} endpoint returned {resp.status_code} (Client Error) - failing immediately")
+                        logger.error(f"  URL: {url}")
+                        return False
+                    else:
+                        # 2xx but check failed (e.g., no "<html" in frontend)
+                        if (elapsed % 30) == 0 or elapsed < 10:
+                            logger.info(f"  [{elapsed}s] {e['name']} check failed (status {resp.status_code}), waiting...")
+            except requests.exceptions.ConnectionError as ex:
+                last_error[e["name"]] = str(ex)
+                # Connection errors are transient - keep retrying
+                if (elapsed % 30) == 0 or elapsed < 10:
+                    logger.info(f"  [{elapsed}s] {e['name']} connection failed, retrying... ({type(ex).__name__})")
+            except requests.exceptions.Timeout as ex:
+                last_error[e["name"]] = str(ex)
+                # Timeouts are transient - keep retrying
+                if (elapsed % 30) == 0 or elapsed < 10:
+                    logger.info(f"  [{elapsed}s] {e['name']} timeout, retrying...")
             except Exception as ex:
-                if (int(time.time() - start_time) % 30) == 0:
-                    logger.info(f"  ... {e['name']} connection waiting ({ex}) ...")
+                last_error[e["name"]] = str(ex)
+                if (elapsed % 30) == 0 or elapsed < 10:
+                    logger.info(f"  [{elapsed}s] {e['name']} error, retrying... ({type(ex).__name__})")
         
         if all(results.values()):
             return True
         
         time.sleep(10)
-        
-    for name, success in results.items():
-        if not success:
-            logger.error(f"✗ {name} endpoint verification FAILED")
+    
+    # Timeout reached - report which endpoints failed
+    logger.error(f"\n[VERIFICATION TIMEOUT] Endpoints failed to respond successfully within {timeout_secs}s:")
+    for e in endpoints:
+        if not results[e["name"]]:
+            if last_status[e["name"]]:
+                logger.error(f"  ✗ {e['name']}: HTTP {last_status[e['name']]}")
+            else:
+                logger.error(f"  ✗ {e['name']}: {last_error[e['name']] or 'Unknown error'}")
             
-    return all(results.values())
+    return False
 
 def verify_cloudwatch(env, timeout_mins=None):
     region = require("AWS_REGION")
     prefix = os.getenv("FRU_PREFIX", "fru")
-    log_group = f"/fru/{env}/analytics"
+    # Use log group from env if set, otherwise default
+    log_group = os.getenv("CLOUDWATCH_LOG_GROUP") or f"/fru/{env}/analytics"
     
     # Use timeout from env if not specified
     from tools._env import get_int_env
@@ -171,8 +208,12 @@ def main():
         alb_dns = stack_out.get("alb_dns_name", {}).get("value")
         if alb_dns:
             endpoint_success = verify_api_endpoints(f"http://{alb_dns}")
+            if not endpoint_success:
+                logger.error("[VERIFICATION FAILED] API endpoints are not responding correctly")
+                sys.exit(1)
         else:
             logger.error("Could not find ALB DNS in terraform outputs.")
+            sys.exit(1)
     
     elif args.scope == "kube":
         # Get K8s LoadBalancer URL
@@ -188,6 +229,9 @@ def main():
             
         if lb_host:
             endpoint_success = verify_api_endpoints(f"http://{lb_host}")
+            if not endpoint_success:
+                logger.error("[VERIFICATION FAILED] API endpoints are not responding correctly")
+                sys.exit(1)
         else:
             logger.warning("EKS LoadBalancer hostname not available after timeout. Skipping endpoint check.")
 
@@ -198,7 +242,7 @@ def main():
         logger.success("PLUMBING VERIFICATION: SUCCESS")
         sys.exit(0)
     else:
-        logger.error("PLUMBING VERIFICATION: FAILED")
+        logger.error("PLUMBING VERIFICATION: FAILED - CloudWatch logs did not show success pattern")
         sys.exit(1)
 
 if __name__ == "__main__":

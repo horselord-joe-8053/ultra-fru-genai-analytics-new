@@ -8,7 +8,7 @@ terraform {
 provider "aws" { region = var.aws_region }
 
 module "tags" {
-  source = "../../../infra-modules/primitives/tags"
+  source = "../../../infra-modules/shared/primitives/tags"
   extra_tags = {
     environment = var.env
     scope = "shared"
@@ -17,25 +17,25 @@ module "tags" {
 }
 
 module "delta_bucket" {
-  source = "../../../infra-modules/primitives/s3_bucket"
+  source = "../../../infra-modules/aws/primitives/s3_bucket"
   name   = var.delta_bucket
   tags   = module.tags.common_tags
 }
 
 module "artifacts_bucket" {
-  source = "../../../infra-modules/primitives/s3_bucket"
+  source = "../../../infra-modules/aws/primitives/s3_bucket"
   name   = var.artifacts_bucket
   tags   = module.tags.common_tags
 }
 
 module "ecr_app" {
-  source = "../../../infra-modules/aws/ecr"
+  source = "../../../infra-modules/aws/primitives/ecr"
   name   = var.ecr_repo_app
   tags   = module.tags.common_tags
 }
 
 module "ecr_spark" {
-  source = "../../../infra-modules/aws/ecr"
+  source = "../../../infra-modules/aws/primitives/ecr"
   name   = var.ecr_repo_spark
   tags   = module.tags.common_tags
 }

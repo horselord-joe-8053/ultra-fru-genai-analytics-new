@@ -69,10 +69,14 @@ def get_base_vars(env: str):
         set_tf("artifacts_bucket", f"{prefix}-{env}-artifacts")
     if not os.getenv("TF_VAR_tf_lock_table"):
         set_tf("tf_lock_table", f"{prefix}-{env}-lock")
+    # ECR repo names include container type (kube or nonkube)
+    container_type = os.getenv("CONTAINER_TYPE", "")
     if not os.getenv("TF_VAR_ecr_repo_app"):
-        set_tf("ecr_repo_app", f"{prefix}-{env}-api")
+        ecr_app_name = f"{prefix}-{container_type}-{env}-api" if container_type else f"{prefix}-{env}-api"
+        set_tf("ecr_repo_app", ecr_app_name)
     if not os.getenv("TF_VAR_ecr_repo_spark"):
-        set_tf("ecr_repo_spark", f"{prefix}-{env}-spark")
+        ecr_spark_name = f"{prefix}-{container_type}-{env}-spark" if container_type else f"{prefix}-{env}-spark"
+        set_tf("ecr_repo_spark", ecr_spark_name)
 
     # Construct full images if component vars are present
     repo_app = os.getenv("ECR_REPO_APP") or os.getenv("TF_VAR_ecr_repo_app")

@@ -61,3 +61,5 @@ override.tf.json
 # Project specific
 .DS_Store
 teardown-all-*.log
+tmp/
+vscode_gen/
