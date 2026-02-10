@@ -135,21 +135,24 @@ def main():
     with logger.Heartbeat("Building and pushing images"):
         subprocess.run(["python","tools/aws/build_and_push_images.py","--env",args.env], check=True)
 
+    # Get ECR URLs from state
+    snd = tofu_output_json("deploy-aws/shared/nondurable", args.env)
+    app_repo_url = snd["ecr_app_url"]["value"]
+    spark_repo_url = snd["ecr_spark_url"]["value"]
+    spark_image_full = f"{spark_repo_url}:{require('SPARK_IMAGE_TAG')}"
+    app_image_full = f"{app_repo_url}:{require('APP_IMAGE_TAG')}"
+
     if args.scope == "kube":
         apply_stack("deploy-aws/kube", args.env, [
-            "-var", f"eks_instance_types=['{require('EKS_NODE_INSTANCE_TYPES')}']",
+            "-var", f"eks_instance_types=[\"{require('EKS_NODE_INSTANCE_TYPES')}\"]",
             "-var", f"eks_desired_nodes={require('EKS_DESIRED_NODES')}",
         ])
-        subprocess.run(["python","tools/aws/kube_apply.py","--env",args.env,"--phase","bootstrap"], check=True)
-        subprocess.run(["python","tools/aws/kube_apply.py","--env",args.env,"--phase","schedule"], check=True)
+        subprocess.run(["python","tools/aws/kube_apply.py","--env",args.env,"--phase","bootstrap","--spark-image",spark_image_full,"--app-image",app_image_full], check=True)
+        subprocess.run(["python","tools/aws/kube_apply.py","--env",args.env,"--phase","schedule","--spark-image",spark_image_full], check=True)
     else:
-        snd = tofu_output_json("deploy-aws/shared/nondurable", args.env)
-        app_repo_url = snd["ecr_app_url"]["value"]
-        spark_repo_url = snd["ecr_spark_url"]["value"]
-
         apply_stack("deploy-aws/nonkube", args.env, [
             "-var", f"app_image={app_repo_url}:{require('APP_IMAGE_TAG')}",
-            "-var", f"spark_image={spark_repo_url}:{require('SPARK_IMAGE_TAG')}",
+            "-var", f"spark_image={spark_image_full}",
         ])
 
         run_ecs_bootstrap(args.env)

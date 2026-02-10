@@ -21,7 +21,7 @@ load_dotenv()
 
 def sh(cmd, input_text=None):
     print("+", " ".join(cmd))
-    return subprocess.run(cmd, input=input_text, text=True, check=False)
+    return subprocess.run(cmd, input=input_text, text=True, check=True)
 
 def tofu_output_json(stack_dir: str, env: str):
     cfg = backend_config(os.path.basename(stack_dir), env)
@@ -52,10 +52,11 @@ def main():
 
     app_tag = require("APP_IMAGE_TAG")
     spark_tag = require("SPARK_IMAGE_TAG")
+    platform = os.getenv("DOCKER_RUN_REMOTE_PLATFORM", "linux/amd64")
 
     # Build images
-    sh(["docker","build","-t",f"{app_repo_url}:{app_tag}","core-app"])
-    sh(["docker","build","-t",f"{spark_repo_url}:{spark_tag}","core-app/analytics/docker"])
+    sh(["docker","build","--platform",platform,"-t",f"{app_repo_url}:{app_tag}","core-app"])
+    sh(["docker","build","--platform",platform,"-t",f"{spark_repo_url}:{spark_tag}","-f","core-app/analytics/docker/Dockerfile","core-app/analytics"])
 
     # Push images
     sh(["docker","push",f"{app_repo_url}:{app_tag}"])

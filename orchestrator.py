@@ -56,8 +56,8 @@ def handle_aws(args):
             run_command(["python", script] + cmd_args)
         
         # Auto-verify after successful deploy
-        logger.step("Initiating automatic plumbing verification...")
-        verify_script = f"{base_path}/verify_plumbing.py"
+        logger.step("Initiating automatic verification...")
+        verify_script = f"{base_path}/verify_all.py"
         run_command(["python", verify_script] + cmd_args)
         
     elif args.command == "teardown":
@@ -78,10 +78,10 @@ def handle_aws(args):
         if not args.scope:
             logger.error("Error: --scope required for verify")
             sys.exit(1)
-        script = f"{base_path}/verify_plumbing.py"
+        script = f"{base_path}/verify_all.py"
         cmd_args.extend(["--scope", args.scope])
-        # verify_plumbing.py itself polls, so we wrap it here for a top-level heartbeat
-        with logger.Heartbeat(f"Plumbing verification scope={args.scope} env={args.env}"):
+        # verify_all.py itself polls, so we wrap it here for a top-level heartbeat
+        with logger.Heartbeat(f"Verification scope={args.scope} env={args.env}"):
             run_command(["python", script] + cmd_args)
         
     else:

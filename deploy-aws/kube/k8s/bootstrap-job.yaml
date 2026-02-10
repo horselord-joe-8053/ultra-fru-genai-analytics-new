@@ -1,0 +1,23 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: fru-analytics-bootstrap
+  namespace: fru
+spec:
+  template:
+    spec:
+      containers:
+      - name: spark
+        image: ${SPARK_IMAGE}
+        command: ["/opt/spark/bin/spark-submit", "/opt/fru/jobs/bootstrap.py"]
+        env:
+        - name: SPARK_EXTRA_CONF
+          value: "spark.fru.delta_root=${DELTA_ROOT}"
+        - name: AWS_ACCESS_KEY_ID
+          value: "${AWS_ACCESS_KEY_ID}"
+        - name: AWS_SECRET_ACCESS_KEY
+          value: "${AWS_SECRET_ACCESS_KEY}"
+        - name: AWS_REGION
+          value: "${AWS_REGION}"
+      restartPolicy: Never
+  backoffLimit: 4

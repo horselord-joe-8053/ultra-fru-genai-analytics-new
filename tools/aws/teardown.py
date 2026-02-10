@@ -27,7 +27,7 @@ ORDER = {
 
 def init_stack(stack_dir: str, env: str):
     cfg = backend_config(stack_dir, env)
-    args = ["init","-upgrade"]
+    args = ["init","-upgrade","-reconfigure"]
     for c in cfg:
         args += ["-backend-config", c]
     tofu(args, cwd=stack_dir, check=True)

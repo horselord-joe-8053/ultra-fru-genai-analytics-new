@@ -1,0 +1,6 @@
+core-app/frontend/node_modules
+core-app/frontend/dist
+core-app/backend/__pycache__
+.git
+.env
+tofu_data
