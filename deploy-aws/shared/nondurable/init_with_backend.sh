@@ -42,4 +42,5 @@ if [ -n "${TF_STATE_LOCK_TABLE}${TF_LOCK_TABLE}" ]; then
 fi
 
 cd "$SCRIPT_DIR"
-exec terraform init -upgrade -reconfigure "${BACKEND_CFG[@]}"
+export TF_DATA_DIR="$REPO_ROOT/tofu_data"
+exec "${FRU_TF_BIN:-tofu}" init -upgrade -reconfigure "${BACKEND_CFG[@]}"
