@@ -31,11 +31,11 @@ def sh(cmd, input_text=None):
 def tofu_output_json(stack_dir: str, env: str):
     logger.info(f"[TOFU OUTPUT] Getting outputs from {stack_dir}")
     try:
-        cfg = backend_config(os.path.basename(stack_dir), env)
-        args = ["init","-upgrade"]
+        cfg = backend_config(stack_dir, env)
+        args = ["init","-upgrade","-reconfigure"]
         for c in cfg:
             args += ["-backend-config", c]
-        tofu(args, cwd=stack_dir)
+        tofu(args, cwd=stack_dir, check=True)
         out = subprocess.check_output([os.getenv("FRU_TF_BIN","tofu"),"output","-json"], cwd=stack_dir, text=True, timeout=30)
         result = json.loads(out)
         logger.success(f"[TOFU OUTPUT OK] {stack_dir}")

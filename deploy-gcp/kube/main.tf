@@ -11,7 +11,7 @@ provider "google" {
 }
 
 resource "google_container_cluster" "gke" {
-  name     = var.gke_cluster_name
-  location = var.gcp_region
+  name               = var.gke_cluster_name
+  location           = var.gcp_region
   initial_node_count = 1
 }

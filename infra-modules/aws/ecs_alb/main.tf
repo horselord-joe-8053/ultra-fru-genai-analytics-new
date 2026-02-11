@@ -91,11 +91,11 @@ resource "aws_security_group_rule" "tasks_from_alb" {
 resource "aws_iam_role" "exec" {
   name = "${var.name}-${var.env}-ecs-exec"
   assume_role_policy = jsonencode({
-    Version="2012-10-17"
-    Statement=[{
-      Effect="Allow"
-      Principal={ Service="ecs-tasks.amazonaws.com" }
-      Action="sts:AssumeRole"
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "ecs-tasks.amazonaws.com" }
+      Action    = "sts:AssumeRole"
     }]
   })
   tags = var.tags
@@ -107,15 +107,15 @@ resource "aws_iam_role_policy_attachment" "exec_attach" {
 
 # Runtime role (extend later for Bedrock/RDS/etc)
 resource "aws_iam_role" "task" {
-  name = "${var.name}-${var.env}-ecs-task"
+  name               = "${var.name}-${var.env}-ecs-task"
   assume_role_policy = aws_iam_role.exec.assume_role_policy
-  tags = var.tags
+  tags               = var.tags
 }
 
 # Task definition
 locals {
-  env_list = [for k,v in var.env_vars : { name = k, value = v }]
-  secrets_list = [for k,v in var.secret_arns : { name = k, valueFrom = v }]
+  env_list     = [for k, v in var.env_vars : { name = k, value = v }]
+  secrets_list = [for k, v in var.secret_arns : { name = k, valueFrom = v }]
 }
 
 resource "aws_ecs_task_definition" "api" {
@@ -128,8 +128,8 @@ resource "aws_ecs_task_definition" "api" {
   task_role_arn            = aws_iam_role.task.arn
 
   container_definitions = jsonencode([{
-    name  = var.container_name
-    image = var.app_image
+    name      = var.container_name
+    image     = var.app_image
     essential = true
     portMappings = [{
       containerPort = var.container_port
@@ -148,7 +148,7 @@ resource "aws_ecs_task_definition" "api" {
   }])
 
   depends_on = [aws_iam_role_policy_attachment.exec_attach, aws_cloudwatch_log_group.ecs]
-  tags = var.tags
+  tags       = var.tags
 }
 
 data "aws_region" "current" {}
@@ -161,8 +161,8 @@ resource "aws_ecs_service" "api" {
   launch_type     = "FARGATE"
 
   network_configuration {
-    subnets         = var.private_subnet_ids
-    security_groups = [aws_security_group.tasks.id]
+    subnets          = var.private_subnet_ids
+    security_groups  = [aws_security_group.tasks.id]
     assign_public_ip = false
   }
 
@@ -173,5 +173,5 @@ resource "aws_ecs_service" "api" {
   }
 
   depends_on = [aws_lb_listener.http]
-  tags = var.tags
+  tags       = var.tags
 }

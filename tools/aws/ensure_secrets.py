@@ -20,10 +20,10 @@ load_dotenv()
 def init_stack(env):
     logger.info("[SECRETS] Initializing shared/durable stack...")
     cfg = backend_config("deploy-aws/shared/durable", env)
-    args = ["init","-upgrade"]
+    args = ["init","-upgrade","-reconfigure"]
     for c in cfg:
         args += ["-backend-config", c]
-    tofu(args, cwd="deploy-aws/shared/durable")
+    tofu(args, cwd="deploy-aws/shared/durable", check=True)
     logger.success("[SECRETS] Stack initialized")
 
 def outputs(env):
@@ -63,16 +63,22 @@ def main():
 
         openai = os.getenv("OPENAI_API_KEY","").strip()
         if openai:
+            arn = o.get("openai_api_key_secret_arn", {}).get("value")
+            if not arn:
+                raise KeyError("openai_api_key_secret_arn not in durable outputs; run deploy durable first")
             logger.info("[SECRETS] Setting OPENAI_API_KEY...")
-            put_value(o["openai_api_key_secret_arn"]["value"], openai, region)
+            put_value(arn, openai, region)
             logger.success("[SECRETS] OPENAI_API_KEY set")
         else:
             logger.warning("[SECRETS] OPENAI_API_KEY not set in .env; skipping")
 
         dbpw = (os.getenv("DB_PASSWORD") or os.getenv("PGPASSWORD") or "").strip()
         if dbpw:
+            arn = o.get("db_password_secret_arn", {}).get("value")
+            if not arn:
+                raise KeyError("db_password_secret_arn not in durable outputs; run deploy durable first")
             logger.info("[SECRETS] Setting DB_PASSWORD...")
-            put_value(o["db_password_secret_arn"]["value"], dbpw, region)
+            put_value(arn, dbpw, region)
             logger.success("[SECRETS] DB_PASSWORD set")
         else:
             logger.warning("[SECRETS] DB_PASSWORD/PGPASSWORD not set in .env; skipping")

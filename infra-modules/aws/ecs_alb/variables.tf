@@ -26,13 +26,13 @@ variable "app_image" { type = string }
 
 # non-sensitive env vars to inject
 variable "env_vars" {
-  type = map(string)
+  type    = map(string)
   default = {}
 }
 
 # secrets manager ARNs: env var name -> secret arn
 variable "secret_arns" {
-  type = map(string)
+  type    = map(string)
   default = {}
 }
 

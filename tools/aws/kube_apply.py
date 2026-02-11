@@ -14,6 +14,7 @@ This tool:
 """
 import argparse, os, subprocess
 from tools._env import load_dotenv, require
+from tools.aws.bootstrap_helpers import check_k8s_bootstrap_job_succeeded
 
 load_dotenv()
 
@@ -54,19 +55,21 @@ def main():
     kubectl(["apply","-f","-"], input_text="apiVersion: v1\nkind: Namespace\nmetadata:\n  name: fru\n")
 
     if args.phase == "bootstrap":
-        subs = {
-            "SPARK_IMAGE": spark_image, 
-            "DELTA_ROOT": delta_root,
-            "AWS_ACCESS_KEY_ID": require("AWS_ADMIN_ACCESS_KEY_ID"),
-            "AWS_SECRET_ACCESS_KEY": require("AWS_ADMIN_SECRET_ACCESS_KEY"),
-            "AWS_REGION": require("AWS_REGION")
-        }
-        txt = render("infra-modules/shared/k8s/bootstrap-job.yaml", subs)
-        # Delete existing job to handle immutable field updates
-        kubectl(["delete","job","fru-analytics-bootstrap","--ignore-not-found","-n","fru"])
-        kubectl(["apply","-f","-"], input_text=txt)
-        
-        # Deploy API
+        if check_k8s_bootstrap_job_succeeded(args.env):
+            print("[KUBE BOOTSTRAP] Skip: Job fru-analytics-bootstrap already succeeded (idempotent)")
+        else:
+            subs = {
+                "SPARK_IMAGE": spark_image,
+                "DELTA_ROOT": delta_root,
+                "AWS_ACCESS_KEY_ID": require("AWS_ADMIN_ACCESS_KEY_ID"),
+                "AWS_SECRET_ACCESS_KEY": require("AWS_ADMIN_SECRET_ACCESS_KEY"),
+                "AWS_REGION": require("AWS_REGION")
+            }
+            txt = render("infra-modules/shared/k8s/bootstrap-job.yaml", subs)
+            kubectl(["delete", "job", "fru-analytics-bootstrap", "--ignore-not-found", "-n", "fru"])
+            kubectl(["apply", "-f", "-"], input_text=txt)
+
+        # Deploy API (always run - idempotent)
         try:
             txt = render("infra-modules/shared/k8s/api-deployment.yaml", {"APP_IMAGE": app_image})
             kubectl(["apply","-f","-"], input_text=txt)

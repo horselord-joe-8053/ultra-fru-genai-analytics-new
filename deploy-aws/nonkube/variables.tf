@@ -51,3 +51,12 @@ variable "delta_table_path" {
 
 variable "tf_state_bucket" { type = string }
 variable "tf_state_prefix" { type = string }
+
+variable "cloudfront_price_class" {
+  type    = string
+  default = "PriceClass_100"
+}
+variable "certificate_arn" {
+  type    = string
+  default = null
+}
