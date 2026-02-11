@@ -1,0 +1,71 @@
+{
+  "retriable": [
+    {
+      "id": "cloudfront_oac",
+      "pattern": "OriginAccessControlInUse",
+      "max_retries": 1,
+      "wait_sec": 900
+    },
+    {
+      "id": "resource_not_ready",
+      "pattern": "ResourceNotReady",
+      "max_retries": 3,
+      "wait_sec": 60
+    },
+    {
+      "id": "exceeded_wait_attempts",
+      "pattern": "exceeded wait attempts",
+      "max_retries": 3,
+      "wait_sec": 120
+    },
+    {
+      "id": "dependency_violation",
+      "pattern": "DependencyViolation",
+      "max_retries": 3,
+      "wait_sec": 90
+    },
+    {
+      "id": "invalid_parameter_target",
+      "pattern": "InvalidParameterValue",
+      "max_retries": 2,
+      "wait_sec": 60
+    },
+    {
+      "id": "cluster_contains_instances",
+      "pattern": "ClusterContainsContainerInstancesException",
+      "max_retries": 2,
+      "wait_sec": 120
+    },
+    {
+      "id": "cannot_delete_listener",
+      "pattern": "CannotDelete",
+      "max_retries": 2,
+      "wait_sec": 60
+    },
+    {
+      "id": "throttling",
+      "pattern": "Throttling",
+      "max_retries": 3,
+      "wait_sec": 30
+    },
+    {
+      "id": "request_limit_exceeded",
+      "pattern": "RequestLimitExceeded",
+      "max_retries": 3,
+      "wait_sec": 30
+    },
+    {
+      "id": "service_unavailable",
+      "pattern": "ServiceUnavailable",
+      "max_retries": 3,
+      "wait_sec": 60
+    }
+  ],
+  "non_retriable": [
+    "BucketNotEmpty",
+    "AccessDenied",
+    "InvalidClientTokenId",
+    "NoSuchBucket",
+    "ResourceNotFoundException"
+  ]
+}

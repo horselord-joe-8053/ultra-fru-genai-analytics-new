@@ -75,8 +75,28 @@ def k8s_remove_bootstrap_and_scheduler(env: str) -> None:
     """
     Remove bootstrap Job and periodic CronJob before teardown.
     Ensures scheduler is stopped and bootstrap job is cleaned up.
+    When cluster is already gone, logs a helpful warning instead of raw errors.
     """
-    subprocess.run(["python", "tools/aws/eks_kubeconfig.py", "--env", env], check=False)
-    subprocess.run(["kubectl", "delete", "cronjob", CRONJOB_PERIODIC, "--ignore-not-found", "-n", K8S_NAMESPACE], check=False)
-    subprocess.run(["kubectl", "delete", "job", JOB_BOOTSTRAP, "--ignore-not-found", "-n", K8S_NAMESPACE], check=False)
-    subprocess.run(["kubectl", "delete", "namespace", K8S_NAMESPACE, "--ignore-not-found"], check=False)
+    from tools import logger
+
+    # Try to configure kubectl; if cluster is gone, warn and skip kubectl steps
+    result = subprocess.run(
+        ["python", "tools/aws/eks_kubeconfig.py", "--env", env],
+        capture_output=True, text=True, check=False,
+    )
+    if result.returncode != 0:
+        err = (result.stderr or "") + (result.stdout or "")
+        if "ResourceNotFoundException" in err or "No cluster found" in err.lower():
+            cluster_name = os.getenv("EKS_CLUSTER_NAME") or f"{os.getenv('FRU_PREFIX', 'fru')}-{env}-eks"
+            logger.warning(
+                f"EKS cluster not found (name={cluster_name}, region={os.getenv('AWS_REGION', 'us-east-1')}), "
+                "likely already removed. Skipping pre-destroy kube cleanup (CronJob/Job/namespace)."
+            )
+            return
+
+    # Cluster reachable: remove resources (suppress noisy kubectl output)
+    _quiet = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
+    subprocess.run(["kubectl", "delete", "cronjob", CRONJOB_PERIODIC, "--ignore-not-found", "-n", K8S_NAMESPACE], check=False, **_quiet)
+    subprocess.run(["kubectl", "delete", "job", JOB_BOOTSTRAP, "--ignore-not-found", "-n", K8S_NAMESPACE], check=False, **_quiet)
+    subprocess.run(["kubectl", "delete", "namespace", K8S_NAMESPACE, "--ignore-not-found"], check=False, **_quiet)
+    logger.info("Pre-destroy: removed kube CronJob and Job.")

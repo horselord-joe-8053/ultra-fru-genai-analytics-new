@@ -89,5 +89,6 @@ def get_base_vars(env: str):
     if repo_spark and not os.getenv("TF_VAR_spark_image"):
         set_tf("spark_image", f"{repo_spark}:{tag_spark}")
 
-    print(f"[_aws_vars] Exported {len([k for k in os.environ if k.startswith('TF_VAR_')])} TF_VARs for env={env}")
+    from tools import logger
+    logger.info(f"Exported {len([k for k in os.environ if k.startswith('TF_VAR_')])} TF_VARs for env={env}")
     return []

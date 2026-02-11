@@ -10,6 +10,7 @@ import requests
 from tools import logger
 from tools._env import load_dotenv, require, get_int_env
 from tools.aws._aws_vars import get_base_vars
+from tools.with_heartbeat import update_heartbeat
 from tools.aws.bootstrap_helpers import K8S_NAMESPACE
 from tools.tofu_runner import ensure_shared_tofu_env
 
@@ -61,10 +62,10 @@ def verify_api_endpoints(base_url, timeout_secs=None, heartbeat_interval_sec=Non
 
     while (time.time() - start_time) < timeout_secs:
         elapsed = int(time.time() - start_time)
-        # Heartbeat: print every heartbeat_interval_sec (legacy pattern)
-        if elapsed - last_heartbeat >= heartbeat_interval_sec and elapsed > 0:
-            logger.info(f"  Still waiting for endpoints... {elapsed} s elapsed")
-            last_heartbeat = elapsed
+        last_heartbeat = update_heartbeat(
+            elapsed, last_heartbeat, heartbeat_interval_sec,
+            f"  Still waiting for endpoints... {elapsed} s elapsed",
+        )
 
         for e in endpoints:
             if results[e["name"]]:
@@ -138,18 +139,16 @@ def verify_cloudwatch(env, timeout_mins=None):
              logger.warning(f"Log group {log_group} not found in describe-log-groups output. Skipping log verification.")
              return True # Treat missing logs as warning, not failure
     except Exception as e:
-        logger.warning(f"Log group {log_group} not found in describe-log-groups output. Skipping log verification.")
-        return True # Treat missing logs as warning, not failure, if endpoints are checked elsewhere
-    except Exception as e:
         logger.warning(f"Log group {log_group} check failed. Skipping log verification. ({e})")
-        return True # Treat check failure as warning
+        return True  # Treat check failure as warning
 
     last_heartbeat = 0
     while (time.time() - start_time) < timeout_secs:
         elapsed = int(time.time() - start_time)
-        if elapsed - last_heartbeat >= heartbeat_interval and elapsed > 0:
-            logger.info(f"  Still waiting for CloudWatch logs... {elapsed} s elapsed")
-            last_heartbeat = elapsed
+        last_heartbeat = update_heartbeat(
+            elapsed, last_heartbeat, heartbeat_interval,
+            f"  Still waiting for CloudWatch logs... {elapsed} s elapsed",
+        )
 
         try:
             # Find latest stream

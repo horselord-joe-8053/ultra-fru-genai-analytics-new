@@ -128,7 +128,7 @@ def main():
     
     # Passthrough arguments (common across providers)
     parser.add_argument("--scope", choices=["kube", "nonkube", "all"], help="Scope of operation (deployment targets)")
-    parser.add_argument("--env", help="Environment (dev, prod, etc.)")
+    parser.add_argument("--env", default=os.getenv("FRU_ENV", "dev"), help="Environment (dev, prod, etc.)")
     parser.add_argument("--non-interactive", action="store_true", help="Skip confirmation prompts")
     parser.add_argument("--force", action="store_true", help="Legacy alias for --non-interactive")
     parser.add_argument("--skip-doctor", action="store_true", help="Skip preflight checks (deploy only)")
