@@ -8,9 +8,9 @@ resource "aws_iam_role" "eks_cluster" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect = "Allow"
+      Effect    = "Allow"
       Principal = { Service = "eks.amazonaws.com" }
-      Action = "sts:AssumeRole"
+      Action    = "sts:AssumeRole"
     }]
   })
   tags = var.tags
@@ -27,7 +27,7 @@ resource "aws_eks_cluster" "this" {
   vpc_config {
     subnet_ids = var.subnet_ids
   }
-  tags = var.tags
+  tags       = var.tags
   depends_on = [aws_iam_role_policy_attachment.cluster_attach]
 }
 
@@ -36,9 +36,9 @@ resource "aws_iam_role" "eks_nodes" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect = "Allow"
+      Effect    = "Allow"
       Principal = { Service = "ec2.amazonaws.com" }
-      Action = "sts:AssumeRole"
+      Action    = "sts:AssumeRole"
     }]
   })
   tags = var.tags
@@ -70,7 +70,7 @@ resource "aws_eks_node_group" "this" {
   }
 
   instance_types = var.instance_types
-  tags = var.tags
+  tags           = var.tags
 
   depends_on = [
     aws_iam_role_policy_attachment.node_attach1,

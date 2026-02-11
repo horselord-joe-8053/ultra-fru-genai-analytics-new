@@ -4,7 +4,7 @@
 
 resource "google_storage_bucket" "this" {
   name          = var.name
-  location      = "US"  # TODO: Make configurable
+  location      = "US" # TODO: Make configurable
   force_destroy = false
 
   labels = var.tags

@@ -17,6 +17,9 @@ def run_command(cmd, cwd=None):
         # Single shared OpenTofu data dir (providers, etc.) for all stacks; absolute path
         env["TF_DATA_DIR"] = os.path.abspath(os.path.join(project_root, "tofu_data"))
 
+        # Unbuffered stdout so child output (heartbeats, etc.) appears immediately
+        env["PYTHONUNBUFFERED"] = "1"
+
         # If we are in the orchestrator, we might assume the python executable 
         # is the one running this script (if run via venv) or we explicitly call python.
         # We'll use sys.executable to ensure we use the same python interpreter.

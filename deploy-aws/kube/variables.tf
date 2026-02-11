@@ -16,3 +16,17 @@ variable "eks_desired_nodes" {
 variable "tf_state_bucket" { type = string }
 variable "tf_lock_table" { type = string }
 variable "tf_state_prefix" { type = string }
+
+# Ingress/NLB hostname for CloudFront API origin. Set after Ingress is created.
+variable "ingress_hostname" {
+  type    = string
+  default = null
+}
+variable "cloudfront_price_class" {
+  type    = string
+  default = "PriceClass_100"
+}
+variable "certificate_arn" {
+  type    = string
+  default = null
+}

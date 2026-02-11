@@ -31,6 +31,7 @@ from tools.aws._backend import backend_config
 
 from tools import logger
 from tools.aws._aws_vars import get_base_vars
+from tools.aws.bootstrap_helpers import check_ecs_bootstrap_succeeded
 
 load_dotenv()
 
@@ -92,7 +93,11 @@ def aws_json(cmd):
 
 def run_ecs_bootstrap(env: str):
     region = require("AWS_REGION")
-    
+
+    if check_ecs_bootstrap_succeeded(env):
+        logger.success("[ECS BOOTSTRAP] Skip: bootstrap already succeeded (idempotent)")
+        return
+
     logger.step("Executing ECS analytics bootstrap")
     try:
         # discover outputs from terraform
@@ -240,36 +245,49 @@ def main():
             subprocess.run(["python","tools/aws/kube_apply.py","--env",env,"--phase","schedule","--spark-image",spark_image_full], check=True)
             logger.success("[9/9] Kubernetes bootstrap and schedule complete")
             
-            # Get K8s LoadBalancer URL for manual testing
+            # Get CloudFront / K8s LoadBalancer URL for manual testing
             try:
                 logger.info("Retrieving frontend URL...")
-                import time as time_module
-                lb_host = ""
-                for attempt in range(12):  # Try for up to 2 minutes
-                    try:
-                        lb_host = subprocess.check_output([
-                            "kubectl", "get", "svc", "fru-api-svc", "-n", "fru",
-                            "-o", "jsonpath={.status.loadBalancer.ingress[0].hostname}"
-                        ], text=True).strip()
-                        if lb_host:
-                            break
-                    except:
-                        pass
-                    if attempt < 11:
-                        time_module.sleep(10)
-                
-                if lb_host:
-                    frontend_url = f"http://{lb_host}"
+                stack_out = tofu_output_json("deploy-aws/kube", env)
+                cf_domain = stack_out.get("cloudfront_domain_name", {}).get("value")
+                if cf_domain:
+                    frontend_url = f"https://{cf_domain}"
                     logger.success(f"\n{'='*70}")
                     logger.success(f"✓ DEPLOYMENT COMPLETE - READY FOR TESTING")
                     logger.success(f"{'='*70}")
-                    logger.success(f"\n🌐 Frontend URL: {frontend_url}")
+                    logger.success(f"\n🌐 CloudFront URL: {frontend_url}")
                     logger.success(f"   Health Check: {frontend_url}/health")
                     logger.success(f"   API Version: {frontend_url}/version")
                     logger.success(f"\n   Open in browser: {frontend_url}")
                     logger.success(f"{'='*70}\n")
                 else:
-                    logger.warning("LoadBalancer URL not yet available (may take a few minutes)")
+                    import time as time_module
+                    lb_host = ""
+                    for attempt in range(12):  # Try for up to 2 minutes
+                        try:
+                            lb_host = subprocess.check_output([
+                                "kubectl", "get", "svc", "fru-api-svc", "-n", "fru",
+                                "-o", "jsonpath={.status.loadBalancer.ingress[0].hostname}"
+                            ], text=True).strip()
+                            if lb_host:
+                                break
+                        except Exception:
+                            pass
+                        if attempt < 11:
+                            time_module.sleep(10)
+
+                    if lb_host:
+                        frontend_url = f"http://{lb_host}"
+                        logger.success(f"\n{'='*70}")
+                        logger.success(f"✓ DEPLOYMENT COMPLETE - READY FOR TESTING")
+                        logger.success(f"{'='*70}")
+                        logger.success(f"\n🌐 Frontend URL: {frontend_url}")
+                        logger.success(f"   Health Check: {frontend_url}/health")
+                        logger.success(f"   API Version: {frontend_url}/version")
+                        logger.success(f"\n   Open in browser: {frontend_url}")
+                        logger.success(f"{'='*70}\n")
+                    else:
+                        logger.warning("LoadBalancer URL not yet available (may take a few minutes)")
             except Exception as e:
                 logger.warning(f"Could not retrieve frontend URL: {e}")
         else:
@@ -284,12 +302,25 @@ def main():
             run_ecs_bootstrap(env)
             logger.success("[9/9] ECS bootstrap complete")
             
-            # Get ALB DNS for manual testing
+            # Get CloudFront / ALB URLs for manual testing
             try:
                 logger.info("Retrieving frontend URL...")
                 stack_out = tofu_output_json("deploy-aws/nonkube", env)
+                cf_domain = stack_out.get("cloudfront_domain_name", {}).get("value")
                 alb_dns = stack_out.get("alb_dns_name", {}).get("value")
-                if alb_dns:
+                if cf_domain:
+                    frontend_url = f"https://{cf_domain}"
+                    logger.success(f"\n{'='*70}")
+                    logger.success(f"✓ DEPLOYMENT COMPLETE - READY FOR TESTING")
+                    logger.success(f"{'='*70}")
+                    logger.success(f"\n🌐 CloudFront URL: {frontend_url}")
+                    logger.success(f"   Health Check: {frontend_url}/health")
+                    logger.success(f"   API Version: {frontend_url}/version")
+                    logger.success(f"\n   Open in browser: {frontend_url}")
+                    if alb_dns:
+                        logger.success(f"   (Direct ALB: http://{alb_dns})")
+                    logger.success(f"{'='*70}\n")
+                elif alb_dns:
                     frontend_url = f"http://{alb_dns}"
                     logger.success(f"\n{'='*70}")
                     logger.success(f"✓ DEPLOYMENT COMPLETE - READY FOR TESTING")

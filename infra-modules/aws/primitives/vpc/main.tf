@@ -2,13 +2,13 @@
 terraform { required_version = ">= 1.6.0" }
 
 locals {
-  protected = var.allow_destroy ? 0 : 1
+  protected   = var.allow_destroy ? 0 : 1
   unprotected = var.allow_destroy ? 1 : 0
 }
 
 # ---------- VPC ----------
 resource "aws_vpc" "protected" {
-  count                 = local.protected
+  count                = local.protected
   cidr_block           = var.cidr
   enable_dns_support   = true
   enable_dns_hostnames = true
@@ -17,7 +17,7 @@ resource "aws_vpc" "protected" {
 }
 
 resource "aws_vpc" "unprotected" {
-  count                 = local.unprotected
+  count                = local.unprotected
   cidr_block           = var.cidr
   enable_dns_support   = true
   enable_dns_hostnames = true
@@ -30,13 +30,13 @@ locals {
 
 # ---------- IGW ----------
 resource "aws_internet_gateway" "protected" {
-  count = local.protected
+  count  = local.protected
   vpc_id = local.vpc_id
   tags   = merge(var.tags, { Name = "${var.name}-igw" })
   lifecycle { prevent_destroy = true }
 }
 resource "aws_internet_gateway" "unprotected" {
-  count = local.unprotected
+  count  = local.unprotected
   vpc_id = local.vpc_id
   tags   = merge(var.tags, { Name = "${var.name}-igw" })
 }
@@ -89,13 +89,13 @@ locals {
 
 # ---------- Public Route Table ----------
 resource "aws_route_table" "public_protected" {
-  count = local.protected
+  count  = local.protected
   vpc_id = local.vpc_id
   tags   = merge(var.tags, { Name = "${var.name}-public-rt" })
   lifecycle { prevent_destroy = true }
 }
 resource "aws_route_table" "public_unprotected" {
-  count = local.unprotected
+  count  = local.unprotected
   vpc_id = local.vpc_id
   tags   = merge(var.tags, { Name = "${var.name}-public-rt" })
 }
@@ -118,15 +118,15 @@ resource "aws_route_table_association" "public_assoc" {
 
 # ---------- NAT (optional) ----------
 resource "aws_eip" "nat_protected" {
-  count = (var.enable_nat ? local.protected : 0)
-  vpc   = true
-  tags  = merge(var.tags, { Name = "${var.name}-nat-eip" })
+  count  = (var.enable_nat ? local.protected : 0)
+  domain = "vpc"
+  tags   = merge(var.tags, { Name = "${var.name}-nat-eip" })
   lifecycle { prevent_destroy = true }
 }
 resource "aws_eip" "nat_unprotected" {
-  count = (var.enable_nat ? local.unprotected : 0)
-  vpc   = true
-  tags  = merge(var.tags, { Name = "${var.name}-nat-eip" })
+  count  = (var.enable_nat ? local.unprotected : 0)
+  domain = "vpc"
+  tags   = merge(var.tags, { Name = "${var.name}-nat-eip" })
 }
 
 resource "aws_nat_gateway" "nat_protected" {
@@ -149,13 +149,13 @@ locals {
 }
 
 resource "aws_route_table" "private_protected" {
-  count = (var.enable_nat ? local.protected : 0)
+  count  = (var.enable_nat ? local.protected : 0)
   vpc_id = local.vpc_id
   tags   = merge(var.tags, { Name = "${var.name}-private-rt" })
   lifecycle { prevent_destroy = true }
 }
 resource "aws_route_table" "private_unprotected" {
-  count = (var.enable_nat ? local.unprotected : 0)
+  count  = (var.enable_nat ? local.unprotected : 0)
   vpc_id = local.vpc_id
   tags   = merge(var.tags, { Name = "${var.name}-private-rt" })
 }

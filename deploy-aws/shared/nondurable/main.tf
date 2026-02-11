@@ -2,7 +2,7 @@
 terraform {
   backend "s3" {}
   required_providers {
-    aws = { source="hashicorp/aws", version="~> 5.0" }
+    aws = { source = "hashicorp/aws", version = "~> 5.0" }
   }
 }
 provider "aws" { region = var.aws_region }
@@ -11,8 +11,8 @@ module "tags" {
   source = "../../../infra-modules/shared/primitives/tags"
   extra_tags = {
     environment = var.env
-    scope = "shared"
-    durability = "nondurable"
+    scope       = "shared"
+    durability  = "nondurable"
   }
 }
 

@@ -1896,6 +1896,7 @@ Terraform stopped because it detected a mismatch between the backend declared in
 
 ### 37.3 How we fixed it
 
+**Manual init:**
 - When we moved the ecr module and refreshed modules, we ran:
 
 ```bash
@@ -1905,61 +1906,10 @@ terraform init -upgrade -reconfigure
 
 - `-reconfigure` updates the local backend metadata to match the HCL without moving state. Use `-migrate-state` only when you intentionally want to move the authoritative state between backends.
 
+**Python tools that run tofu init (ensure_secrets, build_and_push):**
+- **ensure_secrets.py** — Uses `tofu init` to read durable outputs before setting secret values. It previously ran `init -upgrade` without `-reconfigure`, so when backend metadata disagreed (e.g. after deploy had already initted with different config), init failed with "Backend configuration changed". Fix: add `-reconfigure` and `check=True` so init fails loudly instead of silently; add safe handling for missing output keys (`o.get("openai_api_key_secret_arn", {}).get("value")`) with a clear error if durable wasn't applied.
+- **build_and_push_images.py** — Reads nondurable outputs (ECR URLs). It passed `os.path.basename(stack_dir)` (e.g. `"nondurable"`) to `backend_config()`, producing the wrong state key (`fru/dev/nondurable.tfstate`) instead of the canonical `fru/dev/aws-shared-nondurable.tfstate`. That mismatch triggered "Backend configuration changed" and caused output to fail or return empty, leading to `KeyError: 'ecr_app_url'`. Fix: pass the full `stack_dir` to `backend_config()` (e.g. `"deploy-aws/shared/nondurable"`); add `-reconfigure` and `check=True` to init.
+
 ### 37.4 Takeaway
 
-Treat backend changes as an operational event. After refactors run `terraform init -upgrade -reconfigure` in the affected directories to refresh module caches and avoid the backend mismatch error. Coordinate and use `-migrate-state` only when you mean to relocate the canonical state.
-
-
-### 37.1 What happened
-
-We hit this during `terraform init -upgrade`:
-
-```
-Error: Backend configuration changed
-
-A change in the backend configuration has been detected, which may require
-migrating existing state.
-```
-
-Terraform stopped because it detected a mismatch between the backend declared in the HCL and the cached backend metadata in the working directory.
-
-### 37.2 Why it happens
-
-- Terraform declares its backend (S3, etc.) in HCL. It also stores metadata in .terraform/ in the working directory.
-- If .terraform/ metadata disagrees with the current backend block (different bucket, prefix, or config), Terraform refuses to proceed to avoid corrupting or losing the canonical state.
-- Common triggers: moving modules, refactoring directories, checking out branches with diffe
-## 37. Terraform: "Backend state config changed" — why it happens and how we fixed it
-
-
-- 
-**creation:** `<260210>`
-**last_updated:** `<260210>`
-
-### 37.1 What happened
-
-We hitred**last_updated:** `<260ni
-### 37.1 What happened
-
-We
-
--
-We hit this during `es 
-```
-Error: Backend configuration changed
-
-AwitErut
-A change in the backend configurat onmigrating existing state.
-```
-
-Terraform stopped because it detected a mick```
-
-Terraform stopped b
-
-
-Teat
-### 37.2 Why it happens
-
-- Terraform declares its backend (S3, etc.) in HCL. It also stores metadata in .terraform/ in the working directory.
-- e c
-- Ts and avoid the backe- If .terraform/ metadata disagrees with the current backend block (different buckate the canonical state.
-
+Treat backend changes as an operational event. After refactors run `terraform init -upgrade -reconfigure` in the affected directories to refresh module caches and avoid the backend mismatch error. Coordinate and use `-migrate-state` only when you mean to relocate the canonical state. **Any script that runs tofu init** must use the same backend config as the main deploy (full stack path for `backend_config`, `-reconfigure`), or it will hit the same error.
