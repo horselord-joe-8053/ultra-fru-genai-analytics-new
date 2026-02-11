@@ -10,11 +10,13 @@ import requests
 from tools import logger
 from tools._env import load_dotenv, require
 from tools.aws._aws_vars import get_base_vars
+from tools.tofu_runner import ensure_shared_tofu_env
 
 load_dotenv()
 
 def get_tofu_output(stack_dir, env):
     """Retrieve output from Tofu (assumed already applied)."""
+    ensure_shared_tofu_env()
     tofu_bin = os.getenv("FRU_TF_BIN", "tofu")
     # We use -json for reliable parsing
     try:

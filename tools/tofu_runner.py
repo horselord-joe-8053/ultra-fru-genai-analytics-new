@@ -10,6 +10,11 @@ def _shared_tofu_data_dir():
     root = os.environ.get("REPO_ROOT") or os.getcwd()
     return os.path.join(root, "tofu_data")
 
+def ensure_shared_tofu_env():
+    """Ensure TF_DATA_DIR is set so any tofu subprocess uses the shared provider cache."""
+    shared = os.path.abspath(_shared_tofu_data_dir())
+    os.environ["TF_DATA_DIR"] = shared
+
 def run(cmd, cwd=None, check=False):
     print(f"[run] cwd={cwd} :: {' '.join(shlex.quote(x) for x in cmd)}")
     
