@@ -4,7 +4,7 @@ A short, visual crash course that bridges two gaps: **cloud (AWS VPC)** and **Te
 
 **Context:** Useful for AWS Certified ML Engineer – Associate and Google Professional ML Engineer (concepts transfer to GCP VPC + Terraform).
 
-**See also:** [TERRA_LEARNED.md](TERRA_LEARNED.md) (Terraform layers), [DEPLOYMENT_ERRORS_AND_FIXES.md](../DEPLOYMENT_ERRORS_AND_FIXES.md), [README_WAR_STORIES.md](../../README_WAR_STORIES.md).
+**See also:** [TERRA_LEARNED.md](terra/TERRA_LEARNED.md) (Terraform layers), [DEPLOYMENT_ERRORS_AND_FIXES.md](../DEPLOYMENT_ERRORS_AND_FIXES.md), [README_WAR_STORIES.md](../../README_WAR_STORIES.md).
 
 ---
 
@@ -172,7 +172,7 @@ flowchart TB
 
 ### 2.3 Terragrunt in One Sentence
 
-**Terragrunt** wraps Terraform: it keeps **per-layer** config (e.g. `dev/eks`, `dev/infrastructure`), pulls shared config (backend, account ID), and runs `terraform` in the right order. So "teardown EKS" = run `terragrunt destroy` in the EKS layer directory; state and lock are **per layer** (one state file per layer). See [TERRA_LEARNED.md](TERRA_LEARNED.md) for what a "layer" is.
+**Terragrunt** wraps Terraform: it keeps **per-layer** config (e.g. `dev/eks`, `dev/infrastructure`), pulls shared config (backend, account ID), and runs `terraform` in the right order. So "teardown EKS" = run `terragrunt destroy` in the EKS layer directory; state and lock are **per layer** (one state file per layer). See [TERRA_LEARNED.md](terra/TERRA_LEARNED.md) for what a "layer" is.
 
 ---
 
@@ -271,4 +271,4 @@ flowchart LR
 
 ---
 
-*This doc: `docs/learned/VPC_LEARNED.md`. Layers: [TERRA_LEARNED.md](TERRA_LEARNED.md). War stories: [README_WAR_STORIES.md](../../README_WAR_STORIES.md). Deployment errors: [DEPLOYMENT_ERRORS_AND_FIXES.md](../DEPLOYMENT_ERRORS_AND_FIXES.md).*
+*This doc: `docs/learned/VPC_LEARNED.md`. Layers: [TERRA_LEARNED.md](terra/TERRA_LEARNED.md). War stories: [README_WAR_STORIES.md](../../README_WAR_STORIES.md). Deployment errors: [DEPLOYMENT_ERRORS_AND_FIXES.md](../DEPLOYMENT_ERRORS_AND_FIXES.md).*

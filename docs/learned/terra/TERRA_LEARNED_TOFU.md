@@ -138,4 +138,4 @@ VPC module creates: VPC, IGW, public/private subnets, route tables, NAT gateway.
 
 ---
 
-*Related: [TERRA_LEARNED.md](TERRA_LEARNED.md), [VPC_LEARNED.md](VPC_LEARNED.md), [infra-modules/README.md](../../infra-modules/README.md).*
+*Related: [TERRA_LEARNED.md](TERRA_LEARNED.md), [VPC_LEARNED.md](../VPC_LEARNED.md), [infra-modules/README.md](../../../infra-modules/README.md).*
