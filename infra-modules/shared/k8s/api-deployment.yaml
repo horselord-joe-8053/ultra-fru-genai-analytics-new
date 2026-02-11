@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: fru-api
-  namespace: fru
+  namespace: fru-kube
 spec:
   replicas: 2
   selector:

@@ -1,8 +1,8 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: fru-analytics-bootstrap
-  namespace: fru
+  name: fru-analytics-bootstrap-kube
+  namespace: fru-kube
 spec:
   template:
     spec:

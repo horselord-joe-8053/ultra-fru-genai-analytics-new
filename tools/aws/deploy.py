@@ -31,7 +31,7 @@ from tools.aws._backend import backend_config
 
 from tools import logger
 from tools.aws._aws_vars import get_base_vars
-from tools.aws.bootstrap_helpers import check_ecs_bootstrap_succeeded
+from tools.aws.bootstrap_helpers import check_ecs_bootstrap_succeeded, K8S_NAMESPACE
 
 load_dotenv()
 
@@ -266,7 +266,7 @@ def main():
                     for attempt in range(12):  # Try for up to 2 minutes
                         try:
                             lb_host = subprocess.check_output([
-                                "kubectl", "get", "svc", "fru-api-svc", "-n", "fru",
+                                "kubectl", "get", "svc", "fru-api-svc", "-n", K8S_NAMESPACE,
                                 "-o", "jsonpath={.status.loadBalancer.ingress[0].hostname}"
                             ], text=True).strip()
                             if lb_host:

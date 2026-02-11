@@ -1,8 +1,8 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: fru-analytics-periodic
-  namespace: fru
+  name: fru-analytics-periodic-kube
+  namespace: fru-kube
 spec:
   schedule: "*/5 * * * *"
   jobTemplate:

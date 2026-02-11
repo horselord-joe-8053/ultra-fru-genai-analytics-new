@@ -15,9 +15,10 @@ load_dotenv()
 # Log pattern for bootstrap success (from bootstrap.py / run_analytics_once)
 BOOTSTRAP_SUCCESS_PATTERN = "fru bootstrap success"
 
-# K8s Job/CronJob names (must match infra-modules/shared/k8s/)
-JOB_BOOTSTRAP = "fru-analytics-bootstrap"
-CRONJOB_PERIODIC = "fru-analytics-periodic"
+# K8s Job/CronJob names and namespace (must match infra-modules/shared/k8s/)
+JOB_BOOTSTRAP = "fru-analytics-bootstrap-kube"
+CRONJOB_PERIODIC = "fru-analytics-periodic-kube"
+K8S_NAMESPACE = "fru-kube"
 
 
 def check_ecs_bootstrap_succeeded(env: str, log_group: str | None = None) -> bool:
@@ -56,13 +57,13 @@ def check_ecs_bootstrap_succeeded(env: str, log_group: str | None = None) -> boo
 
 def check_k8s_bootstrap_job_succeeded(env: str) -> bool:
     """
-    Check if Job fru-analytics-bootstrap exists and has status.succeeded >= 1.
+    Check if Job fru-analytics-bootstrap-kube exists and has status.succeeded >= 1.
     Returns True if already succeeded (skip re-run).
     """
     subprocess.run(["python", "tools/aws/eks_kubeconfig.py", "--env", env], check=False)
     try:
         out = subprocess.check_output([
-            "kubectl", "get", "job", JOB_BOOTSTRAP, "-n", "fru",
+            "kubectl", "get", "job", JOB_BOOTSTRAP, "-n", K8S_NAMESPACE,
             "-o", "jsonpath={.status.succeeded}"
         ], text=True, timeout=10)
         return out.strip() and int(out.strip()) >= 1
@@ -76,6 +77,6 @@ def k8s_remove_bootstrap_and_scheduler(env: str) -> None:
     Ensures scheduler is stopped and bootstrap job is cleaned up.
     """
     subprocess.run(["python", "tools/aws/eks_kubeconfig.py", "--env", env], check=False)
-    subprocess.run(["kubectl", "delete", "cronjob", CRONJOB_PERIODIC, "--ignore-not-found", "-n", "fru"], check=False)
-    subprocess.run(["kubectl", "delete", "job", JOB_BOOTSTRAP, "--ignore-not-found", "-n", "fru"], check=False)
-    subprocess.run(["kubectl", "delete", "namespace", "fru", "--ignore-not-found"], check=False)
+    subprocess.run(["kubectl", "delete", "cronjob", CRONJOB_PERIODIC, "--ignore-not-found", "-n", K8S_NAMESPACE], check=False)
+    subprocess.run(["kubectl", "delete", "job", JOB_BOOTSTRAP, "--ignore-not-found", "-n", K8S_NAMESPACE], check=False)
+    subprocess.run(["kubectl", "delete", "namespace", K8S_NAMESPACE, "--ignore-not-found"], check=False)
