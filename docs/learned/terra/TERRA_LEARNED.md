@@ -265,4 +265,4 @@ The root_* modules are “abstract” by design: they are the **root module for 
 
 ---
 
-*This doc: `docs/learned/TERRA_LEARNED.md`. Related: [VPC_LEARNED.md](VPC_LEARNED.md), [DEPLOYMENT_ERRORS_AND_FIXES.md](../DEPLOYMENT_ERRORS_AND_FIXES.md), [README_WAR_STORIES.md](../../README_WAR_STORIES.md).*
+*This doc: `docs/learned/terra/TERRA_LEARNED.md`. Related: [VPC_LEARNED.md](../VPC_LEARNED.md), [DEPLOYMENT_ERRORS_AND_FIXES.md](../../DEPLOYMENT_ERRORS_AND_FIXES.md), [README_WAR_STORIES.md](../../../README_WAR_STORIES.md).*
