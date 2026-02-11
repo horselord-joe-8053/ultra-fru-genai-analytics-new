@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 import sys
 import subprocess
@@ -71,9 +72,6 @@ def main():
                 "--clusters", cluster_name,
                 "--region", os.getenv("AWS_REGION", "us-east-1")
             ], text=True)
-            data = requests.json.loads(out) # wait, json from subprocess? NO.
-            # Use json module
-            import json
             data = json.loads(out)
             
             clusters = data.get("clusters", [])

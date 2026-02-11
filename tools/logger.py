@@ -14,19 +14,23 @@ BLUE = '\033[0;34m'
 NC = '\033[0m'
 
 def _log_prefix(level: str) -> str:
+    """Format: [YYYY-MM-DD HH:MM:SS.mmm TZ] [LEVEL] message (aligned with legacy lib/logger.sh)"""
     now = datetime.datetime.now()
     ms = int(now.microsecond / 1000)
     ts = now.strftime("%Y-%m-%d %H:%M:%S.") + f"{ms:03d}"
-    # Python time.tzname or localized tz can be complex, using local time for TZ for now
-    tz = time.tzname[0]
-    
+    tz = time.tzname[0] if time.tzname else "UTC"
+
     color = NC
-    if level == "INFO": color = BLUE
-    elif level == "SUCCESS": color = GREEN
-    elif level == "WARNING": color = YELLOW
-    elif level == "ERROR": color = RED
-    
-    return f"[=={ts} {tz}==] {color}[{level}]{NC} "
+    if level == "INFO":
+        color = BLUE
+    elif level == "SUCCESS":
+        color = GREEN
+    elif level == "WARNING":
+        color = YELLOW
+    elif level == "ERROR":
+        color = RED
+
+    return f"[{ts} {tz}] {color}[{level}]{NC} "
 
 def info(msg: str):
     print(f"{_log_prefix('INFO')}{msg}")
@@ -41,7 +45,7 @@ def error(msg: str):
     print(f"{_log_prefix('ERROR')}{msg}", file=sys.stderr)
 
 def step(msg: str):
-    print(f"\n{_log_prefix('SUCCESS')}==> {BLUE}{msg}{NC}")
+    print(f"\n{_log_prefix('SUCCESS')}{GREEN}==>{NC} {BLUE}{msg}{NC}")
 
 class Heartbeat:
     """
