@@ -10,6 +10,7 @@ import requests
 from tools import logger
 from tools._env import load_dotenv, require, get_int_env
 from tools.aws._aws_vars import get_base_vars
+from tools.aws.bootstrap_helpers import K8S_NAMESPACE
 from tools.tofu_runner import ensure_shared_tofu_env
 
 load_dotenv()
@@ -235,7 +236,7 @@ def main():
             lb_host = ""
             for _ in range(30):  # Wait up to 5 minutes for LB hostname
                 try:
-                    cmd = ["kubectl", "get", "svc", "fru-api-svc", "-n", "fru", "-o", "jsonpath={.status.loadBalancer.ingress[0].hostname}"]
+                    cmd = ["kubectl", "get", "svc", "fru-api-svc", "-n", K8S_NAMESPACE, "-o", "jsonpath={.status.loadBalancer.ingress[0].hostname}"]
                     lb_host = subprocess.check_output(cmd, text=True).strip()
                     if lb_host:
                         break

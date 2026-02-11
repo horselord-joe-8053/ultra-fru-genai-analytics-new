@@ -46,19 +46,20 @@ def main():
     
     if args.scope == "kube":
         # Verify namespace is gone
-        logger.info("Verifying Kubernetes namespace 'fru' is gone...")
+        from tools.aws.bootstrap_helpers import K8S_NAMESPACE
+        logger.info(f"Verifying Kubernetes namespace '{K8S_NAMESPACE}' is gone...")
         try:
             # If namespace exists, this command succeeds (exit 0)
             subprocess.check_call(
-                ["kubectl", "get", "ns", "fru"], 
-                stdout=subprocess.DEVNULL, 
+                ["kubectl", "get", "ns", K8S_NAMESPACE],
+                stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL
             )
-            logger.error("✗ Namespace 'fru' still exists!")
+            logger.error(f"✗ Namespace '{K8S_NAMESPACE}' still exists!")
             sys.exit(1)
         except subprocess.CalledProcessError:
             # Command failed means namespace not found (Good)
-            logger.success("✓ Namespace 'fru' is gone.")
+            logger.success(f"✓ Namespace '{K8S_NAMESPACE}' is gone.")
             
     elif args.scope == "nonkube":
         # Verify ECS cluster is gone or inactive

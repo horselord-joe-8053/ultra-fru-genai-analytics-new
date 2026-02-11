@@ -113,12 +113,12 @@ Resources are imported by Terraform address and AWS resource ID. IDs are derived
 
 ## 3. Refactor Plan (No Code Yet)
 
-### Phase 1: CronJob/Job Naming (Optional)
+### Phase 1: CronJob/Job Naming (Optional) — DONE
 
-- [ ] Add `-kube` suffix to Job/CronJob names and/or namespace
-- [ ] Update: `infra-modules/shared/k8s/bootstrap-job.yaml`, `spark-cronjob.yaml`
-- [ ] Update: `bootstrap_helpers.py` (JOB_BOOTSTRAP, CRONJOB_PERIODIC, namespace)
-- [ ] Update: `kube_apply.py` references
+- [x] Add `-kube` suffix to Job/CronJob names and namespace `fru-kube`
+- [x] Update: `infra-modules/shared/k8s/bootstrap-job.yaml`, `spark-cronjob.yaml`
+- [x] Update: `bootstrap_helpers.py` (JOB_BOOTSTRAP, CRONJOB_PERIODIC, K8S_NAMESPACE)
+- [x] Update: `kube_apply.py` references
 
 ### Phase 2: Import Scripts (Python)
 

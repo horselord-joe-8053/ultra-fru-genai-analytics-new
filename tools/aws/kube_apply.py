@@ -8,13 +8,13 @@ Examples:
 
 This tool:
 - ensures kubeconfig for EKS
-- creates namespace `fru`
+- creates namespace `fru-kube`
 - substitutes SPARK_IMAGE and DELTA_ROOT
 - applies Job/CronJob manifests
 """
 import argparse, os, subprocess
 from tools._env import load_dotenv, require
-from tools.aws.bootstrap_helpers import check_k8s_bootstrap_job_succeeded
+from tools.aws.bootstrap_helpers import check_k8s_bootstrap_job_succeeded, JOB_BOOTSTRAP, K8S_NAMESPACE
 
 load_dotenv()
 
@@ -52,11 +52,11 @@ def main():
     delta_root  = f"s3a://{require('S3_DELTA_BUCKET')}/delta"
 
     # namespace
-    kubectl(["apply","-f","-"], input_text="apiVersion: v1\nkind: Namespace\nmetadata:\n  name: fru\n")
+    kubectl(["apply","-f","-"], input_text=f"apiVersion: v1\nkind: Namespace\nmetadata:\n  name: {K8S_NAMESPACE}\n")
 
     if args.phase == "bootstrap":
         if check_k8s_bootstrap_job_succeeded(args.env):
-            print("[KUBE BOOTSTRAP] Skip: Job fru-analytics-bootstrap already succeeded (idempotent)")
+            print(f"[KUBE BOOTSTRAP] Skip: Job {JOB_BOOTSTRAP} already succeeded (idempotent)")
         else:
             subs = {
                 "SPARK_IMAGE": spark_image,
@@ -66,7 +66,7 @@ def main():
                 "AWS_REGION": require("AWS_REGION")
             }
             txt = render("infra-modules/shared/k8s/bootstrap-job.yaml", subs)
-            kubectl(["delete", "job", "fru-analytics-bootstrap", "--ignore-not-found", "-n", "fru"])
+            kubectl(["delete", "job", JOB_BOOTSTRAP, "--ignore-not-found", "-n", K8S_NAMESPACE])
             kubectl(["apply", "-f", "-"], input_text=txt)
 
         # Deploy API (always run - idempotent)
