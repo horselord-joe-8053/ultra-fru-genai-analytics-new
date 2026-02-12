@@ -79,7 +79,8 @@ def handle_aws(args):
         # 4. Auto-verify after successful deploy (Verify Deploy)
         logger.step("Initiating automatic verification...")
         verify_script = f"{base_path}/verify_all_deploy.py"
-        run_command(["python", verify_script] + deploy_args)
+        verify_args = cmd_args + ["--scope", args.scope]  # verify does not accept --skip-doctor
+        run_command(["python", verify_script] + verify_args)
         
     elif args.command == "teardown":
         if not args.scope:

@@ -11,8 +11,9 @@ Reads from `.env`:
 """
 import argparse, os, subprocess, json, sys
 from tools._env import load_dotenv, require
-from tools.tofu_runner import tofu
+from tools.tofu_runner import get_tofu_env
 from tools.aws._backend import backend_config
+from tools.subprocess_retry import run_with_retry
 from tools import logger
 
 load_dotenv()
@@ -20,10 +21,12 @@ load_dotenv()
 def init_stack(env):
     logger.info("[SECRETS] Initializing shared/durable stack...")
     cfg = backend_config("deploy-aws/shared/durable", env)
-    args = ["init","-upgrade","-reconfigure"]
+    args = ["init", "-lock=false", "-upgrade", "-reconfigure"]
     for c in cfg:
         args += ["-backend-config", c]
-    tofu(args, cwd="deploy-aws/shared/durable", check=True)
+    exe = os.getenv("FRU_TF_BIN", "tofu")
+    cmd = [exe] + args
+    run_with_retry(cmd, cwd="deploy-aws/shared/durable", env=get_tofu_env(), description="tofu init for secrets")
     logger.success("[SECRETS] Stack initialized")
 
 def outputs(env):

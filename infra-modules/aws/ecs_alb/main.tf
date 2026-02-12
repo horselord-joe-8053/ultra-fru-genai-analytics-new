@@ -105,6 +105,21 @@ resource "aws_iam_role_policy_attachment" "exec_attach" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+# Execution role needs Secrets Manager access for container secrets (valueFrom)
+resource "aws_iam_role_policy" "exec_secrets" {
+  count       = length(var.secret_arns) > 0 ? 1 : 0
+  name        = "${var.name}-${var.env}-ecs-exec-secrets"
+  role        = aws_iam_role.exec.id
+  policy = jsonencode({
+    Version   = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["secretsmanager:GetSecretValue"]
+      Resource = [for arn in values(var.secret_arns) : arn]
+    }]
+  })
+}
+
 # Runtime role (extend later for Bedrock/RDS/etc)
 resource "aws_iam_role" "task" {
   name               = "${var.name}-${var.env}-ecs-task"

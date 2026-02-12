@@ -10,15 +10,20 @@ import requests
 from tools import logger
 from tools._env import load_dotenv, require, get_int_env
 from tools.aws._aws_vars import get_base_vars
-from tools.with_heartbeat import update_heartbeat
+from tools.with_heartbeat import poll_until, update_heartbeat
 from tools.aws.bootstrap_helpers import K8S_NAMESPACE
 from tools.tofu_runner import ensure_shared_tofu_env
 
 load_dotenv()
 
 # Configurable via .env (aligned with legacy heartbeat/timeout pattern)
-VERIFY_TIMEOUT_SEC = get_int_env("VERIFY_TIMEOUT_SEC", 300)
+VERIFY_TIMEOUT_SEC = get_int_env("VERIFY_TIMEOUT_SEC", 900)  # CloudFront propagation can take 5-15 min
 VERIFY_HEARTBEAT_INTERVAL_SEC = get_int_env("VERIFY_HEARTBEAT_INTERVAL_SEC", 30)
+
+# HTTP status codes treated as retriable during verification (transient "not-ready-yet" only).
+# 403 Access Denied = real failure (OAC misconfig, empty S3, wrong bucket policy) - NOT retriable.
+# 502/503 = may be transient (ECS/ALB not ready yet) - we poll until timeout; persistent 502/503 will fail.
+VERIFY_RETRIABLE_HTTP_CODES = frozenset({502, 503})
 
 def get_tofu_output(stack_dir, env):
     """Retrieve output from Tofu (assumed already applied)."""
@@ -34,13 +39,14 @@ def get_tofu_output(stack_dir, env):
         return {}
 
 def verify_api_endpoints(base_url, timeout_secs=None, heartbeat_interval_sec=None):
+    """
+    Poll endpoints until all pass or timeout. Uses poll_until (DRY with retry pattern).
+    HTTP 502/503 and ConnectionError are retriable (ECS/ALB not ready yet). 403 = real failure.
+    """
     timeout_secs = timeout_secs or VERIFY_TIMEOUT_SEC
     heartbeat_interval_sec = heartbeat_interval_sec or VERIFY_HEARTBEAT_INTERVAL_SEC
     logger.info(f"Validating API Endpoints at: {base_url} (timeout={timeout_secs}s, heartbeat every {heartbeat_interval_sec}s)")
-    start_time = time.time()
-    last_heartbeat = 0
 
-    # Check /query/stream - accept 200 even if agent is disabled (missing DB)
     def check_query_stream(r):
         if r.status_code != 200:
             return False
@@ -55,63 +61,60 @@ def verify_api_endpoints(base_url, timeout_secs=None, heartbeat_interval_sec=Non
         {"path": "/", "name": "Frontend", "check": lambda r: r.status_code == 200 and "<html" in r.text.lower()},
         {"path": "/query/stream?query=test", "name": "QueryStream", "check": check_query_stream},
     ]
-
     results = {e["name"]: False for e in endpoints}
     last_status = {e["name"]: None for e in endpoints}
     last_error = {e["name"]: None for e in endpoints}
 
-    while (time.time() - start_time) < timeout_secs:
-        elapsed = int(time.time() - start_time)
-        last_heartbeat = update_heartbeat(
-            elapsed, last_heartbeat, heartbeat_interval_sec,
-            f"  Still waiting for endpoints... {elapsed} s elapsed",
-        )
-
+    def check_one_round() -> bool:
         for e in endpoints:
             if results[e["name"]]:
                 continue
-
             url = base_url.rstrip("/") + e["path"]
             try:
                 resp = requests.get(url, timeout=10)
                 last_status[e["name"]] = resp.status_code
                 last_error[e["name"]] = None
-
                 if e["check"](resp):
                     logger.success(f"✓ {e['name']} endpoint is UP: {url}")
                     results[e["name"]] = True
                 else:
-                    if resp.status_code >= 500:
-                        logger.error(f"✗ {e['name']} endpoint returned {resp.status_code} (Server Error) - failing immediately")
-                        logger.error(f"  URL: {url}")
-                        logger.error(f"  Response body: {resp.text[:200]}")
-                        return False
+                    if resp.status_code in VERIFY_RETRIABLE_HTTP_CODES:
+                        last_error[e["name"]] = f"HTTP {resp.status_code}"
+                    elif resp.status_code >= 500:
+                        logger.error(f"✗ {e['name']} returned {resp.status_code} (Server Error)")
+                        logger.error(f"  URL: {url}\n  Body: {resp.text[:200]}")
+                        raise RuntimeError(f"Non-retriable: {e['name']} HTTP {resp.status_code}")
                     elif resp.status_code >= 400:
-                        logger.error(f"✗ {e['name']} endpoint returned {resp.status_code} (Client Error) - failing immediately")
+                        logger.error(f"✗ {e['name']} returned {resp.status_code} (Client Error)")
                         logger.error(f"  URL: {url}")
-                        return False
+                        raise RuntimeError(f"Non-retriable: {e['name']} HTTP {resp.status_code}")
             except requests.exceptions.ConnectionError as ex:
                 last_error[e["name"]] = str(ex)
             except requests.exceptions.Timeout as ex:
                 last_error[e["name"]] = str(ex)
-            except Exception as ex:
-                last_error[e["name"]] = str(ex)
+        return all(results.values())
 
-        if all(results.values()):
-            return True
+    def heartbeat_msg(elapsed: int) -> str:
+        pending = [n for n, ok in results.items() if not ok]
+        parts = [f"{n}: {last_status[n] or last_error[n] or 'pending'}" for n in pending]
+        detail = "; ".join(parts) if parts else "all passed"
+        return f"  Still waiting for endpoints... {elapsed}s elapsed ({detail})"
 
-        time.sleep(min(10, heartbeat_interval_sec))
-
-    # Timeout reached - report which endpoints failed
-    logger.error(f"\n[VERIFICATION TIMEOUT] Endpoints failed to respond successfully within {timeout_secs}s:")
-    for e in endpoints:
-        if not results[e["name"]]:
-            if last_status[e["name"]]:
-                logger.error(f"  ✗ {e['name']}: HTTP {last_status[e['name']]}")
-            else:
-                logger.error(f"  ✗ {e['name']}: {last_error[e['name']] or 'Unknown error'}")
-            
-    return False
+    ok = poll_until(
+        check_one_round,
+        timeout_sec=timeout_secs,
+        check_interval_sec=10,
+        heartbeat_interval_sec=heartbeat_interval_sec,
+        heartbeat_message_fn=heartbeat_msg,
+    )
+    if not ok:
+        logger.error(f"\n[VERIFICATION TIMEOUT] Endpoints failed within {timeout_secs}s:")
+        for e in endpoints:
+            if not results[e["name"]]:
+                s = last_status[e["name"]]
+                err = last_error[e["name"]]
+                logger.error(f"  ✗ {e['name']}: {f'HTTP {s}' if s else (err or 'Unknown error')}")
+    return ok
 
 def verify_cloudwatch(env, timeout_mins=None):
     region = require("AWS_REGION")

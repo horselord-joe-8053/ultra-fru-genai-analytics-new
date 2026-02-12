@@ -59,6 +59,24 @@
       "pattern": "ServiceUnavailable",
       "max_retries": 3,
       "wait_sec": 60
+    },
+    {
+      "id": "provider_registry_timeout",
+      "pattern": "could not query provider registry",
+      "max_retries": 2,
+      "wait_sec": 30
+    },
+    {
+      "id": "client_timeout",
+      "pattern": "Client.Timeout",
+      "max_retries": 2,
+      "wait_sec": 30
+    },
+    {
+      "id": "request_canceled",
+      "pattern": "request canceled",
+      "max_retries": 2,
+      "wait_sec": 30
     }
   ],
   "non_retriable": [
