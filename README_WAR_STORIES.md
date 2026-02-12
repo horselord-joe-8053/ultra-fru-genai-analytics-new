@@ -1913,3 +1913,49 @@ terraform init -upgrade -reconfigure
 ### 37.4 Takeaway
 
 Treat backend changes as an operational event. After refactors run `terraform init -upgrade -reconfigure` in the affected directories to refresh module caches and avoid the backend mismatch error. Coordinate and use `-migrate-state` only when you mean to relocate the canonical state. **Any script that runs tofu init** must use the same backend config as the main deploy (full stack path for `backend_config`, `-reconfigure`), or it will hit the same error.
+
+---
+
+## 38. CloudFront 403 Access Denied: Treating Real Failures as "Retriable" and the Missing Frontend Deploy
+
+**creation:** `<260211>`
+**last_updated:** `<260211>`
+
+**keywords:** CloudFront, S3, 403 Access Denied, OAC, verification retry logic, deploy-frontend, frontend deploy
+**difficulty:** 6
+**significance:** 8
+
+### 38.1 Context
+
+Post-deploy verification of the nonkube stack (ECS + CloudFront) ran for 15+ minutes, polling endpoints that returned `HTTP 403 Access Denied`. We had added 403 to a "retriable" list under the assumption that CloudFront propagation could cause transient 403s. Verification kept retrying instead of failing fast. The raw error was:
+
+```xml
+<Error>
+<Code>AccessDenied</Code>
+<Message>Access Denied</Message>
+</Error>
+```
+
+### 38.2 Root Cause
+
+Two separate issues:
+
+1. **403 is a real failure, not a transient state.** CloudFront 403 Access Denied indicates misconfiguration (OAC, bucket policy, wrong origin) or missing content (empty S3 bucket). It does *not* indicate "still propagating." Treating 403 as retriable masked the real problem and wasted 15 minutes.
+
+2. **The new deploy flow never deployed frontend to S3.** The legacy project runs `deploy-frontend.sh`, which builds the frontend and syncs `dist/` to the S3 bucket. The new project created the CloudFront distribution and S3 bucket via Terraform but **never uploaded frontend assets**. The bucket was empty. When CloudFront tried to fetch `/`, `index.html`, or `/health`, S3 returned 403 (or 404). Additionally, CloudFront lacked a path pattern for `/health`, so `/health` went to the default behavior (S3) instead of the ALB.
+
+### 38.3 Key Insight
+
+> Distinguish "transient not-ready-yet" (502/503 from ECS/ALB startup) from "real failure" (403 from permissions or missing content). 403 should never be retried; it signals a configuration or deploy-gap problem.
+
+### 38.4 Resolution
+
+1. **Removed 403 from retriable.** Only 502 and 503 remain retriable; 403 now fails immediately so we surface real config errors.
+
+2. **Added frontend deploy step.** Created `tools/aws/deploy_frontend.py` and wired it into the nonkube deploy flow: after applying the ECS stack, we build the frontend (`npm run build`) and sync `core-app/frontend/dist` to the S3 bucket via `aws s3 sync --delete`.
+
+3. **Added `/health` to CloudFront path patterns.** The legacy frontend module routes `/health` to the ALB. Our CloudFront module was missing this; we added an `ordered_cache_behavior` for `/health` targeting the API origin.
+
+### 38.5 Takeaway
+
+When designing verification retry logic, only tolerate status codes that indicate *transient* unavailability (502/503 during startup). 403 Access Denied is a configuration or content problem—retrying it forever hides the real bug. When migrating from a legacy deploy flow, ensure every deploy step (including frontend build + sync) is present in the new flow; missing steps cause "mysterious" failures that look like propagation delays.

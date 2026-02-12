@@ -58,6 +58,9 @@ override.tf.json
 *.swp
 *.swo
 
+# Node (frontend)
+core-app/frontend/node_modules/
+
 # Project specific
 .DS_Store
 teardown-all-*.log

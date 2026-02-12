@@ -19,6 +19,7 @@ import subprocess
 from tools import logger
 from tools._env import load_dotenv
 from tools.aws._backend import backend_config
+from tools.phases import PhaseTracker, teardown_phases
 from tools.aws._aws_vars import get_base_vars
 from tools.aws.bootstrap_helpers import k8s_remove_bootstrap_and_scheduler
 from tools.subprocess_retry import run_with_retry
@@ -94,11 +95,21 @@ def main():
         if resp != token:
             raise SystemExit("Confirmation failed. Exiting.")
 
+    phases = teardown_phases(args.scope)
+    tracker = PhaseTracker("Teardown", phases)
+    phase_idx = 0
+
     if args.scope in ("kube", "all"):
+        phase_idx += 1
+        tracker.start_phase(phase_idx)
         pre_destroy_kube(args.env)
+        tracker.end_phase(phase_idx)
 
     for s in ORDER[args.scope]:
+        phase_idx += 1
+        tracker.start_phase(phase_idx)
         destroy_stack(s, args.env)
+        tracker.end_phase(phase_idx)
 
     logger.success("Done. (Shared durable remains.)")
 

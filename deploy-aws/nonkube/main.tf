@@ -65,6 +65,7 @@ module "ecs_alb" {
     ANALYTICS_SCHEDULER_INTERVAL_SECONDS = tostring(var.analytics_scheduler_interval_seconds)
     DELTA_TABLE_PATH                     = var.delta_table_path
     CONTAINER_TYPE                       = "ecs"
+    CONTAINER_IMAGE                      = var.app_image
   }
 
   secret_arns = {

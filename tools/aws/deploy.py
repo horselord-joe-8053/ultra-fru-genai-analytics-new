@@ -31,18 +31,24 @@ from tools.aws._backend import backend_config
 
 from tools import logger
 from tools.aws._aws_vars import get_base_vars
+from tools.phases import PhaseTracker, deploy_phases
+from tools.subprocess_retry import run_with_retry
+from tools.tofu_runner import get_tofu_env
 from tools.aws.bootstrap_helpers import check_ecs_bootstrap_succeeded, K8S_NAMESPACE
+from tools.aws.deploy_frontend import deploy_frontend_to_s3
 
 load_dotenv()
 
 def init_stack(stack_dir: str, env: str):
     logger.info(f"[INIT] {stack_dir}")
     cfg = backend_config(stack_dir, env)
-    args = ["init","-upgrade","-reconfigure"]
+    args = ["init", "-lock=false", "-upgrade", "-reconfigure"]
     for c in cfg:
         args += ["-backend-config", c]
+    exe = os.getenv("FRU_TF_BIN", "tofu")
+    cmd = [exe] + args
     try:
-        tofu(args, cwd=stack_dir, check=True)
+        run_with_retry(cmd, cwd=stack_dir, env=get_tofu_env(), description=f"tofu init in {stack_dir}")
         logger.success(f"[INIT OK] {stack_dir}")
     except subprocess.CalledProcessError as e:
         logger.error(f"[INIT FAILED] {stack_dir}: {e}")
@@ -184,67 +190,90 @@ def main():
     scope = args.scope
     
     logger.step(f"Starting deployment: scope={scope} env={env}")
+    phases = deploy_phases(scope)
+    tracker = PhaseTracker("Deploy", phases)
 
     try:
-        # Fail fast on all support scripts
+        # Phase 1: Doctor
+        tracker.start_phase(1)
         if not args.skip_doctor:
-            logger.step("[1/9] Running doctor checks...")
+            logger.step(f"[1/{len(phases)}] Running doctor checks...")
             subprocess.run(["python","tools/aws/doctor.py","--env",env], check=True)
-            logger.success("[1/9] Doctor OK")
+            logger.success("Doctor OK")
         else:
-            logger.info("[1/9] Skipping doctor checks")
-        
-        logger.step("[2/9] Bootstrapping state backend...")
-        subprocess.run(["python","tools/aws/bootstrap_state_backend.py"], check=True)
-        logger.success("[2/9] Backend bootstrapped")
+            logger.info(f"[1/{len(phases)}] Skipping doctor checks")
+        tracker.end_phase(1)
 
-        # shared durable
-        logger.step("[3/9] Applying shared durable stack (VPC + Secrets)...")
+        # Phase 2: Backend
+        tracker.start_phase(2)
+        logger.step(f"[2/{len(phases)}] Bootstrapping state backend...")
+        subprocess.run(["python","tools/aws/bootstrap_state_backend.py"], check=True)
+        logger.success("Backend bootstrapped")
+        tracker.end_phase(2)
+
+        # Phase 3: Shared durable
+        tracker.start_phase(3)
+        logger.step(f"[3/{len(phases)}] Applying shared durable stack (VPC + Secrets)...")
         apply_stack("deploy-aws/shared/durable", env, [
             "-var", 'azs=["us-east-1a","us-east-1b"]',
             "-var", 'public_subnet_cidrs=["10.0.1.0/24","10.0.2.0/24"]',
             "-var", 'private_subnet_cidrs=["10.0.101.0/24","10.0.102.0/24"]',
             "-var", "allow_destroy_durable=false",
         ])
-        logger.success("[3/9] Shared durable applied")
+        logger.success("Shared durable applied")
+        tracker.end_phase(3)
 
-        # shared nondurable
-        logger.step("[4/9] Applying shared nondurable stack (ECR + S3)...")
+        # Phase 4: Shared nondurable
+        tracker.start_phase(4)
+        logger.step(f"[4/{len(phases)}] Applying shared nondurable stack (ECR + S3)...")
         apply_stack("deploy-aws/shared/nondurable", env, [])
-        logger.success("[4/9] Shared nondurable applied")
+        logger.success("Shared nondurable applied")
+        tracker.end_phase(4)
 
-        logger.step("[5/9] Ensuring secrets in Secrets Manager...")
+        # Phase 5: Secrets
+        tracker.start_phase(5)
+        logger.step(f"[5/{len(phases)}] Ensuring secrets in Secrets Manager...")
         subprocess.run(["python","tools/aws/ensure_secrets.py","--env",env], check=True)
-        logger.success("[5/9] Secrets ensured")
-        
-        logger.step("[6/9] Building and pushing images...")
-        subprocess.run(["python","tools/aws/build_and_push_images.py","--env",env], check=True)
-        logger.success("[6/9] Images built and pushed")
+        logger.success("Secrets ensured")
+        tracker.end_phase(5)
 
-        # Get ECR URLs from state
-        logger.step("[7/9] Getting ECR image URLs...")
+        # Phase 6: Build & push
+        tracker.start_phase(6)
+        logger.step(f"[6/{len(phases)}] Building and pushing images...")
+        subprocess.run(["python","tools/aws/build_and_push_images.py","--env",env], check=True)
+        logger.success("Images built and pushed")
+        tracker.end_phase(6)
+
+        # Phase 7: ECR URLs
+        tracker.start_phase(7)
+        logger.step(f"[7/{len(phases)}] Getting ECR image URLs...")
         snd = tofu_output_json("deploy-aws/shared/nondurable", env)
         app_repo_url = snd["ecr_app_url"]["value"]
         spark_repo_url = snd["ecr_spark_url"]["value"]
         spark_image_full = f"{spark_repo_url}:{require('SPARK_IMAGE_TAG')}"
         app_image_full = f"{app_repo_url}:{require('APP_IMAGE_TAG')}"
-        logger.info(f"[7/9] App image: {app_image_full}")
-        logger.info(f"[7/9] Spark image: {spark_image_full}")
-        logger.success("[7/9] ECR URLs obtained")
+        logger.info(f"App image: {app_image_full}")
+        logger.info(f"Spark image: {spark_image_full}")
+        logger.success("ECR URLs obtained")
+        tracker.end_phase(7)
 
         if scope == "kube":
-            logger.step("[8/9] Applying EKS stack...")
+            tracker.start_phase(8)
+            logger.step(f"[8/{len(phases)}] Applying EKS stack...")
             apply_stack("deploy-aws/kube", env, [
                 "-var", f"eks_instance_types=[\"{require('EKS_NODE_INSTANCE_TYPES')}\"]",
                 "-var", f"eks_desired_nodes={require('EKS_DESIRED_NODES')}",
             ])
-            logger.success("[8/9] EKS stack applied")
-            
-            logger.step("[9/9] Running Kubernetes bootstrap and schedule...")
+            logger.success("EKS stack applied")
+            tracker.end_phase(8)
+
+            tracker.start_phase(9)
+            logger.step(f"[9/{len(phases)}] Running Kubernetes bootstrap and schedule...")
             subprocess.run(["python","tools/aws/kube_apply.py","--env",env,"--phase","bootstrap","--spark-image",spark_image_full,"--app-image",app_image_full], check=True)
             subprocess.run(["python","tools/aws/kube_apply.py","--env",env,"--phase","schedule","--spark-image",spark_image_full], check=True)
-            logger.success("[9/9] Kubernetes bootstrap and schedule complete")
-            
+            logger.success("Kubernetes bootstrap and schedule complete")
+            tracker.end_phase(9)
+
             # Get CloudFront / K8s LoadBalancer URL for manual testing
             try:
                 logger.info("Retrieving frontend URL...")
@@ -291,17 +320,29 @@ def main():
             except Exception as e:
                 logger.warning(f"Could not retrieve frontend URL: {e}")
         else:
-            logger.step("[8/9] Applying ECS stack...")
+            tracker.start_phase(8)
+            logger.step(f"[8/{len(phases)}] Applying ECS stack...")
             apply_stack("deploy-aws/nonkube", env, [
                 "-var", f"app_image={app_repo_url}:{require('APP_IMAGE_TAG')}",
                 "-var", f"spark_image={spark_image_full}",
             ])
-            logger.success("[8/9] ECS stack applied")
+            logger.success("ECS stack applied")
+            tracker.end_phase(8)
 
-            logger.step("[9/9] Running ECS bootstrap...")
+            # Deploy frontend to S3 (build + sync) - matches legacy deploy-frontend.sh; fixes 403 Access Denied
+            stack_out = tofu_output_json("deploy-aws/nonkube", env)
+            frontend_bucket = stack_out.get("frontend_s3_bucket_id", {}).get("value")
+            if frontend_bucket:
+                deploy_frontend_to_s3(frontend_bucket, env)
+            else:
+                logger.warning("frontend_s3_bucket_id not found; skipping frontend deploy")
+
+            tracker.start_phase(9)
+            logger.step(f"[9/{len(phases)}] Running ECS bootstrap...")
             run_ecs_bootstrap(env)
-            logger.success("[9/9] ECS bootstrap complete")
-            
+            logger.success("ECS bootstrap complete")
+            tracker.end_phase(9)
+
             # Get CloudFront / ALB URLs for manual testing
             try:
                 logger.info("Retrieving frontend URL...")

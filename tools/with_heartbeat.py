@@ -6,7 +6,7 @@ import shlex
 import subprocess
 import threading
 import time
-from typing import Optional
+from typing import Callable, Optional
 
 from tools import logger
 from tools._env import load_dotenv, get_int_env
@@ -80,3 +80,32 @@ def update_heartbeat(
         logger.info(message)
         return elapsed
     return last_heartbeat
+
+
+def poll_until(
+    check_fn: Callable[[], bool],
+    timeout_sec: int,
+    check_interval_sec: int = 10,
+    heartbeat_interval_sec: Optional[int] = None,
+    heartbeat_message_fn: Optional[Callable[[int], str]] = None,
+) -> bool:
+    """
+    Poll check_fn until it returns True or timeout. Reusable retry/poll pattern.
+    On failure: check_fn returns False; we sleep and retry. On success: return True.
+    Raises: if check_fn raises (e.g. non-retriable error), propagate up.
+    """
+    interval = heartbeat_interval_sec or DEFAULT_HEARTBEAT_INTERVAL_SEC
+    start = time.time()
+    last_heartbeat = 0
+    while (time.time() - start) < timeout_sec:
+        try:
+            if check_fn():
+                return True
+        except Exception:
+            raise
+        elapsed = int(time.time() - start)
+        if heartbeat_message_fn and elapsed - last_heartbeat >= interval and elapsed > 0:
+            logger.info(heartbeat_message_fn(elapsed))
+            last_heartbeat = elapsed
+        time.sleep(min(check_interval_sec, interval))
+    return False

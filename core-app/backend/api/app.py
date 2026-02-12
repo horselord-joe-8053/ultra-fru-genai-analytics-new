@@ -335,6 +335,14 @@ def get_analytics():
         )
     
     try:
+        # Check if database is configured (PGHOST required for analytics)
+        if not os.environ.get("PGHOST"):
+            app.logger.info(f"[{request_id}] Analytics skipped: database not configured (PGHOST not set)")
+            return jsonify({
+                "error": "Analytics requires a database. Database not configured (PGHOST not set).",
+                "request_id": request_id
+            }), 200
+
         conn = get_db_conn()
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -412,9 +420,13 @@ def get_analytics():
         finally:
             return_db_conn(conn)
             
-    except Psycopg2Error as e:
-        app.logger.error(f"[{request_id}] Database error: {e}")
-        return jsonify({"error": "Database error", "request_id": request_id}), 500
+    except (ValueError, Psycopg2Error) as e:
+        # ValueError: required env (PGHOST, etc.) not set; Psycopg2Error: connection failed
+        app.logger.warning(f"[{request_id}] Analytics unavailable: {e}")
+        return jsonify({
+            "error": "Analytics requires a database. Database not configured or unreachable.",
+            "request_id": request_id
+        }), 200
     except Exception as e:
         app.logger.error(f"[{request_id}] Unexpected error: {e}", exc_info=True)
         return jsonify({"error": "Internal server error", "request_id": request_id}), 500

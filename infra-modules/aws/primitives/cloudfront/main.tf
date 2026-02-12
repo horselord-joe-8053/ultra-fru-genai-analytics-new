@@ -206,6 +206,27 @@ resource "aws_cloudfront_distribution" "frontend" {
     compress               = true
   }
 
+  # /health routes to ALB (API), not S3 - matches legacy frontend module
+  ordered_cache_behavior {
+    path_pattern     = "/health"
+    allowed_methods  = ["GET", "HEAD", "OPTIONS"]
+    cached_methods   = ["GET", "HEAD"]
+    target_origin_id = local.use_api ? local.api_origin_id : local.s3_origin_id
+
+    forwarded_values {
+      query_string = true
+      cookies {
+        forward = "all"
+      }
+    }
+
+    viewer_protocol_policy = "redirect-to-https"
+    min_ttl                = 0
+    default_ttl            = 0
+    max_ttl                = 0
+    compress               = true
+  }
+
   restrictions {
     geo_restriction {
       restriction_type = "none"
