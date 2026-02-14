@@ -44,9 +44,21 @@ variable "analytics_scheduler_interval_seconds" {
   type    = number
   default = 180
 }
-variable "delta_table_path" {
+variable "delta_lake_package" {
   type    = string
-  default = "s3://example/delta/fru_sales"
+  default = "io.delta:delta-spark_2.13:4.0.0"
+}
+variable "spark_home" {
+  type    = string
+  default = "/opt/spark"
+}
+variable "bedrock_inference_profile_id" {
+  type    = string
+  default = ""
+}
+variable "bedrock_model_id" {
+  type    = string
+  default = "anthropic.claude-3-5-haiku-20241022-v1:0"
 }
 
 variable "tf_state_bucket" { type = string }

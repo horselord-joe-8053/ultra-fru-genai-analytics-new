@@ -45,3 +45,21 @@ variable "spark_schedule_expression" {
   type    = string
   default = "rate(1 hour)"
 }
+
+# Aurora (optional - when empty, PG* not passed)
+variable "aurora_endpoint" {
+  type    = string
+  default = ""
+}
+variable "aurora_port" {
+  type    = string
+  default = "5432"
+}
+variable "aurora_database_name" {
+  type    = string
+  default = "fru_db"
+}
+variable "aurora_security_group_id" {
+  type    = string
+  default = ""
+}

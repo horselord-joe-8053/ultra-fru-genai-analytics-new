@@ -213,13 +213,19 @@ def main():
 
         # Phase 3: Shared durable
         tracker.start_phase(3)
-        logger.step(f"[3/{len(phases)}] Applying shared durable stack (VPC + Secrets)...")
-        apply_stack("live-deploy-aws/shared/durable", env, [
+        logger.step(f"[3/{len(phases)}] Applying shared durable stack (VPC + Aurora + Secrets)...")
+        aurora_pw = os.getenv("DB_PASSWORD") or os.getenv("PGPASSWORD") or ""
+        durable_vars = [
             "-var", 'azs=["us-east-1a","us-east-1b"]',
             "-var", 'public_subnet_cidrs=["10.0.1.0/24","10.0.2.0/24"]',
             "-var", 'private_subnet_cidrs=["10.0.101.0/24","10.0.102.0/24"]',
             "-var", "allow_destroy_durable=false",
-        ])
+        ]
+        if aurora_pw:
+            durable_vars += ["-var", f"aurora_master_password={aurora_pw}"]
+        else:
+            logger.warning("DB_PASSWORD/PGPASSWORD not set; Aurora creation may fail. Set in .env before deploy.")
+        apply_stack("live-deploy-aws/shared/durable", env, durable_vars)
         logger.success("Shared durable applied")
         tracker.end_phase(3)
 
@@ -237,16 +243,26 @@ def main():
         logger.success("Secrets ensured")
         tracker.end_phase(5)
 
-        # Phase 6: Build & push
+        # Phase 6: Database setup
         tracker.start_phase(6)
-        logger.step(f"[6/{len(phases)}] Building and pushing images...")
-        subprocess.run(["python","tools/aws/build_and_push_images.py","--env",env], check=True)
-        logger.success("Images built and pushed")
+        logger.step(f"[6/{len(phases)}] Setting up database (pgvector, schema, data)...")
+        try:
+            subprocess.run(["python","tools/aws/setup_database.py","--env",env], check=True)
+            logger.success("Database setup complete")
+        except subprocess.CalledProcessError as e:
+            logger.warning(f"Database setup had issues (may already be initialized): {e}")
         tracker.end_phase(6)
 
-        # Phase 7: ECR URLs
+        # Phase 7: Build & push
         tracker.start_phase(7)
-        logger.step(f"[7/{len(phases)}] Getting ECR image URLs...")
+        logger.step(f"[7/{len(phases)}] Building and pushing images...")
+        subprocess.run(["python","tools/aws/build_and_push_images.py","--env",env], check=True)
+        logger.success("Images built and pushed")
+        tracker.end_phase(7)
+
+        # Phase 8: ECR URLs
+        tracker.start_phase(8)
+        logger.step(f"[8/{len(phases)}] Getting ECR image URLs...")
         snd = tofu_output_json("live-deploy-aws/shared/nondurable", env)
         app_repo_url = snd["ecr_app_url"]["value"]
         spark_repo_url = snd["ecr_spark_url"]["value"]
@@ -255,24 +271,66 @@ def main():
         logger.info(f"App image: {app_image_full}")
         logger.info(f"Spark image: {spark_image_full}")
         logger.success("ECR URLs obtained")
-        tracker.end_phase(7)
+        tracker.end_phase(8)
 
         if scope == "kube":
-            tracker.start_phase(8)
-            logger.step(f"[8/{len(phases)}] Applying EKS stack...")
+            tracker.start_phase(9)
+            logger.step(f"[9/{len(phases)}] Applying EKS stack...")
             apply_stack("live-deploy-aws/kube", env, [
                 "-var", f"eks_instance_types=[\"{require('EKS_NODE_INSTANCE_TYPES')}\"]",
                 "-var", f"eks_desired_nodes={require('EKS_DESIRED_NODES')}",
             ])
             logger.success("EKS stack applied")
-            tracker.end_phase(8)
-
-            tracker.start_phase(9)
-            logger.step(f"[9/{len(phases)}] Running Kubernetes bootstrap and schedule...")
-            subprocess.run(["python","tools/aws/kube_apply.py","--env",env,"--phase","bootstrap","--spark-image",spark_image_full,"--app-image",app_image_full], check=True)
-            subprocess.run(["python","tools/aws/kube_apply.py","--env",env,"--phase","schedule","--spark-image",spark_image_full], check=True)
-            logger.success("Kubernetes bootstrap and schedule complete")
             tracker.end_phase(9)
+
+            tracker.start_phase(10)
+            logger.step(f"[10/{len(phases)}] Running Kubernetes bootstrap and schedule...")
+            delta_bucket = snd["delta_bucket"]["value"]
+            durable = tofu_output_json("live-deploy-aws/shared/durable", env)
+            aurora_endpoint = durable.get("aurora_endpoint", {}).get("value", "")
+            db_secret_arn = durable.get("db_password_secret_arn", {}).get("value", "")
+            openai_secret_arn = durable.get("openai_api_key_secret_arn", {}).get("value", "")
+            region = os.getenv("AWS_REGION", "us-east-1")
+            delta_table_path = f"s3a://{delta_bucket}/delta/fru_sales"
+            kube_apply_args = [
+                "python", "tools/aws/kube_apply.py", "--env", env, "--phase", "bootstrap",
+                "--spark-image", spark_image_full, "--app-image", app_image_full,
+                "--delta-bucket", delta_bucket,
+                "--pg-host", aurora_endpoint or "localhost",
+                "--pg-port", str(durable.get("aurora_port", {}).get("value", 5432)),
+                "--pg-database", durable.get("aurora_database_name", {}).get("value", "fru_db"),
+                "--pg-user", "postgres",
+                "--aws-region", region,
+                "--delta-table-path", delta_table_path,
+            ]
+            if db_secret_arn:
+                kube_apply_args += ["--db-secret-arn", db_secret_arn]
+            if openai_secret_arn:
+                kube_apply_args += ["--openai-secret-arn", openai_secret_arn]
+            bedrock_profile = os.getenv("AWS_BEDROCK_INFERENCE_PROFILE_ID", "")
+            bedrock_model = os.getenv("AWS_BEDROCK_MODEL_ID", "anthropic.claude-3-5-haiku-20241022-v1:0")
+            if bedrock_profile:
+                kube_apply_args += ["--bedrock-inference-profile-id", bedrock_profile]
+            if bedrock_model:
+                kube_apply_args += ["--bedrock-model-id", bedrock_model]
+            subprocess.run(kube_apply_args, check=True)
+            subprocess.run([
+                "python", "tools/aws/kube_apply.py", "--env", env, "--phase", "schedule",
+                "--spark-image", spark_image_full, "--delta-bucket", delta_bucket,
+            ], check=True)
+            logger.success("Kubernetes bootstrap and schedule complete")
+            tracker.end_phase(10)
+
+            # Deploy frontend to S3 (kube parity with nonkube)
+            try:
+                stack_out = tofu_output_json("live-deploy-aws/kube", env)
+                frontend_bucket = stack_out.get("frontend_s3_bucket_id", {}).get("value")
+                if frontend_bucket:
+                    deploy_frontend_to_s3(frontend_bucket, env)
+                else:
+                    logger.warning("frontend_s3_bucket_id not found; skipping kube frontend deploy")
+            except Exception as e:
+                logger.warning(f"Could not deploy kube frontend: {e}")
 
             # Get CloudFront / K8s LoadBalancer URL for manual testing
             try:
@@ -320,14 +378,14 @@ def main():
             except Exception as e:
                 logger.warning(f"Could not retrieve frontend URL: {e}")
         else:
-            tracker.start_phase(8)
-            logger.step(f"[8/{len(phases)}] Applying ECS stack...")
+            tracker.start_phase(9)
+            logger.step(f"[9/{len(phases)}] Applying ECS stack...")
             apply_stack("live-deploy-aws/nonkube", env, [
                 "-var", f"app_image={app_repo_url}:{require('APP_IMAGE_TAG')}",
                 "-var", f"spark_image={spark_image_full}",
             ])
             logger.success("ECS stack applied")
-            tracker.end_phase(8)
+            tracker.end_phase(9)
 
             # Deploy frontend to S3 (build + sync) - matches legacy deploy-frontend.sh; fixes 403 Access Denied
             stack_out = tofu_output_json("live-deploy-aws/nonkube", env)
@@ -337,11 +395,11 @@ def main():
             else:
                 logger.warning("frontend_s3_bucket_id not found; skipping frontend deploy")
 
-            tracker.start_phase(9)
-            logger.step(f"[9/{len(phases)}] Running ECS bootstrap...")
+            tracker.start_phase(10)
+            logger.step(f"[10/{len(phases)}] Running ECS bootstrap...")
             run_ecs_bootstrap(env)
             logger.success("ECS bootstrap complete")
-            tracker.end_phase(9)
+            tracker.end_phase(10)
 
             # Get CloudFront / ALB URLs for manual testing
             try:

@@ -28,6 +28,31 @@ module "vpc" {
   tags                 = module.tags.common_tags
 }
 
+module "aurora" {
+  source = "../../../infra-modules/aws/primitives/aurora"
+
+  prefix              = var.prefix
+  env                 = var.env
+  vpc_id              = module.vpc.vpc_id
+  private_subnet_ids  = module.vpc.private_subnet_ids
+  database_name       = var.aurora_database_name
+  master_username     = var.aurora_master_username
+  master_password     = var.aurora_master_password
+  engine_version      = var.aurora_engine_version
+  instance_class      = var.aurora_instance_class
+  instance_count      = var.aurora_instance_count
+  min_capacity        = var.aurora_min_capacity
+  max_capacity        = var.aurora_max_capacity
+  deletion_protection = var.aurora_deletion_protection
+  tags                = module.tags.common_tags
+}
+
 output "vpc_id" { value = module.vpc.vpc_id }
 output "public_subnet_ids" { value = module.vpc.public_subnet_ids }
 output "private_subnet_ids" { value = module.vpc.private_subnet_ids }
+
+output "aurora_endpoint"            { value = module.aurora.cluster_endpoint }
+output "aurora_port"                { value = module.aurora.cluster_port }
+output "aurora_database_name"       { value = module.aurora.database_name }
+output "aurora_security_group_id"   { value = module.aurora.security_group_id }
+output "aurora_cluster_arn"         { value = module.aurora.cluster_arn }

@@ -40,3 +40,9 @@ Options for the new project:
 - **Option C – One distribution, two origins:** a single CloudFront distribution with two custom origins (nonkube ALB + kube NLB) and path- or host-based routing. Possible but more complex and couples both backends to one distribution.
 
 Recommendation: **Option A or B** so you keep two distinct URLs (nonkube vs kube) and avoid coupling. Primitives live in `infra-modules/aws/primitives/`; deploy in `live-deploy-aws/shared/nondurable/` or `live-deploy-aws/shared/frontend/` (or two stacks under `shared/` as above).
+
+---
+
+## 4. Implementation Plan
+
+See **[FINAL_REFACTOR_PLAN.md](./FINAL_REFACTOR_PLAN.md)** for the consolidated refactor plan (Aurora, DB setup, PG* env vars, kube parity).
