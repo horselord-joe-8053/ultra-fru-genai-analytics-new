@@ -12,7 +12,7 @@ Reusable module: S3 bucket for static assets + CloudFront distribution with opti
 
 ## Usage
 
-From `deploy-aws/nonkube` or `deploy-aws/kube`:
+From `live-deploy-aws/nonkube` or `live-deploy-aws/kube`:
 
 ```hcl
 module "frontend" {
@@ -21,7 +21,7 @@ module "frontend" {
   env    = var.env
   suffix = "nonkube"  # or "kube"
 
-  alb_dns_name = module.ecs_alb.alb_dns_name  # or var.ingress_hostname for kube
+  alb_dns_name = module.ecs.alb_dns_name  # or var.ingress_hostname for kube
   api_origin_id = "ALB-${var.prefix}-${var.env}-nonkube"
   tags = module.tags.common_tags
 }

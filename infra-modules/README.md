@@ -22,7 +22,7 @@ infra-modules/
 │   │   └── vpc/                     # VPC with subnets (networking)
 │   └── services/                    # Higher-level AWS services
 │       ├── ecr/                     # Elastic Container Registry
-│       ├── ecs_alb/                 # ECS cluster + ALB
+│       ├── ecs/                     # ECS cluster + ALB + Spark schedule
 │       └── eks/                     # Elastic Kubernetes Service
 │
 └── gcp/                             # GCP-specific modules (placeholders)
@@ -43,12 +43,15 @@ infra-modules/
 
 ### AWS Services
 - **ecr**: Elastic Container Registry for Docker images
-- **ecs_alb**: ECS cluster with Application Load Balancer and task definitions
+- **ecs**: ECS cluster + ALB + API service + EventBridge Spark schedule (combined, consistent with eks)
 - **eks**: EKS cluster with security groups, node groups, kubeconfig
 
-### GCP Primitives (Placeholders)
-- **gcs_bucket**: Cloud Storage bucket (to be implemented)
-- **vpc**: VPC network with subnets (to be implemented)
+### GCP Primitives
+- **gcs_bucket**: Cloud Storage bucket (location, versioning, force_destroy)
+- **vpc**: VPC network (auto_create_subnetworks)
+
+### GCP Services
+- **gke**: GKE cluster (minimal phase-1)
 
 ## Usage Pattern
 

@@ -10,8 +10,13 @@ provider "google" {
   region  = var.gcp_region
 }
 
-resource "google_container_cluster" "gke" {
-  name               = var.gke_cluster_name
+module "delta_bucket" {
+  source = "../../../infra-modules/gcp/primitives/gcs_bucket"
+
+  name               = var.gcs_delta_bucket
   location           = var.gcp_region
-  initial_node_count = 1
+  force_destroy      = true
+  versioning_enabled = true
 }
+
+output "delta_bucket_name" { value = module.delta_bucket.bucket_name }

@@ -7,7 +7,7 @@ Usage:
   python tools/aws/teardown.py --scope all --env dev --non-interactive
 
 Rules:
-- Never destroys deploy-aws/shared/durable.
+- Never destroys live-deploy-aws/shared/durable.
 - `all` destroys: nonkube -> kube -> shared-nondurable.
 - Before destroying kube: removes CronJob + Job (scheduler + bootstrap).
 - Retry logic: configurable via config/retry_config.json (retriable/non-retriable patterns).
@@ -29,9 +29,9 @@ from tools.with_heartbeat import run_with_heartbeat
 load_dotenv()
 
 ORDER = {
-    "kube": ["deploy-aws/kube"],
-    "nonkube": ["deploy-aws/nonkube"],
-    "all": ["deploy-aws/nonkube", "deploy-aws/kube", "deploy-aws/shared/nondurable"],
+    "kube": ["live-deploy-aws/kube"],
+    "nonkube": ["live-deploy-aws/nonkube"],
+    "all": ["live-deploy-aws/nonkube", "live-deploy-aws/kube", "live-deploy-aws/shared/nondurable"],
 }
 
 

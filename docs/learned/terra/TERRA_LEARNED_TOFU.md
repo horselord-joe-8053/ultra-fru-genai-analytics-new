@@ -1,13 +1,13 @@
-# OpenTofu / Terraform: deploy-aws/shared/durable
+# OpenTofu / Terraform: live-deploy-aws/shared/durable
 
 Comprehensive reference for the durable shared stack and its layout. Uses OpenTofu (alias `tofu`) or Terraform.
 
 ---
 
-## 1. deploy-aws layout
+## 1. live-deploy-aws layout
 
 ```text
-deploy-aws/
+live-deploy-aws/
 ├── shared/
 │   ├── durable/          ← this stack (VPC, Secrets)
 │   │   ├── main.tf
@@ -64,12 +64,12 @@ flowchart TB
 
 ## 4. Generated files (gitignored)
 
-| File / Dir | Purpose | When / how created |
-|------------|---------|--------------------|
-| **.terraform/** | Provider binaries, module cache | `tofu init` or `terraform init`. Contains provider plugins and module downloads from `infra-modules/`. |
-| **.terraform.lock.hcl** / **.tofu.lock.hcl** | Provider version lock | `tofu init` / `terraform init`. Pins provider versions for reproducible runs. |
-| **terraform.tfstate** / ***.tfstate** | Local state (if used) | Normally state lives in S3; local state appears only if backend is not configured. |
-| **tofu_data/** | Shared OpenTofu data (repo root) | Set by `TF_DATA_DIR` (absolute path) so all stacks share one provider cache; avoids duplicating provider binaries per stack. Old per-stack `*/tofu_data` dirs can be removed. |
+| File / Dir | Purpose | When / how created | In this project |
+|------------|---------|--------------------|-----------------|
+| **.terraform/** | Provider binaries, module cache | `tofu init`. Contains provider plugins and module downloads. | **Stale** when `TF_DATA_DIR` is set. Use `tofu_data/` instead; per-stack `.terraform/` dirs removed. |
+| **.terraform.lock.hcl** | Provider version lock | `tofu init`. Pins provider versions for reproducible runs. | **Gitignored** (not committed). Created per stack; used when running from that stack. |
+| **terraform.tfstate** | Local state (if used) | Normally state lives in S3; local state only if backend not configured. | State is remote (S3). |
+| **tofu_data/** | Shared provider cache (repo root) | Set by `TF_DATA_DIR` so all stacks share one cache. | **Canonical** location. `init_terra_upgrade_reconfigure.sh` and `tofu_runner.py` set `TF_DATA_DIR=$REPO_ROOT/tofu_data`. |
 
 State is stored remotely in S3; key format: `{prefix}/{env}/aws-shared-durable.tfstate`.
 

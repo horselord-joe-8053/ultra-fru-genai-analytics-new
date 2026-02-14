@@ -1,7 +1,10 @@
+# ECS cluster + ALB + API service + Spark schedule (EventBridge -> ECS RunTask)
+# Combined module for consistency with infra-modules/aws/eks
 
+# ---- ECS ALB (cluster, ALB, API service) ----
 resource "aws_cloudwatch_log_group" "ecs" {
   name              = "/fru/${var.env}/ecs-api"
-  retention_in_days = 14
+  retention_in_days  = 14
   tags              = var.tags
 }
 
@@ -10,7 +13,6 @@ resource "aws_ecs_cluster" "main" {
   tags = merge(var.tags, { Name = var.cluster_name })
 }
 
-# ALB SG
 resource "aws_security_group" "alb" {
   name        = "${var.alb_name}-sg"
   description = "ALB SG"
@@ -63,7 +65,6 @@ resource "aws_lb_listener" "http" {
   }
 }
 
-# ECS tasks SG: allow inbound only from ALB
 resource "aws_security_group" "tasks" {
   name        = "${var.name}-ecs-tasks-sg"
   description = "ECS tasks SG"
@@ -87,7 +88,6 @@ resource "aws_security_group_rule" "tasks_from_alb" {
   description              = "Allow inbound from ALB"
 }
 
-# Execution role (ECR pull + logs)
 resource "aws_iam_role" "exec" {
   name = "${var.name}-${var.env}-ecs-exec"
   assume_role_policy = jsonencode({
@@ -105,7 +105,6 @@ resource "aws_iam_role_policy_attachment" "exec_attach" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-# Execution role needs Secrets Manager access for container secrets (valueFrom)
 resource "aws_iam_role_policy" "exec_secrets" {
   count       = length(var.secret_arns) > 0 ? 1 : 0
   name        = "${var.name}-${var.env}-ecs-exec-secrets"
@@ -120,14 +119,12 @@ resource "aws_iam_role_policy" "exec_secrets" {
   })
 }
 
-# Runtime role (extend later for Bedrock/RDS/etc)
 resource "aws_iam_role" "task" {
   name               = "${var.name}-${var.env}-ecs-task"
   assume_role_policy = aws_iam_role.exec.assume_role_policy
   tags               = var.tags
 }
 
-# Task definition
 locals {
   env_list     = [for k, v in var.env_vars : { name = k, value = v }]
   secrets_list = [for k, v in var.secret_arns : { name = k, valueFrom = v }]
@@ -189,4 +186,129 @@ resource "aws_ecs_service" "api" {
 
   depends_on = [aws_lb_listener.http]
   tags       = var.tags
+}
+
+# ---- Spark schedule (EventBridge -> ECS RunTask) ----
+resource "aws_cloudwatch_log_group" "spark" {
+  name              = "/fru/${var.env}/spark"
+  retention_in_days  = 14
+  tags              = var.tags
+}
+
+resource "aws_iam_role" "spark_task_exec" {
+  name = "${var.name}-${var.env}-spark-task-exec"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "ecs-tasks.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+  tags = var.tags
+}
+
+resource "aws_iam_role_policy_attachment" "spark_exec_attach" {
+  role       = aws_iam_role.spark_task_exec.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
+resource "aws_iam_role_policy" "spark_s3" {
+  name = "${var.name}-${var.env}-spark-s3"
+  role = aws_iam_role.spark_task_exec.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = ["s3:GetObject", "s3:PutObject", "s3:ListBucket"]
+      Resource = [
+        "arn:aws:s3:::${var.delta_bucket}",
+        "arn:aws:s3:::${var.delta_bucket}/*"
+      ]
+    }]
+  })
+}
+
+resource "aws_ecs_task_definition" "spark" {
+  family                   = "${var.name}-${var.env}-spark"
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu                      = "512"
+  memory                   = "1024"
+  execution_role_arn       = aws_iam_role.spark_task_exec.arn
+  container_definitions = jsonencode([{
+    name      = "spark"
+    image     = var.spark_image
+    essential = true
+    command   = ["spark-submit", "/opt/fru/jobs/periodic.py"]
+    environment = [
+      { name = "SPARK_EXTRA_CONF", value = "spark.fru.delta_root=s3a://${var.delta_bucket}/delta" }
+    ]
+    logConfiguration = {
+      logDriver = "awslogs"
+      options = {
+        awslogs-group         = aws_cloudwatch_log_group.spark.name
+        awslogs-region        = data.aws_region.current.name
+        awslogs-stream-prefix = "spark"
+      }
+    }
+  }])
+  tags       = var.tags
+  depends_on = [aws_iam_role_policy_attachment.spark_exec_attach, aws_cloudwatch_log_group.spark]
+}
+
+resource "aws_iam_role" "events_invoke_ecs" {
+  name = "${var.name}-${var.env}-events-invoke-ecs"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "events.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+  tags = var.tags
+}
+
+resource "aws_iam_role_policy" "events_invoke_ecs" {
+  name = "${var.name}-${var.env}-events-invoke-ecs"
+  role = aws_iam_role.events_invoke_ecs.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["ecs:RunTask"]
+        Resource = [aws_ecs_task_definition.spark.arn]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["iam:PassRole"]
+        Resource = [aws_iam_role.spark_task_exec.arn]
+      }
+    ]
+  })
+}
+
+resource "aws_cloudwatch_event_rule" "spark_schedule" {
+  name                = "${var.name}-${var.env}-spark-schedule"
+  schedule_expression = var.spark_schedule_expression
+  tags                = var.tags
+}
+
+resource "aws_cloudwatch_event_target" "spark" {
+  rule     = aws_cloudwatch_event_rule.spark_schedule.name
+  arn      = aws_ecs_cluster.main.arn
+  role_arn = aws_iam_role.events_invoke_ecs.arn
+
+  ecs_target {
+    task_definition_arn = aws_ecs_task_definition.spark.arn
+    task_count          = 1
+    launch_type         = "FARGATE"
+    network_configuration {
+      subnets          = var.private_subnet_ids
+      security_groups  = [aws_security_group.tasks.id]
+      assign_public_ip = false
+    }
+  }
 }

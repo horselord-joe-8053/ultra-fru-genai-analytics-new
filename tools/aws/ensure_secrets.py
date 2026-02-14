@@ -20,19 +20,19 @@ load_dotenv()
 
 def init_stack(env):
     logger.info("[SECRETS] Initializing shared/durable stack...")
-    cfg = backend_config("deploy-aws/shared/durable", env)
+    cfg = backend_config("live-deploy-aws/shared/durable", env)
     args = ["init", "-lock=false", "-upgrade", "-reconfigure"]
     for c in cfg:
         args += ["-backend-config", c]
     exe = os.getenv("FRU_TF_BIN", "tofu")
     cmd = [exe] + args
-    run_with_retry(cmd, cwd="deploy-aws/shared/durable", env=get_tofu_env(), description="tofu init for secrets")
+    run_with_retry(cmd, cwd="live-deploy-aws/shared/durable", env=get_tofu_env(), description="tofu init for secrets")
     logger.success("[SECRETS] Stack initialized")
 
 def outputs(env):
     logger.info("[SECRETS] Getting terraform outputs...")
     init_stack(env)
-    out = subprocess.check_output([os.getenv("FRU_TF_BIN","tofu"),"output","-json"], cwd="deploy-aws/shared/durable", text=True, timeout=30)
+    out = subprocess.check_output([os.getenv("FRU_TF_BIN","tofu"),"output","-json"], cwd="live-deploy-aws/shared/durable", text=True, timeout=30)
     result = json.loads(out)
     logger.success("[SECRETS] Outputs retrieved")
     return result

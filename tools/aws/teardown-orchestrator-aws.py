@@ -8,7 +8,7 @@ Usage:
   python tools/teardown-orchestrator-aws.py --scope all --env dev --non-interactive
 
 Rules:
-- Never destroys deploy-aws/shared/durable.
+- Never destroys live-deploy-aws/shared/durable.
 - `all` destroys: nonkube -> kube -> shared-nondurable.
 """
 import argparse, os
@@ -36,13 +36,13 @@ def main():
             raise SystemExit("Confirmation failed. Exiting.")
 
     if args.scope == "kube":
-        destroy_stack("deploy-aws/kube")
+        destroy_stack("live-deploy-aws/kube")
     elif args.scope == "nonkube":
-        destroy_stack("deploy-aws/nonkube")
+        destroy_stack("live-deploy-aws/nonkube")
     else:
-        destroy_stack("deploy-aws/nonkube")
-        destroy_stack("deploy-aws/kube")
-        destroy_stack("deploy-aws/shared/nondurable")
+        destroy_stack("live-deploy-aws/nonkube")
+        destroy_stack("live-deploy-aws/kube")
+        destroy_stack("live-deploy-aws/shared/nondurable")
 
     print("Done. (Shared durable remains.)")
 

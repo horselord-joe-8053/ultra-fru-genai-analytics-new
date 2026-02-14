@@ -1,5 +1,5 @@
 
-# deploy-aws/shared/durable
+# live-deploy-aws/shared/durable
 
 Durable shared AWS infra:
 - VPC + subnets + NAT

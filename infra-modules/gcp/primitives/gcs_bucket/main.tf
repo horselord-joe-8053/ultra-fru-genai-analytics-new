@@ -1,13 +1,17 @@
-# GCP Cloud Storage Bucket Module - Placeholder
-# TODO: Implement GCS bucket creation
+# GCP Cloud Storage Bucket Module
 # Reference: https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/storage_bucket
 
 resource "google_storage_bucket" "this" {
   name          = var.name
-  location      = "US" # TODO: Make configurable
-  force_destroy = false
+  location      = var.location
+  force_destroy = var.force_destroy
 
   labels = var.tags
 
-  # TODO: Add versioning, encryption, lifecycle policies as needed
+  dynamic "versioning" {
+    for_each = var.versioning_enabled ? [1] : []
+    content {
+      enabled = true
+    }
+  }
 }

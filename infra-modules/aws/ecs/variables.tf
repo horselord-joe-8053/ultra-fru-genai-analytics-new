@@ -1,4 +1,3 @@
-
 variable "name" { type = string }
 variable "env" { type = string }
 variable "tags" {
@@ -24,13 +23,11 @@ variable "container_port" {
 
 variable "app_image" { type = string }
 
-# non-sensitive env vars to inject
 variable "env_vars" {
   type    = map(string)
   default = {}
 }
 
-# secrets manager ARNs: env var name -> secret arn
 variable "secret_arns" {
   type    = map(string)
   default = {}
@@ -39,4 +36,12 @@ variable "secret_arns" {
 variable "desired_count" {
   type    = number
   default = 1
+}
+
+# Spark schedule
+variable "delta_bucket" { type = string }
+variable "spark_image" { type = string }
+variable "spark_schedule_expression" {
+  type    = string
+  default = "rate(1 hour)"
 }

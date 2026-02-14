@@ -26,7 +26,7 @@ ALLOW_DURABLE_DESTROY=YES python tools/aws/destroy_durable.py --env dev --force
 If you want to run `tofu plan` (or init) by hand in a stack directory without the deploy pipeline, use:
 
 ```bash
-./tools/aws/utils/init_terra_upgrade_reconfigure.sh deploy-aws/shared/nondurable
+./tools/aws/utils/init_terra_upgrade_reconfigure.sh live-deploy-aws/shared/nondurable
 ```
 
 See [tools/aws/utils/README.md](utils/README.md) for details.
