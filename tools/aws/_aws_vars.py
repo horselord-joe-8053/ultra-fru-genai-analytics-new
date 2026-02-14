@@ -26,6 +26,9 @@ MAP = {
     "ENABLE_ANALYTICS_SCHEDULER": "enable_analytics_scheduler",
     "ANALYTICS_SCHEDULER_INTERVAL_SECONDS": "analytics_scheduler_interval_seconds",
     "DELTA_TABLE_PATH": "delta_table_path",
+    "DELTA_LAKE_PACKAGE": "delta_lake_package",
+    "AWS_BEDROCK_INFERENCE_PROFILE_ID": "bedrock_inference_profile_id",
+    "AWS_BEDROCK_MODEL_ID": "bedrock_model_id",
 }
 
 def get_base_vars(env: str):

@@ -55,7 +55,7 @@ module "ecs" {
   app_image     = var.app_image
   desired_count = var.desired_count
 
-  env_vars = {
+  env_vars = merge({
     AWS_REGION                           = var.aws_region
     LOG_LEVEL                            = var.log_level
     ALLOWED_ORIGINS                      = var.allowed_origins
@@ -63,15 +63,29 @@ module "ecs" {
     OPENAI_EMBED_MODEL                   = var.openai_embed_model
     ENABLE_ANALYTICS_SCHEDULER           = var.enable_analytics_scheduler
     ANALYTICS_SCHEDULER_INTERVAL_SECONDS = tostring(var.analytics_scheduler_interval_seconds)
-    DELTA_TABLE_PATH                     = var.delta_table_path
+    DELTA_TABLE_PATH                     = "s3a://${var.delta_bucket}/delta/fru_sales"
+    DELTA_LAKE_PACKAGE                   = var.delta_lake_package
+    SPARK_HOME                           = var.spark_home
     CONTAINER_TYPE                       = "ecs"
     CONTAINER_IMAGE                      = var.app_image
-  }
+    AWS_BEDROCK_INFERENCE_PROFILE_ID     = var.bedrock_inference_profile_id
+    AWS_BEDROCK_MODEL_ID                 = var.bedrock_model_id
+  }, try(data.terraform_remote_state.shared_durable.outputs.aurora_endpoint, "") != "" ? {
+    PGHOST     = data.terraform_remote_state.shared_durable.outputs.aurora_endpoint
+    PGPORT     = tostring(data.terraform_remote_state.shared_durable.outputs.aurora_port)
+    PGDATABASE = data.terraform_remote_state.shared_durable.outputs.aurora_database_name
+    PGUSER     = "postgres"
+  } : {})
 
   secret_arns = {
     OPENAI_API_KEY = data.terraform_remote_state.shared_durable.outputs.openai_api_key_secret_arn
     PGPASSWORD     = data.terraform_remote_state.shared_durable.outputs.db_password_secret_arn
   }
+
+  aurora_endpoint          = try(data.terraform_remote_state.shared_durable.outputs.aurora_endpoint, "")
+  aurora_port              = tostring(try(data.terraform_remote_state.shared_durable.outputs.aurora_port, 5432))
+  aurora_database_name     = try(data.terraform_remote_state.shared_durable.outputs.aurora_database_name, "fru_db")
+  aurora_security_group_id = try(data.terraform_remote_state.shared_durable.outputs.aurora_security_group_id, "")
 
   delta_bucket             = var.delta_bucket
   spark_image              = var.spark_image

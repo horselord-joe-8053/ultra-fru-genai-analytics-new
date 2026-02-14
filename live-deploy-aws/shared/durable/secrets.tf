@@ -17,4 +17,6 @@ resource "aws_secretsmanager_secret" "db_password" {
 }
 
 output "openai_api_key_secret_arn" { value = aws_secretsmanager_secret.openai_api_key.arn }
-output "db_password_secret_arn" { value = aws_secretsmanager_secret.db_password.arn }
+output "db_password_secret_arn"   { value = aws_secretsmanager_secret.db_password.arn }
+# For RDS Data API (setup_database, ETL): use db_password_secret_arn
+output "db_secret_arn" { value = aws_secretsmanager_secret.db_password.arn }

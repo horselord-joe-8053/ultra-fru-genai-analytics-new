@@ -88,6 +88,17 @@ resource "aws_security_group_rule" "tasks_from_alb" {
   description              = "Allow inbound from ALB"
 }
 
+resource "aws_security_group_rule" "aurora_from_ecs" {
+  count                    = var.aurora_security_group_id != "" ? 1 : 0
+  type                     = "ingress"
+  from_port                = 5432
+  to_port                  = 5432
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.tasks.id
+  security_group_id        = var.aurora_security_group_id
+  description              = "Allow ECS tasks to reach Aurora"
+}
+
 resource "aws_iam_role" "exec" {
   name = "${var.name}-${var.env}-ecs-exec"
   assume_role_policy = jsonencode({

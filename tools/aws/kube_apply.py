@@ -9,10 +9,10 @@ Examples:
 This tool:
 - ensures kubeconfig for EKS
 - creates namespace `fru-kube`
-- substitutes SPARK_IMAGE and DELTA_ROOT
+- substitutes SPARK_IMAGE, DELTA_ROOT, PG*
 - applies Job/CronJob manifests
 """
-import argparse, os, subprocess
+import argparse, base64, json, os, subprocess
 from tools._env import load_dotenv, require
 from tools.aws.bootstrap_helpers import check_k8s_bootstrap_job_succeeded, JOB_BOOTSTRAP, K8S_NAMESPACE
 
@@ -21,7 +21,7 @@ load_dotenv()
 def render(template_path, subs):
     s = open(template_path, "r").read()
     for k,v in subs.items():
-        s = s.replace("${"+k+"}", v)
+        s = s.replace("${"+k+"}", str(v))
     return s
 
 def kubectl(args, input_text=None):
@@ -29,12 +29,40 @@ def kubectl(args, input_text=None):
     print("+", " ".join(cmd))
     subprocess.run(cmd, input=input_text, text=True, check=False)
 
+def fetch_secret_value(secret_arn: str) -> str:
+    """Fetch secret value from AWS Secrets Manager. Handles plain string or JSON."""
+    out = subprocess.check_output([
+        "aws", "secretsmanager", "get-secret-value",
+        "--secret-id", secret_arn,
+        "--query", "SecretString",
+        "--output", "text",
+        "--region", os.getenv("AWS_REGION", "us-east-1"),
+    ], text=True)
+    raw = out.strip()
+    try:
+        parsed = json.loads(raw)
+        return parsed if isinstance(parsed, str) else str(parsed)
+    except json.JSONDecodeError:
+        return raw.strip('"')
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--env", default=os.getenv("FRU_ENV","dev"))
     ap.add_argument("--phase", choices=["bootstrap","schedule"], required=True)
     ap.add_argument("--spark-image", help="Full Spark image URI")
     ap.add_argument("--app-image", help="Full App image URI")
+    ap.add_argument("--delta-bucket", help="S3 delta bucket (overrides S3_DELTA_BUCKET)")
+    ap.add_argument("--pg-host", default="", help="PGHOST from durable")
+    ap.add_argument("--pg-port", default="5432", help="PGPORT")
+    ap.add_argument("--pg-database", default="fru_db", help="PGDATABASE")
+    ap.add_argument("--pg-user", default="postgres", help="PGUSER")
+    ap.add_argument("--db-secret-arn", default="", help="AWS Secrets Manager ARN for db_password")
+    ap.add_argument("--openai-secret-arn", default="", help="AWS Secrets Manager ARN for openai_api_key")
+    ap.add_argument("--aws-region", default="", help="AWS_REGION for pods")
+    ap.add_argument("--delta-table-path", default="", help="DELTA_TABLE_PATH (s3a://bucket/delta/fru_sales)")
+    ap.add_argument("--delta-lake-package", default="io.delta:delta-spark_2.13:4.0.0", help="DELTA_LAKE_PACKAGE")
+    ap.add_argument("--bedrock-inference-profile-id", default="", help="AWS_BEDROCK_INFERENCE_PROFILE_ID")
+    ap.add_argument("--bedrock-model-id", default="anthropic.claude-3-5-haiku-20241022-v1:0", help="AWS_BEDROCK_MODEL_ID")
     args = ap.parse_args()
 
     # ensure kubeconfig
@@ -42,14 +70,14 @@ def main():
 
     spark_image = args.spark_image
     if not spark_image:
-        # Prefer fully-qualified repo URL from state if available; fallback to env
         spark_image = f"{require('ECR_REPO_SPARK')}:{require('SPARK_IMAGE_TAG')}"
-    
+
     app_image = args.app_image
     if not app_image:
         app_image = f"{require('ECR_REPO_APP')}:{require('APP_IMAGE_TAG')}"
-    
-    delta_root  = f"s3a://{require('S3_DELTA_BUCKET')}/delta"
+
+    delta_bucket = args.delta_bucket or os.getenv("S3_DELTA_BUCKET") or f"{os.getenv('FRU_PREFIX','fru')}-{args.env}-delta"
+    delta_root = f"s3a://{delta_bucket}/delta"
 
     # namespace
     kubectl(["apply","-f","-"], input_text=f"apiVersion: v1\nkind: Namespace\nmetadata:\n  name: {K8S_NAMESPACE}\n")
@@ -69,9 +97,64 @@ def main():
             kubectl(["delete", "job", JOB_BOOTSTRAP, "--ignore-not-found", "-n", K8S_NAMESPACE])
             kubectl(["apply", "-f", "-"], input_text=txt)
 
+        # Create db-credentials secret (from AWS or placeholder)
+        pw = "placeholder"
+        if args.db_secret_arn:
+            try:
+                pw = fetch_secret_value(args.db_secret_arn)
+            except Exception as e:
+                print(f"WARN: Could not fetch db password: {e}")
+        secret_b64 = base64.b64encode(pw.encode()).decode()
+        secret_yml = f"""apiVersion: v1
+kind: Secret
+metadata:
+  name: db-credentials
+  namespace: {K8S_NAMESPACE}
+type: Opaque
+data:
+  PGPASSWORD: {secret_b64}
+"""
+        kubectl(["apply", "-f", "-"], input_text=secret_yml)
+
+        # Create app-credentials secret (OPENAI_API_KEY from AWS or placeholder)
+        openai_key = "sk-placeholder"
+        if args.openai_secret_arn:
+            try:
+                openai_key = fetch_secret_value(args.openai_secret_arn)
+            except Exception as e:
+                print(f"WARN: Could not fetch OPENAI_API_KEY: {e}")
+        openai_b64 = base64.b64encode(openai_key.encode()).decode()
+        app_secret_yml = f"""apiVersion: v1
+kind: Secret
+metadata:
+  name: app-credentials
+  namespace: {K8S_NAMESPACE}
+type: Opaque
+data:
+  OPENAI_API_KEY: {openai_b64}
+"""
+        kubectl(["apply", "-f", "-"], input_text=app_secret_yml)
+
         # Deploy API (always run - idempotent)
         try:
-            txt = render("infra-modules/shared/k8s/api-deployment.yaml", {"APP_IMAGE": app_image})
+            delta_table_path = args.delta_table_path or f"s3a://{delta_bucket}/delta/fru_sales"
+            api_subs = {
+                "APP_IMAGE": app_image,
+                "PGHOST": args.pg_host or "localhost",
+                "PGPORT": args.pg_port,
+                "PGUSER": args.pg_user,
+                "PGDATABASE": args.pg_database,
+                "ALLOWED_ORIGINS": "*",
+                "AWS_REGION": args.aws_region or os.getenv("AWS_REGION", "us-east-1"),
+                "DELTA_TABLE_PATH": delta_table_path,
+                "DELTA_LAKE_PACKAGE": args.delta_lake_package,
+                "SPARK_HOME": "/opt/spark",
+                "AWS_BEDROCK_INFERENCE_PROFILE_ID": args.bedrock_inference_profile_id or "",
+                "AWS_BEDROCK_MODEL_ID": args.bedrock_model_id or "anthropic.claude-3-5-haiku-20241022-v1:0",
+                "ENABLE_ANALYTICS_SCHEDULER": os.getenv("ENABLE_ANALYTICS_SCHEDULER", "true"),
+                "ANALYTICS_SCHEDULER_INTERVAL_SECONDS": os.getenv("ANALYTICS_SCHEDULER_INTERVAL_SECONDS", "180"),
+            }
+            txt = render("infra-modules/shared/k8s/api-deployment.yaml", api_subs)
             kubectl(["apply","-f","-"], input_text=txt)
             txt = render("infra-modules/shared/k8s/api-service.yaml", {})
             kubectl(["apply","-f","-"], input_text=txt)

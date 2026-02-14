@@ -45,3 +45,9 @@ python tools/aws/deploy.py --scope nonkube --env dev
 ```
 
 This destroys and recreates all nonkube resources.
+
+---
+
+## See Also
+
+- **[FINAL_REFACTOR_PLAN.md](./FINAL_REFACTOR_PLAN.md)** – Consolidated refactor plan (Aurora, DB setup, PG* env vars)

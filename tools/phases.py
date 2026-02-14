@@ -56,9 +56,10 @@ def deploy_phases(scope: str) -> list[str]:
     return [
         "Doctor checks",
         "State backend bootstrap",
-        "Shared durable (VPC + Secrets)",
+        "Shared durable (VPC + Aurora + Secrets)",
         "Shared nondurable (ECR + S3)",
         "Secrets in Secrets Manager",
+        "Database setup (pgvector, schema, data)",
         "Build and push images",
         "ECR image URLs",
         "Apply stack (kube/nonkube)",
