@@ -4,7 +4,53 @@ This doc is the **structural map** of how we use Terraform and Terragrunt in thi
 
 **Goals:** (1) One place for the full pipeline from repo layout → cache → Terraform → AWS. (2) Terraform-only vs Terragrunt usage. (3) The role of `//`, leaf vs root modules, and generated artifacts. Examples are from this repo.
 
-**Guide to sections:** §1 = total mapping and structure; §2 = Terraform without Terragrunt, then with Terragrunt; §3 = full pipeline (environments/, _component/, modules/ → generated cache and files → cloud); §3.2 = generated files (cache dir, lock files, backend.tf, provider.tf); §4 = `//` and leaf vs composition/root modules.
+**Guide to sections:** §0 = new project (OpenTofu, infra-modules + live-deploy); §1 = legacy Terragrunt mapping; §2–6 = Terraform/Terragrunt pipeline.
+
+---
+
+## 0. This Project: infra-modules + live-deploy (OpenTofu, Gruntwork-Style)
+
+The **new** project uses OpenTofu (Terraform-compatible) without Terragrunt. It follows the **modules vs live** split from Gruntwork/Terragrunt best practice.
+
+### 0.1 A (infra-modules) vs B (live-deploy-*)
+
+| Layer | Path | Role | Contains |
+|-------|------|------|----------|
+| **A — Modules** | `infra-modules/aws/`, `infra-modules/gcp/`, `infra-modules/shared/` | Reusable building blocks | `resource` blocks, variable inputs, outputs |
+| **B — Live** | `live-deploy-aws/`, `live-deploy-gcp/` | Environment-specific composition | **Only** `module` calls + `data` + `output`; no inline `resource` |
+
+**Rule:** Live config = pure composition. If a deploy stack has `resource` blocks, extract them into a module.
+
+### 0.2 Live stacks are thin
+
+- `live-deploy-aws/shared/durable` — modules: tags, vpc; outputs only
+- `live-deploy-aws/shared/nondurable` — modules: tags, s3_bucket, ecr; outputs only
+- `live-deploy-aws/nonkube` — modules: tags, ecs, cloudfront; remote state data; outputs
+- `live-deploy-aws/kube` — modules: tags, eks, cloudfront; remote state data; outputs
+- `live-deploy-gcp/shared/durable` — module: vpc; outputs
+- `live-deploy-gcp/shared/nondurable` — module: gcs_bucket; outputs
+- `live-deploy-gcp/kube` — module: gke; outputs
+
+### 0.3 Durability is a deployment concern, not a module concern
+
+**Durable** vs **nondurable** lives in **B** (how we organize stacks and teardown), not in **A**. The same module (e.g. vpc, aurora) can be used in either context. "Durable" = don't destroy when we tear down; "nondurable" = safe to destroy.
+
+### 0.4 Outputs flow
+
+- **A (modules):** Each module exposes outputs (e.g. `vpc_id`, `subnet_ids`). Consumed by the root config that calls it.
+- **B (live):** Stack-level outputs (e.g. `vpc_id`, `aurora_endpoint`) consumed by other stacks (via `terraform_remote_state`), scripts (`deploy.py`), or CI.
+
+### 0.5 State keys
+
+`tools/aws/_backend.py` maps stack dir → state key so S3 keys stay stable across renames:
+- `live-deploy-aws/shared/durable` → `{prefix}/{env}/aws-shared-durable.tfstate`
+- `live-deploy-gcp/shared/durable` → `{prefix}/{env}/gcp-shared-durable.tfstate`
+
+Renaming `deploy-aws` → `live-deploy-aws` preserved state keys via explicit mapping.
+
+### 0.6 Schema and data are separate from IaC
+
+Terraform provisions infrastructure. Schema (DDL) and data (ETL) run via **post-provision scripts** (e.g. `setup_database.py`). Industry practice: don't run DDL in Terraform.
 
 ---
 

@@ -108,7 +108,7 @@ def run_ecs_bootstrap(env: str):
     try:
         # discover outputs from terraform
         logger.info("[ECS BOOTSTRAP] Getting terraform outputs...")
-        out = tofu_output_json("deploy-aws/nonkube", env)
+        out = tofu_output_json("live-deploy-aws/nonkube", env)
         
         # Resolve Cluster and Service names
         cluster = out.get("ecs_cluster_name", {}).get("value")
@@ -214,7 +214,7 @@ def main():
         # Phase 3: Shared durable
         tracker.start_phase(3)
         logger.step(f"[3/{len(phases)}] Applying shared durable stack (VPC + Secrets)...")
-        apply_stack("deploy-aws/shared/durable", env, [
+        apply_stack("live-deploy-aws/shared/durable", env, [
             "-var", 'azs=["us-east-1a","us-east-1b"]',
             "-var", 'public_subnet_cidrs=["10.0.1.0/24","10.0.2.0/24"]',
             "-var", 'private_subnet_cidrs=["10.0.101.0/24","10.0.102.0/24"]',
@@ -226,7 +226,7 @@ def main():
         # Phase 4: Shared nondurable
         tracker.start_phase(4)
         logger.step(f"[4/{len(phases)}] Applying shared nondurable stack (ECR + S3)...")
-        apply_stack("deploy-aws/shared/nondurable", env, [])
+        apply_stack("live-deploy-aws/shared/nondurable", env, [])
         logger.success("Shared nondurable applied")
         tracker.end_phase(4)
 
@@ -247,7 +247,7 @@ def main():
         # Phase 7: ECR URLs
         tracker.start_phase(7)
         logger.step(f"[7/{len(phases)}] Getting ECR image URLs...")
-        snd = tofu_output_json("deploy-aws/shared/nondurable", env)
+        snd = tofu_output_json("live-deploy-aws/shared/nondurable", env)
         app_repo_url = snd["ecr_app_url"]["value"]
         spark_repo_url = snd["ecr_spark_url"]["value"]
         spark_image_full = f"{spark_repo_url}:{require('SPARK_IMAGE_TAG')}"
@@ -260,7 +260,7 @@ def main():
         if scope == "kube":
             tracker.start_phase(8)
             logger.step(f"[8/{len(phases)}] Applying EKS stack...")
-            apply_stack("deploy-aws/kube", env, [
+            apply_stack("live-deploy-aws/kube", env, [
                 "-var", f"eks_instance_types=[\"{require('EKS_NODE_INSTANCE_TYPES')}\"]",
                 "-var", f"eks_desired_nodes={require('EKS_DESIRED_NODES')}",
             ])
@@ -277,7 +277,7 @@ def main():
             # Get CloudFront / K8s LoadBalancer URL for manual testing
             try:
                 logger.info("Retrieving frontend URL...")
-                stack_out = tofu_output_json("deploy-aws/kube", env)
+                stack_out = tofu_output_json("live-deploy-aws/kube", env)
                 cf_domain = stack_out.get("cloudfront_domain_name", {}).get("value")
                 if cf_domain:
                     frontend_url = f"https://{cf_domain}"
@@ -322,7 +322,7 @@ def main():
         else:
             tracker.start_phase(8)
             logger.step(f"[8/{len(phases)}] Applying ECS stack...")
-            apply_stack("deploy-aws/nonkube", env, [
+            apply_stack("live-deploy-aws/nonkube", env, [
                 "-var", f"app_image={app_repo_url}:{require('APP_IMAGE_TAG')}",
                 "-var", f"spark_image={spark_image_full}",
             ])
@@ -330,7 +330,7 @@ def main():
             tracker.end_phase(8)
 
             # Deploy frontend to S3 (build + sync) - matches legacy deploy-frontend.sh; fixes 403 Access Denied
-            stack_out = tofu_output_json("deploy-aws/nonkube", env)
+            stack_out = tofu_output_json("live-deploy-aws/nonkube", env)
             frontend_bucket = stack_out.get("frontend_s3_bucket_id", {}).get("value")
             if frontend_bucket:
                 deploy_frontend_to_s3(frontend_bucket, env)
@@ -346,7 +346,7 @@ def main():
             # Get CloudFront / ALB URLs for manual testing
             try:
                 logger.info("Retrieving frontend URL...")
-                stack_out = tofu_output_json("deploy-aws/nonkube", env)
+                stack_out = tofu_output_json("live-deploy-aws/nonkube", env)
                 cf_domain = stack_out.get("cloudfront_domain_name", {}).get("value")
                 alb_dns = stack_out.get("alb_dns_name", {}).get("value")
                 if cf_domain:

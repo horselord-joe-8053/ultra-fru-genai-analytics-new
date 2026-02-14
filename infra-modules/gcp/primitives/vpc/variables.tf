@@ -1,4 +1,4 @@
-# GCP VPC Module - Placeholder
+# GCP VPC Module
 # Equivalent to AWS VPC with subnets
 
 variable "name" {
@@ -6,15 +6,16 @@ variable "name" {
   type        = string
 }
 
-variable "cidr" {
-  description = "Primary CIDR range for the network"
-  type        = string
-}
-
-variable "enabled_nat" {
-  description = "Enable NAT gateway for private subnets"
+variable "auto_create_subnetworks" {
+  description = "When true, GCP creates subnets automatically per region"
   type        = bool
   default     = true
+}
+
+variable "cidr" {
+  description = "Primary CIDR range (used when auto_create_subnetworks = false)"
+  type        = string
+  default     = null
 }
 
 variable "tags" {

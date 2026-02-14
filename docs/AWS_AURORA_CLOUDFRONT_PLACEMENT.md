@@ -15,8 +15,8 @@
 
 ### Deploy (stack wiring)
 
-- **Reasonable dir:** `deploy-aws/shared/nondurable/` for **both** Aurora and CloudFront, if you want all shared, non-VPC resources in one place.
-- **Alternative for CloudFront:** a dedicated stack such as `deploy-aws/shared/frontend/` so frontend (S3 + CloudFront) lives in one stack and stays separate from ECR/S3 data buckets.
+- **Reasonable dir:** `live-deploy-aws/shared/nondurable/` for **both** Aurora and CloudFront, if you want all shared, non-VPC resources in one place.
+- **Alternative for CloudFront:** a dedicated stack such as `live-deploy-aws/shared/frontend/` so frontend (S3 + CloudFront) lives in one stack and stays separate from ECR/S3 data buckets.
 
 ### Aurora note
 
@@ -35,8 +35,8 @@ So yes: **two different URLs**, each backed by its own CloudFront distribution (
 
 Options for the new project:
 
-- **Option A – Two stacks:** e.g. `deploy-aws/shared/frontend-nonkube/` and `deploy-aws/shared/frontend-kube/`, each with its own CloudFront distribution (S3 + ALB or NLB origin). Clear separation, two URLs.
-- **Option B – One stack, two distributions:** one stack under `deploy-aws/shared/frontend/` that instantiates two CloudFront distributions (one for nonkube ALB, one for kube NLB), with different origins and URLs.
+- **Option A – Two stacks:** e.g. `live-deploy-aws/shared/frontend-nonkube/` and `live-deploy-aws/shared/frontend-kube/`, each with its own CloudFront distribution (S3 + ALB or NLB origin). Clear separation, two URLs.
+- **Option B – One stack, two distributions:** one stack under `live-deploy-aws/shared/frontend/` that instantiates two CloudFront distributions (one for nonkube ALB, one for kube NLB), with different origins and URLs.
 - **Option C – One distribution, two origins:** a single CloudFront distribution with two custom origins (nonkube ALB + kube NLB) and path- or host-based routing. Possible but more complex and couples both backends to one distribution.
 
-Recommendation: **Option A or B** so you keep two distinct URLs (nonkube vs kube) and avoid coupling. Primitives live in `infra-modules/aws/primitives/`; deploy in `deploy-aws/shared/nondurable/` or `deploy-aws/shared/frontend/` (or two stacks under `shared/` as above).
+Recommendation: **Option A or B** so you keep two distinct URLs (nonkube vs kube) and avoid coupling. Primitives live in `infra-modules/aws/primitives/`; deploy in `live-deploy-aws/shared/nondurable/` or `live-deploy-aws/shared/frontend/` (or two stacks under `shared/` as above).

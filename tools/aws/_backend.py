@@ -4,6 +4,8 @@ from tools._env import require
 
 def stack_id_from_dir(stack_dir: str) -> str:
     s = stack_dir.strip("/")
+    # live-deploy-* first to avoid partial replacement
+    s = s.replace("live-deploy-aws/", "aws-").replace("live-deploy-gcp/", "gcp-")
     s = s.replace("deploy-aws/", "aws-").replace("deploy-gcp/", "gcp-")
     s = s.replace("/", "-")
     return s

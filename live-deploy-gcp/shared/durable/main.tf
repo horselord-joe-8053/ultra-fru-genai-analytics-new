@@ -10,7 +10,12 @@ provider "google" {
   region  = var.gcp_region
 }
 
-resource "google_compute_network" "vpc" {
+module "vpc" {
+  source = "../../../infra-modules/gcp/primitives/vpc"
+
   name                    = "${var.prefix}-${var.env}-net"
   auto_create_subnetworks = true
 }
+
+output "network_name" { value = module.vpc.network_name }
+output "network_id" { value = module.vpc.network_id }

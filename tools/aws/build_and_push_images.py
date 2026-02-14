@@ -6,7 +6,7 @@ One-liners:
   python tools/aws/build_and_push_images.py --env dev
 
 This tool:
-- Reads ECR repository URLs from `deploy-aws/shared/nondurable` state
+- Reads ECR repository URLs from `live-deploy-aws/shared/nondurable` state
 - Logs into ECR properly
 - Builds and pushes images
 
@@ -71,7 +71,7 @@ def main():
     logger.info(f"[BUILD] Region: {region}")
     
     logger.info("[BUILD] Getting ECR URLs from terraform state...")
-    out = tofu_output_json("deploy-aws/shared/nondurable", args.env)
+    out = tofu_output_json("live-deploy-aws/shared/nondurable", args.env)
 
     app_repo_url   = out["ecr_app_url"]["value"]
     spark_repo_url = out["ecr_spark_url"]["value"]

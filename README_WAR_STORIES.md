@@ -1959,3 +1959,38 @@ Two separate issues:
 ### 38.5 Takeaway
 
 When designing verification retry logic, only tolerate status codes that indicate *transient* unavailability (502/503 during startup). 403 Access Denied is a configuration or content problem—retrying it forever hides the real bug. When migrating from a legacy deploy flow, ensure every deploy step (including frontend build + sync) is present in the new flow; missing steps cause "mysterious" failures that look like propagation delays.
+
+---
+
+## 39. Live Config vs Modules: Making Deploy Stacks Pure Composition (Gruntwork-Style "Live")
+
+**creation:** `<260210>`
+**last_updated:** `<260210>`
+
+**keywords:** Infrastructure-as-Code, Terraform, modules vs live config, Gruntwork, Terragrunt, deployment composition, inline resources
+**difficulty:** 5
+**significance:** 7
+
+### 39.1 Context
+
+Our project separates **infra-modules** (A: reusable Terraform modules) from **deploy** (B: composition of modules for deployment). Industry best practice (Gruntwork, Terragrunt) dictates that "live" config should be *thin*—purely module composition and variable passing—with no inline `resource` blocks. We discovered that `deploy-aws/nonkube` had ~15 inline resources (Spark EventBridge, IAM roles, CloudWatch), while `deploy-gcp` stacks had inline resources in durable, nondurable, and kube. This violated the "live = config only" principle.
+
+### 39.2 Root Cause
+
+Resources were defined directly in deploy stacks instead of being encapsulated in reusable modules. The same pattern appeared on both AWS and GCP: `resource "aws_*"` and `resource "google_*"` blocks lived in deploy directories rather than in `infra-modules/`.
+
+### 39.3 Key Insight
+
+> **Live config should be pure composition.** If a deploy stack contains `resource` blocks, those belong in a module. The deploy stack's job is to wire modules together with variables and pass outputs—nothing more. This aligns with Gruntwork's "modules" (reusable) vs "live" (environment-specific composition) split.
+
+### 39.4 Resolution
+
+1. **AWS:** Extracted Spark EventBridge wiring into `infra-modules/aws/ecs_spark_schedule/`. Replaced 15 inline resources in `nonkube/main.tf` with a single `module "ecs_spark_schedule"` call.
+
+2. **GCP:** Refactored `deploy-gcp` durable, nondurable, and kube to use existing modules (`infra-modules/gcp/primitives/vpc`, `gcs_bucket`) and a new `infra-modules/gcp/gke` module. Replaced inline `resource` blocks with module composition.
+
+3. **Rename:** Renamed `deploy-aws/` → `live-deploy-aws/` and `deploy-gcp/` → `live-deploy-gcp/` to explicitly signal the "live" role. Updated `_backend.py` and `init_terra_upgrade_reconfigure.sh` to map `live-deploy-*` to the same state keys (`aws-*`, `gcp-*`) for backward compatibility.
+
+### 39.5 Takeaway
+
+Keep deploy stacks thin: module composition only. Extract any `resource` block into a reusable module. Name your deploy directories to reflect their role (e.g. `live-deploy-aws`) so the architecture is self-documenting. When renaming, preserve state key semantics so existing Terraform state remains valid.

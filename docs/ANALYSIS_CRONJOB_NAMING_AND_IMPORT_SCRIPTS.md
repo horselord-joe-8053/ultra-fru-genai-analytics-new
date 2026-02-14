@@ -38,10 +38,10 @@ They are mutually exclusive deployment targets. The CronJob/Job are **kube-only*
 
 | Stack | State key | Key resources |
 |-------|-----------|---------------|
-| `deploy-aws/shared/durable` | `fru/{env}/aws-shared-durable.tfstate` | VPC, subnets |
-| `deploy-aws/shared/nondurable` | `fru/{env}/aws-shared-nondurable.tfstate` | S3 (delta, artifacts), ECR (app, spark) |
-| `deploy-aws/nonkube` | `fru/{env}/aws-nonkube.tfstate` | ECS, ALB, frontend (CloudFront, S3, OAC), EventBridge, IAM, CloudWatch |
-| `deploy-aws/kube` | `fru/{env}/aws-kube.tfstate` | EKS, frontend (CloudFront, S3, OAC) |
+| `live-deploy-aws/shared/durable` | `fru/{env}/aws-shared-durable.tfstate` | VPC, subnets |
+| `live-deploy-aws/shared/nondurable` | `fru/{env}/aws-shared-nondurable.tfstate` | S3 (delta, artifacts), ECR (app, spark) |
+| `live-deploy-aws/nonkube` | `fru/{env}/aws-nonkube.tfstate` | ECS, ALB, frontend (CloudFront, S3, OAC), EventBridge, IAM, CloudWatch |
+| `live-deploy-aws/kube` | `fru/{env}/aws-kube.tfstate` | EKS, frontend (CloudFront, S3, OAC) |
 
 ### Proposed Python Structure
 
