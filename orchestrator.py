@@ -3,9 +3,14 @@ import argparse
 import sys
 import subprocess
 from tools import logger
+from tools._env import load_dotenv, get_int_env
+
+load_dotenv()
 
 def run_command(cmd, cwd=None):
-    """Run a subprocess command and exit with its return code."""
+    """Run a subprocess command and exit with its return code.
+    Respects LOGGING_TASK_DEFAULT_TIMEOUT: when set > 0, kills the child after that many seconds.
+    """
     try:
         # Pass through the current environment with the virtualenv active
         env = os.environ.copy()
@@ -26,10 +31,18 @@ def run_command(cmd, cwd=None):
         if cmd[0] == "python":
             cmd[0] = sys.executable
 
-        logger.info(f"--> Running: {' '.join(cmd)}")
-        result = subprocess.run(cmd, cwd=cwd, env=env)
+        timeout = get_int_env("LOGGING_TASK_DEFAULT_TIMEOUT", 0)  # 0 = no timeout
+        if timeout > 0:
+            logger.info(f"--> Running: {' '.join(cmd)} (timeout: {timeout}s)")
+        else:
+            logger.info(f"--> Running: {' '.join(cmd)}")
+
+        result = subprocess.run(cmd, cwd=cwd, env=env, timeout=timeout if timeout > 0 else None)
         if result.returncode != 0:
             sys.exit(result.returncode)
+    except subprocess.TimeoutExpired as e:
+        logger.error(f"Command timed out after {e.timeout}s: {' '.join(e.cmd)}")
+        sys.exit(1)
     except Exception as e:
         logger.error(f"Error running command: {e}")
         sys.exit(1)

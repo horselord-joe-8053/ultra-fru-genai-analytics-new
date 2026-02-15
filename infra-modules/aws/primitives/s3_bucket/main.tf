@@ -2,8 +2,9 @@
 terraform { required_version = ">= 1.6.0" }
 
 resource "aws_s3_bucket" "this" {
-  bucket = var.name
-  tags   = var.tags
+  bucket        = var.name
+  force_destroy = var.force_destroy # Empty bucket before delete; avoids BucketNotEmpty on teardown
+  tags          = var.tags
 }
 
 resource "aws_s3_bucket_versioning" "v" {

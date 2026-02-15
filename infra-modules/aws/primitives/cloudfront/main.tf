@@ -1,6 +1,7 @@
 # S3 bucket for frontend static assets
 resource "aws_s3_bucket" "frontend" {
-  bucket = "${var.prefix}-${var.env}-frontend-${var.suffix}-${data.aws_caller_identity.current.account_id}"
+  bucket        = "${var.prefix}-${var.env}-frontend-${var.suffix}-${data.aws_caller_identity.current.account_id}"
+  force_destroy = true # Empty bucket before delete; avoids BucketNotEmpty on teardown
 
   tags = merge(var.tags, {
     Name          = "${var.prefix}-${var.env}-frontend-${var.suffix}"

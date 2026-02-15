@@ -18,6 +18,6 @@ Examples:
 ./tools/aws/utils/init_terra_upgrade_reconfigure.sh live-deploy-aws/nonkube dev
 ```
 
-**Requirements:** `.env` (or `.env.fru`) with at least `TF_STATE_BUCKET`, `AWS_REGION`. Optional: `TF_STATE_PREFIX`/`FRU_PREFIX`, `FRU_ENV`, `TF_LOCK_TABLE`/`TF_STATE_LOCK_TABLE`.
+**Requirements:** `.env` (or `.env.fru`) with at least `TF_STATE_BUCKET`, `CLOUD_REGION`. Optional: `TF_STATE_PREFIX`/`FRU_PREFIX`, `FRU_ENV`, `TF_LOCK_TABLE`/`TF_STATE_LOCK_TABLE`.
 
 After running, you can `tofu plan` / `apply` / `destroy` from that stack directory. Use `TF_DATA_DIR=$REPO_ROOT/tofu_data` if you follow the project convention (the script sets it for the init run).

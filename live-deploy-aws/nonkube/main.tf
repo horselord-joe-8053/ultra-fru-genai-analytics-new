@@ -11,7 +11,7 @@ data "terraform_remote_state" "shared_durable" {
   backend = "s3"
   config = {
     bucket       = var.tf_state_bucket
-    key          = "${var.tf_state_prefix}/${var.env}/aws-shared-durable.tfstate"
+    key          = "${var.tf_state_prefix}/${var.env}/${var.aws_region}/aws-shared-durable.tfstate"
     region       = var.aws_region
     encrypt      = true
     use_lockfile = true
@@ -22,7 +22,7 @@ data "terraform_remote_state" "shared_nondurable" {
   backend = "s3"
   config = {
     bucket       = var.tf_state_bucket
-    key          = "${var.tf_state_prefix}/${var.env}/aws-shared-nondurable.tfstate"
+    key          = "${var.tf_state_prefix}/${var.env}/${var.aws_region}/aws-shared-nondurable.tfstate"
     region       = var.aws_region
     encrypt      = true
     use_lockfile = true

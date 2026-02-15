@@ -14,7 +14,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--env", default=os.getenv("FRU_ENV","dev"))
     args = ap.parse_args()
-    region = require("AWS_REGION")
+    region = os.getenv("CLOUD_REGION", "").strip() or require("AWS_REGION")
     cluster = require("EKS_CLUSTER_NAME")
     print("+ aws eks update-kubeconfig")
     subprocess.run(["aws","eks","update-kubeconfig","--region",region,"--name",cluster], check=False)

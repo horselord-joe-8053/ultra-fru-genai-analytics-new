@@ -37,6 +37,12 @@
       "wait_sec": 120
     },
     {
+      "id": "cluster_contains_tasks",
+      "pattern": "ClusterContainsTasksException",
+      "max_retries": 2,
+      "wait_sec": 120
+    },
+    {
       "id": "cannot_delete_listener",
       "pattern": "CannotDelete",
       "max_retries": 2,

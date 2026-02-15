@@ -227,7 +227,7 @@ This document defines the wiring and implementation tasks to close these gaps.
 - **ECS bootstrap**: If load_data runs as ECS task, task definition must include `DB_CLUSTER_ARN`, `DB_SECRET_ARN` as env vars (from Terraform outputs)
 - **Kube**: Same for Job/CronJob – pass via env from ConfigMap/Secret populated from Terraform
 
-**Action**: Ensure `setup_database.py` sets `DB_CLUSTER_ARN`, `DB_SECRET_ARN`, `PGDATABASE`, `AWS_REGION` before invoking the ETL script.
+**Action**: Ensure `setup_database.py` sets `DB_CLUSTER_ARN`, `DB_SECRET_ARN`, `PGDATABASE`, `CLOUD_REGION`/`AWS_REGION` before invoking the ETL script.
 
 ---
 

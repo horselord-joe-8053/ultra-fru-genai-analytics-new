@@ -117,7 +117,7 @@ def verify_api_endpoints(base_url, timeout_secs=None, heartbeat_interval_sec=Non
     return ok
 
 def verify_cloudwatch(env, timeout_mins=None):
-    region = require("AWS_REGION")
+    region = os.getenv("CLOUD_REGION", "").strip() or require("AWS_REGION")
     # Use log group from env if set, otherwise default
     log_group = os.getenv("CLOUDWATCH_LOG_GROUP") or f"/fru/{env}/analytics"
 

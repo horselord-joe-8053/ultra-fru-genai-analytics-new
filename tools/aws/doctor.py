@@ -10,6 +10,7 @@ Legacy-aware:
 """
 import argparse, os, subprocess, json
 from tools._env import load_dotenv, require
+from tools.aws._backend import resolve_region
 
 load_dotenv()
 
@@ -23,9 +24,14 @@ def has(exe):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--env", default=os.getenv("ENVIRONMENT", os.getenv("FRU_ENV","dev")))
-    _ = ap.parse_args()
+    ap.add_argument("--region", default=None, help="Region (default: CLOUD_REGION)")
+    args = ap.parse_args()
 
-    for k in ["AWS_REGION","TF_STATE_BUCKET","FRU_PREFIX","S3_DELTA_BUCKET","S3_ARTIFACT_BUCKET","ECR_REPO_APP","ECR_REPO_SPARK","APP_IMAGE_TAG","SPARK_IMAGE_TAG"]:
+    region = resolve_region(args.region)
+    os.environ["CLOUD_REGION"] = region
+    os.environ["AWS_REGION"] = region
+
+    for k in ["TF_STATE_BUCKET","FRU_PREFIX","S3_DELTA_BUCKET","S3_ARTIFACT_BUCKET","ECR_REPO_APP","ECR_REPO_SPARK","APP_IMAGE_TAG","SPARK_IMAGE_TAG"]:
         require(k)
 
     tfbin = os.getenv("FRU_TF_BIN","tofu")

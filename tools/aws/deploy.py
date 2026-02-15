@@ -27,7 +27,7 @@ Flow:
 import argparse, os, subprocess, json, sys
 from tools._env import load_dotenv, require
 from tools.tofu_runner import tofu
-from tools.aws._backend import backend_config
+from tools.aws._backend import backend_config, resolve_region
 
 from tools import logger
 from tools.aws._aws_vars import get_base_vars
@@ -39,27 +39,28 @@ from tools.aws.deploy_frontend import deploy_frontend_to_s3
 
 load_dotenv()
 
-def init_stack(stack_dir: str, env: str):
+def init_stack(stack_dir: str, env: str, region: str | None = None):
     logger.info(f"[INIT] {stack_dir}")
-    cfg = backend_config(stack_dir, env)
+    cfg = backend_config(stack_dir, env, region)
     args = ["init", "-lock=false", "-upgrade", "-reconfigure"]
     for c in cfg:
         args += ["-backend-config", c]
     exe = os.getenv("FRU_TF_BIN", "tofu")
     cmd = [exe] + args
     try:
-        run_with_retry(cmd, cwd=stack_dir, env=get_tofu_env(), description=f"tofu init in {stack_dir}")
+        run_with_retry(cmd, cwd=stack_dir, env=get_tofu_env(region), description=f"tofu init in {stack_dir}")
         logger.success(f"[INIT OK] {stack_dir}")
     except subprocess.CalledProcessError as e:
         logger.error(f"[INIT FAILED] {stack_dir}: {e}")
         raise
 
-def apply_stack(stack_dir: str, env: str, extra_vars: list[str]):
+def apply_stack(stack_dir: str, env: str, extra_vars: list[str], region: str | None = None):
     logger.step(f"Applying stack: {stack_dir}")
     try:
-        init_stack(stack_dir, env)
-        base = get_base_vars(env)
-        logger.info(f"[APPLY] Running tofu apply with base vars: {base} + extra vars: {extra_vars}")
+        init_stack(stack_dir, env, region)
+        get_base_vars(env, region)
+        base = []  # get_base_vars sets TF_VAR_ in env
+        logger.info(f"[APPLY] Running tofu apply with base vars + extra vars: {extra_vars}")
         tofu(["apply","-auto-approve"] + base + extra_vars, cwd=stack_dir, check=True)
         logger.success(f"[APPLY OK] {stack_dir}")
     except subprocess.CalledProcessError as e:
@@ -69,11 +70,14 @@ def apply_stack(stack_dir: str, env: str, extra_vars: list[str]):
         logger.error(f"[APPLY ERROR] {stack_dir}: {e}")
         raise
 
-def tofu_output_json(stack_dir: str, env: str):
+def tofu_output_json(stack_dir: str, env: str, region: str | None = None):
     logger.info(f"[OUTPUT] Getting outputs from {stack_dir}")
     try:
-        init_stack(stack_dir, env)
-        out = subprocess.check_output([os.getenv("FRU_TF_BIN","tofu"),"output","-json"], cwd=stack_dir, text=True)
+        init_stack(stack_dir, env, region)
+        out = subprocess.check_output(
+            [os.getenv("FRU_TF_BIN","tofu"),"output","-json"],
+            cwd=stack_dir, text=True, env=get_tofu_env(region)
+        )
         logger.success(f"[OUTPUT OK] {stack_dir}")
         return json.loads(out)
     except subprocess.CalledProcessError as e:
@@ -97,8 +101,8 @@ def aws_json(cmd):
         logger.error(f"[AWS ERROR]: {e}")
         raise
 
-def run_ecs_bootstrap(env: str):
-    region = require("AWS_REGION")
+def run_ecs_bootstrap(env: str, region: str | None = None):
+    region = region or os.getenv("CLOUD_REGION", "").strip() or require("AWS_REGION")
 
     if check_ecs_bootstrap_succeeded(env):
         logger.success("[ECS BOOTSTRAP] Skip: bootstrap already succeeded (idempotent)")
@@ -108,7 +112,7 @@ def run_ecs_bootstrap(env: str):
     try:
         # discover outputs from terraform
         logger.info("[ECS BOOTSTRAP] Getting terraform outputs...")
-        out = tofu_output_json("live-deploy-aws/nonkube", env)
+        out = tofu_output_json("live-deploy-aws/nonkube", env, region)
         
         # Resolve Cluster and Service names
         cluster = out.get("ecs_cluster_name", {}).get("value")
@@ -183,13 +187,18 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--scope", choices=["kube","nonkube"], required=True)
     ap.add_argument("--env", default=os.getenv("ENVIRONMENT", os.getenv("FRU_ENV","dev")))
+    ap.add_argument("--region", default="", help="Region (default: CLOUD_REGION)")
     ap.add_argument("--skip-doctor", action="store_true")
     args = ap.parse_args()
 
     env = args.env
     scope = args.scope
-    
-    logger.step(f"Starting deployment: scope={scope} env={env}")
+    region = resolve_region(args.region or None)
+    os.environ["CLOUD_REGION"] = region
+    os.environ["AWS_REGION"] = region
+    os.environ["AWS_DEFAULT_REGION"] = region
+
+    logger.step(f"Starting deployment: scope={scope} env={env} region={region}")
     phases = deploy_phases(scope)
     tracker = PhaseTracker("Deploy", phases)
 
@@ -198,7 +207,7 @@ def main():
         tracker.start_phase(1)
         if not args.skip_doctor:
             logger.step(f"[1/{len(phases)}] Running doctor checks...")
-            subprocess.run(["python","tools/aws/doctor.py","--env",env], check=True)
+            subprocess.run(["python","tools/aws/doctor.py","--env",env,"--region",region], check=True, env={**os.environ, "CLOUD_REGION": region, "AWS_REGION": region})
             logger.success("Doctor OK")
         else:
             logger.info(f"[1/{len(phases)}] Skipping doctor checks")
@@ -225,21 +234,21 @@ def main():
             durable_vars += ["-var", f"aurora_master_password={aurora_pw}"]
         else:
             logger.warning("DB_PASSWORD/PGPASSWORD not set; Aurora creation may fail. Set in .env before deploy.")
-        apply_stack("live-deploy-aws/shared/durable", env, durable_vars)
+        apply_stack("live-deploy-aws/shared/durable", env, durable_vars, region)
         logger.success("Shared durable applied")
         tracker.end_phase(3)
 
         # Phase 4: Shared nondurable
         tracker.start_phase(4)
         logger.step(f"[4/{len(phases)}] Applying shared nondurable stack (ECR + S3)...")
-        apply_stack("live-deploy-aws/shared/nondurable", env, [])
+        apply_stack("live-deploy-aws/shared/nondurable", env, [], region)
         logger.success("Shared nondurable applied")
         tracker.end_phase(4)
 
         # Phase 5: Secrets
         tracker.start_phase(5)
         logger.step(f"[5/{len(phases)}] Ensuring secrets in Secrets Manager...")
-        subprocess.run(["python","tools/aws/ensure_secrets.py","--env",env], check=True)
+        subprocess.run(["python","tools/aws/ensure_secrets.py","--env",env,"--region",region], check=True, env={**os.environ, "CLOUD_REGION": region, "AWS_REGION": region})
         logger.success("Secrets ensured")
         tracker.end_phase(5)
 
@@ -247,23 +256,31 @@ def main():
         tracker.start_phase(6)
         logger.step(f"[6/{len(phases)}] Setting up database (pgvector, schema, data)...")
         try:
-            subprocess.run(["python","tools/aws/setup_database.py","--env",env], check=True)
+            subprocess.run(["python","tools/aws/setup_database.py","--env",env,"--region",region], check=True, env={**os.environ, "CLOUD_REGION": region, "AWS_REGION": region})
             logger.success("Database setup complete")
         except subprocess.CalledProcessError as e:
             logger.warning(f"Database setup had issues (may already be initialized): {e}")
         tracker.end_phase(6)
 
-        # Phase 7: Build & push
+        # Phase 7: Build & push (build_and_push has its own per-step progress: 1/4, 2/4, etc.)
         tracker.start_phase(7)
         logger.step(f"[7/{len(phases)}] Building and pushing images...")
-        subprocess.run(["python","tools/aws/build_and_push_images.py","--env",env], check=True)
+        build_env = {**os.environ, "CLOUD_REGION": region, "AWS_REGION": region}
+        build_env["PYTHONUNBUFFERED"] = "1"  # Flush output immediately (avoids silent hang when run under Cursor/CI)
+        proc = subprocess.run(
+            ["python", "tools/aws/build_and_push_images.py", "--env", env, "--region", region],
+            cwd=os.getcwd(),
+            env=build_env,
+        )
+        if proc.returncode != 0:
+            raise subprocess.CalledProcessError(proc.returncode, proc.args)
         logger.success("Images built and pushed")
         tracker.end_phase(7)
 
         # Phase 8: ECR URLs
         tracker.start_phase(8)
         logger.step(f"[8/{len(phases)}] Getting ECR image URLs...")
-        snd = tofu_output_json("live-deploy-aws/shared/nondurable", env)
+        snd = tofu_output_json("live-deploy-aws/shared/nondurable", env, region)
         app_repo_url = snd["ecr_app_url"]["value"]
         spark_repo_url = snd["ecr_spark_url"]["value"]
         spark_image_full = f"{spark_repo_url}:{require('SPARK_IMAGE_TAG')}"
@@ -279,21 +296,21 @@ def main():
             apply_stack("live-deploy-aws/kube", env, [
                 "-var", f"eks_instance_types=[\"{require('EKS_NODE_INSTANCE_TYPES')}\"]",
                 "-var", f"eks_desired_nodes={require('EKS_DESIRED_NODES')}",
-            ])
+            ], region)
             logger.success("EKS stack applied")
             tracker.end_phase(9)
 
             tracker.start_phase(10)
             logger.step(f"[10/{len(phases)}] Running Kubernetes bootstrap and schedule...")
             delta_bucket = snd["delta_bucket"]["value"]
-            durable = tofu_output_json("live-deploy-aws/shared/durable", env)
+            durable = tofu_output_json("live-deploy-aws/shared/durable", env, region)
             aurora_endpoint = durable.get("aurora_endpoint", {}).get("value", "")
             db_secret_arn = durable.get("db_password_secret_arn", {}).get("value", "")
             openai_secret_arn = durable.get("openai_api_key_secret_arn", {}).get("value", "")
-            region = os.getenv("AWS_REGION", "us-east-1")
+            region = os.getenv("CLOUD_REGION", os.getenv("AWS_REGION", "us-east-1"))
             delta_table_path = f"s3a://{delta_bucket}/delta/fru_sales"
             kube_apply_args = [
-                "python", "tools/aws/kube_apply.py", "--env", env, "--phase", "bootstrap",
+                "python", "tools/aws/kube_apply.py", "--env", env, "--region", region, "--phase", "bootstrap",
                 "--spark-image", spark_image_full, "--app-image", app_image_full,
                 "--delta-bucket", delta_bucket,
                 "--pg-host", aurora_endpoint or "localhost",
@@ -315,15 +332,15 @@ def main():
                 kube_apply_args += ["--bedrock-model-id", bedrock_model]
             subprocess.run(kube_apply_args, check=True)
             subprocess.run([
-                "python", "tools/aws/kube_apply.py", "--env", env, "--phase", "schedule",
+                "python", "tools/aws/kube_apply.py", "--env", env, "--region", region, "--phase", "schedule",
                 "--spark-image", spark_image_full, "--delta-bucket", delta_bucket,
-            ], check=True)
+            ], check=True, env={**os.environ, "CLOUD_REGION": region, "AWS_REGION": region})
             logger.success("Kubernetes bootstrap and schedule complete")
             tracker.end_phase(10)
 
             # Deploy frontend to S3 (kube parity with nonkube)
             try:
-                stack_out = tofu_output_json("live-deploy-aws/kube", env)
+                stack_out = tofu_output_json("live-deploy-aws/kube", env, region)
                 frontend_bucket = stack_out.get("frontend_s3_bucket_id", {}).get("value")
                 if frontend_bucket:
                     deploy_frontend_to_s3(frontend_bucket, env)
@@ -335,7 +352,7 @@ def main():
             # Get CloudFront / K8s LoadBalancer URL for manual testing
             try:
                 logger.info("Retrieving frontend URL...")
-                stack_out = tofu_output_json("live-deploy-aws/kube", env)
+                stack_out = tofu_output_json("live-deploy-aws/kube", env, region)
                 cf_domain = stack_out.get("cloudfront_domain_name", {}).get("value")
                 if cf_domain:
                     frontend_url = f"https://{cf_domain}"
@@ -383,12 +400,12 @@ def main():
             apply_stack("live-deploy-aws/nonkube", env, [
                 "-var", f"app_image={app_repo_url}:{require('APP_IMAGE_TAG')}",
                 "-var", f"spark_image={spark_image_full}",
-            ])
+            ], region)
             logger.success("ECS stack applied")
             tracker.end_phase(9)
 
             # Deploy frontend to S3 (build + sync) - matches legacy deploy-frontend.sh; fixes 403 Access Denied
-            stack_out = tofu_output_json("live-deploy-aws/nonkube", env)
+            stack_out = tofu_output_json("live-deploy-aws/nonkube", env, region)
             frontend_bucket = stack_out.get("frontend_s3_bucket_id", {}).get("value")
             if frontend_bucket:
                 deploy_frontend_to_s3(frontend_bucket, env)
@@ -397,14 +414,14 @@ def main():
 
             tracker.start_phase(10)
             logger.step(f"[10/{len(phases)}] Running ECS bootstrap...")
-            run_ecs_bootstrap(env)
+            run_ecs_bootstrap(env, region)
             logger.success("ECS bootstrap complete")
             tracker.end_phase(10)
 
             # Get CloudFront / ALB URLs for manual testing
             try:
                 logger.info("Retrieving frontend URL...")
-                stack_out = tofu_output_json("live-deploy-aws/nonkube", env)
+                stack_out = tofu_output_json("live-deploy-aws/nonkube", env, region)
                 cf_domain = stack_out.get("cloudfront_domain_name", {}).get("value")
                 alb_dns = stack_out.get("alb_dns_name", {}).get("value")
                 if cf_domain:

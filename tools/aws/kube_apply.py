@@ -14,6 +14,7 @@ This tool:
 """
 import argparse, base64, json, os, subprocess
 from tools._env import load_dotenv, require
+from tools.aws._backend import resolve_region
 from tools.aws.bootstrap_helpers import check_k8s_bootstrap_job_succeeded, JOB_BOOTSTRAP, K8S_NAMESPACE
 
 load_dotenv()
@@ -36,7 +37,7 @@ def fetch_secret_value(secret_arn: str) -> str:
         "--secret-id", secret_arn,
         "--query", "SecretString",
         "--output", "text",
-        "--region", os.getenv("AWS_REGION", "us-east-1"),
+        "--region", os.getenv("CLOUD_REGION", os.getenv("AWS_REGION", "us-east-1")),
     ], text=True)
     raw = out.strip()
     try:
@@ -48,6 +49,7 @@ def fetch_secret_value(secret_arn: str) -> str:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--env", default=os.getenv("FRU_ENV","dev"))
+    ap.add_argument("--region", default=None, help="Region (default: CLOUD_REGION)")
     ap.add_argument("--phase", choices=["bootstrap","schedule"], required=True)
     ap.add_argument("--spark-image", help="Full Spark image URI")
     ap.add_argument("--app-image", help="Full App image URI")
@@ -58,15 +60,19 @@ def main():
     ap.add_argument("--pg-user", default="postgres", help="PGUSER")
     ap.add_argument("--db-secret-arn", default="", help="AWS Secrets Manager ARN for db_password")
     ap.add_argument("--openai-secret-arn", default="", help="AWS Secrets Manager ARN for openai_api_key")
-    ap.add_argument("--aws-region", default="", help="AWS_REGION for pods")
+    ap.add_argument("--aws-region", default="", help="Region for pods (CLOUD_REGION)")
     ap.add_argument("--delta-table-path", default="", help="DELTA_TABLE_PATH (s3a://bucket/delta/fru_sales)")
     ap.add_argument("--delta-lake-package", default="io.delta:delta-spark_2.13:4.0.0", help="DELTA_LAKE_PACKAGE")
     ap.add_argument("--bedrock-inference-profile-id", default="", help="AWS_BEDROCK_INFERENCE_PROFILE_ID")
     ap.add_argument("--bedrock-model-id", default="anthropic.claude-3-5-haiku-20241022-v1:0", help="AWS_BEDROCK_MODEL_ID")
     args = ap.parse_args()
 
+    region = resolve_region(args.region)
+    os.environ["CLOUD_REGION"] = region
+    os.environ["AWS_REGION"] = region
+
     # ensure kubeconfig
-    subprocess.run(["python","tools/aws/eks_kubeconfig.py","--env",args.env], check=False)
+    subprocess.run(["python","tools/aws/eks_kubeconfig.py","--env",args.env], check=False, env={**os.environ, "CLOUD_REGION": region, "AWS_REGION": region})
 
     spark_image = args.spark_image
     if not spark_image:
@@ -91,7 +97,7 @@ def main():
                 "DELTA_ROOT": delta_root,
                 "AWS_ACCESS_KEY_ID": require("AWS_ADMIN_ACCESS_KEY_ID"),
                 "AWS_SECRET_ACCESS_KEY": require("AWS_ADMIN_SECRET_ACCESS_KEY"),
-                "AWS_REGION": require("AWS_REGION")
+                "AWS_REGION": os.getenv("CLOUD_REGION", "").strip() or require("AWS_REGION")
             }
             txt = render("infra-modules/shared/k8s/bootstrap-job.yaml", subs)
             kubectl(["delete", "job", JOB_BOOTSTRAP, "--ignore-not-found", "-n", K8S_NAMESPACE])
@@ -145,7 +151,7 @@ data:
                 "PGUSER": args.pg_user,
                 "PGDATABASE": args.pg_database,
                 "ALLOWED_ORIGINS": "*",
-                "AWS_REGION": args.aws_region or os.getenv("AWS_REGION", "us-east-1"),
+                "AWS_REGION": args.aws_region or os.getenv("CLOUD_REGION", os.getenv("AWS_REGION", "us-east-1")),
                 "DELTA_TABLE_PATH": delta_table_path,
                 "DELTA_LAKE_PACKAGE": args.delta_lake_package,
                 "SPARK_HOME": "/opt/spark",
