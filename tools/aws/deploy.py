@@ -39,6 +39,46 @@ from tools.aws.deploy_frontend import deploy_frontend_to_s3
 
 load_dotenv()
 
+REPO_ROOT = os.path.abspath(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+CSV_PATH = os.path.join(REPO_ROOT, "core-app", "data", "raw", "fridge_sales_with_rating.csv")
+
+
+def upload_csv_to_delta_bucket(delta_bucket: str, region: str) -> bool:
+    """Upload CSV to S3 raw/ (legacy pattern). Spark run_analytics reads from s3a://bucket/raw/... when creating Delta.
+    Returns True if upload succeeded (caller may force bootstrap to refresh Delta)."""
+    if not os.path.exists(CSV_PATH):
+        logger.warning(f"CSV not found: {CSV_PATH}; Spark will use bundled CSV")
+        return False
+    s3_uri = f"s3://{delta_bucket}/raw/fridge_sales_with_rating.csv"
+    logger.info(f"Uploading CSV to {s3_uri} (legacy: ensures 200 rows for batch analytics)")
+    try:
+        subprocess.run(
+            ["aws", "s3", "cp", CSV_PATH, s3_uri, "--region", region],
+            cwd=REPO_ROOT,
+            check=True,
+        )
+        logger.success("CSV uploaded to S3")
+        return True
+    except subprocess.CalledProcessError as e:
+        logger.warning(f"CSV upload failed: {e}; Spark may fall back to bundled CSV")
+        return False
+
+
+def clear_delta_table(delta_bucket: str, region: str) -> None:
+    """Clear existing Delta table in S3 so bootstrap creates fresh from CSV (avoids stale upgrade path)."""
+    prefix = "delta/fru_sales/"
+    s3_uri = f"s3://{delta_bucket}/{prefix}"
+    logger.info(f"Clearing Delta table at {s3_uri} (forces fresh create from CSV)")
+    try:
+        subprocess.run(
+            ["aws", "s3", "rm", s3_uri, "--recursive", "--region", region],
+            cwd=REPO_ROOT,
+            check=True,
+        )
+        logger.success("Delta table cleared")
+    except subprocess.CalledProcessError as e:
+        logger.warning(f"Delta clear failed: {e}; bootstrap may upgrade existing table")
+
 def init_stack(stack_dir: str, env: str, region: str | None = None):
     logger.info(f"[INIT] {stack_dir}")
     cfg = backend_config(stack_dir, env, region)
@@ -101,81 +141,61 @@ def aws_json(cmd):
         logger.error(f"[AWS ERROR]: {e}")
         raise
 
-def run_ecs_bootstrap(env: str, region: str | None = None):
+def run_ecs_bootstrap(env: str, region: str | None = None, force: bool = False):
     region = region or os.getenv("CLOUD_REGION", "").strip() or require("AWS_REGION")
 
-    if check_ecs_bootstrap_succeeded(env):
+    if not force and check_ecs_bootstrap_succeeded(env):
         logger.success("[ECS BOOTSTRAP] Skip: bootstrap already succeeded (idempotent)")
         return
 
-    logger.step("Executing ECS analytics bootstrap")
+    logger.step("Executing ECS analytics bootstrap (Spark run_analytics)")
     try:
-        # discover outputs from terraform
-        logger.info("[ECS BOOTSTRAP] Getting terraform outputs...")
         out = tofu_output_json("live-deploy-aws/nonkube", env, region)
-        
-        # Resolve Cluster and Service names
-        cluster = out.get("ecs_cluster_name", {}).get("value")
-        if not cluster:
-             cluster = os.getenv("ECS_CLUSTER_NAME") or f"{require('FRU_PREFIX')}-{env}-ecs"
-        
-        logger.info(f"[ECS BOOTSTRAP] Cluster: {cluster}")
-        
-        svc = out.get("ecs_service_name", {}).get("value") or f"{require('FRU_PREFIX')}-{env}-api-svc"
-        logger.info(f"[ECS BOOTSTRAP] Service: {svc}")
+        cluster = out.get("ecs_cluster_name", {}).get("value") or f"{require('FRU_PREFIX')}-{env}-ecs"
+        spark_task_def = out.get("spark_task_definition_arn", {}).get("value")
+        if not spark_task_def:
+            raise SystemExit("spark_task_definition_arn not in nonkube outputs")
 
-        logger.info("[ECS BOOTSTRAP] Describing service...")
-        svc_desc = aws_json(["aws","ecs","describe-services","--cluster",cluster,"--services",svc,"--region",region])
-        service = svc_desc["services"][0]
-        task_def_arn = service["taskDefinition"]
-        net = service.get("networkConfiguration",{}).get("awsvpcConfiguration",{})
-        subnets = net.get("subnets",[])
-        sgs = net.get("securityGroups",[])
+        durable = tofu_output_json("live-deploy-aws/shared/durable", env, region)
+        private_subnets = durable.get("private_subnet_ids", {}).get("value", [])
+        if not private_subnets:
+            raise SystemExit("Could not determine private subnets for Spark bootstrap.")
 
-        if not subnets:
-            raise SystemExit("Could not determine ECS service subnets for bootstrap.")
+        tasks_sg = out.get("ecs_tasks_sg_id", {}).get("value")
+        if not tasks_sg:
+            raise SystemExit("ecs_tasks_sg_id not in nonkube outputs")
 
-        logger.info(f"[ECS BOOTSTRAP] Task def: {task_def_arn}")
-        logger.info(f"[ECS BOOTSTRAP] Subnets: {subnets}")
+        logger.info(f"[ECS BOOTSTRAP] Cluster: {cluster}, Spark task def: {spark_task_def}")
 
-        # Container name: first container in task def (legacy approach)
-        logger.info("[ECS BOOTSTRAP] Getting task definition...")
-        td = aws_json(["aws","ecs","describe-task-definition","--task-definition",task_def_arn,"--region",region])
-        container_name = td["taskDefinition"]["containerDefinitions"][0]["name"]
-        logger.info(f"[ECS BOOTSTRAP] Container: {container_name}")
-
-        # Override command to run analytics once (legacy working pattern)
+        net_cfg = {
+            "awsvpcConfiguration": {
+                "subnets": private_subnets,
+                "securityGroups": [tasks_sg],
+                "assignPublicIp": "DISABLED",
+            }
+        }
         overrides = {
-          "containerOverrides": [{
-            "name": container_name,
-            "command": ["python", "/app/spark_jobs/utils/run_analytics_once.py"]
-          }]
+            "containerOverrides": [{
+                "name": "spark",
+                "command": ["/opt/spark/bin/spark-submit", "--packages", "io.delta:delta-spark_2.12:3.1.0,org.apache.hadoop:hadoop-aws:3.3.4", "/opt/fru/jobs/run_analytics.py"]
+            }]
         }
 
-        net_cfg = {"awsvpcConfiguration": {"subnets": subnets, "assignPublicIp":"DISABLED"}}
-        if sgs:
-            net_cfg["awsvpcConfiguration"]["securityGroups"] = sgs
-
-        logger.info("[ECS BOOTSTRAP] Starting one-off ECS task...")
+        logger.info("[ECS BOOTSTRAP] Starting one-off Spark task...")
         try:
-            # Capture output to prevent buffering hangs and log only if needed
             proc = subprocess.run([
-                "aws","ecs","run-task",
-                "--cluster",cluster,
-                "--task-definition",task_def_arn,
-                "--launch-type","FARGATE",
+                "aws", "ecs", "run-task",
+                "--cluster", cluster,
+                "--task-definition", spark_task_def,
+                "--launch-type", "FARGATE",
                 "--network-configuration", json.dumps(net_cfg),
                 "--overrides", json.dumps(overrides),
                 "--region", region,
             ], check=True, capture_output=True, text=True, timeout=60)
-            
-            # Log success but don't dump huge JSON
             logger.success("ECS bootstrap task started successfully.")
             logger.info(f"[ECS BOOTSTRAP] Task info: {proc.stdout[:200]}...")
-            
         except subprocess.TimeoutExpired:
             logger.error("AWS ECS run-task timed out (CLI hang).")
-            # If it timed out, task might have started anyway.
         except subprocess.CalledProcessError as e:
             logger.error(f"[ECS BOOTSTRAP FAILED] Failed to run ECS task: {e.stderr}")
             raise
@@ -189,6 +209,7 @@ def main():
     ap.add_argument("--env", default=os.getenv("ENVIRONMENT", os.getenv("FRU_ENV","dev")))
     ap.add_argument("--region", default="", help="Region (default: CLOUD_REGION)")
     ap.add_argument("--skip-doctor", action="store_true")
+    ap.add_argument("--force-spark-rebuild", action="store_true", help="Build Spark image with --no-cache (ensures fresh run_analytics)")
     args = ap.parse_args()
 
     env = args.env
@@ -207,7 +228,7 @@ def main():
         tracker.start_phase(1)
         if not args.skip_doctor:
             logger.step(f"[1/{len(phases)}] Running doctor checks...")
-            subprocess.run(["python","tools/aws/doctor.py","--env",env,"--region",region], check=True, env={**os.environ, "CLOUD_REGION": region, "AWS_REGION": region})
+            subprocess.run(["python","tools/aws/doctor.py","--env",env,"--region",region,"--scope",scope], check=True, env={**os.environ, "CLOUD_REGION": region, "AWS_REGION": region})
             logger.success("Doctor OK")
         else:
             logger.info(f"[1/{len(phases)}] Skipping doctor checks")
@@ -267,8 +288,11 @@ def main():
         logger.step(f"[7/{len(phases)}] Building and pushing images...")
         build_env = {**os.environ, "CLOUD_REGION": region, "AWS_REGION": region}
         build_env["PYTHONUNBUFFERED"] = "1"  # Flush output immediately (avoids silent hang when run under Cursor/CI)
+        build_cmd = ["python", "tools/aws/build_and_push_images.py", "--env", env, "--region", region]
+        if args.force_spark_rebuild:
+            build_cmd.append("--no-cache")
         proc = subprocess.run(
-            ["python", "tools/aws/build_and_push_images.py", "--env", env, "--region", region],
+            build_cmd,
             cwd=os.getcwd(),
             env=build_env,
         )
@@ -303,9 +327,10 @@ def main():
             tracker.start_phase(10)
             logger.step(f"[10/{len(phases)}] Running Kubernetes bootstrap and schedule...")
             delta_bucket = snd["delta_bucket"]["value"]
+            csv_uploaded = upload_csv_to_delta_bucket(delta_bucket, region)
             durable = tofu_output_json("live-deploy-aws/shared/durable", env, region)
             aurora_endpoint = durable.get("aurora_endpoint", {}).get("value", "")
-            db_secret_arn = durable.get("db_password_secret_arn", {}).get("value", "")
+            db_secret_arn = durable.get("db_password_plain_secret_arn", {}).get("value", "")
             openai_secret_arn = durable.get("openai_api_key_secret_arn", {}).get("value", "")
             region = os.getenv("CLOUD_REGION", os.getenv("AWS_REGION", "us-east-1"))
             delta_table_path = f"s3a://{delta_bucket}/delta/fru_sales"
@@ -330,10 +355,17 @@ def main():
                 kube_apply_args += ["--bedrock-inference-profile-id", bedrock_profile]
             if bedrock_model:
                 kube_apply_args += ["--bedrock-model-id", bedrock_model]
+            if csv_uploaded:
+                kube_apply_args += ["--force"]
             subprocess.run(kube_apply_args, check=True)
             subprocess.run([
                 "python", "tools/aws/kube_apply.py", "--env", env, "--region", region, "--phase", "schedule",
                 "--spark-image", spark_image_full, "--delta-bucket", delta_bucket,
+                "--pg-host", aurora_endpoint or "localhost",
+                "--pg-port", str(durable.get("aurora_port", {}).get("value", 5432)),
+                "--pg-database", durable.get("aurora_database_name", {}).get("value", "fru_db"),
+                "--pg-user", "postgres",
+                "--delta-table-path", delta_table_path,
             ], check=True, env={**os.environ, "CLOUD_REGION": region, "AWS_REGION": region})
             logger.success("Kubernetes bootstrap and schedule complete")
             tracker.end_phase(10)
@@ -414,7 +446,14 @@ def main():
 
             tracker.start_phase(10)
             logger.step(f"[10/{len(phases)}] Running ECS bootstrap...")
-            run_ecs_bootstrap(env, region)
+            snd = tofu_output_json("live-deploy-aws/shared/nondurable", env, region)
+            delta_bucket = snd.get("delta_bucket", {}).get("value", "")
+            csv_uploaded = False
+            if delta_bucket:
+                csv_uploaded = upload_csv_to_delta_bucket(delta_bucket, region)
+                if csv_uploaded:
+                    clear_delta_table(delta_bucket, region)
+            run_ecs_bootstrap(env, region, force=csv_uploaded)
             logger.success("ECS bootstrap complete")
             tracker.end_phase(10)
 

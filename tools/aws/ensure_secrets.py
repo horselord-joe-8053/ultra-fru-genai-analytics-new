@@ -81,14 +81,23 @@ def main():
 
         dbpw = (os.getenv("DB_PASSWORD") or os.getenv("PGPASSWORD") or "").strip()
         if dbpw:
+            # RDS Data API (setup_database) needs JSON format
             arn = o.get("db_password_secret_arn", {}).get("value")
             if not arn:
                 raise KeyError("db_password_secret_arn not in durable outputs; run deploy durable first")
             logger.info("[SECRETS] Setting DB_PASSWORD (RDS Data API JSON format)...")
-            # RDS Data API requires secret as JSON: {"username":"postgres","password":"..."}
             db_secret_json = json.dumps({"username": "postgres", "password": dbpw})
             put_value(arn, db_secret_json, region)
-            logger.success("[SECRETS] DB_PASSWORD set")
+            logger.success("[SECRETS] DB_PASSWORD set (JSON)")
+
+            # ECS needs plain string (legacy: db_password_plain; ECS doesn't support JSON key extraction)
+            arn_plain = o.get("db_password_plain_secret_arn", {}).get("value")
+            if arn_plain:
+                logger.info("[SECRETS] Setting DB_PASSWORD (plain for ECS)...")
+                put_value(arn_plain, dbpw, region)
+                logger.success("[SECRETS] DB_PASSWORD set (plain)")
+            else:
+                logger.warning("[SECRETS] db_password_plain_secret_arn not in outputs; ECS may fail")
         else:
             logger.warning("[SECRETS] DB_PASSWORD/PGPASSWORD not set in .env; skipping")
 

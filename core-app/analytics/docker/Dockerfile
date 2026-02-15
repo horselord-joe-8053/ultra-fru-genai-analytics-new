@@ -1,8 +1,11 @@
 
 FROM apache/spark:3.5.1
 USER root
+RUN pip install --no-cache-dir psycopg2-binary
 # Add delta libraries via spark packages at runtime; keep image minimal here.
-COPY jobs /opt/fru/jobs
+COPY analytics/jobs /opt/fru/jobs
+COPY data/raw/fridge_sales_with_rating.csv /opt/fru/data/fridge_sales_with_rating.csv
+RUN chmod 644 /opt/fru/data/fridge_sales_with_rating.csv
 # Set HOME to /tmp to avoid Ivy/Maven cache permission issues (Spark uses ~/.ivy2)
 # Also set Spark-specific Ivy home and user.home property
 ENV HOME=/tmp

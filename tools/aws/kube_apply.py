@@ -65,6 +65,7 @@ def main():
     ap.add_argument("--delta-lake-package", default="io.delta:delta-spark_2.13:4.0.0", help="DELTA_LAKE_PACKAGE")
     ap.add_argument("--bedrock-inference-profile-id", default="", help="AWS_BEDROCK_INFERENCE_PROFILE_ID")
     ap.add_argument("--bedrock-model-id", default="anthropic.claude-3-5-haiku-20241022-v1:0", help="AWS_BEDROCK_MODEL_ID")
+    ap.add_argument("--force", action="store_true", help="Force bootstrap even if already succeeded (e.g. after CSV upload)")
     args = ap.parse_args()
 
     region = resolve_region(args.region)
@@ -89,21 +90,7 @@ def main():
     kubectl(["apply","-f","-"], input_text=f"apiVersion: v1\nkind: Namespace\nmetadata:\n  name: {K8S_NAMESPACE}\n")
 
     if args.phase == "bootstrap":
-        if check_k8s_bootstrap_job_succeeded(args.env):
-            print(f"[KUBE BOOTSTRAP] Skip: Job {JOB_BOOTSTRAP} already succeeded (idempotent)")
-        else:
-            subs = {
-                "SPARK_IMAGE": spark_image,
-                "DELTA_ROOT": delta_root,
-                "AWS_ACCESS_KEY_ID": require("AWS_ADMIN_ACCESS_KEY_ID"),
-                "AWS_SECRET_ACCESS_KEY": require("AWS_ADMIN_SECRET_ACCESS_KEY"),
-                "AWS_REGION": os.getenv("CLOUD_REGION", "").strip() or require("AWS_REGION")
-            }
-            txt = render("infra-modules/shared/k8s/bootstrap-job.yaml", subs)
-            kubectl(["delete", "job", JOB_BOOTSTRAP, "--ignore-not-found", "-n", K8S_NAMESPACE])
-            kubectl(["apply", "-f", "-"], input_text=txt)
-
-        # Create db-credentials secret (from AWS or placeholder)
+        # Create db-credentials secret first (Job references it via secretKeyRef)
         pw = "placeholder"
         if args.db_secret_arn:
             try:
@@ -141,6 +128,26 @@ data:
 """
         kubectl(["apply", "-f", "-"], input_text=app_secret_yml)
 
+        if not args.force and check_k8s_bootstrap_job_succeeded(args.env):
+            print(f"[KUBE BOOTSTRAP] Skip: Job {JOB_BOOTSTRAP} already succeeded (idempotent)")
+        else:
+            delta_table_path = args.delta_table_path or f"s3a://{delta_bucket}/delta/fru_sales"
+            subs = {
+                "SPARK_IMAGE": spark_image,
+                "DELTA_ROOT": delta_root,
+                "DELTA_TABLE_PATH": delta_table_path,
+                "PGHOST": args.pg_host or "localhost",
+                "PGPORT": args.pg_port,
+                "PGDATABASE": args.pg_database,
+                "PGUSER": args.pg_user,
+                "AWS_ACCESS_KEY_ID": require("AWS_ADMIN_ACCESS_KEY_ID"),
+                "AWS_SECRET_ACCESS_KEY": require("AWS_ADMIN_SECRET_ACCESS_KEY"),
+                "AWS_REGION": os.getenv("CLOUD_REGION", "").strip() or require("AWS_REGION")
+            }
+            txt = render("infra-modules/shared/k8s/bootstrap-job.yaml", subs)
+            kubectl(["delete", "job", JOB_BOOTSTRAP, "--ignore-not-found", "-n", K8S_NAMESPACE])
+            kubectl(["apply", "-f", "-"], input_text=txt)
+
         # Deploy API (always run - idempotent)
         try:
             delta_table_path = args.delta_table_path or f"s3a://{delta_bucket}/delta/fru_sales"
@@ -167,7 +174,17 @@ data:
         except FileNotFoundError:
             print("WARN: API manifests not found, skipping API deployment.")
     else:
-        txt = render("infra-modules/shared/k8s/spark-cronjob.yaml", {"SPARK_IMAGE": spark_image, "DELTA_ROOT": delta_root})
+        delta_table_path = args.delta_table_path or f"s3a://{delta_bucket}/delta/fru_sales"
+        subs = {
+            "SPARK_IMAGE": spark_image,
+            "DELTA_ROOT": delta_root,
+            "DELTA_TABLE_PATH": delta_table_path,
+            "PGHOST": args.pg_host or "localhost",
+            "PGPORT": args.pg_port,
+            "PGDATABASE": args.pg_database,
+            "PGUSER": args.pg_user,
+        }
+        txt = render("infra-modules/shared/k8s/spark-cronjob.yaml", subs)
         kubectl(["apply","-f","-"], input_text=txt)
 
 if __name__ == "__main__":

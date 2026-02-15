@@ -20,6 +20,14 @@ from .prompts import get_agent_system_prompt, get_planning_prompt, get_synthesis
 logger = logging.getLogger(__name__)
 
 
+def _safe_agent_error(agent_logger: AgentLogger, message: str, exc_info: bool = True) -> None:
+    """Log error via AgentLogger. Never passes exc_info to avoid compatibility issues with older deployed images."""
+    import traceback
+    if exc_info:
+        message = f"{message}\n{traceback.format_exc()}"
+    agent_logger.error(message)
+
+
 class QueryAgent:
     """ReAct agent for processing queries autonomously."""
     
@@ -430,9 +438,9 @@ class QueryAgent:
                                 }
                             )
                         except Exception as e:
-                            logger.error(
+                            _safe_agent_error(
+                                logger,
                                 f"[AUTO] execute_sql failed with auto-generated SQL: {e}",
-                                exc_info=True,
                             )
 
             # Synthesis phase: Generate final answer
@@ -737,7 +745,7 @@ class QueryAgent:
         except Exception as e:
             execution_time = (time.time() - start_time) * 1000
             error_msg = f"Agent processing failed: {str(e)}"
-            logger.error(f"Agent error: {error_msg}", exc_info=True)
+            _safe_agent_error(logger, f"Agent error: {error_msg}")
             
             agent_metrics.record_query(
                 query_type="error",

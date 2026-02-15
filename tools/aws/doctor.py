@@ -25,6 +25,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--env", default=os.getenv("ENVIRONMENT", os.getenv("FRU_ENV","dev")))
     ap.add_argument("--region", default=None, help="Region (default: CLOUD_REGION)")
+    ap.add_argument("--scope", choices=["kube", "nonkube", "all"], default=None, help="Deploy scope (kube requires kubectl)")
     args = ap.parse_args()
 
     region = resolve_region(args.region)
@@ -42,7 +43,8 @@ def main():
     if not has("docker"):
         raise SystemExit("Missing required executable: docker")
 
-    if not has("kubectl"):
+    # Only warn about kubectl when scope needs it (kube or all); skip for nonkube
+    if args.scope != "nonkube" and not has("kubectl"):
         print("WARN: kubectl not found (kube deploy will fail until installed).")
 
     try:

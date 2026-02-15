@@ -1,13 +1,8 @@
-
-from pyspark.sql import SparkSession
-
-def main():
-    spark = SparkSession.builder.appName("fru-periodic").getOrCreate()
-    delta_root = spark.conf.get("spark.fru.delta_root", "s3a://example/delta")
-    path = f"{delta_root}/gold/bootstrap_metrics"
-    df = spark.read.format("delta").load(path)
-    df.groupBy().count().show()
-    spark.stop()
+"""
+Periodic analytics job: runs run_analytics (Delta -> batch_analytics DB).
+Shared entry point for both ECS EventBridge schedule and K8s CronJob.
+"""
+from run_analytics import main
 
 if __name__ == "__main__":
     main()
