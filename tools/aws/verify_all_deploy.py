@@ -28,11 +28,15 @@ VERIFY_RETRIABLE_HTTP_CODES = frozenset({502, 503})
 def get_tofu_output(stack_dir, env):
     """Retrieve output from Tofu (assumed already applied)."""
     ensure_shared_tofu_env()
-    tofu_bin = os.getenv("FRU_TF_BIN", "tofu")
-    # We use -json for reliable parsing
+    from tools.aws.deploy import init_stack
+    from tools.aws._backend import resolve_region
+    region = resolve_region(None)
     try:
-        cmd = [tofu_bin, "output", "-json"]
-        out = subprocess.check_output(cmd, cwd=stack_dir, text=True)
+        init_stack(stack_dir, env, region)
+        out = subprocess.check_output(
+            [os.getenv("FRU_TF_BIN", "tofu"), "output", "-json"],
+            cwd=stack_dir, text=True, env={**os.environ, "CLOUD_REGION": region, "AWS_REGION": region}
+        )
         return json.loads(out)
     except Exception as e:
         logger.warning(f"could not get tofu output from {stack_dir}: {e}")
@@ -53,13 +57,36 @@ def verify_api_endpoints(base_url, timeout_secs=None, heartbeat_interval_sec=Non
         if "Agent-based query processing is disabled" in r.text:
             logger.info("  (Note: Agent is disabled due to missing DB, but endpoint is reachable)")
             return True
+        # Non-retriable: AgentLogger exc_info error needs a code fix
+        if "exc_info" in r.text and "unexpected keyword argument" in r.text:
+            raise RuntimeError("QueryStream returned AgentLogger exc_info error (non-retriable; needs redeploy)")
         return True
+
+    def check_analytics(r):
+        if r.status_code != 200:
+            return False
+        try:
+            data = r.json()
+            if data.get("error"):
+                raise RuntimeError(f"Analytics error (non-retriable): {data.get('error')}")
+            total_records = data.get("total_records") or 0
+            if total_records < 10:
+                raise RuntimeError(
+                    f"Analytics total_records={total_records} (expected 200; non-retriable; run bootstrap)"
+                )
+            logger.info(f"  Analytics OK: total_records={total_records}")
+            return True
+        except RuntimeError:
+            raise
+        except Exception:
+            return r.status_code == 200
 
     endpoints = [
         {"path": "/health", "name": "Health", "check": lambda r: r.status_code == 200},
         {"path": "/version", "name": "Version", "check": lambda r: r.status_code == 200},
         {"path": "/", "name": "Frontend", "check": lambda r: r.status_code == 200 and "<html" in r.text.lower()},
         {"path": "/query/stream?query=test", "name": "QueryStream", "check": check_query_stream},
+        {"path": "/analytics", "name": "Analytics", "check": check_analytics},
     ]
     results = {e["name"]: False for e in endpoints}
     last_status = {e["name"]: None for e in endpoints}
@@ -119,7 +146,7 @@ def verify_api_endpoints(base_url, timeout_secs=None, heartbeat_interval_sec=Non
 def verify_cloudwatch(env, timeout_mins=None):
     region = os.getenv("CLOUD_REGION", "").strip() or require("AWS_REGION")
     # Use log group from env if set, otherwise default
-    log_group = os.getenv("CLOUDWATCH_LOG_GROUP") or f"/fru/{env}/analytics"
+    log_group = os.getenv("CLOUDWATCH_LOG_GROUP") or f"/fru/{env}/spark"
 
     timeout_secs = (timeout_mins * 60) if timeout_mins else get_int_env("LOGGING_TASK_DEFAULT_TIMEOUT", VERIFY_TIMEOUT_SEC)
     heartbeat_interval = VERIFY_HEARTBEAT_INTERVAL_SEC

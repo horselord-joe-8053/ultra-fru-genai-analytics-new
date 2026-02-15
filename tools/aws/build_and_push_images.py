@@ -191,6 +191,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--env", default=os.getenv("FRU_ENV","dev"))
     ap.add_argument("--region", default=None, help="Region (default: CLOUD_REGION)")
+    ap.add_argument("--no-cache", action="store_true", help="Build Spark image without cache (ensures fresh run_analytics.py)")
     args = ap.parse_args()
 
     region = resolve_region(args.region)
@@ -228,8 +229,12 @@ def main():
         ["docker","build","--progress=plain","--platform",platform,"-t",f"{app_repo_url}:{app_tag}","core-app"],
         "Building app image", 1, 4,
     )
+    spark_build_cmd = ["docker","build","--progress=plain","--platform",platform,"-t",f"{spark_repo_url}:{spark_tag}","-f","core-app/analytics/docker/Dockerfile","core-app"]
+    if args.no_cache:
+        spark_build_cmd.insert(2, "--no-cache")
+        logger.info("[BUILD] Spark: --no-cache (fresh build)")
     run_docker_with_progress(
-        ["docker","build","--progress=plain","--platform",platform,"-t",f"{spark_repo_url}:{spark_tag}","-f","core-app/analytics/docker/Dockerfile","core-app/analytics"],
+        spark_build_cmd,
         "Building spark image", 2, 4,
     )
     run_docker_with_progress(

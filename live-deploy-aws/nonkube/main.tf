@@ -77,15 +77,17 @@ module "ecs" {
     PGUSER     = "postgres"
   } : {})
 
+  # Legacy pattern: use plain string secret for PGPASSWORD (ECS doesn't support JSON key extraction)
   secret_arns = {
     OPENAI_API_KEY = data.terraform_remote_state.shared_durable.outputs.openai_api_key_secret_arn
-    PGPASSWORD     = data.terraform_remote_state.shared_durable.outputs.db_password_secret_arn
+    PGPASSWORD     = data.terraform_remote_state.shared_durable.outputs.db_password_plain_secret_arn
   }
 
-  aurora_endpoint          = try(data.terraform_remote_state.shared_durable.outputs.aurora_endpoint, "")
-  aurora_port              = tostring(try(data.terraform_remote_state.shared_durable.outputs.aurora_port, 5432))
-  aurora_database_name     = try(data.terraform_remote_state.shared_durable.outputs.aurora_database_name, "fru_db")
-  aurora_security_group_id = try(data.terraform_remote_state.shared_durable.outputs.aurora_security_group_id, "")
+  aurora_endpoint               = try(data.terraform_remote_state.shared_durable.outputs.aurora_endpoint, "")
+  aurora_port                   = tostring(try(data.terraform_remote_state.shared_durable.outputs.aurora_port, 5432))
+  aurora_database_name          = try(data.terraform_remote_state.shared_durable.outputs.aurora_database_name, "fru_db")
+  aurora_security_group_id      = try(data.terraform_remote_state.shared_durable.outputs.aurora_security_group_id, "")
+  db_password_plain_secret_arn  = try(data.terraform_remote_state.shared_durable.outputs.db_password_plain_secret_arn, "")
 
   delta_bucket             = var.delta_bucket
   spark_image              = var.spark_image
@@ -111,6 +113,7 @@ output "alb_dns_name" { value = module.ecs.alb_dns_name }
 output "ecs_service_name" { value = module.ecs.service_name }
 output "ecs_cluster_name" { value = module.ecs.cluster_name }
 output "ecs_task_definition_arn" { value = module.ecs.task_definition_arn }
+output "spark_task_definition_arn" { value = module.ecs.spark_task_definition_arn }
 output "ecs_tasks_sg_id" { value = module.ecs.tasks_security_group_id }
 output "cloudfront_domain_name" { value = module.frontend.cloudfront_domain_name }
 output "cloudfront_distribution_id" { value = module.frontend.cloudfront_distribution_id }

@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 load_dotenv()
 
-# Log pattern for bootstrap success (from bootstrap.py / run_analytics_once)
+# Log pattern for bootstrap success (from run_analytics.py)
 BOOTSTRAP_SUCCESS_PATTERN = "fru bootstrap success"
 
 # K8s Job/CronJob names and namespace (must match infra-modules/shared/k8s/)
@@ -34,10 +34,10 @@ def check_ecs_bootstrap_succeeded(env: str, log_group: str | None = None) -> boo
     """
     Check CloudWatch logs for ECS bootstrap success. Used to skip re-running.
     Returns True if 'fru bootstrap success' found in log_group streams.
-    Log group: /fru/{env}/ecs-api (API container logs from ecs module).
+    Log group: /fru/{env}/spark (Spark task logs).
     """
     region = os.getenv("CLOUD_REGION", os.getenv("AWS_REGION", "us-east-1"))
-    lg = log_group or os.getenv("CLOUDWATCH_LOG_GROUP") or f"/fru/{env}/ecs-api"
+    lg = log_group or os.getenv("CLOUDWATCH_LOG_GROUP") or f"/fru/{env}/spark"
     try:
         out = subprocess.check_output([
             "aws", "logs", "describe-log-streams",

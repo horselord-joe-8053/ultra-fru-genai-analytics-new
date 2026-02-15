@@ -136,6 +136,19 @@ resource "aws_iam_role" "task" {
   tags               = var.tags
 }
 
+resource "aws_iam_role_policy" "task_bedrock" {
+  name = "${var.name}-${var.env}-ecs-task-bedrock"
+  role = aws_iam_role.task.id
+  policy = jsonencode({
+    Version   = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]
+      Resource = ["*"]
+    }]
+  })
+}
+
 locals {
   env_list     = [for k, v in var.env_vars : { name = k, value = v }]
   secrets_list = [for k, v in var.secret_arns : { name = k, valueFrom = v }]
@@ -240,6 +253,68 @@ resource "aws_iam_role_policy" "spark_s3" {
   })
 }
 
+# Task role: used by container for AWS SDK (S3, etc). Execution role is for ECS agent only.
+resource "aws_iam_role" "spark_task" {
+  name = "${var.name}-${var.env}-spark-task"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "ecs-tasks.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+  tags = var.tags
+}
+
+resource "aws_iam_role_policy" "spark_task_s3" {
+  name = "${var.name}-${var.env}-spark-task-s3"
+  role = aws_iam_role.spark_task.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = ["s3:GetObject", "s3:PutObject", "s3:ListBucket"]
+      Resource = [
+        "arn:aws:s3:::${var.delta_bucket}",
+        "arn:aws:s3:::${var.delta_bucket}/*"
+      ]
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "spark_secrets" {
+  count       = var.db_password_plain_secret_arn != "" ? 1 : 0
+  name        = "${var.name}-${var.env}-spark-secrets"
+  role        = aws_iam_role.spark_task_exec.id
+  policy = jsonencode({
+    Version   = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["secretsmanager:GetSecretValue"]
+      Resource = [var.db_password_plain_secret_arn]
+    }]
+  })
+}
+
+locals {
+  spark_env = concat(
+    [
+      { name = "SPARK_EXTRA_CONF", value = "spark.fru.delta_root=s3a://${var.delta_bucket}/delta" },
+      { name = "DELTA_TABLE_PATH", value = "s3a://${var.delta_bucket}/delta/fru_sales" }
+    ],
+    var.aurora_endpoint != "" ? [
+      { name = "PGHOST", value = var.aurora_endpoint },
+      { name = "PGPORT", value = var.aurora_port },
+      { name = "PGDATABASE", value = var.aurora_database_name },
+      { name = "PGUSER", value = "postgres" }
+    ] : []
+  )
+  spark_secrets = var.db_password_plain_secret_arn != "" ? [
+    { name = "PGPASSWORD", valueFrom = var.db_password_plain_secret_arn }
+  ] : []
+}
+
 resource "aws_ecs_task_definition" "spark" {
   family                   = "${var.name}-${var.env}-spark"
   requires_compatibilities = ["FARGATE"]
@@ -247,14 +322,14 @@ resource "aws_ecs_task_definition" "spark" {
   cpu                      = "512"
   memory                   = "1024"
   execution_role_arn       = aws_iam_role.spark_task_exec.arn
+  task_role_arn            = aws_iam_role.spark_task.arn
   container_definitions = jsonencode([{
-    name      = "spark"
-    image     = var.spark_image
-    essential = true
-    command   = ["spark-submit", "/opt/fru/jobs/periodic.py"]
-    environment = [
-      { name = "SPARK_EXTRA_CONF", value = "spark.fru.delta_root=s3a://${var.delta_bucket}/delta" }
-    ]
+    name        = "spark"
+    image       = var.spark_image
+    essential   = true
+    command     = ["/opt/spark/bin/spark-submit", "--packages", "io.delta:delta-spark_2.12:3.1.0,org.apache.hadoop:hadoop-aws:3.3.4", "/opt/fru/jobs/periodic.py"]
+    environment = local.spark_env
+    secrets     = local.spark_secrets
     logConfiguration = {
       logDriver = "awslogs"
       options = {
@@ -295,7 +370,7 @@ resource "aws_iam_role_policy" "events_invoke_ecs" {
       {
         Effect   = "Allow"
         Action   = ["iam:PassRole"]
-        Resource = [aws_iam_role.spark_task_exec.arn]
+        Resource = [aws_iam_role.spark_task_exec.arn, aws_iam_role.spark_task.arn]
       }
     ]
   })

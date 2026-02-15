@@ -5,6 +5,7 @@ Applicable environment: [local] [aws {ecs | eks}] [azure {aci | aks}] [gcp {clou
 """
 import json
 import logging
+import traceback
 import uuid
 from typing import Dict, Any, List, Optional
 from datetime import datetime
@@ -142,9 +143,14 @@ class AgentLogger:
         """Convert to JSON string."""
         return json.dumps(self.get_debug_info(), indent=2)
     
-    def error(self, message: str):
-        """Log an error message."""
-        logger.error(f"[{self.query_id}] {message}")
+    def error(self, message: str, exc_info: bool = False, **kwargs):
+        """Log an error message. Accepts exc_info for stack traces (matches stdlib logging).
+        Never passes exc_info to underlying logger to avoid compatibility issues in ECS/Flask."""
+        _log = logging.getLogger(__name__)
+        msg = f"[{self.query_id}] {message}"
+        if exc_info:
+            msg = f"{msg}\n{traceback.format_exc()}"
+        _log.error(msg)
     
     def warning(self, message: str):
         """Log a warning message."""

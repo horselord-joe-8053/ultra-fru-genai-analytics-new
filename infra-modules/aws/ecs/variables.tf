@@ -63,3 +63,8 @@ variable "aurora_security_group_id" {
   type    = string
   default = ""
 }
+# Plain DB password secret for Spark task (batch_analytics write)
+variable "db_password_plain_secret_arn" {
+  type    = string
+  default = ""
+}
