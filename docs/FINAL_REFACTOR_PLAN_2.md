@@ -25,7 +25,7 @@
 After FINAL_REFACTOR_PLAN.md is complete, this plan adds:
 
 - **`--region`** flag to `deploy.py`, `teardown.py`, and related tools
-- **`TF_DEFAULT_REGION`** fallback when `--region` is omitted (defaults to `AWS_REGION`)
+- **`CLOUD_REGION`** fallback when `--region` is omitted
 - **Region in state key** so each region has isolated Terraform state
 - **`migrate_state_to_region_key.py`** for one-time migration of existing state from old keys to region-scoped keys
 
@@ -42,16 +42,15 @@ python tools/aws/migrate_state_to_region_key.py --env dev --region us-east-1 --e
 
 # Deploy / teardown
 python tools/aws/deploy.py --scope nonkube --env dev --region us-east-1
-python tools/aws/deploy.py --scope nonkube --env dev  # uses TF_DEFAULT_REGION or AWS_REGION
+python tools/aws/deploy.py --scope nonkube --env dev  # uses CLOUD_REGION
 python tools/aws/teardown.py --scope all --env dev --region us-east-1 --force
 ```
 
 **Region resolution order**:
 
 1. `--region` (CLI)
-2. `TF_DEFAULT_REGION` (env)
-3. `AWS_REGION` (env)
-4. `us-east-1` (hard default)
+2. `CLOUD_REGION` (env)
+3. `us-east-1` (hard default)
 
 ---
 
@@ -93,9 +92,9 @@ Example: `fru/dev/us-east-1/aws-shared-durable.tfstate`
 | 4 | Add `--region` to `teardown.py`; pass region to all backend/tofu calls | `tools/aws/teardown.py` |
 | 5 | Add `--region` to `ensure_secrets.py`, `build_and_push_images.py`, `kube_apply.py`, `doctor.py` (or accept from env) | Various |
 | 6 | Create `migrate_state_to_region_key.py` | `tools/aws/migrate_state_to_region_key.py` |
-| 7 | Set `AWS_REGION` in tofu env when running Terraform (so provider uses correct region) | `get_tofu_env()` or callers |
+| 7 | Set `CLOUD_REGION`/`AWS_REGION` in tofu env when running Terraform (so provider uses correct region) | `get_tofu_env()` or callers |
 | 8 | Update `get_base_vars()` / `_aws_vars` to use region for `aws_region` TF var | `tools/aws/_aws_vars.py` |
-| 9 | Document `TF_DEFAULT_REGION` in `.env.example` | `.env.example` or `docs/` |
+| 9 | Document `AWS_REGION` in `.env.example` | `.env.example` or `docs/` |
 
 ### migrate_state_to_region_key.py
 
@@ -129,7 +128,7 @@ python tools/aws/migrate_state_to_region_key.py --env dev --region us-east-1 --e
    python tools/aws/migrate_state_to_region_key.py --env dev --region us-east-1 --execute
    ```
 3. **After migration**: State at `fru/dev/us-east-1/aws-shared-durable.tfstate`, etc.
-4. **Deploy/teardown** must use `--region us-east-1` (or `TF_DEFAULT_REGION=us-east-1`).
+4. **Deploy/teardown** must use `--region us-east-1` (or `CLOUD_REGION=us-east-1`).
 
 ### For New Deployments (after Plan 2)
 
@@ -143,11 +142,8 @@ python tools/aws/migrate_state_to_region_key.py --env dev --region us-east-1 --e
 ### .env Additions
 
 ```bash
-# Optional: default region when --region not passed
-TF_DEFAULT_REGION=us-east-1
-
-# AWS region (used by provider and when TF_DEFAULT_REGION not set)
-AWS_REGION=us-east-1
+# AWS region (used by provider and when --region not passed)
+CLOUD_REGION=us-east-1
 ```
 
 ### Per-Region Considerations

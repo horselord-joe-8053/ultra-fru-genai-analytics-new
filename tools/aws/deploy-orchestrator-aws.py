@@ -21,7 +21,7 @@ def base_vars(env):
     return [
         "-var", f"env={env}",
         "-var", f"prefix={require('FRU_PREFIX')}",
-        "-var", f"aws_region={require('AWS_REGION')}",
+        "-var", f"aws_region={os.getenv('CLOUD_REGION', '').strip() or require('AWS_REGION')}",
     ]
 
 def apply_stack(stack, env, extra_vars):

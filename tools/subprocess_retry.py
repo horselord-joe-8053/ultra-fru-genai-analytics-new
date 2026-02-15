@@ -7,7 +7,7 @@ from typing import Optional
 
 from tools import logger
 from tools.retry_config import RetryConfig, get_retry_config
-from tools.with_heartbeat import run_with_heartbeat, sleep_with_heartbeat
+from tools.with_heartbeat import run_with_heartbeat, run_with_heartbeat_stream_capture, sleep_with_heartbeat
 
 
 def run_with_retry(
@@ -18,14 +18,20 @@ def run_with_retry(
     config: Optional[RetryConfig] = None,
     config_path: Optional[str] = None,
     heartbeat_interval_sec: Optional[int] = None,
+    stream_output: bool = False,
 ) -> subprocess.CompletedProcess:
     """
     Run command with retry on configurable retriable errors.
     Non-retriable patterns fail immediately. Retriable patterns trigger wait + retry.
+    If stream_output=True, streams child stdout/stderr for fine-grained progress (e.g. tofu destroy).
     """
     cfg = config or get_retry_config(config_path)
 
     def _run():
+        if stream_output:
+            return run_with_heartbeat_stream_capture(
+                cmd, cwd=cwd, env=env, description=description, interval_sec=heartbeat_interval_sec
+            )
         return run_with_heartbeat(
             cmd, cwd=cwd, env=env, description=description, interval_sec=heartbeat_interval_sec
         )

@@ -471,9 +471,9 @@ For teardown (and similar multi-step automation), keep orchestration in shell—
 ## 10. Continuous Feedback and Heartbeat: So Long-Running Scripts Don’t Look Stuck
 
 **creation:** `<260130>`
-**last_updated:** `<260130>`
+**last_updated:** `<260210>`
 
-**keywords:** UX, feedback, heartbeat, timeout, teardown, remove-all-aws-resources, stderr, long-running, run_with_heartbeat, wait_with_heartbeat
+**keywords:** UX, feedback, heartbeat, timeout, teardown, remove-all-aws-resources, stderr, long-running, run_with_heartbeat, wait_with_heartbeat, output buffering, PYTHONUNBUFFERED, docker --progress=plain, non-TTY, Cursor IDE
 **difficulty:** 6
 **significance:** 7
 
@@ -500,6 +500,17 @@ With this, both teardown and remove-all give continuous feedback and heartbeat d
 ### 10.5 Takeaway
 
 For long-running scripts: (1) emit progress lines (what’s running, what completed/failed); (2) emit heartbeat lines on a fixed interval ("Still running: … N s elapsed") so waits don’t look stuck; (3) use a shared helper per language (shell: run command + heartbeat [+ timeout]; Python: wait until condition + heartbeat + timeout); (4) put timeout and interval constants at the top of the main script and document which phases have no heartbeat (e.g. initial setup). That keeps users and CI confident the process is alive and makes timeouts explicit and configurable.
+
+### 10.6 Output Buffering: Silent "Hang" When Run Under IDE or CI
+
+**creation:** `<260210>`
+**last_updated:** `<260210>`
+
+Deploy's build-and-push phase (Docker build + push) ran for 15+ minutes with no terminal output after "OpenTofu has been successfully initialized!" The process was not stuck—Docker build was actively running—but output was buffered. When Python runs in a non-TTY (e.g. Cursor's integrated terminal, CI runners), stdout is block-buffered by default. Docker build's fancy progress display also buffers when not attached to a real TTY. Result: users assume the script hung and kill it, or wait indefinitely with no feedback.
+
+**Resolution:** (1) Set `PYTHONUNBUFFERED=1` in the subprocess env when spawning long-running child scripts (e.g. `build_and_push_images.py`) so Python flushes output immediately. (2) Add `--progress=plain` to `docker build` so Docker emits line-by-line output instead of the interactive progress bar, which buffers or misbehaves in non-TTY environments. (3) Run the top-level deploy with `PYTHONUNBUFFERED=1` when invoking from IDE or CI. Heartbeat helps too, but unbuffered output ensures the child's real progress (Docker layer logs, etc.) streams to the terminal.
+
+**Takeaway:** When long-running subprocesses appear to "freeze" with no output, suspect buffering—not deadlock. Python block-buffers stdout when not a TTY; Docker's progress display buffers in non-TTY. Use `PYTHONUNBUFFERED=1` for Python children and `docker build --progress=plain` for build visibility in IDE/CI.
 
 ---
 
@@ -1994,3 +2005,68 @@ Resources were defined directly in deploy stacks instead of being encapsulated i
 ### 39.5 Takeaway
 
 Keep deploy stacks thin: module composition only. Extract any `resource` block into a reusable module. Name your deploy directories to reflect their role (e.g. `live-deploy-aws`) so the architecture is self-documenting. When renaming, preserve state key semantics so existing Terraform state remains valid.
+
+---
+
+## 40. K8s Pre-Destroy: Why We Keep kubectl Instead of Moving K8s Resources into Terraform
+
+**creation:** `<260215>`
+**last_updated:** `<260215>`
+
+**keywords:** Terraform, Kubernetes, EKS, teardown, pre-destroy, kubectl, kubernetes provider, infrastructure lifecycle
+**difficulty:** 5
+**significance:** 7
+
+### 40.1 Context
+
+Kube teardown requires pre-destroy: we run `kubectl` to scale deployments, delete the LoadBalancer service, CronJob, Job, and namespace before Terraform can destroy the EKS cluster. Without this, AWS blocks cluster deletion (LoadBalancer holds ENIs; pods block removal). The question arose: could we eliminate pre-destroy by moving K8s resources (Namespace, Deployment, Service, CronJob, Job) into Terraform using the `kubernetes` provider? Terraform would then destroy them in the right order before the cluster.
+
+### 40.2 Evaluation
+
+**Pros of Terraform-managed K8s:** Single source of truth, no pre-destroy, declarative, proper dependency ordering, idempotent teardown.
+
+**Cons (why we kept kubectl):**
+- **Templating:** `kube_apply.py` injects ECR URLs, secret ARNs, PGHOST, etc. Terraform would need `templatefile()` and data sources; more wiring.
+- **Provider config:** kubernetes provider needs cluster endpoint/CA/token from EKS; brittle during first apply.
+- **Secret handling:** Bootstrap needs DB/OpenAI secrets from AWS Secrets Manager. Terraform would need `kubernetes_secret` + `aws_secretsmanager_get_secret_value`; more complexity.
+- **Migration:** Existing clusters have resources created by kubectl; would need `terraform import` or clean redeploy.
+- **Slower iteration:** Changing a Deployment means `tofu apply` instead of `kubectl apply -f`; heavier for K8s-only tweaks.
+
+### 40.3 Decision
+
+We kept the pre-destroy approach. The cons outweighed the pros: templating, provider config, and secret handling add significant complexity; kubectl + pre-destroy is simpler and works. See `tools/aws/bootstrap_helpers.py` and `tools/aws/teardown.py` for the implementation.
+
+### 40.4 Takeaway
+
+Moving K8s resources into Terraform is possible but not always worth it. When templating, provider config, and secret wiring add substantial complexity, keeping kubectl + pre-destroy is a pragmatic choice. Document the decision so future maintainers understand why pre-destroy exists and when a Terraform migration might be reconsidered.
+
+---
+
+## 41. EKS Security Groups: AWS-Created Side Effects, Not Terraform Resources
+
+**creation:** `<260215>`
+**last_updated:** `<260215>`
+
+**keywords:** EKS, security groups, Terraform, AWS side effects, orphan cleanup, teardown
+**difficulty:** 5
+**significance:** 7
+
+### 41.1 Context
+
+When we tear down the kube stack, EKS cluster and node security groups (`{cluster}-cluster-sg`, `{cluster}-nodes-sg`) sometimes remain orphaned after the cluster is deleted. Terraform does not remove them. Why?
+
+### 41.2 Root Cause
+
+These SGs are **not Terraform resources**. They are created by **AWS** as a side effect when:
+- `aws_eks_cluster` is applied → AWS CreateCluster API → AWS creates the cluster SG
+- `aws_eks_node_group` is applied → AWS CreateNodegroup API → AWS creates the node SG
+
+Terraform's `aws_eks_cluster` and `aws_eks_node_group` do not declare `aws_security_group` blocks. The SGs are created by the EKS service, not by Terraform. When Terraform destroys the cluster, it deletes the cluster via the AWS API; AWS does not always delete the associated SGs. They are unique in that sense: created by AWS, not managed by Terraform, and often orphaned on cluster deletion.
+
+### 41.3 Industry Practice
+
+The common approach is **post-destroy cleanup**: run a script after `terraform destroy` to delete orphaned SGs. Alternatives include accepting orphaned SGs (low cost) or using custom SGs in Terraform (more complex, changes default EKS setup). We use `remove_orphaned_eks_security_groups` in pre_destroy—idempotent, runs when cluster is gone, cleans via AWS CLI.
+
+### 41.4 Takeaway
+
+EKS cluster and node SGs are AWS-created side effects, not Terraform resources. Terraform cannot manage their lifecycle. Post-destroy CLI cleanup is the common industry practice. Document this so future maintainers understand why `remove_orphaned_eks_security_groups` exists and that it is not a workaround for missing Terraform—the SGs were never in Terraform.

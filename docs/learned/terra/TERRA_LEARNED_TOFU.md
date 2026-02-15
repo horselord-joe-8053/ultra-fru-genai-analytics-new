@@ -111,7 +111,7 @@ flowchart TB
 | `tools/aws/ensure_secrets.py` | init + output read | Uses durable stack for secret ARNs |
 | `tools/aws/destroy_durable.py` | `tofu destroy` | Same; requires `ALLOW_DURABLE_DESTROY=YES` and confirmation token |
 
-**Required env vars** for init/apply (via `_aws_vars.py` + `_backend.py`): `TF_STATE_BUCKET`, `AWS_REGION`, `FRU_PREFIX`, `VPC_CIDR`; optionally `TF_STATE_PREFIX`, `TF_LOCK_TABLE`.
+**Required env vars** for init/apply (via `_aws_vars.py` + `_backend.py`): `TF_STATE_BUCKET`, `CLOUD_REGION`, `FRU_PREFIX`, `VPC_CIDR`; optionally `TF_STATE_PREFIX`, `TF_LOCK_TABLE`.
 
 ---
 

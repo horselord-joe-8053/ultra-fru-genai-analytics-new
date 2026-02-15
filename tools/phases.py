@@ -70,12 +70,11 @@ def deploy_phases(scope: str) -> list[str]:
 def teardown_phases(scope: str) -> list[str]:
     """Return phase names for teardown (order matches teardown scope)."""
     if scope == "kube":
-        return ["Pre-destroy (remove CronJob/Job)", "Destroy kube stack"]
+        return ["Destroy kube stack"]
     if scope == "nonkube":
         return ["Destroy nonkube stack"]
     # scope == "all"
     return [
-        "Pre-destroy (remove CronJob/Job)",
         "Destroy nonkube stack",
         "Destroy kube stack",
         "Destroy shared-nondurable",

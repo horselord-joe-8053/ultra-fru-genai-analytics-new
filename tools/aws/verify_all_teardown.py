@@ -70,7 +70,7 @@ def main():
             out = subprocess.check_output([
                 "aws", "ecs", "describe-clusters", 
                 "--clusters", cluster_name,
-                "--region", os.getenv("AWS_REGION", "us-east-1")
+                "--region", os.getenv("CLOUD_REGION", os.getenv("AWS_REGION", "us-east-1"))
             ], text=True)
             data = json.loads(out)
             

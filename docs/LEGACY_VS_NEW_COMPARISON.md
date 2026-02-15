@@ -74,9 +74,9 @@ export FRU_CSV_PATH="${FRU_CSV_PATH:-$CSV_FILE}"
 
 **New**: Now in `api-deployment.yaml`: `DELTA_TABLE_PATH` (s3a://{delta_bucket}/delta/fru_sales), `DELTA_LAKE_PACKAGE`, `CONTAINER_TYPE=eks`, `SPARK_HOME`, passed via kube_apply.
 
-### 2.4 AWS_REGION – **Fixed**
+### 2.4 CLOUD_REGION (AWS_REGION for pods) – **Fixed**
 
-**New**: Now templated as `"${AWS_REGION}"` from kube_apply (`--aws-region` from deploy.py/env).
+**New**: Now templated as `"${AWS_REGION}"` from kube_apply (`--aws-region` from deploy.py/env). Tools use `CLOUD_REGION`; pods receive `AWS_REGION` for AWS SDK.
 
 ---
 
@@ -133,7 +133,7 @@ After fixes (all implemented):
 - [x] Schema verification (embedding column)
 - [x] OPENAI_API_KEY from app-credentials Secret
 - [x] Bedrock, DELTA_*, CONTAINER_TYPE in kube API
-- [x] AWS_REGION templated
+- [x] CLOUD_REGION / AWS_REGION templated
 - [x] Bedrock, DELTA_LAKE_PACKAGE in ECS
 
 Manual verification (requires live deploy):

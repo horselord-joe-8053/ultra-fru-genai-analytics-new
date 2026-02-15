@@ -18,7 +18,7 @@ import json
 import subprocess
 
 from tools._env import load_dotenv, require
-from tools.aws._backend import backend_config
+from tools.aws._backend import backend_config, resolve_region
 from tools.tofu_runner import get_tofu_env
 from tools.subprocess_retry import run_with_retry
 from tools import logger
@@ -31,16 +31,16 @@ PARSE_SQL = os.path.join(REPO_ROOT, "tools", "sql", "parse_sql_statements.py")
 ETL_SCRIPT = os.path.join(REPO_ROOT, "core-app", "backend", "etl", "load_openai_embeddings_to_pgvector_rds_api.py")
 
 
-def get_durable_outputs(env: str) -> dict:
+def get_durable_outputs(env: str, region: str | None = None) -> dict:
     """Get Aurora-related outputs from durable stack."""
     stack_dir = "live-deploy-aws/shared/durable"
-    cfg = backend_config(stack_dir, env)
+    cfg = backend_config(stack_dir, env, region)
     args = ["init", "-lock=false", "-upgrade", "-reconfigure"]
     for c in cfg:
         args += ["-backend-config", c]
     exe = os.getenv("FRU_TF_BIN", "tofu")
-    run_with_retry([exe] + args, cwd=stack_dir, env=get_tofu_env(), description="tofu init for durable")
-    out_raw = subprocess.check_output([exe, "output", "-json"], cwd=stack_dir, text=True, env=get_tofu_env())
+    run_with_retry([exe] + args, cwd=stack_dir, env=get_tofu_env(region), description="tofu init for durable")
+    out_raw = subprocess.check_output([exe, "output", "-json"], cwd=stack_dir, text=True, env=get_tofu_env(region))
     out = json.loads(out_raw)
     cluster_arn = out.get("aurora_cluster_arn", {}).get("value")
     secret_arn = out.get("db_password_secret_arn", {}).get("value") or out.get("db_secret_arn", {}).get("value")
@@ -172,7 +172,7 @@ def load_data(env: str, cluster_arn: str, secret_arn: str, db_name: str, force: 
     # Idempotency: skip if data exists and not forcing (legacy parity)
     if not force:
         import boto3
-        rds = boto3.client("rds-data", region_name=env_vars.get("AWS_REGION", "us-east-1"))
+        rds = boto3.client("rds-data", region_name=env_vars.get("CLOUD_REGION", env_vars.get("AWS_REGION", "us-east-1")))
         try:
             resp = rds.execute_statement(
                 resourceArn=cluster_arn,
@@ -203,17 +203,21 @@ def load_data(env: str, cluster_arn: str, secret_arn: str, db_name: str, force: 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--env", default=os.getenv("FRU_ENV", "dev"))
+    ap.add_argument("--region", default=None, help="Region (default: CLOUD_REGION)")
     ap.add_argument("--force-refresh-data", action="store_true")
     args = ap.parse_args()
+
+    region = resolve_region(args.region)
+    os.environ["CLOUD_REGION"] = region
+    os.environ["AWS_REGION"] = region
 
     logger.step("Setting up database (pgvector, schema, data)")
 
     try:
-        region = require("AWS_REGION")
         import boto3
         rds = boto3.client("rds-data", region_name=region)
 
-        outputs = get_durable_outputs(args.env)
+        outputs = get_durable_outputs(args.env, region)
         cluster_arn = outputs["cluster_arn"]
         secret_arn = outputs["secret_arn"]
         db_name = outputs["db_name"]

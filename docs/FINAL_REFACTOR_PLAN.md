@@ -150,12 +150,12 @@ This section consolidates the **Refactor Plan: Multi-Env, Multi-Region, Multi-Cl
 
 ### 4.2 Multi-Region
 
-- **Current**: Single region (e.g. `us-east-1`) via `AWS_REGION` / `var.aws_region`
+- **Current**: Single region (e.g. `us-east-1`) via `CLOUD_REGION` / `var.aws_region`
 - **Future**: Add `us-west-2/` (or similar) under `live-deploy-aws/`; region-specific stacks
 - **Pattern**: `live-deploy-aws/{region}/shared/durable`, `live-deploy-aws/{region}/kube`, etc., or `live-deploy-aws/shared/durable` with `region` var
 - **State**: Region in state key or path to avoid collisions
 - **Tasks**: Add region to deploy CLI; document cross-region patterns
-- **Follow-on**: [FINAL_REFACTOR_PLAN_2.md](./FINAL_REFACTOR_PLAN_2.md) – `--region` support, state migration, `TF_DEFAULT_REGION`
+- **Follow-on**: [FINAL_REFACTOR_PLAN_2.md](./FINAL_REFACTOR_PLAN_2.md) – `--region` support, state migration
 
 ### 4.3 Multi-Cloud
 
@@ -405,7 +405,7 @@ This section verifies the plan covers all legacy functionality. Items not in the
 
 ### 11.2 Follow-on Plan
 
-- [FINAL_REFACTOR_PLAN_2.md](./FINAL_REFACTOR_PLAN_2.md) – Multi-region: `--region`, `migrate_state_to_region_key.py`, `TF_DEFAULT_REGION`
+- [FINAL_REFACTOR_PLAN_2.md](./FINAL_REFACTOR_PLAN_2.md) – Multi-region: `--region`, `migrate_state_to_region_key.py`
 
 ### 11.3 Legacy References
 

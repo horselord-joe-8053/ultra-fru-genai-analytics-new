@@ -15,14 +15,19 @@ def ensure_shared_tofu_env():
     shared = os.path.abspath(_shared_tofu_data_dir())
     os.environ["TF_DATA_DIR"] = shared
 
-def get_tofu_env():
+def get_tofu_env(region: str | None = None):
     """Env for tofu subprocesses. Needed when calling subprocess.run(..., capture_output=True) directly:
     must pass env= explicitly. Sets TF_DATA_DIR (shared provider cache) and maps AWS_ADMIN_* to
-    AWS_ACCESS_KEY_ID/SECRET so tofu uses admin credentials."""
+    AWS_ACCESS_KEY_ID/SECRET so tofu uses admin credentials.
+    If region is provided, sets CLOUD_REGION and AWS_REGION so Terraform provider uses that region."""
     ensure_shared_tofu_env()
     shared = os.path.abspath(_shared_tofu_data_dir())
     env = os.environ.copy()
     env["TF_DATA_DIR"] = shared
+    if region:
+        env["CLOUD_REGION"] = region
+        env["AWS_REGION"] = region
+        env["AWS_DEFAULT_REGION"] = region
     if env.get("AWS_ADMIN_ACCESS_KEY_ID"):
         env["AWS_ACCESS_KEY_ID"] = env["AWS_ADMIN_ACCESS_KEY_ID"]
     if env.get("AWS_ADMIN_SECRET_ACCESS_KEY"):

@@ -14,7 +14,7 @@ from tools.aws._aws_vars import get_base_vars
 load_dotenv()
 
 def init_stack(env):
-    cfg = backend_config("live-deploy-aws/shared/durable", env)
+    cfg = backend_config("live-deploy-aws/shared/durable", env, region=None, cloud="aws")
     args = ["init","-upgrade"]
     for c in cfg:
         args += ["-backend-config", c]

@@ -11,7 +11,7 @@
 # tofu plan locally) without going through the full deploy.
 #
 # **How to run:** From repo root only. Requires .env (or .env.fru) with at least
-# TF_STATE_BUCKET, AWS_REGION; optional TF_STATE_PREFIX/FRU_PREFIX, FRU_ENV,
+# TF_STATE_BUCKET, CLOUD_REGION; optional TF_STATE_PREFIX/FRU_PREFIX, FRU_ENV,
 # TF_LOCK_TABLE/TF_STATE_LOCK_TABLE.
 #
 #   ./tools/aws/utils/init_terra_upgrade_reconfigure.sh <stack_dir> [env]
@@ -29,7 +29,7 @@ if [ $# -lt 1 ]; then
   echo "Usage: $0 <stack_dir> [env]" >&2
   echo "  stack_dir  e.g. live-deploy-aws/shared/nondurable or live-deploy-aws/shared/durable" >&2
   echo "  env        default: FRU_ENV or dev" >&2
-  echo "Run from repo root. Requires .env with TF_STATE_BUCKET, AWS_REGION." >&2
+  echo "Run from repo root. Requires .env with TF_STATE_BUCKET, CLOUD_REGION." >&2
   exit 1
 fi
 
@@ -55,18 +55,20 @@ elif [ -f .env.fru ]; then
 fi
 
 : "${TF_STATE_BUCKET:?Set TF_STATE_BUCKET in .env}"
-: "${AWS_REGION:=us-east-1}"
+: "${CLOUD_REGION:=us-east-1}"
 PREFIX="${TF_STATE_PREFIX:-${FRU_PREFIX:-fru}}"
 
-# Match _backend.py: stack_id_from_dir
-# strip trailing /; replace live-deploy-aws/ -> aws-, live-deploy-gcp/ -> gcp-; / -> -
-STACK_ID="$(echo "$STACK_DIR" | sed 's|/*$||; s|^live-deploy-aws/|aws-|; s|^live-deploy-gcp/|gcp-|; s|^deploy-aws/|aws-|; s|^deploy-gcp/|gcp-|; s|/|-|g')"
+# Match _backend.py: stack_id_from_dir (cloud=aws from script location; strip first path component)
+# e.g. live-deploy-aws/shared/durable -> aws-shared-durable
+PARTS="$(echo "$STACK_DIR" | sed 's|/*$||' | tr '/' '\n')"
+REST="$(echo "$PARTS" | tail -n +2 | tr '\n' '-')"
+STACK_ID="aws-${REST%-}"
 KEY="${PREFIX}/${ENV}/${STACK_ID}.tfstate"
 
 BACKEND_CFG=(
   -backend-config="bucket=$TF_STATE_BUCKET"
   -backend-config="key=$KEY"
-  -backend-config="region=$AWS_REGION"
+  -backend-config="region=$CLOUD_REGION"
   -backend-config=encrypt=true
   -backend-config=use_lockfile=true
 )

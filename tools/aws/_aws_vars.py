@@ -6,7 +6,7 @@ from tools._env import require
 MAP = {
     "FRU_ENV": "env",
     "FRU_PREFIX": "prefix",
-    "AWS_REGION": "aws_region",
+    "CLOUD_REGION": "aws_region",
     "TF_STATE_BUCKET": "tf_state_bucket",
     "TF_LOCK_TABLE": "tf_lock_table",
     "VPC_CIDR": "vpc_cidr",
@@ -31,20 +31,26 @@ MAP = {
     "AWS_BEDROCK_MODEL_ID": "bedrock_model_id",
 }
 
-def get_base_vars(env: str):
+def get_base_vars(env: str, region: str | None = None):
     """
     Set TF_VAR_ environment variables for OpenTofu.
     Returns an empty list to maintain compatibility with existing script signatures.
+    If region is provided, uses it for aws_region TF var and sets CLOUD_REGION/AWS_REGION in env for subprocesses.
     """
     prefix = os.getenv("FRU_PREFIX", "fru")
-    
+
+    if region:
+        os.environ["CLOUD_REGION"] = region
+        os.environ["AWS_REGION"] = region
+        os.environ["AWS_DEFAULT_REGION"] = region
+
     # helper to set TF_VAR
     def set_tf(name, val):
         os.environ[f"TF_VAR_{name}"] = str(val)
 
     set_tf("env", env)
     set_tf("prefix", prefix)
-    
+
     # TF State Prefix logic
     tf_state_prefix = os.getenv("TF_STATE_PREFIX") or prefix
     set_tf("tf_state_prefix", tf_state_prefix)
@@ -54,10 +60,10 @@ def get_base_vars(env: str):
         val = os.getenv(env_key)
         if val:
             set_tf(tf_key, val)
-            
-    # CRITICAL: Ensure aws_region is explicitly set
+
+    # CRITICAL: Ensure aws_region is explicitly set (use region param or CLOUD_REGION)
     if not os.getenv("TF_VAR_aws_region"):
-        set_tf("aws_region", require('AWS_REGION'))
+        set_tf("aws_region", region or os.getenv("CLOUD_REGION", "").strip() or require("AWS_REGION"))
 
     # DEFAULTS for names if missing
     if not os.getenv("TF_VAR_ecs_cluster_name"):

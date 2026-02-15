@@ -12,27 +12,27 @@ Reads from `.env`:
 import argparse, os, subprocess, json, sys
 from tools._env import load_dotenv, require
 from tools.tofu_runner import get_tofu_env
-from tools.aws._backend import backend_config
+from tools.aws._backend import backend_config, resolve_region
 from tools.subprocess_retry import run_with_retry
 from tools import logger
 
 load_dotenv()
 
-def init_stack(env):
+def init_stack(env, region=None):
     logger.info("[SECRETS] Initializing shared/durable stack...")
-    cfg = backend_config("live-deploy-aws/shared/durable", env)
+    cfg = backend_config("live-deploy-aws/shared/durable", env, region)
     args = ["init", "-lock=false", "-upgrade", "-reconfigure"]
     for c in cfg:
         args += ["-backend-config", c]
     exe = os.getenv("FRU_TF_BIN", "tofu")
     cmd = [exe] + args
-    run_with_retry(cmd, cwd="live-deploy-aws/shared/durable", env=get_tofu_env(), description="tofu init for secrets")
+    run_with_retry(cmd, cwd="live-deploy-aws/shared/durable", env=get_tofu_env(region), description="tofu init for secrets")
     logger.success("[SECRETS] Stack initialized")
 
-def outputs(env):
+def outputs(env, region=None):
     logger.info("[SECRETS] Getting terraform outputs...")
-    init_stack(env)
-    out = subprocess.check_output([os.getenv("FRU_TF_BIN","tofu"),"output","-json"], cwd="live-deploy-aws/shared/durable", text=True, timeout=30)
+    init_stack(env, region)
+    out = subprocess.check_output([os.getenv("FRU_TF_BIN","tofu"),"output","-json"], cwd="live-deploy-aws/shared/durable", text=True, timeout=30, env=get_tofu_env(region))
     result = json.loads(out)
     logger.success("[SECRETS] Outputs retrieved")
     return result
@@ -53,16 +53,20 @@ def put_value(secret_arn, value, region):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--env", default=os.getenv("FRU_ENV","dev"))
+    ap.add_argument("--region", default=None, help="Region (default: CLOUD_REGION)")
     args = ap.parse_args()
+
+    region = resolve_region(args.region)
+    os.environ["CLOUD_REGION"] = region
+    os.environ["AWS_REGION"] = region
 
     logger.step("Ensuring secrets in AWS Secrets Manager")
 
     try:
-        region = require("AWS_REGION")
         logger.info(f"[SECRETS] Region: {region}")
         
         logger.info("[SECRETS] Getting terraform outputs...")
-        o = outputs(args.env)
+        o = outputs(args.env, region)
 
         openai = os.getenv("OPENAI_API_KEY","").strip()
         if openai:
@@ -80,8 +84,10 @@ def main():
             arn = o.get("db_password_secret_arn", {}).get("value")
             if not arn:
                 raise KeyError("db_password_secret_arn not in durable outputs; run deploy durable first")
-            logger.info("[SECRETS] Setting DB_PASSWORD...")
-            put_value(arn, dbpw, region)
+            logger.info("[SECRETS] Setting DB_PASSWORD (RDS Data API JSON format)...")
+            # RDS Data API requires secret as JSON: {"username":"postgres","password":"..."}
+            db_secret_json = json.dumps({"username": "postgres", "password": dbpw})
+            put_value(arn, db_secret_json, region)
             logger.success("[SECRETS] DB_PASSWORD set")
         else:
             logger.warning("[SECRETS] DB_PASSWORD/PGPASSWORD not set in .env; skipping")
