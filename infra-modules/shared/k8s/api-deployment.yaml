@@ -22,14 +22,18 @@ spec:
           httpGet:
             path: /health
             port: 5001
-          initialDelaySeconds: 30
-          periodSeconds: 10
+          initialDelaySeconds: 60
+          periodSeconds: 15
+          timeoutSeconds: 10
+          failureThreshold: 3
         readinessProbe:
           httpGet:
             path: /health
             port: 5001
-          initialDelaySeconds: 10
-          periodSeconds: 5
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 10
+          failureThreshold: 3
         env:
         - name: PGHOST
           value: "${PGHOST}"
@@ -49,6 +53,16 @@ spec:
             secretKeyRef:
               name: app-credentials
               key: OPENAI_API_KEY
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: AWS_ACCESS_KEY_ID
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: AWS_SECRET_ACCESS_KEY
         - name: LOG_LEVEL
           value: "INFO"
         - name: ALLOWED_ORIGINS

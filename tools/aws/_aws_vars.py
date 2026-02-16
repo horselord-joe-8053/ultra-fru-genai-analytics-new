@@ -69,7 +69,10 @@ def get_base_vars(env: str, region: str | None = None):
     if not os.getenv("TF_VAR_ecs_cluster_name"):
         set_tf("ecs_cluster_name", f"{prefix}-{env}-ecs")
     if not os.getenv("TF_VAR_eks_cluster_name"):
-        set_tf("eks_cluster_name", f"{prefix}-{env}-eks")
+        default_eks = f"{prefix}-{env}-eks"
+        set_tf("eks_cluster_name", default_eks)
+        if not os.getenv("EKS_CLUSTER_NAME"):
+            os.environ["EKS_CLUSTER_NAME"] = default_eks  # eks_kubeconfig needs this
     if not os.getenv("TF_VAR_alb_name"):
         set_tf("alb_name", f"{prefix}-{env}-alb")
     if not os.getenv("TF_VAR_delta_bucket"):

@@ -89,7 +89,7 @@ def main():
 
     logger.info("")
     logger.info("Next steps if DB disconnected:")
-    logger.info("  1. python tools/aws/ensure_secrets.py --env $FRU_ENV  # set DB_PASSWORD in Secrets Manager")
+    logger.info("  1. python tools/aws/ensure_secrets.py --env $FRU_ENV  # set PGPASSWORD in Secrets Manager")
     logger.info("  2. Redeploy or force new ECS task / K8s rollout to pick up env")
     logger.info("  3. Nonkube: Verify ECS task has PGHOST from durable aurora_endpoint")
     logger.info("  4. Kube: Verify aurora_from_eks SG rule allows EKS nodes → Aurora 5432")

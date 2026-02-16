@@ -7,7 +7,7 @@ Usage:
   python tools/aws/setup_database.py --env dev
   python tools/aws/setup_database.py --env dev --force-refresh-data
 
-Requires: DB_PASSWORD or PGPASSWORD in .env; durable stack applied.
+Requires: PGPASSWORD in .env; durable stack applied.
 """
 import argparse
 import os
@@ -48,7 +48,7 @@ def get_durable_outputs(env: str, region: str | None = None) -> dict:
     if not cluster_arn or not secret_arn:
         raise RuntimeError(
             "aurora_cluster_arn or db_password_secret_arn missing from durable outputs. "
-            "Run deploy durable first and ensure Aurora was created (DB_PASSWORD in .env)."
+            "Run deploy durable first and ensure Aurora was created (PGPASSWORD in .env)."
         )
     return {"cluster_arn": cluster_arn, "secret_arn": secret_arn, "db_name": db_name}
 
