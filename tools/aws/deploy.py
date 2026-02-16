@@ -34,8 +34,14 @@ from tools.aws._aws_vars import get_base_vars
 from tools.phases import PhaseTracker, deploy_phases
 from tools.subprocess_retry import run_with_retry
 from tools.tofu_runner import get_tofu_env
-from tools.aws.bootstrap_helpers import check_ecs_bootstrap_succeeded, K8S_NAMESPACE
-from tools.aws.deploy_frontend import deploy_frontend_to_s3
+from tools.aws.bootstrap_helpers import (
+    check_ecs_bootstrap_succeeded,
+    K8S_NAMESPACE,
+    wait_for_fru_api_ready,
+    verify_api_db_connected,
+    k8s_rollout_restart_api,
+)
+from tools.aws.deploy_frontend import deploy_frontend_to_s3, invalidate_cloudfront, wait_for_invalidation
 
 load_dotenv()
 
@@ -223,6 +229,13 @@ def main():
     phases = deploy_phases(scope)
     tracker = PhaseTracker("Deploy", phases)
 
+    # War Story 44: Require PGPASSWORD when deploying kube/nonkube (Aurora + db_password_plain must match)
+    if scope in ("kube", "nonkube") and not os.getenv("PGPASSWORD"):
+        logger.error("PGPASSWORD must be set in .env when deploying kube/nonkube.")
+        logger.error("Aurora and db_password_plain in Secrets Manager must use the same password.")
+        logger.error("See README_WAR_STORIES.md ## 44 for resolution steps.")
+        raise SystemExit(1)
+
     try:
         # Phase 1: Doctor
         tracker.start_phase(1)
@@ -244,7 +257,7 @@ def main():
         # Phase 3: Shared durable
         tracker.start_phase(3)
         logger.step(f"[3/{len(phases)}] Applying shared durable stack (VPC + Aurora + Secrets)...")
-        aurora_pw = os.getenv("DB_PASSWORD") or os.getenv("PGPASSWORD") or ""
+        aurora_pw = os.getenv("PGPASSWORD") or ""
         durable_vars = [
             "-var", 'azs=["us-east-1a","us-east-1b"]',
             "-var", 'public_subnet_cidrs=["10.0.1.0/24","10.0.2.0/24"]',
@@ -254,7 +267,7 @@ def main():
         if aurora_pw:
             durable_vars += ["-var", f"aurora_master_password={aurora_pw}"]
         else:
-            logger.warning("DB_PASSWORD/PGPASSWORD not set; Aurora creation may fail. Set in .env before deploy.")
+            logger.warning("PGPASSWORD not set; Aurora creation may fail. Set in .env before deploy.")
         apply_stack("live-deploy-aws/shared/durable", env, durable_vars, region)
         logger.success("Shared durable applied")
         tracker.end_phase(3)
@@ -368,7 +381,43 @@ def main():
                 "--delta-table-path", delta_table_path,
             ], check=True, env={**os.environ, "CLOUD_REGION": region, "AWS_REGION": region})
             logger.success("Kubernetes bootstrap and schedule complete")
+
+            # War Story 44: Restart pods so they pick up updated db-credentials (K8s does not hot-reload secrets)
+            k8s_rollout_restart_api(env, region=region)
+
+            # Fail-fast: wait for API pods to be ready before wiring CloudFront (War Story 43)
+            logger.step("Waiting for fru-api pods to be ready...")
+            wait_for_fru_api_ready(env, timeout_seconds=600, check_interval_seconds=15, region=region)
+            logger.success("fru-api pods ready")
             tracker.end_phase(10)
+
+            # Wire K8s LoadBalancer into CloudFront API origin (ingress_hostname was null at first apply)
+            import time as time_module
+            lb_host = ""
+            for attempt in range(18):  # Up to ~3 minutes for LB to get hostname
+                try:
+                    lb_host = subprocess.check_output([
+                        "kubectl", "get", "svc", "fru-api-svc", "-n", K8S_NAMESPACE,
+                        "-o", "jsonpath={.status.loadBalancer.ingress[0].hostname}"
+                    ], text=True, env={**os.environ, "CLOUD_REGION": region, "AWS_REGION": region}).strip()
+                    if lb_host:
+                        break
+                except Exception:
+                    pass
+                if attempt < 17:
+                    time_module.sleep(10)
+            if lb_host:
+                # War Story 44: Verify DB connected before declaring success (catch password mismatch)
+                verify_api_db_connected(f"http://{lb_host}", timeout_seconds=60)
+                logger.step("Re-applying kube stack with LoadBalancer hostname for CloudFront API origin...")
+                apply_stack("live-deploy-aws/kube", env, [
+                    "-var", f"eks_instance_types=[\"{require('EKS_NODE_INSTANCE_TYPES')}\"]",
+                    "-var", f"eks_desired_nodes={require('EKS_DESIRED_NODES')}",
+                    "-var", f"ingress_hostname={lb_host}",
+                ], region)
+                logger.success("CloudFront API origin wired to K8s LoadBalancer")
+            else:
+                logger.warning("LoadBalancer hostname not available; CloudFront API routes may not work until re-applied manually")
 
             # Deploy frontend to S3 (kube parity with nonkube)
             try:
@@ -376,6 +425,14 @@ def main():
                 frontend_bucket = stack_out.get("frontend_s3_bucket_id", {}).get("value")
                 if frontend_bucket:
                     deploy_frontend_to_s3(frontend_bucket, env)
+                    cf_dist_id = stack_out.get("cloudfront_distribution_id", {}).get("value")
+                    if cf_dist_id:
+                        ok, inv_id = invalidate_cloudfront(cf_dist_id, region)
+                        if ok and inv_id:
+                            if not wait_for_invalidation(cf_dist_id, inv_id, timeout_minutes=15, non_blocking=True, region=region):
+                                logger.warning("[CloudFront Invalidation] Did not complete within timeout; deployment continues.")
+                    else:
+                        logger.warning("[CloudFront Invalidation] Skipped: cloudfront_distribution_id not in kube stack output")
                 else:
                     logger.warning("frontend_s3_bucket_id not found; skipping kube frontend deploy")
             except Exception as e:
@@ -441,6 +498,14 @@ def main():
             frontend_bucket = stack_out.get("frontend_s3_bucket_id", {}).get("value")
             if frontend_bucket:
                 deploy_frontend_to_s3(frontend_bucket, env)
+                cf_dist_id = stack_out.get("cloudfront_distribution_id", {}).get("value")
+                if cf_dist_id:
+                    ok, inv_id = invalidate_cloudfront(cf_dist_id, region)
+                    if ok and inv_id:
+                        if not wait_for_invalidation(cf_dist_id, inv_id, timeout_minutes=15, non_blocking=True, region=region):
+                            logger.warning("[CloudFront Invalidation] Did not complete within timeout; deployment continues.")
+                else:
+                    logger.warning("[CloudFront Invalidation] Skipped: cloudfront_distribution_id not in nonkube stack output")
             else:
                 logger.warning("frontend_s3_bucket_id not found; skipping frontend deploy")
 

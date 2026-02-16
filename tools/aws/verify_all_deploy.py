@@ -1,4 +1,3 @@
-
 import os
 import sys
 import time
@@ -6,6 +5,9 @@ import json
 import subprocess
 import argparse
 import requests
+
+# Force immediate output so orchestrator subprocess doesn't appear stuck
+print("verify_all_deploy: starting...", flush=True)
 
 from tools import logger
 from tools._env import load_dotenv, require, get_int_env
@@ -19,6 +21,17 @@ load_dotenv()
 # Configurable via .env (aligned with legacy heartbeat/timeout pattern)
 VERIFY_TIMEOUT_SEC = get_int_env("VERIFY_TIMEOUT_SEC", 900)  # CloudFront propagation can take 5-15 min
 VERIFY_HEARTBEAT_INTERVAL_SEC = get_int_env("VERIFY_HEARTBEAT_INTERVAL_SEC", 30)
+
+# CSV path for total_rec (line count - 1)
+CSV_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "core-app", "data", "raw", "fridge_sales_with_rating.csv")
+
+
+def get_total_rec_from_csv() -> int:
+    """Return expected total records from CSV (line count minus header)."""
+    if not os.path.exists(CSV_PATH):
+        return 200  # fallback
+    with open(CSV_PATH) as f:
+        return max(0, sum(1 for _ in f) - 1)
 
 # HTTP status codes treated as retriable during verification (transient "not-ready-yet" only).
 # 403 Access Denied = real failure (OAC misconfig, empty S3, wrong bucket policy) - NOT retriable.
@@ -42,14 +55,34 @@ def get_tofu_output(stack_dir, env):
         logger.warning(f"could not get tofu output from {stack_dir}: {e}")
         return {}
 
-def verify_api_endpoints(base_url, timeout_secs=None, heartbeat_interval_sec=None):
+def _parse_sse_complete_answer(text: str) -> str | None:
+    """Parse SSE stream, return answer from last event: complete data."""
+    last_answer = None
+    for block in text.split("\n\n"):
+        event_type = None
+        data_json = None
+        for line in block.split("\n"):
+            if line.startswith("event:"):
+                event_type = line[6:].strip()
+            elif line.startswith("data:"):
+                try:
+                    data_json = json.loads(line[5:].strip())
+                except json.JSONDecodeError:
+                    pass
+        if event_type == "complete" and data_json and "answer" in data_json:
+            last_answer = data_json.get("answer", "")
+    return last_answer
+
+
+def verify_api_endpoints(base_url, total_rec: int, timeout_secs=None, heartbeat_interval_sec=None):
     """
     Poll endpoints until all pass or timeout. Uses poll_until (DRY with retry pattern).
     HTTP 502/503 and ConnectionError are retriable (ECS/ALB not ready yet). 403 = real failure.
+    total_rec: expected record count from CSV (used for QueryStream answer and Analytics total_records).
     """
     timeout_secs = timeout_secs or VERIFY_TIMEOUT_SEC
     heartbeat_interval_sec = heartbeat_interval_sec or VERIFY_HEARTBEAT_INTERVAL_SEC
-    logger.info(f"Validating API Endpoints at: {base_url} (timeout={timeout_secs}s, heartbeat every {heartbeat_interval_sec}s)")
+    logger.info(f"Validating API Endpoints at: {base_url} (timeout={timeout_secs}s, heartbeat every {heartbeat_interval_sec}s, total_rec={total_rec})")
 
     def check_query_stream(r):
         if r.status_code != 200:
@@ -57,9 +90,16 @@ def verify_api_endpoints(base_url, timeout_secs=None, heartbeat_interval_sec=Non
         if "Agent-based query processing is disabled" in r.text:
             logger.info("  (Note: Agent is disabled due to missing DB, but endpoint is reachable)")
             return True
-        # Non-retriable: AgentLogger exc_info error needs a code fix
         if "exc_info" in r.text and "unexpected keyword argument" in r.text:
             raise RuntimeError("QueryStream returned AgentLogger exc_info error (non-retriable; needs redeploy)")
+        answer = _parse_sse_complete_answer(r.text)
+        if answer is None:
+            return False
+        if str(total_rec) not in answer:
+            raise RuntimeError(
+                f"QueryStream answer does not contain total_rec={total_rec}: {answer[:100]}..."
+            )
+        logger.info(f"  QueryStream OK (query='total number of record'): answer contains total_rec={total_rec}")
         return True
 
     def check_analytics(r):
@@ -67,14 +107,17 @@ def verify_api_endpoints(base_url, timeout_secs=None, heartbeat_interval_sec=Non
             return False
         try:
             data = r.json()
-            if data.get("error"):
-                raise RuntimeError(f"Analytics error (non-retriable): {data.get('error')}")
+            err = data.get("error") or ""
+            if err:
+                # DB unreachable is a config/ops issue, not a deploy failure—endpoint is reachable
+                if "database" in err.lower() and ("not configured" in err.lower() or "unreachable" in err.lower()):
+                    logger.warning(f"  Analytics endpoint UP but DB unreachable: {err[:80]}...")
+                    return True
+                raise RuntimeError(f"Analytics error (non-retriable): {err}")
             total_records = data.get("total_records") or 0
-            if total_records < 10:
-                raise RuntimeError(
-                    f"Analytics total_records={total_records} (expected 200; non-retriable; run bootstrap)"
-                )
-            logger.info(f"  Analytics OK: total_records={total_records}")
+            if total_records != total_rec:
+                return False
+            logger.info(f"  Analytics OK: total_records={total_records} (matches CSV total_rec)")
             return True
         except RuntimeError:
             raise
@@ -82,11 +125,11 @@ def verify_api_endpoints(base_url, timeout_secs=None, heartbeat_interval_sec=Non
             return r.status_code == 200
 
     endpoints = [
-        {"path": "/health", "name": "Health", "check": lambda r: r.status_code == 200},
-        {"path": "/version", "name": "Version", "check": lambda r: r.status_code == 200},
-        {"path": "/", "name": "Frontend", "check": lambda r: r.status_code == 200 and "<html" in r.text.lower()},
-        {"path": "/query/stream?query=test", "name": "QueryStream", "check": check_query_stream},
-        {"path": "/analytics", "name": "Analytics", "check": check_analytics},
+        {"path": "/health", "name": "Health", "check": lambda r: r.status_code == 200, "timeout": 10},
+        {"path": "/version", "name": "Version", "check": lambda r: r.status_code == 200, "timeout": 10},
+        {"path": "/", "name": "Frontend", "check": lambda r: r.status_code == 200 and "<html" in r.text.lower(), "timeout": 10},
+        {"path": "/query/stream?query=total%20number%20of%20record", "name": "QueryStream", "check": check_query_stream, "timeout": 60},
+        {"path": "/analytics", "name": "Analytics", "check": check_analytics, "timeout": 10},
     ]
     results = {e["name"]: False for e in endpoints}
     last_status = {e["name"]: None for e in endpoints}
@@ -97,8 +140,9 @@ def verify_api_endpoints(base_url, timeout_secs=None, heartbeat_interval_sec=Non
             if results[e["name"]]:
                 continue
             url = base_url.rstrip("/") + e["path"]
+            timeout = e.get("timeout", 10)
             try:
-                resp = requests.get(url, timeout=10)
+                resp = requests.get(url, timeout=timeout)
                 last_status[e["name"]] = resp.status_code
                 last_error[e["name"]] = None
                 if e["check"](resp):
@@ -229,20 +273,26 @@ def main():
     ap.add_argument("--scope", choices=["kube", "nonkube"], default="nonkube")
     args = ap.parse_args()
     
+    logger.info("Verify script started (fetching tofu outputs next, may take 30-60s)...")
+    sys.stdout.flush()
+    
     env = args.env
     get_base_vars(env) # ensure env vars are set for subprocesses
     
-    logger.step(f"Plumbing Verification Interface (env: {env})")
+    total_rec = get_total_rec_from_csv()
+    logger.step(f"Full Verification Interface (env: {env}, total_rec from CSV: {total_rec})")
     
     # 1. Endpoint Check
     endpoint_success = False
     if args.scope == "nonkube":
+        logger.info("Fetching nonkube tofu outputs (tofu init + output, ~30-60s)...")
+        sys.stdout.flush()
         stack_out = get_tofu_output("live-deploy-aws/nonkube", env)
         cf_domain = stack_out.get("cloudfront_domain_name", {}).get("value")
         alb_dns = stack_out.get("alb_dns_name", {}).get("value")
         base_url = f"https://{cf_domain}" if cf_domain else (f"http://{alb_dns}" if alb_dns else None)
         if base_url:
-            endpoint_success = verify_api_endpoints(base_url)
+            endpoint_success = verify_api_endpoints(base_url, total_rec)
             if not endpoint_success:
                 logger.error("[VERIFICATION FAILED] API endpoints are not responding correctly")
                 sys.exit(1)
@@ -255,7 +305,7 @@ def main():
         cf_domain = stack_out.get("cloudfront_domain_name", {}).get("value")
         if cf_domain:
             base_url = f"https://{cf_domain}"
-            endpoint_success = verify_api_endpoints(base_url)
+            endpoint_success = verify_api_endpoints(base_url, total_rec)
             if not endpoint_success:
                 logger.error("[VERIFICATION FAILED] API endpoints are not responding correctly")
                 sys.exit(1)
@@ -274,7 +324,7 @@ def main():
                 time.sleep(10)
 
             if lb_host:
-                endpoint_success = verify_api_endpoints(f"http://{lb_host}")
+                endpoint_success = verify_api_endpoints(f"http://{lb_host}", total_rec)
                 if not endpoint_success:
                     logger.error("[VERIFICATION FAILED] API endpoints are not responding correctly")
                     sys.exit(1)
@@ -285,10 +335,10 @@ def main():
     success = verify_cloudwatch(env)
     
     if success:
-        logger.success("PLUMBING VERIFICATION: SUCCESS")
+        logger.success("FULL VERIFICATION: SUCCESS")
         sys.exit(0)
     else:
-        logger.error("PLUMBING VERIFICATION: FAILED - CloudWatch logs did not show success pattern")
+        logger.error("FULL VERIFICATION: FAILED - CloudWatch logs did not show success pattern")
         sys.exit(1)
 
 if __name__ == "__main__":

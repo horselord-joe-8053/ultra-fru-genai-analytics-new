@@ -2070,3 +2070,428 @@ The common approach is **post-destroy cleanup**: run a script after `terraform d
 ### 41.4 Takeaway
 
 EKS cluster and node SGs are AWS-created side effects, not Terraform resources. Terraform cannot manage their lifecycle. Post-destroy CLI cleanup is the common industry practice. Document this so future maintainers understand why `remove_orphaned_eks_security_groups` exists and that it is not a workaround for missing Terraform—the SGs were never in Terraform.
+
+---
+
+## 42. SPA 404→index.html, Stale CDN Cache, and the "Expected JavaScript but got text/html" MIME Error
+
+**creation:** `<260216>`
+**last_updated:** `<260216>` (added 42.5 Code You Must Use; invalidation + wait parity with legacy)
+
+**keywords:** CloudFront, CDN, invalidation, SPA, 404, index.html, MIME type, cache, deploy
+**difficulty:** 6
+**significance:** 8
+
+### 42.1 Context
+
+After deploying a new frontend to S3 (with CloudFront in front), users saw:
+
+```
+Failed to load module script: Expected a JavaScript-or-Wasm module script but the server responded with a MIME type of "text/html".
+```
+
+The app failed to load. The deploy had succeeded—new files were in S3. Why was the browser receiving HTML when it expected JavaScript?
+
+### 42.2 The 404→200 Custom Error: SPA Routing Rationale
+
+CloudFront (and many SPA setups) use a custom error response:
+
+```hcl
+custom_error_response {
+  error_code         = 404
+  response_code      = 200
+  response_page_path = "/index.html"
+}
+```
+
+**Rationale:** Single Page Applications use client-side routing. Routes like `/dashboard` or `/settings` don't exist as files on the origin—they're handled by the app's JavaScript router. When a user bookmarks or refreshes `/dashboard`, the server would return 404 (no file at that path). The custom error says: for any 404, serve `index.html` with 200 instead. The app loads, the router reads the URL, and shows the correct view. This is standard SPA practice.
+
+**The downside:** When the request is for a real asset (e.g. `/assets/index-abc123.js`) and that file is missing (404), we also return `index.html`. The browser expected JavaScript; it got HTML. MIME type error.
+
+### 42.3 Root Cause: Stale CDN Cache + Deleted Assets
+
+The failure chain:
+
+1. Deploy uploads new `index.html` (references `index-C2htoP48.js`) and new `index-C2htoP48.js` to S3.
+2. Deploy deletes old `index-DzZtn0sV.js` from S3 (Vite uses content-hashed filenames; old hashes are removed).
+3. **CloudFront still has the old `index.html` cached** (references `index-DzZtn0sV.js`).
+4. User visits site → CloudFront serves cached old `index.html`.
+5. Browser requests `/assets/index-DzZtn0sV.js` (from that old HTML).
+6. That file no longer exists in S3 → 404.
+7. CloudFront's 404→index.html rule returns HTML for that request.
+8. Browser expected JS, got HTML → MIME type error.
+
+The new project's `tools/aws/deploy_frontend.py` now runs CloudFront invalidation and waits for completion (parity with legacy `deploy-frontend.sh` and `cloudfront-invalidation.sh`). See §42.5 for the code you must use.
+
+### 42.4 The Fix: CDN Invalidation After Deploy
+
+`aws cloudfront create-invalidation --paths "/*"` tells CloudFront to purge its cache for those paths. After invalidation, CloudFront fetches fresh content from S3. The next request for `/` gets the new `index.html`, which references `index-C2htoP48.js`. The browser requests that file—it exists—200 with correct JS. No 404, no MIME error.
+
+**Summary:** Invalidation clears the cached `index.html`. Without it, CloudFront keeps serving old HTML that points at deleted asset filenames. The 404 happens because we're requesting the *old* file name. Invalidation forces CloudFront to fetch the *new* index.html, which has the correct (new) file names.
+
+### 42.5 Code You Must Use: Invalidation + Wait (Legacy Parity)
+
+The fix is not just to create an invalidation—you must also **wait for it to complete** before considering the deploy done. Otherwise, users may hit the site while invalidation is still in progress and see stale content. The legacy project (`module_infra_frontend/aws/helpers/cloudfront-invalidation.sh`) does both: `create_cloudfront_invalidation` and `wait_for_invalidation`. The new project mirrors this in `tools/aws/deploy_frontend.py`.
+
+**Two functions, used together:**
+
+1. **`invalidate_cloudfront(distribution_id, region=None)`** — Creates the invalidation. Returns `(success: bool, invalidation_id: str | None)`.
+2. **`wait_for_invalidation(distribution_id, invalidation_id, timeout_minutes=15, non_blocking=True, region=None)`** — Polls `aws cloudfront get-invalidation` until status is `Completed` or timeout. Returns `True` if completed, `False` on failure/timeout. With `non_blocking=True`, deploy continues even if wait fails (recommended).
+
+**Deploy flow (from `tools/aws/deploy.py`):**
+
+```python
+from tools.aws.deploy_frontend import deploy_frontend_to_s3, invalidate_cloudfront, wait_for_invalidation
+
+# After S3 sync...
+cf_dist_id = stack_out.get("cloudfront_distribution_id", {}).get("value")
+if cf_dist_id:
+    ok, inv_id = invalidate_cloudfront(cf_dist_id, region)
+    if ok and inv_id:
+        if not wait_for_invalidation(cf_dist_id, inv_id, timeout_minutes=15, non_blocking=True, region=region):
+            logger.warning("[CloudFront Invalidation] Did not complete within timeout; deployment continues.")
+```
+
+**Why wait?** Creating an invalidation is asynchronous. CloudFront propagates the purge to edge locations over minutes. If you don't wait, the deploy script finishes while invalidation is still `InProgress`. Users visiting immediately may still get cached content. Waiting (with a timeout) gives confidence that fresh content is live before you declare the deploy complete.
+
+**Why non_blocking=True?** If the wait times out or status checks fail (e.g. network issues, AWS throttling), the deploy should not fail. The invalidation will complete in the background. `non_blocking=True` ensures we log a warning and continue—same behavior as legacy.
+
+**Legacy equivalent (Bash):**
+
+```bash
+# From module_infra_frontend/aws/deploy-frontend.sh
+source "$SCRIPT_DIR/helpers/cloudfront-invalidation.sh"
+if create_cloudfront_invalidation "$cloudfront_dist_id" "/*"; then
+    wait_for_invalidation "$cloudfront_dist_id" "$CLOUDFRONT_INVALIDATION_ID" 15 "true"
+fi
+```
+
+**Manual invalidation (if deploy skips it or you need to fix a bad deploy):**
+
+```bash
+aws cloudfront create-invalidation --distribution-id <DIST_ID> --paths "/*"
+# Check status:
+aws cloudfront get-invalidation --distribution-id <DIST_ID> --id <INVALIDATION_ID>
+```
+
+### 42.6 Is This CloudFront-Specific?
+
+No. The need is **CDN-specific**. Any layer that caches responses can cause this:
+
+| Layer | Invalidation / purge needed? |
+|-------|------------------------------|
+| CloudFront (AWS) | Yes — `create-invalidation` |
+| Cloudflare | Yes — Purge Cache API |
+| GCP Cloud CDN | Yes — cache invalidation API |
+| Fastly, Akamai, etc. | Yes — each has its own purge API |
+| Nginx / reverse proxy | Only if you enable caching |
+| Direct file server (no CDN) | No — files overwritten, next request gets new content |
+
+**Self-hosting or other clouds:** Without a CDN, files are replaced on deploy; the next request hits the new files. No invalidation. With a CDN in front (e.g. Cloudflare), you need to purge the CDN cache after deploy.
+
+### 42.7 Industry Best Practice
+
+1. **Invalidate after deploy** — Run a purge step in CI/CD after uploading new assets. Standard for CDN-backed frontends.
+2. **Don't cache index.html** — Set `index.html` to no cache or very short TTL. It's the entry point; it should always be fresh. Hashed assets can be cached long-term.
+3. **Content-hashed filenames** — Use hashes in asset URLs (e.g. `index-abc123.js`). Each deploy gets new URLs. This avoids stale assets *if* index.html is fresh. The bug we hit was cached index.html still pointing at old asset URLs.
+4. **Hybrid** — Long cache for hashed assets, no/short cache for index.html, plus invalidation after deploy for belt-and-suspenders.
+
+### 42.8 Takeaway
+
+The 404→index.html custom error is correct for SPA deep links. It breaks when the missing resource is an asset (JS/CSS) that the browser expects to be that type. The fix is to avoid 404s on assets: run CDN invalidation after deploy so users get fresh index.html with correct asset URLs. Invalidation is not CloudFront-specific—any CDN requires it. Self-hosting without a CDN typically does not.
+
+---
+
+## 43. CloudFront 502 on API Paths: NLB Internal, Probe Timeouts, and the Need for Fail-Fast Pod Verification
+
+**creation:** `<260216>`
+**last_updated:** `<260216>`
+
+**keywords:** CloudFront, 502, NLB, EKS, LoadBalancer, CrashLoopBackOff, readiness probe, liveness probe, fail-fast
+**difficulty:** 7
+**significance:** 8
+
+### 43.1 Context
+
+After deploying the kube stack, users saw 502 Bad Gateway on `/version`, `/analytics`, and `/health` through CloudFront. The frontend loaded (S3), but API paths failed. The deploy script completed successfully—why were the API endpoints broken?
+
+### 43.2 Root Cause Chain (Multiple Layers)
+
+502 from CloudFront can mean several things. In this case, **two** issues compounded:
+
+1. **NLB was internal** — The `fru-api-svc` LoadBalancer (type LoadBalancer) created an NLB in private subnets by default. CloudFront edge locations are on the internet; they cannot reach an internal NLB. CloudFront tried to connect, got connection errors, and returned 502.
+
+2. **API pods in CrashLoopBackOff** — Even if the NLB had been internet-facing, the pods were crashing. The NLB had no healthy targets, so it would return 502 anyway. The pods failed because:
+   - **Readiness/liveness probes** used `timeoutSeconds: 1` (default). The `/health` request sometimes took longer (agent init, cold start), so probes timed out.
+   - After 3 consecutive probe failures, Kubernetes marked the pod unhealthy and restarted it. Restart loop → CrashLoopBackOff → no ready pods → NLB has no targets.
+
+### 43.3 Lessons Learned
+
+1. **502 has multiple causes** — Don't assume one fix. Check the full chain: CloudFront → NLB (internet-facing?) → Service → Pods (ready?). Any break causes 502.
+
+2. **NLB in private subnets is internal** — For CloudFront to reach an EKS API, the NLB must be internet-facing. Add `service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing` to the Service. Public subnets need `kubernetes.io/role/elb: 1` for the controller to place the NLB there.
+
+3. **Probe timeouts matter** — Default 1s can be too short for apps with cold starts or slow first requests. Use `timeoutSeconds: 10`, longer `initialDelaySeconds`, and `failureThreshold: 3` so transient slowness doesn't kill pods.
+
+4. **Deploy "success" ≠ API working** — The deploy script applied manifests and moved on. It never verified that pods came up. We declared success while pods were in CrashLoopBackOff. **Fail-fast**: after applying K8s manifests, wait for the API deployment to have ready replicas; if not within timeout, fail the deploy.
+
+### 43.4 Fixes Applied
+
+- **api-service.yaml:** `service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing`
+- **kube/main.tf:** Tag public subnets with `kubernetes.io/role/elb` and `kubernetes.io/cluster/<name>` so the controller can place internet-facing NLBs there.
+- **api-deployment.yaml:** Increased probe `timeoutSeconds`, `initialDelaySeconds`, `periodSeconds` so pods aren't killed by transient slowness.
+- **deploy.py:** Added `wait_for_fru_api_ready()` after bootstrap—fail the deploy if pods don't become ready within timeout.
+
+### 43.5 Takeaway
+
+CloudFront 502 on API paths can stem from NLB unreachability (internal vs internet-facing) or from unhealthy origins (pods crashing). Fix both. And don't trust deploy success without verifying the critical path: wait for pods to be ready before declaring the deploy done.
+
+---
+
+## 44. Analytics "Database not configured" and Query Stream "Agent disabled" — Aurora, Secrets Manager, and AWS Credentials
+
+**creation:** `<260210>`
+**last_updated:** `<260216>`
+
+**keywords:** Aurora, PostgreSQL, Secrets Manager, db_password_plain, PGPASSWORD, password authentication failed, analytics, agent query, Bedrock, AWS credentials, Unable to locate credentials
+**difficulty:** 7
+**significance:** 8
+
+### 44.1 Context
+
+After a successful kube deploy, two API endpoints failed:
+
+1. **`/analytics`** returned `{"error": "Analytics requires a database. Database not configured or unreachable.", "request_id": "..."}`
+2. **`/query/stream`** returned `MessageEvent { data: '{"message": "Agent-based query processing is disabled"}' }`
+
+The frontend loaded, `/version` and `/health` worked (502 was fixed per War Story 43), but analytics and agent-based query were broken.
+
+After fixing the DB connection, a **second error** appeared for `/query/stream`:
+
+```
+MessageEvent { data: '{"message": "Agent processing failed: AWS service error: Unable to locate credentials"}' }
+```
+
+### 44.2 Root Cause (Part 1: Database)
+
+The API container connects to Aurora PostgreSQL using `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, and `PGPASSWORD`. When the connection fails with `password authentication failed for user "postgres"`, the app:
+
+- Sets `status["database"] = "disconnected"` in `/health`
+- Disables the agent (agent init requires a working DB connection pool)
+- Returns "Database not configured or unreachable" for `/analytics`
+- Returns "Agent-based query processing is disabled" for `/query/stream` and `/query-v2`
+
+**The real bug:** Aurora's master password and the value in AWS Secrets Manager (`db_password_plain`) did not match. The API pods get `PGPASSWORD` from a K8s secret `db-credentials`, which is populated at bootstrap by fetching from `db_password_plain_secret_arn`. If that secret has the wrong password, Aurora rejects the connection.
+
+### 44.3 Root Cause (Part 2: AWS Credentials for Bedrock)
+
+The agent uses **AWS Bedrock** (via boto3) for SQL generation. When the DB is fixed, the agent runs but Bedrock calls fail with "Unable to locate credentials" because the API pods had **no AWS credentials**.
+
+EKS pods do not automatically inherit credentials. The node IAM role (AmazonEKSWorkerNodePolicy, CNI, ECR) does not include Bedrock permissions. The agent needs explicit credentials as environment variables.
+
+boto3 (and the AWS SDK) use the standard credential pair: `AWS_ACCESS_KEY_ID` (public identifier) and `AWS_SECRET_ACCESS_KEY` (secret used for signing). If either is missing, you get "Unable to locate credentials". They must be set together—boto3 picks them up from the default credential chain when both are present.
+
+**Fix:** Create an `aws-credentials` K8s secret with `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` from `.env` (`AWS_ADMIN_ACCESS_KEY_ID`/`AWS_ADMIN_SECRET_ACCESS_KEY` or `AWS_BEDROCK_ACCESS_KEY_ID`/`AWS_BEDROCK_SECRET_ACCESS_KEY`), and add env vars to the API deployment to read from that secret. Per War Story 24, use admin credentials (which have both Bedrock and S3) so the analytics scheduler can also access S3.
+
+### 44.4 Password Flow (Kube and Nonkube)
+
+We know exactly how Aurora is created: Phase 3 (durable apply) passes `aurora_master_password` from `PGPASSWORD` in `.env`. Phase 5 (ensure_secrets) reads the same `PGPASSWORD` and writes to Secrets Manager. So in a single deploy run, Aurora and `db_password_plain` use the **same source**—they match by design.
+
+| Step | What happens |
+|------|--------------|
+| 1. Durable apply | Aurora is created with `aurora_master_password` (from `PGPASSWORD` in `.env`) |
+| 2. ensure_secrets | Reads `PGPASSWORD` from `.env`, writes to `db_password` (JSON) and `db_password_plain` (plain) in Secrets Manager |
+| 3. Kube bootstrap | `kube_apply.py` fetches from `db_password_plain_secret_arn`, creates K8s secret `db-credentials` with `PGPASSWORD` |
+| 4. Nonkube ECS | ECS task definition references `db_password_plain_secret_arn`; ECS injects the value as `PGPASSWORD` at runtime |
+
+**Note:** We use only `PGPASSWORD` (not `DB_PASSWORD`). The latter was removed; all code reads from `PGPASSWORD`.
+
+**Mismatch scenarios:**
+
+- Aurora was created with password A (e.g. from a previous deploy or manual Terraform run)
+- `ensure_secrets` was never run, or was run with password B in `.env`
+- `.env` was changed after Aurora creation but before `ensure_secrets` ran
+- Terraform does not update RDS master password on subsequent applies; Aurora keeps its original password
+
+### 44.5 How Nonkube and Legacy Kube Handle This
+
+- **Nonkube:** ECS tasks read `PGPASSWORD` directly from Secrets Manager at task start. If you fix `db_password_plain` and force a new deployment, the next ECS task gets the updated value.
+- **Legacy Kube:** Same pattern—`db_password_plain_secret_arn` → K8s secret or ECS secret injection. The password must match Aurora.
+- **New Kube:** `kube_apply.py` fetches from `db_password_plain_secret_arn` at bootstrap and creates the K8s secret. Pods do not auto-refresh when the AWS secret changes; you must update the K8s secret and restart pods.
+
+### 44.6 Resolution (Manual)
+
+**For DB (password mismatch):**
+
+1. **Align Aurora and Secrets Manager:**
+   - Ensure `PGPASSWORD` in `.env` matches the password Aurora was created with.
+   - If unsure, run `python tools/aws/verify_db_password.py --env $FRU_ENV`—it tries a direct connection (if reachable from your machine) or compares `db_password_plain` in Secrets Manager with `.env`.
+   - Run: `python tools/aws/ensure_secrets.py --env $FRU_ENV`
+
+2. **Update K8s secret (kube only):**
+   - Quick fix (no full deploy): `python tools/aws/fix_kube_db_credentials.py --env $FRU_ENV`
+   - Or re-run bootstrap: `python tools/aws/kube_apply.py --env $FRU_ENV --phase bootstrap ...` (with same args deploy uses, including `--db-secret-arn`)
+   - Or manually update the secret and restart the deployment:
+     ```bash
+     kubectl delete secret db-credentials -n fru-kube
+     # Then re-run bootstrap, or create secret manually from AWS
+     kubectl rollout restart deployment/fru-api -n fru-kube
+     ```
+
+3. **Restart pods** so they pick up the new `PGPASSWORD` (K8s does not hot-reload secret changes).
+
+**For AWS credentials (Bedrock "Unable to locate credentials"):**
+
+1. Ensure `AWS_ADMIN_ACCESS_KEY_ID` and `AWS_ADMIN_SECRET_ACCESS_KEY` (or `AWS_BEDROCK_ACCESS_KEY_ID`/`AWS_BEDROCK_SECRET_ACCESS_KEY`) are set in `.env`.
+2. Re-run bootstrap so `kube_apply.py` creates the `aws-credentials` secret and the deployment picks it up.
+3. Or run `python tools/aws/fix_kube_db_credentials.py --env $FRU_ENV` (it refreshes both db-credentials and aws-credentials).
+
+### 44.7 Diagnosis
+
+Use the diagnose script:
+
+```bash
+python tools/aws/diagnose_api_db.py --base-url https://your-cloudfront-domain
+```
+
+It checks `/health` for `database` status and `database_error`, and explains whether the issue is PGHOST, credentials, or something else.
+
+To verify that `PGPASSWORD` in `.env` can connect to Aurora (or that `db_password_plain` matches `.env`):
+
+```bash
+PYTHONPATH=. python tools/aws/verify_db_password.py --env dev
+```
+
+### 44.8 Deploy Refactors (Prevention)
+
+To reduce recurrence, the deploy flow was updated:
+
+1. **Fail early** — Deploy now requires `PGPASSWORD` in `.env` when scope is kube or nonkube. If missing, deploy fails before Phase 5 with a clear message.
+2. **Rollout restart after bootstrap** — After kube bootstrap, `kubectl rollout restart deployment/fru-api` runs so pods pick up any updated `db-credentials`, `app-credentials`, and `aws-credentials` secrets (K8s does not hot-reload secret changes).
+3. **Post-deploy DB verification** — After pods are ready and the NLB hostname is available, deploy calls `/health` and checks `database=connected`. If disconnected, deploy fails with guidance pointing to this war story.
+4. **AWS credentials for agent** — `kube_apply.py` creates an `aws-credentials` secret from `AWS_ADMIN_*` or `AWS_BEDROCK_*` in `.env`, and the API deployment reads `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` from it. Both env vars are required for boto3 to call Bedrock.
+
+### 44.9 K8s Secrets Summary (Kube API Pods)
+
+| Secret | Keys | Source |
+|--------|------|--------|
+| db-credentials | PGPASSWORD | `db_password_plain` in Secrets Manager (from ensure_secrets) |
+| app-credentials | OPENAI_API_KEY | `openai_api_key` in Secrets Manager |
+| aws-credentials | AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY | `AWS_ADMIN_*` or `AWS_BEDROCK_*` from `.env` at bootstrap time |
+
+### 44.10 Takeaway
+
+`/analytics` and "Agent-based query processing is disabled" often share one root cause: DB connection failure. When Aurora returns `password authentication failed for user "postgres"`, the fix is to align three places: (1) Aurora master password, (2) `db_password_plain` in Secrets Manager, (3) K8s secret `db-credentials` (for kube). Use `ensure_secrets` with the correct `.env`, then refresh the K8s secret and restart pods.
+
+After fixing the DB, if `/query/stream` returns "Agent processing failed: Unable to locate credentials", the API pods need AWS credentials for Bedrock. Add the `aws-credentials` secret with `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` (both required), and ensure the deployment reads them. Run `fix_kube_db_credentials.py` to refresh all secrets and restart pods.
+
+---
+
+## 45. Bedrock ValidationException: Inference Profile vs Model ID — How to Deploy and Why Both Matter
+
+**creation:** `<260216>`
+**last_updated:** `<260216>`
+
+**keywords:** AWS Bedrock, inference profile, model ID, Claude 3.5, ValidationException, on-demand throughput, kube, nonkube, ECS, EKS
+**difficulty:** 6
+**significance:** 7
+
+### 45.1 Context
+
+After fixing DB and AWS credentials, `/query/stream` returned:
+
+```
+Agent processing failed: Bedrock API error: ValidationException - Invocation of model ID anthropic.claude-3-5-haiku-20241022-v1:0 with on-demand throughput isn't supported. Retry your request with the ID or ARN of an inference profile that contains this model.
+```
+
+The agent uses Bedrock for SQL generation. The error indicated we were passing the **model ID** where Bedrock expected an **inference profile ID**.
+
+### 45.2 Inference Profile vs Model ID
+
+| Term | Example | Purpose |
+|------|---------|--------|
+| **Model ID** | `anthropic.claude-3-5-haiku-20241022-v1:0` | The underlying model identifier. For Claude 3.5 and newer models, **direct invocation with this ID is not supported** for on-demand throughput. |
+| **Inference profile ID** | `us.anthropic.claude-3-5-haiku-20241022-v1:0` | An AWS Bedrock construct that references the model with specific provisioning. For on-demand usage, you must pass this as the `modelId` parameter to `invoke_model`. |
+
+The Bedrock API accepts the inference profile ID in the `modelId` field. The error occurs when you pass the raw model ID instead.
+
+### 45.3 Why Both Are in .env
+
+The app uses a priority chain:
+
+1. **If `AWS_BEDROCK_INFERENCE_PROFILE_ID` is set** → use it (required for Claude 3.5 on-demand).
+2. **Else if `AWS_BEDROCK_MODEL_ID` is set** → use it (fallback for older models or different provisioning).
+
+So both exist: inference profile for the supported path, model ID as fallback. At least one must be set. For Claude 3.5 on-demand, the inference profile is required.
+
+**Recommended .env:**
+```bash
+AWS_BEDROCK_INFERENCE_PROFILE_ID=us.anthropic.claude-3-5-haiku-20241022-v1:0
+AWS_BEDROCK_MODEL_ID=anthropic.claude-3-5-haiku-20241022-v1:0
+```
+
+### 45.4 App Code Flow
+
+The agent calls Bedrock via `claude_complete()` from `backend.llm.client_factory`, which creates `AWSBedrockClient` from `backend.env_utils.aws.bedrock_client`. The client:
+
+1. Reads `AWS_BEDROCK_INFERENCE_PROFILE_ID` and `AWS_BEDROCK_MODEL_ID` from the environment.
+2. If inference profile is set → passes it as `modelId` to `invoke_model`.
+3. Else → passes model ID as `modelId`.
+
+Relevant files:
+- `core-app/backend/llm/client_factory.py` — `create_llm_client()`, `claude_complete()`
+- `core-app/backend/env_utils/aws/bedrock_client.py` — `AWSBedrockClient.complete()`
+- `core-app/backend/agents/tools/sql_generator_tool.py` — calls `claude_complete()` for SQL generation
+
+### 45.5 Kube Route: How Bedrock Vars Reach Pods
+
+| Step | What happens |
+|------|--------------|
+| 1. `.env` | `AWS_BEDROCK_INFERENCE_PROFILE_ID` and `AWS_BEDROCK_MODEL_ID` |
+| 2. `deploy.py` | Reads from `.env`, passes `--bedrock-inference-profile-id` and `--bedrock-model-id` to `kube_apply.py` |
+| 3. `fix_kube_db_credentials.py` | Same: passes these args when set in `.env` |
+| 4. `kube_apply.py` | Renders `infra-modules/shared/k8s/api-deployment.yaml` with `${AWS_BEDROCK_INFERENCE_PROFILE_ID}` and `${AWS_BEDROCK_MODEL_ID}` in `api_subs`. Values come from args **or** `os.getenv()` fallback when args are empty |
+| 5. Deployment | Pods get these as env vars in the container spec |
+
+**Key files:**
+- `tools/aws/kube_apply.py` — `--bedrock-inference-profile-id`, `--bedrock-model-id`; fallback: `args.X or os.getenv("AWS_BEDROCK_X")`
+- `infra-modules/shared/k8s/api-deployment.yaml` — env vars `AWS_BEDROCK_INFERENCE_PROFILE_ID`, `AWS_BEDROCK_MODEL_ID` with value `${...}`
+
+**Permanent fix in kube_apply:** When callers omit the args, `kube_apply` uses `os.getenv()` so values from `.env` are still applied. This ensures `fix_kube_db_credentials` and any other caller that inherits `.env` get the correct Bedrock config.
+
+### 45.6 Nonkube Route: How Bedrock Vars Reach ECS Tasks
+
+| Step | What happens |
+|------|--------------|
+| 1. `.env` | `AWS_BEDROCK_INFERENCE_PROFILE_ID` and `AWS_BEDROCK_MODEL_ID` |
+| 2. `get_base_vars()` | Maps `.env` to Terraform vars: `AWS_BEDROCK_INFERENCE_PROFILE_ID` → `TF_VAR_bedrock_inference_profile_id`, `AWS_BEDROCK_MODEL_ID` → `TF_VAR_bedrock_model_id` |
+| 3. Terraform apply | `live-deploy-aws/nonkube/main.tf` passes `var.bedrock_inference_profile_id` and `var.bedrock_model_id` into the ECS module |
+| 4. ECS task definition | Container env includes `AWS_BEDROCK_INFERENCE_PROFILE_ID` and `AWS_BEDROCK_MODEL_ID` |
+
+**Key files:**
+- `tools/aws/_aws_vars.py` — MAP: `AWS_BEDROCK_INFERENCE_PROFILE_ID` → `bedrock_inference_profile_id`, `AWS_BEDROCK_MODEL_ID` → `bedrock_model_id`
+- `live-deploy-aws/nonkube/main.tf` — `AWS_BEDROCK_INFERENCE_PROFILE_ID = var.bedrock_inference_profile_id`, etc.
+- `live-deploy-aws/nonkube/variables.tf` — `bedrock_inference_profile_id` (default `""`), `bedrock_model_id` (default `anthropic.claude-3-5-haiku-20241022-v1:0`)
+
+### 45.7 Summary Table
+
+| Route | Mechanism | Where values originate |
+|-------|------------|------------------------|
+| **Kube** | `kube_apply` substitutes into `api-deployment.yaml` | Args from deploy/fix script, or `os.getenv()` fallback |
+| **Nonkube** | Terraform passes `var.bedrock_*` into ECS task definition | `TF_VAR_*` from `get_base_vars()` (reads `.env`) |
+
+### 45.8 Resolution
+
+1. Set both in `.env`:
+   ```bash
+   AWS_BEDROCK_INFERENCE_PROFILE_ID=us.anthropic.claude-3-5-haiku-20241022-v1:0
+   AWS_BEDROCK_MODEL_ID=anthropic.claude-3-5-haiku-20241022-v1:0
+   ```
+2. **Kube:** Re-run bootstrap so the deployment gets the vars. Either:
+   - Full deploy: `python tools/aws/deploy.py --scope kube --env dev`
+   - Quick fix: `python tools/aws/fix_kube_db_credentials.py --env dev`
+3. **Nonkube:** Re-apply the nonkube stack so ECS task definition picks up the Terraform vars from `get_base_vars()`.
+
+### 45.9 Takeaway
+
+For Claude 3.5 on-demand, use the **inference profile ID** (e.g. `us.anthropic.claude-3-5-haiku-20241022-v1:0`), not the raw model ID. Set `AWS_BEDROCK_INFERENCE_PROFILE_ID` in `.env`. Kube gets it via `kube_apply` (args or `os.getenv` fallback); nonkube gets it via Terraform vars from `get_base_vars()`. Ensure both deploy paths pass these values into the container environment.

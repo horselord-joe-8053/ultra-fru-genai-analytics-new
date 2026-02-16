@@ -8,7 +8,7 @@ Usage:
 Legacy-aware:
 - Accepts AWS_PROFILE (optional). If set, AWS CLI uses it naturally.
 """
-import argparse, os, subprocess, json
+import argparse, os, subprocess, json, shutil
 from tools._env import load_dotenv, require
 from tools.aws._backend import resolve_region
 
@@ -44,8 +44,13 @@ def main():
         raise SystemExit("Missing required executable: docker")
 
     # Only warn about kubectl when scope needs it (kube or all); skip for nonkube
-    if args.scope != "nonkube" and not has("kubectl"):
-        print("WARN: kubectl not found (kube deploy will fail until installed).")
+    if args.scope != "nonkube":
+        # Ensure common paths in PATH so kubectl is found when run from IDE/minimal env
+        for p in ("/usr/local/bin", "/opt/homebrew/bin"):
+            if os.path.isdir(p) and p not in os.environ.get("PATH", "").split(os.pathsep):
+                os.environ["PATH"] = p + os.pathsep + os.environ.get("PATH", "")
+        if not (shutil.which("kubectl") or has("kubectl")):
+            print("WARN: kubectl not found (kube deploy will fail until installed).")
 
     try:
         out = subprocess.check_output(["aws","sts","get-caller-identity"], text=True)

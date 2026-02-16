@@ -10,6 +10,7 @@ Namespace/Deployment/Service/CronJob/Job into Terraform would require templating
 provider config, and secret wiring—cons outweighed pros. See README_WAR_STORIES ##40.
 """
 import json
+import urllib.request
 import os
 import subprocess
 from typing import TYPE_CHECKING
@@ -78,6 +79,118 @@ def check_k8s_bootstrap_job_succeeded(env: str) -> bool:
         return out.strip() and int(out.strip()) >= 1
     except Exception:
         return False
+
+
+def wait_for_fru_api_ready(
+    env: str,
+    timeout_seconds: int = 600,
+    check_interval_seconds: int = 15,
+    min_ready_replicas: int = 1,
+    region: str | None = None,
+) -> bool:
+    """
+    Wait for fru-api deployment to have at least min_ready_replicas ready.
+    Fail-fast: raises SystemExit if not ready within timeout.
+    Used after kube bootstrap to ensure API pods are up before wiring CloudFront.
+    See War Story 43.
+    """
+    import time
+    from tools import logger
+
+    subprocess.run(["python", "tools/aws/eks_kubeconfig.py", "--env", env], check=False)
+    env_vars = {**os.environ}
+    if region:
+        env_vars["CLOUD_REGION"] = region
+        env_vars["AWS_REGION"] = region
+
+    start = time.time()
+    last_log = 0.0
+    while time.time() - start < timeout_seconds:
+        try:
+            out = subprocess.check_output([
+                "kubectl", "get", "deployment", "fru-api", "-n", K8S_NAMESPACE,
+                "-o", "jsonpath={.status.readyReplicas}"
+            ], text=True, timeout=15, env=env_vars)
+            ready = int(out.strip()) if out.strip() else 0
+            if ready >= min_ready_replicas:
+                elapsed = int(time.time() - start)
+                logger.success(f"[Kube] fru-api deployment ready ({ready} replicas) in {elapsed}s")
+                return True
+        except (subprocess.CalledProcessError, ValueError):
+            pass
+
+        elapsed = int(time.time() - start)
+        if time.time() - last_log >= 30:
+            logger.info(f"[Kube] Waiting for fru-api pods to be ready... ({elapsed}s elapsed)")
+            last_log = time.time()
+        time.sleep(check_interval_seconds)
+
+    # Fail-fast: do not continue deploy with broken API
+    logger.error(f"[Kube] fru-api deployment did not become ready within {timeout_seconds}s")
+    logger.error("Check: kubectl get pods -n fru-kube -l app=fru-api && kubectl describe pod -n fru-kube -l app=fru-api")
+    raise SystemExit(1)
+
+
+def verify_api_db_connected(base_url: str, timeout_seconds: int = 30, max_retries: int = 3) -> bool:
+    """
+    Verify /health returns database=connected. Fail-fast if disconnected.
+    Used after kube deploy to catch Aurora vs db_password_plain mismatch (War Story 44).
+    Retries on connection errors (NLB may need a moment to route to new pods).
+    """
+    import time
+    from tools import logger
+
+    url = f"{base_url.rstrip('/')}/health"
+    last_err = None
+    for attempt in range(max_retries):
+        try:
+            req = urllib.request.Request(url)
+            with urllib.request.urlopen(req, timeout=timeout_seconds) as resp:
+                data = json.loads(resp.read().decode())
+            db_status = data.get("database", "unknown")
+            db_err = data.get("database_error", "")
+            if db_status == "connected":
+                logger.success("[DB] API database: connected")
+                return True
+            logger.error(f"[DB] API database: {db_status}")
+            if db_err:
+                logger.error(f"  Error: {db_err}")
+            logger.error("  → Ensure PGPASSWORD in .env matches Aurora; run ensure_secrets; re-bootstrap.")
+            logger.error("  → See README_WAR_STORIES.md ## 44")
+            raise SystemExit(1)
+        except SystemExit:
+            raise
+        except Exception as e:
+            last_err = e
+            if attempt < max_retries - 1:
+                logger.info(f"[DB] /health not reachable (attempt {attempt + 1}/{max_retries}), retrying in 10s...")
+                time.sleep(10)
+    logger.error(f"[DB] Could not verify /health at {url}: {last_err}")
+    raise SystemExit(1)
+
+
+def k8s_rollout_restart_api(env: str, region: str | None = None) -> None:
+    """
+    Restart fru-api deployment so pods pick up updated db-credentials/app-credentials.
+    K8s does not hot-reload secret changes; rollout restart forces new pods.
+    See War Story 44.
+    """
+    from tools import logger
+
+    subprocess.run(["python", "tools/aws/eks_kubeconfig.py", "--env", env], check=False)
+    env_vars = {**os.environ}
+    if region:
+        env_vars["CLOUD_REGION"] = region
+        env_vars["AWS_REGION"] = region
+    result = subprocess.run(
+        ["kubectl", "rollout", "restart", "deployment/fru-api", "-n", K8S_NAMESPACE],
+        capture_output=True, text=True, timeout=60, env=env_vars,
+    )
+    if result.returncode == 0:
+        logger.info("[Kube] Rollout restart triggered for fru-api (pods will pick up updated secrets)")
+    else:
+        # Deployment might not exist yet on first deploy; non-fatal
+        logger.warning(f"[Kube] Rollout restart skipped or failed: {result.stderr or result.stdout}")
 
 
 def k8s_remove_bootstrap_and_scheduler(

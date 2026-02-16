@@ -128,6 +128,26 @@ data:
 """
         kubectl(["apply", "-f", "-"], input_text=app_secret_yml)
 
+        # AWS credentials for Bedrock (agent) and S3 (analytics scheduler)
+        aws_access = os.getenv("AWS_ADMIN_ACCESS_KEY_ID") or os.getenv("AWS_BEDROCK_ACCESS_KEY_ID") or ""
+        aws_secret = os.getenv("AWS_ADMIN_SECRET_ACCESS_KEY") or os.getenv("AWS_BEDROCK_SECRET_ACCESS_KEY") or ""
+        if aws_access and aws_secret:
+            aws_access_b64 = base64.b64encode(aws_access.encode()).decode()
+            aws_secret_b64 = base64.b64encode(aws_secret.encode()).decode()
+            aws_creds_yml = f"""apiVersion: v1
+kind: Secret
+metadata:
+  name: aws-credentials
+  namespace: {K8S_NAMESPACE}
+type: Opaque
+data:
+  AWS_ACCESS_KEY_ID: {aws_access_b64}
+  AWS_SECRET_ACCESS_KEY: {aws_secret_b64}
+"""
+            kubectl(["apply", "-f", "-"], input_text=aws_creds_yml)
+        else:
+            print("WARN: AWS_ADMIN_ACCESS_KEY_ID/SECRET or AWS_BEDROCK_* not set; agent Bedrock calls may fail")
+
         if not args.force and check_k8s_bootstrap_job_succeeded(args.env):
             print(f"[KUBE BOOTSTRAP] Skip: Job {JOB_BOOTSTRAP} already succeeded (idempotent)")
         else:
@@ -162,8 +182,8 @@ data:
                 "DELTA_TABLE_PATH": delta_table_path,
                 "DELTA_LAKE_PACKAGE": args.delta_lake_package,
                 "SPARK_HOME": "/opt/spark",
-                "AWS_BEDROCK_INFERENCE_PROFILE_ID": args.bedrock_inference_profile_id or "",
-                "AWS_BEDROCK_MODEL_ID": args.bedrock_model_id or "anthropic.claude-3-5-haiku-20241022-v1:0",
+                "AWS_BEDROCK_INFERENCE_PROFILE_ID": args.bedrock_inference_profile_id or os.getenv("AWS_BEDROCK_INFERENCE_PROFILE_ID", ""),
+                "AWS_BEDROCK_MODEL_ID": args.bedrock_model_id or os.getenv("AWS_BEDROCK_MODEL_ID", "anthropic.claude-3-5-haiku-20241022-v1:0"),
                 "ENABLE_ANALYTICS_SCHEDULER": os.getenv("ENABLE_ANALYTICS_SCHEDULER", "true"),
                 "ANALYTICS_SCHEDULER_INTERVAL_SECONDS": os.getenv("ANALYTICS_SCHEDULER_INTERVAL_SECONDS", "180"),
             }

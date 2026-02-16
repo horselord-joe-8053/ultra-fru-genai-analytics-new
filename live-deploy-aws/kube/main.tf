@@ -63,6 +63,21 @@ module "frontend" {
   tags                   = module.tags.common_tags
 }
 
+# Tag public subnets so AWS Load Balancer Controller can place internet-facing NLBs there.
+# Required for CloudFront to reach the API origin (fru-api-svc) from the internet.
+resource "aws_ec2_tag" "public_subnet_elb" {
+  for_each    = toset(data.terraform_remote_state.shared_durable.outputs.public_subnet_ids)
+  resource_id = each.value
+  key         = "kubernetes.io/role/elb"
+  value       = "1"
+}
+resource "aws_ec2_tag" "public_subnet_cluster" {
+  for_each    = toset(data.terraform_remote_state.shared_durable.outputs.public_subnet_ids)
+  resource_id = each.value
+  key         = "kubernetes.io/cluster/${module.eks.cluster_name}"
+  value       = "shared"
+}
+
 # Aurora ingress from EKS nodes (cluster SG) for DB connectivity
 resource "aws_security_group_rule" "aurora_from_eks" {
   count                    = try(data.terraform_remote_state.shared_durable.outputs.aurora_security_group_id, "") != "" ? 1 : 0

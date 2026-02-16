@@ -3,6 +3,9 @@ kind: Service
 metadata:
   name: fru-api-svc
   namespace: fru-kube
+  # CloudFront must reach the API origin from the internet; default NLB is internal in private subnets.
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
 spec:
   selector:
     app: fru-api

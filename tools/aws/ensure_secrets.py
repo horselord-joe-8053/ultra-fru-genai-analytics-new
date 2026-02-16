@@ -7,7 +7,7 @@ Usage:
 
 Reads from `.env`:
 - OPENAI_API_KEY
-- DB_PASSWORD or PGPASSWORD
+- PGPASSWORD
 """
 import argparse, os, subprocess, json, sys
 from tools._env import load_dotenv, require
@@ -79,27 +79,27 @@ def main():
         else:
             logger.warning("[SECRETS] OPENAI_API_KEY not set in .env; skipping")
 
-        dbpw = (os.getenv("DB_PASSWORD") or os.getenv("PGPASSWORD") or "").strip()
+        dbpw = (os.getenv("PGPASSWORD") or "").strip()
         if dbpw:
             # RDS Data API (setup_database) needs JSON format
             arn = o.get("db_password_secret_arn", {}).get("value")
             if not arn:
                 raise KeyError("db_password_secret_arn not in durable outputs; run deploy durable first")
-            logger.info("[SECRETS] Setting DB_PASSWORD (RDS Data API JSON format)...")
+            logger.info("[SECRETS] Setting PGPASSWORD (RDS Data API JSON format)...")
             db_secret_json = json.dumps({"username": "postgres", "password": dbpw})
             put_value(arn, db_secret_json, region)
-            logger.success("[SECRETS] DB_PASSWORD set (JSON)")
+            logger.success("[SECRETS] PGPASSWORD set (JSON)")
 
             # ECS needs plain string (legacy: db_password_plain; ECS doesn't support JSON key extraction)
             arn_plain = o.get("db_password_plain_secret_arn", {}).get("value")
             if arn_plain:
-                logger.info("[SECRETS] Setting DB_PASSWORD (plain for ECS)...")
+                logger.info("[SECRETS] Setting PGPASSWORD (plain for ECS)...")
                 put_value(arn_plain, dbpw, region)
-                logger.success("[SECRETS] DB_PASSWORD set (plain)")
+                logger.success("[SECRETS] PGPASSWORD set (plain)")
             else:
                 logger.warning("[SECRETS] db_password_plain_secret_arn not in outputs; ECS may fail")
         else:
-            logger.warning("[SECRETS] DB_PASSWORD/PGPASSWORD not set in .env; skipping")
+            logger.warning("[SECRETS] PGPASSWORD not set in .env; skipping")
 
         logger.success("[SECRETS] All secrets ensured")
         sys.exit(0)
