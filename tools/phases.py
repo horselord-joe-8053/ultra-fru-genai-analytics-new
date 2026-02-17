@@ -5,7 +5,7 @@ Provides flexible, computed phase numbering and timing logs.
 import time
 from typing import Sequence
 
-from tools import logger
+from tools.common.logging import logger
 
 
 def _format_duration(seconds: int) -> str:

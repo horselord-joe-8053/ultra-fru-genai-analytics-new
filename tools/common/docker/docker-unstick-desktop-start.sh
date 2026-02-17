@@ -14,8 +14,8 @@
 #   5) Re-launches Docker Desktop
 #
 # Usage
-#   chmod +x tools/docker/docker-unstick-desktop-start.sh
-#   ./tools/docker/docker-unstick-desktop-start.sh
+#   chmod +x tools/common/docker/docker-unstick-desktop-start.sh
+#   ./tools/common/docker/docker-unstick-desktop-start.sh
 #
 # Optional environment variables
 #   MAX_ATTEMPTS=10        # Max loops to handle backend respawn

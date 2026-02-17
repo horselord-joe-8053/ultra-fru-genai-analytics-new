@@ -19,15 +19,15 @@ import subprocess
 
 from tools._env import load_dotenv, require
 from tools.aws._backend import backend_config, resolve_region
-from tools.tofu_runner import get_tofu_env
-from tools.subprocess_retry import run_with_retry
-from tools import logger
+from tools.aws.tofu import get_tofu_env
+from tools.common.retry import run_with_retry
+from tools.common.logging import logger
 
 load_dotenv()
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 SCHEMA_FILE = os.path.join(REPO_ROOT, "core-app", "sql", "schema_pgvector.sql")
-PARSE_SQL = os.path.join(REPO_ROOT, "tools", "sql", "parse_sql_statements.py")
+PARSE_SQL = os.path.join(REPO_ROOT, "tools", "common", "sql", "parse_sql_statements.py")
 ETL_SCRIPT = os.path.join(REPO_ROOT, "core-app", "backend", "etl", "load_openai_embeddings_to_pgvector_rds_api.py")
 
 

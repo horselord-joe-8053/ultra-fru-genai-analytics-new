@@ -1,41 +1,74 @@
 """
 Teardown stats: per-component timing for kube and nonkube teardown.
 
-Records each torn-down component with identifier and duration (seconds).
-If a resource was already removed, duration is near zero.
+Records each torn-down component with scope, identifier, and duration (seconds).
+Call set_scope() before each phase so records get the correct scope label.
 """
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Iterator
 
-from tools import logger
+from tools.common.logging import logger
+
+# Column widths for summary table
+_SCOPE_W = 20
+_COMPONENT_W = 38
+_IDENTIFIER_W = 50
+_DURATION_W = 8
+
+
+def scope_for(stack_dir: str) -> str:
+    """Map stack dir to display label (nonkube|kube|shared-nondurable)."""
+    if "nonkube" in stack_dir and "shared" not in stack_dir:
+        return "nonkube"
+    if "kube" in stack_dir and "nonkube" not in stack_dir:
+        return "kube"
+    if "shared" in stack_dir and "nondurable" in stack_dir:
+        return "shared-nondurable"
+    return stack_dir.split("/")[-1] if "/" in stack_dir else stack_dir
 
 
 @dataclass
 class TeardownRecord:
     """Single teardown operation record."""
+    scope: str
     component: str
     identifier: str
     duration_sec: float
 
     def __str__(self) -> str:
-        return f"{self.component:40} {self.identifier:50} {self.duration_sec:>6.1f}s"
+        return (
+            f"{self.scope:<{_SCOPE_W}} "
+            f"{self.component:<{_COMPONENT_W}} "
+            f"{self.identifier:<{_IDENTIFIER_W}} "
+            f"{self.duration_sec:>6.1f}s"
+        )
 
 
 class TeardownStats:
     """
-    Collects teardown stats for kube and nonkube. Use timed() context manager
+    Collects teardown stats. Call set_scope() before each phase; use timed()
     or record() to add entries. Call print_summary() at end of run.
     """
 
     def __init__(self) -> None:
         self._records: list[TeardownRecord] = []
+        self._current_scope: str = ""
+
+    def set_scope(self, scope: str) -> None:
+        """Set scope for subsequent records (call before each phase)."""
+        self._current_scope = scope
 
     def record(self, component: str, identifier: str, duration_sec: float) -> None:
         """Record a completed teardown operation."""
         self._records.append(
-            TeardownRecord(component=component, identifier=identifier, duration_sec=duration_sec)
+            TeardownRecord(
+                scope=self._current_scope,
+                component=component,
+                identifier=identifier,
+                duration_sec=duration_sec,
+            )
         )
 
     @contextmanager
@@ -53,11 +86,16 @@ class TeardownStats:
         if not self._records:
             return
         logger.step("Teardown stats:")
-        header = f"{'Component':<40} {'Identifier':<50} {'Duration':>8}"
+        header = (
+            f"{'Scope':<{_SCOPE_W}} "
+            f"{'Component':<{_COMPONENT_W}} "
+            f"{'Identifier':<{_IDENTIFIER_W}} "
+            f"{'Duration':>8}"
+        )
         logger.info(header)
         logger.info("-" * len(header))
         for r in self._records:
             logger.info(str(r))
         total = sum(r.duration_sec for r in self._records)
         logger.info("-" * len(header))
-        logger.info(f"{'Total':<40} {'':<50} {total:>6.1f}s")
+        logger.info(f"{'Total':<{_SCOPE_W}} {'':<{_COMPONENT_W}} {'':<{_IDENTIFIER_W}} {total:>6.1f}s")

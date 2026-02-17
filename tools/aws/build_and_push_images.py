@@ -14,9 +14,9 @@ Replace the build contexts to match your legacy project.
 """
 import argparse, os, json, subprocess, sys, re, threading, time
 from tools._env import load_dotenv, require, get_int_env
-from tools.tofu_runner import tofu, get_tofu_env
+from tools.aws.tofu import tofu, get_tofu_env
 from tools.aws._backend import backend_config, resolve_region
-from tools import logger
+from tools.common.logging import logger
 
 load_dotenv()
 
@@ -155,7 +155,7 @@ def _docker_hung_suggestion() -> str:
     return (
         "\n"
         "Docker daemon may be hung or unresponsive. To recover:\n"
-        "  ./tools/docker/docker-unstick-desktop-start.sh\n"
+        "  ./tools/common/docker/docker-unstick-desktop-start.sh\n"
         "\n"
         "Run from the project root. Requires sudo for vmnetd. Then retry your command."
     )

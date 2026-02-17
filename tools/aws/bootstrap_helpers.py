@@ -10,6 +10,7 @@ Namespace/Deployment/Service/CronJob/Job into Terraform would require templating
 provider config, and secret wiring—cons outweighed pros. See README_WAR_STORIES ##40.
 """
 import json
+import socket
 import urllib.request
 import os
 import subprocess
@@ -95,7 +96,7 @@ def wait_for_fru_api_ready(
     See War Story 43.
     """
     import time
-    from tools import logger
+    from tools.common.logging import logger
 
     subprocess.run(["python", "tools/aws/eks_kubeconfig.py", "--env", env], check=False)
     env_vars = {**os.environ}
@@ -131,17 +132,55 @@ def wait_for_fru_api_ready(
     raise SystemExit(1)
 
 
+def wait_for_dns_resolvable(
+    hostname: str,
+    timeout_seconds: int = 120,
+    check_interval_sec: int = 5,
+    heartbeat_interval_sec: int = 30,
+) -> bool:
+    """
+    Wait for a hostname to be DNS-resolvable. Used after kube deploy when the NLB
+    hostname is assigned by K8s immediately, but AWS DNS can take 1-2 minutes to
+    propagate. Retries with heartbeat until resolvable or timeout.
+    """
+    import time
+    from tools.common.logging import logger
+
+    start = time.time()
+    last_heartbeat = 0
+    while time.time() - start < timeout_seconds:
+        try:
+            socket.getaddrinfo(hostname, 80)
+            elapsed = int(time.time() - start)
+            logger.success(f"[DNS] {hostname} resolvable in {elapsed}s")
+            return True
+        except (socket.gaierror, OSError):
+            pass
+
+        elapsed = int(time.time() - start)
+        if elapsed - last_heartbeat >= heartbeat_interval_sec and elapsed > 0:
+            logger.info(f"[DNS] Waiting for {hostname} to resolve... ({elapsed}s elapsed)")
+            last_heartbeat = elapsed
+        time.sleep(check_interval_sec)
+
+    logger.error(f"[DNS] {hostname} did not become resolvable within {timeout_seconds}s")
+    logger.error("  → AWS NLB DNS typically propagates in 1-2 min. Retry deploy or check network.")
+    raise SystemExit(1)
+
+
 def verify_api_db_connected(base_url: str, timeout_seconds: int = 30, max_retries: int = 3) -> bool:
     """
     Verify /health returns database=connected. Fail-fast if disconnected.
     Used after kube deploy to catch Aurora vs db_password_plain mismatch (War Story 44).
-    Retries on connection errors (NLB may need a moment to route to new pods).
+    Call wait_for_dns_resolvable(lb_host) before this; DNS propagation is handled there.
+    Retries a few times for transient HTTP/connection issues.
     """
     import time
-    from tools import logger
+    from tools.common.logging import logger
 
     url = f"{base_url.rstrip('/')}/health"
     last_err = None
+    retry_interval_sec = 20
     for attempt in range(max_retries):
         try:
             req = urllib.request.Request(url)
@@ -162,10 +201,18 @@ def verify_api_db_connected(base_url: str, timeout_seconds: int = 30, max_retrie
             raise
         except Exception as e:
             last_err = e
+            err_str = str(e).lower()
+            is_dns = "nodename" in err_str or "not known" in err_str or "name or service not known" in err_str
             if attempt < max_retries - 1:
-                logger.info(f"[DB] /health not reachable (attempt {attempt + 1}/{max_retries}), retrying in 10s...")
-                time.sleep(10)
+                hint = " (NLB DNS may still be propagating; AWS typically takes 1-2 min)" if is_dns else ""
+                logger.info(
+                    f"[DB] /health not reachable (attempt {attempt + 1}/{max_retries}){hint}, "
+                    f"retrying in {retry_interval_sec}s..."
+                )
+                time.sleep(retry_interval_sec)
     logger.error(f"[DB] Could not verify /health at {url}: {last_err}")
+    if last_err and ("nodename" in str(last_err).lower() or "not known" in str(last_err).lower()):
+        logger.error("  → DNS resolution failed. NLB hostname may need 1-2 min to propagate. Re-run deploy or try the URL manually.")
     raise SystemExit(1)
 
 
@@ -175,7 +222,7 @@ def k8s_rollout_restart_api(env: str, region: str | None = None) -> None:
     K8s does not hot-reload secret changes; rollout restart forces new pods.
     See War Story 44.
     """
-    from tools import logger
+    from tools.common.logging import logger
 
     subprocess.run(["python", "tools/aws/eks_kubeconfig.py", "--env", env], check=False)
     env_vars = {**os.environ}
@@ -211,7 +258,7 @@ def k8s_remove_bootstrap_and_scheduler(
     """
     import time
 
-    from tools import logger
+    from tools.common.logging import logger
 
     def _timed(component: str, identifier: str, fn):
         if stats:

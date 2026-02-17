@@ -2,7 +2,7 @@ import os
 import argparse
 import sys
 import subprocess
-from tools import logger
+from tools.common.logging import logger
 from tools._env import load_dotenv, get_int_env
 
 load_dotenv()

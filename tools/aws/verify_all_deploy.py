@@ -9,14 +9,15 @@ import requests
 # Force immediate output so orchestrator subprocess doesn't appear stuck
 print("verify_all_deploy: starting...", flush=True)
 
-from tools import logger
+from tools.common.logging import logger
 from tools._env import load_dotenv, require, get_int_env
 from tools.aws._aws_vars import get_base_vars
-from tools.with_heartbeat import poll_until, update_heartbeat
+from tools.common.retry import poll_until, update_heartbeat
 from tools.aws.bootstrap_helpers import K8S_NAMESPACE
-from tools.tofu_runner import ensure_shared_tofu_env
+from tools.aws.tofu import ensure_shared_tofu_env
 
 load_dotenv()
+print("verify_all_deploy: imports done, entering main()", flush=True)
 
 # Configurable via .env (aligned with legacy heartbeat/timeout pattern)
 VERIFY_TIMEOUT_SEC = get_int_env("VERIFY_TIMEOUT_SEC", 900)  # CloudFront propagation can take 5-15 min
@@ -29,7 +30,9 @@ CSV_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__
 def get_total_rec_from_csv() -> int:
     """Return expected total records from CSV (line count minus header)."""
     if not os.path.exists(CSV_PATH):
-        return 200  # fallback
+        logger.error(f"CSV not found: {CSV_PATH}")
+        logger.error("Verification requires the source CSV to determine expected record count. Cannot proceed.")
+        sys.exit(1)
     with open(CSV_PATH) as f:
         return max(0, sum(1 for _ in f) - 1)
 
@@ -301,6 +304,8 @@ def main():
             sys.exit(1)
     
     elif args.scope == "kube":
+        logger.info("Fetching kube tofu outputs (tofu init + output, ~30-60s)...")
+        sys.stdout.flush()
         stack_out = get_tofu_output("live-deploy-aws/kube", env)
         cf_domain = stack_out.get("cloudfront_domain_name", {}).get("value")
         if cf_domain:
