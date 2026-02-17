@@ -17,10 +17,10 @@ import argparse
 import os
 import subprocess
 
-from tools.common.env import load_dotenv
+from tools.cloud_shared.env import load_dotenv
 from tools.aws.common.core.backend import resolve_region
 from tools.aws.common.deploy.bootstrap_helpers import k8s_rollout_restart_api, wait_for_fru_api_ready
-from tools.common.logging import logger
+from tools.cloud_shared.logging import logger
 
 load_dotenv()
 
@@ -48,16 +48,16 @@ def main():
 
     logger.step("2. Refreshing K8s db-credentials (bootstrap --force)...")
     from tools.aws.common.deploy.deploy_common import init_stack, tofu_output_json
-    init_stack("live-deploy-aws/shared/durable", args.env, region)
-    init_stack("live-deploy-aws/shared/nondurable", args.env, region)
+    init_stack("live-deploy-aws/scope-shared/durable", args.env, region)
+    init_stack("live-deploy-aws/scope-shared/nondurable", args.env, region)
     from tools.aws.terra_var_handling import get_base_vars
     get_base_vars(args.env, region)
-    outputs = tofu_output_json("live-deploy-aws/shared/durable", args.env, region)
+    outputs = tofu_output_json("live-deploy-aws/scope-shared/durable", args.env, region)
     aurora_endpoint = outputs.get("aurora_endpoint", {}).get("value", "")
     db_secret_arn = outputs.get("db_password_plain_secret_arn", {}).get("value", "")
     openai_secret_arn = outputs.get("openai_api_key_secret_arn", {}).get("value", "")
 
-    snd_out = tofu_output_json("live-deploy-aws/shared/nondurable", args.env, region)
+    snd_out = tofu_output_json("live-deploy-aws/scope-shared/nondurable", args.env, region)
     delta_bucket = snd_out.get("delta_bucket", {}).get("value", "")
     app_repo = snd_out.get("ecr_app_url", {}).get("value", "")
     spark_repo = snd_out.get("ecr_spark_url", {}).get("value", "")

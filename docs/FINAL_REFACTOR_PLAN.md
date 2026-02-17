@@ -100,7 +100,7 @@ flowchart TB
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                         live-deploy-aws/shared/durable                       │
+│                         live-deploy-aws/scope-shared/durable                       │
 │  VPC + Aurora (pgvector) + Secrets (openai_api_key, db_password)             │
 │  Outputs: vpc_id, subnets, aurora_endpoint, aurora_port, aurora_database_name│
 │           aurora_security_group_id, db_cluster_arn, db_password_secret_arn  │
@@ -108,7 +108,7 @@ flowchart TB
                     │                                    │
                     ▼                                    ▼
 ┌───────────────────────────────────┐    ┌───────────────────────────────────┐
-│  live-deploy-aws/shared/nondurable │    │  DB Setup (tools/aws/setup_database) │
+│  live-deploy-aws/scope-shared/nondurable │    │  DB Setup (tools/aws/setup_database) │
 │  ECR, S3 (delta, artifacts)       │    │  ensure_pgvector → init_schema →    │
 │  Outputs: ecr_app_url, ecr_spark_   │    │  load_data (RDS Data API)           │
 │  url, delta_bucket                 │    │  Uses: durable outputs               │
@@ -152,7 +152,7 @@ This section consolidates the **Refactor Plan: Multi-Env, Multi-Region, Multi-Cl
 
 - **Current**: Single region (e.g. `us-east-1`) via `CLOUD_REGION` / `var.aws_region`
 - **Future**: Add `us-west-2/` (or similar) under `live-deploy-aws/`; region-specific stacks
-- **Pattern**: `live-deploy-aws/{region}/shared/durable`, `live-deploy-aws/{region}/kube`, etc., or `live-deploy-aws/shared/durable` with `region` var
+- **Pattern**: `live-deploy-aws/{region}/scope-shared/durable`, `live-deploy-aws/{region}/kube`, etc., or `live-deploy-aws/scope-shared/durable` with `region` var
 - **State**: Region in state key or path to avoid collisions
 - **Tasks**: Add region to deploy CLI; document cross-region patterns
 - **Follow-on**: [FINAL_REFACTOR_PLAN_2.md](./FINAL_REFACTOR_PLAN_2.md) – `--region` support, state migration
@@ -248,7 +248,7 @@ Used only for **Terraform state locking** (`TF_LOCK_TABLE` in `tools/aws/backend
 ### Aurora (PostgreSQL + pgvector)
 
 - **Module**: `infra-modules/aws/primitives/aurora/`
-- **Stack**: `live-deploy-aws/shared/durable` (long-lived, depends on VPC)
+- **Stack**: `live-deploy-aws/scope-shared/durable` (long-lived, depends on VPC)
 - Aurora is durable; not in nondurable.
 
 ### CloudFront
@@ -277,7 +277,7 @@ Legacy has **two frontend stacks** (nonkube ALB vs kube NLB). Options:
 
 ### 7.2 Durable Stack: Add Aurora
 
-**Path**: `live-deploy-aws/shared/durable/main.tf`
+**Path**: `live-deploy-aws/scope-shared/durable/main.tf`
 
 - Add `module "aurora"` with VPC wiring
 - Wire `db_password` from Secrets Manager (or RDS-managed secret)
@@ -308,7 +308,7 @@ Legacy has **two frontend stacks** (nonkube ALB vs kube NLB). Options:
 | # | Task | Path / Scope |
 |---|------|--------------|
 | 1 | Create Aurora module | `infra-modules/aws/primitives/aurora/` |
-| 2 | Add Aurora to durable stack | `live-deploy-aws/shared/durable/main.tf` |
+| 2 | Add Aurora to durable stack | `live-deploy-aws/scope-shared/durable/main.tf` |
 | 3 | Add durable outputs | aurora_endpoint, aurora_port, aurora_database_name, aurora_security_group_id, db_cluster_arn, db_secret_arn |
 | 4 | Copy schema file | `core-app/sql/schema_pgvector.sql` |
 | 5 | Create setup_database.py | `tools/aws/setup_database.py` |

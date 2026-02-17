@@ -13,7 +13,7 @@ This tool:
 - applies Job/CronJob manifests
 """
 import argparse, base64, json, os, subprocess
-from tools.common.env import load_dotenv, require
+from tools.cloud_shared.env import load_dotenv, require
 from tools.aws.common.core.backend import resolve_region
 from tools.aws.common.deploy.bootstrap_helpers import check_k8s_bootstrap_job_succeeded, JOB_BOOTSTRAP, K8S_NAMESPACE
 
@@ -164,7 +164,7 @@ data:
                 "AWS_SECRET_ACCESS_KEY": require("AWS_ADMIN_SECRET_ACCESS_KEY"),
                 "AWS_REGION": os.getenv("CLOUD_REGION", "").strip() or require("AWS_REGION")
             }
-            txt = render("infra-modules/shared/k8s/bootstrap-job.yaml", subs)
+            txt = render("infra-modules/cloud-shared/k8s/bootstrap-job.yaml", subs)
             kubectl(["delete", "job", JOB_BOOTSTRAP, "--ignore-not-found", "-n", K8S_NAMESPACE])
             kubectl(["apply", "-f", "-"], input_text=txt)
 
@@ -187,9 +187,9 @@ data:
                 "ENABLE_ANALYTICS_SCHEDULER": os.getenv("ENABLE_ANALYTICS_SCHEDULER", "true"),
                 "ANALYTICS_SCHEDULER_INTERVAL_SECONDS": os.getenv("ANALYTICS_SCHEDULER_INTERVAL_SECONDS", "180"),
             }
-            txt = render("infra-modules/shared/k8s/api-deployment.yaml", api_subs)
+            txt = render("infra-modules/cloud-shared/k8s/api-deployment.yaml", api_subs)
             kubectl(["apply","-f","-"], input_text=txt)
-            txt = render("infra-modules/shared/k8s/api-service.yaml", {})
+            txt = render("infra-modules/cloud-shared/k8s/api-service.yaml", {})
             kubectl(["apply","-f","-"], input_text=txt)
         except FileNotFoundError:
             print("WARN: API manifests not found, skipping API deployment.")
@@ -204,7 +204,7 @@ data:
             "PGDATABASE": args.pg_database,
             "PGUSER": args.pg_user,
         }
-        txt = render("infra-modules/shared/k8s/spark-cronjob.yaml", subs)
+        txt = render("infra-modules/cloud-shared/k8s/spark-cronjob.yaml", subs)
         kubectl(["apply","-f","-"], input_text=txt)
 
 if __name__ == "__main__":

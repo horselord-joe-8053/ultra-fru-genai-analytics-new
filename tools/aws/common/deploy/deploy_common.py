@@ -6,12 +6,12 @@ import json
 import os
 import subprocess
 
-from tools.common.env import load_dotenv, require
+from tools.cloud_shared.env import load_dotenv, require
 from tools.aws.common.core.terra_runner import terra, terra_capture, get_terra_env
 from tools.aws.common.core.backend import backend_config, resolve_region
-from tools.common.logging import logger
+from tools.cloud_shared.logging import logger
 from tools.aws.terra_var_handling import get_base_vars
-from tools.common.retry import run_with_retry
+from tools.cloud_shared.retry import run_with_retry
 from tools.aws.common.deploy.bootstrap_helpers import check_ecs_bootstrap_succeeded
 
 load_dotenv()
@@ -168,7 +168,7 @@ def run_ecs_bootstrap(env: str, region: str | None = None, force: bool = False) 
     if not spark_task_def:
         raise SystemExit("spark_task_definition_arn not in nonkube outputs")
 
-    durable = tofu_output_json("live-deploy-aws/shared/durable", env, region)
+    durable = tofu_output_json("live-deploy-aws/scope-shared/durable", env, region)
     private_subnets = durable.get("private_subnet_ids", {}).get("value", [])
     if not private_subnets:
         raise SystemExit("Could not determine private subnets for Spark bootstrap.")

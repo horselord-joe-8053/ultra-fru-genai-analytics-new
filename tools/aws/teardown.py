@@ -7,7 +7,7 @@ Usage:
   python tools/aws/teardown.py --scope all --env dev --non-interactive
 
 Rules:
-- Never destroys live-deploy-aws/shared/durable.
+- Never destroys live-deploy-aws/scope-shared/durable.
 - `all` destroys: nonkube -> kube -> shared-nondurable.
 - Before destroying kube: removes CronJob + Job (scheduler + bootstrap).
 - Before destroying nonkube: removes EventBridge rule, scales ECS service to 0, drains tasks; then destroy.
@@ -26,15 +26,15 @@ import json
 import os
 import subprocess
 
-from tools.common.logging import logger
-from tools.common.env import load_dotenv
+from tools.cloud_shared.logging import logger
+from tools.cloud_shared.env import load_dotenv
 from tools.aws.common.core.backend import backend_config, resolve_region
-from tools.common.stats import TeardownStats, scope_for
-from tools.common.phases import PhaseTracker, teardown_phases
+from tools.cloud_shared.stats import TeardownStats, scope_for
+from tools.cloud_shared.phases import PhaseTracker, teardown_phases
 from tools.aws.terra_var_handling import get_base_vars
 from tools.aws.common.deploy.bootstrap_helpers import k8s_remove_bootstrap_and_scheduler
 from tools.aws.kube.teardown_orphan_cleanup import remove_orphaned_eks_security_groups
-from tools.common.retry import run_with_retry, run_with_heartbeat
+from tools.cloud_shared.retry import run_with_retry, run_with_heartbeat
 from tools.aws.common.core.terra_runner import get_terra_env
 
 load_dotenv()
@@ -45,7 +45,7 @@ TEARDOWN_HEARTBEAT_INTERVAL_SEC = int(os.getenv("TEARDOWN_HEARTBEAT_INTERVAL_SEC
 ORDER = {
     "kube": ["live-deploy-aws/kube"],
     "nonkube": ["live-deploy-aws/nonkube"],
-    "all": ["live-deploy-aws/nonkube", "live-deploy-aws/kube", "live-deploy-aws/shared/nondurable"],
+    "all": ["live-deploy-aws/nonkube", "live-deploy-aws/kube", "live-deploy-aws/scope-shared/nondurable"],
 }
 
 

@@ -55,7 +55,7 @@ class Heartbeat:
             long_running_task()
     """
     def __init__(self, message: str, interval: Optional[int] = None, timeout: Optional[int] = None):
-        from tools.common.env import load_dotenv, get_int_env
+        from tools.cloud_shared.env import load_dotenv, get_int_env
         load_dotenv()
         
         self.message = message

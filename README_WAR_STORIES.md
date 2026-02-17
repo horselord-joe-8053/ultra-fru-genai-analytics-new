@@ -1615,7 +1615,7 @@ Nesting them under `deploy-aws/` carried a false implication that these were AWS
 
 ### 35.4 Resolution
 
-Moved `deploy-aws/kube/k8s/` → `infra-modules/shared/k8s/` alongside other cloud-agnostic components. Updated references in `tools/aws/kube_apply.py`.
+Moved `deploy-aws/kube/k8s/` → `infra-modules/cloud-shared/k8s/` alongside other cloud-agnostic components. Updated references in `tools/aws/kube_apply.py`.
 
 ### 35.5 Takeaway
 
@@ -1815,16 +1815,16 @@ deploy-aws/shared/durable/main.tf
 
 Phase 2 scatters logic by **conditional routing** (couples everything):
 ```
-infra-modules/shared/primitives/storage_bucket/main.tf
+infra-modules/cloud-shared/primitives/storage_bucket/main.tf
   → module "aws_impl" { count = var.cloud_provider == "aws" ? 1 : 0 }
   → module "gcp_impl" { count = var.cloud_provider == "gcp" ? 1 : 0 }
 
 deploy-aws/shared/durable/main.tf
-  → source = ../../infra-modules/shared/primitives/storage_bucket
+  → source = ../../infra-modules/cloud-shared/primitives/storage_bucket
   → cloud_provider = "aws"
 
 deploy-gcp/shared/durable/main.tf
-  → source = ../../infra-modules/shared/primitives/storage_bucket
+  → source = ../../infra-modules/cloud-shared/primitives/storage_bucket
   → cloud_provider = "gcp"
 ```
 
@@ -2450,12 +2450,12 @@ Relevant files:
 | 1. `.env` | `AWS_BEDROCK_INFERENCE_PROFILE_ID` and `AWS_BEDROCK_MODEL_ID` |
 | 2. `deploy.py` | Reads from `.env`, passes `--bedrock-inference-profile-id` and `--bedrock-model-id` to `kube_apply.py` |
 | 3. `fix_kube_db_credentials.py` | Same: passes these args when set in `.env` |
-| 4. `kube_apply.py` | Renders `infra-modules/shared/k8s/api-deployment.yaml` with `${AWS_BEDROCK_INFERENCE_PROFILE_ID}` and `${AWS_BEDROCK_MODEL_ID}` in `api_subs`. Values come from args **or** `os.getenv()` fallback when args are empty |
+| 4. `kube_apply.py` | Renders `infra-modules/cloud-shared/k8s/api-deployment.yaml` with `${AWS_BEDROCK_INFERENCE_PROFILE_ID}` and `${AWS_BEDROCK_MODEL_ID}` in `api_subs`. Values come from args **or** `os.getenv()` fallback when args are empty |
 | 5. Deployment | Pods get these as env vars in the container spec |
 
 **Key files:**
 - `tools/aws/kube_apply.py` — `--bedrock-inference-profile-id`, `--bedrock-model-id`; fallback: `args.X or os.getenv("AWS_BEDROCK_X")`
-- `infra-modules/shared/k8s/api-deployment.yaml` — env vars `AWS_BEDROCK_INFERENCE_PROFILE_ID`, `AWS_BEDROCK_MODEL_ID` with value `${...}`
+- `infra-modules/cloud-shared/k8s/api-deployment.yaml` — env vars `AWS_BEDROCK_INFERENCE_PROFILE_ID`, `AWS_BEDROCK_MODEL_ID` with value `${...}`
 
 **Permanent fix in kube_apply:** When callers omit the args, `kube_apply` uses `os.getenv()` so values from `.env` are still applied. This ensures `fix_kube_db_credentials` and any other caller that inherits `.env` get the correct Bedrock config.
 

@@ -1,6 +1,6 @@
 
 import os
-from tools.common.env import require
+from tools.cloud_shared.env import require
 
 # Map .env keys to Terraform variable names
 MAP = {
@@ -101,6 +101,6 @@ def get_base_vars(env: str, region: str | None = None):
     if repo_spark and not os.getenv("TF_VAR_spark_image"):
         set_tf("spark_image", f"{repo_spark}:{tag_spark}")
 
-    from tools.common.logging import logger
+    from tools.cloud_shared.logging import logger
     logger.info(f"Exported {len([k for k in os.environ if k.startswith('TF_VAR_')])} TF_VARs for env={env}")
     return []

@@ -6,7 +6,7 @@ Uses print() (no logger prefix) for clean table display with colors.
 from dataclasses import dataclass
 from typing import Sequence
 
-# ANSI colors (aligned with tools.common.logging.logger)
+# ANSI colors (aligned with tools.cloud_shared.logging.logger)
 GREEN = "\033[0;32m"
 RED = "\033[0;31m"
 BLUE = "\033[0;34m"

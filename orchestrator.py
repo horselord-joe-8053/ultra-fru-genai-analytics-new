@@ -2,8 +2,8 @@ import os
 import argparse
 import sys
 import subprocess
-from tools.common.logging import logger
-from tools.common.env import load_dotenv, get_int_env
+from tools.cloud_shared.logging import logger
+from tools.cloud_shared.env import load_dotenv, get_int_env
 
 load_dotenv()
 

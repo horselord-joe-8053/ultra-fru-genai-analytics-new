@@ -16,19 +16,19 @@ The **new** project uses OpenTofu (Terraform-compatible) without Terragrunt. It 
 
 | Layer | Path | Role | Contains |
 |-------|------|------|----------|
-| **A — Modules** | `infra-modules/aws/`, `infra-modules/gcp/`, `infra-modules/shared/` | Reusable building blocks | `resource` blocks, variable inputs, outputs |
+| **A — Modules** | `infra-modules/aws/`, `infra-modules/gcp/`, `infra-modules/cloud-shared/` | Reusable building blocks | `resource` blocks, variable inputs, outputs |
 | **B — Live** | `live-deploy-aws/`, `live-deploy-gcp/` | Environment-specific composition | **Only** `module` calls + `data` + `output`; no inline `resource` |
 
 **Rule:** Live config = pure composition. If a deploy stack has `resource` blocks, extract them into a module.
 
 ### 0.2 Live stacks are thin
 
-- `live-deploy-aws/shared/durable` — modules: tags, vpc; outputs only
-- `live-deploy-aws/shared/nondurable` — modules: tags, s3_bucket, ecr; outputs only
+- `live-deploy-aws/scope-shared/durable` — modules: tags, vpc; outputs only
+- `live-deploy-aws/scope-shared/nondurable` — modules: tags, s3_bucket, ecr; outputs only
 - `live-deploy-aws/nonkube` — modules: tags, ecs, cloudfront; remote state data; outputs
 - `live-deploy-aws/kube` — modules: tags, eks, cloudfront; remote state data; outputs
-- `live-deploy-gcp/shared/durable` — module: vpc; outputs
-- `live-deploy-gcp/shared/nondurable` — module: gcs_bucket; outputs
+- `live-deploy-gcp/scope-shared/durable` — module: vpc; outputs
+- `live-deploy-gcp/scope-shared/nondurable` — module: gcs_bucket; outputs
 - `live-deploy-gcp/kube` — module: gke; outputs
 
 ### 0.3 Durability is a deployment concern, not a module concern
@@ -43,8 +43,8 @@ The **new** project uses OpenTofu (Terraform-compatible) without Terragrunt. It 
 ### 0.5 State keys
 
 `tools/aws/backend.py` maps stack dir → state key so S3 keys stay stable across renames:
-- `live-deploy-aws/shared/durable` → `{prefix}/{env}/aws-shared-durable.tfstate`
-- `live-deploy-gcp/shared/durable` → `{prefix}/{env}/gcp-shared-durable.tfstate`
+- `live-deploy-aws/scope-shared/durable` → `{prefix}/{env}/aws-shared-durable.tfstate`
+- `live-deploy-gcp/scope-shared/durable` → `{prefix}/{env}/gcp-shared-durable.tfstate`
 
 Renaming `deploy-aws` → `live-deploy-aws` preserved state keys via explicit mapping.
 

@@ -3,7 +3,7 @@
 Parse SQL file into individual statements for RDS Data API (one statement per execute).
 
 Usage:
-    python tools/common/sql/parse_sql_statements.py <schema_file>
+    python tools/cloud_shared/sql/parse_sql_statements.py <schema_file>
 """
 import re
 import sys

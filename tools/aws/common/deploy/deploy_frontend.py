@@ -11,8 +11,8 @@ import os
 import random
 import subprocess
 import time
-from tools.common.logging import logger
-from tools.common.env import load_dotenv
+from tools.cloud_shared.logging import logger
+from tools.cloud_shared.env import load_dotenv
 
 load_dotenv()
 

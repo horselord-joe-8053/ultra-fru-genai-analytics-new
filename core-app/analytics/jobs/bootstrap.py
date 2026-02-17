@@ -1,8 +1,8 @@
 from pyspark.sql import SparkSession
 
-# Note: tools.common.logging is in /app/tools/ inside the container
+# Note: tools.cloud_shared.logging is in /app/tools/ inside the container
 try:
-    from tools.common.logging import logger
+    from tools.cloud_shared.logging import logger
 except ImportError:
     # Fallback if not in container or structured differently
     class logger:

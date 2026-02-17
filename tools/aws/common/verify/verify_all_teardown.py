@@ -4,8 +4,8 @@ import os
 import sys
 import subprocess
 import requests
-from tools.common.logging import logger
-from tools.common.env import load_dotenv
+from tools.cloud_shared.logging import logger
+from tools.cloud_shared.env import load_dotenv
 
 load_dotenv()
 
