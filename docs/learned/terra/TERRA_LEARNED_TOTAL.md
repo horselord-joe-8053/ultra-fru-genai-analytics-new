@@ -4,32 +4,32 @@ This doc is the **structural map** of how we use Terraform and Terragrunt in thi
 
 **Goals:** (1) One place for the full pipeline from repo layout → cache → Terraform → AWS. (2) Terraform-only vs Terragrunt usage. (3) The role of `//`, leaf vs root modules, and generated artifacts. Examples are from this repo.
 
-**Guide to sections:** §0 = new project (OpenTofu, infra-modules + live-deploy); §1 = legacy Terragrunt mapping; §2–6 = Terraform/Terragrunt pipeline.
+**Guide to sections:** §0 = new project (OpenTofu, infra_modules + live-deploy); §1 = legacy Terragrunt mapping; §2–6 = Terraform/Terragrunt pipeline.
 
 ---
 
-## 0. This Project: infra-modules + live-deploy (OpenTofu, Gruntwork-Style)
+## 0. This Project: infra_modules + live-deploy (OpenTofu, Gruntwork-Style)
 
 The **new** project uses OpenTofu (Terraform-compatible) without Terragrunt. It follows the **modules vs live** split from Gruntwork/Terragrunt best practice.
 
-### 0.1 A (infra-modules) vs B (live-deploy-*)
+### 0.1 A (infra_modules) vs B (live-deploy-*)
 
 | Layer | Path | Role | Contains |
 |-------|------|------|----------|
-| **A — Modules** | `infra-modules/aws/`, `infra-modules/gcp/`, `infra-modules/cloud-shared/` | Reusable building blocks | `resource` blocks, variable inputs, outputs |
-| **B — Live** | `live-deploy-aws/`, `live-deploy-gcp/` | Environment-specific composition | **Only** `module` calls + `data` + `output`; no inline `resource` |
+| **A — Modules** | `infra_modules/aws/`, `infra_modules/gcp/`, `infra_modules/cloud_shared/` | Reusable building blocks | `resource` blocks, variable inputs, outputs |
+| **B — Live** | `live_deploy_aws/`, `live_deploy_gcp/` | Environment-specific composition | **Only** `module` calls + `data` + `output`; no inline `resource` |
 
 **Rule:** Live config = pure composition. If a deploy stack has `resource` blocks, extract them into a module.
 
 ### 0.2 Live stacks are thin
 
-- `live-deploy-aws/scope-shared/durable` — modules: tags, vpc; outputs only
-- `live-deploy-aws/scope-shared/nondurable` — modules: tags, s3_bucket, ecr; outputs only
-- `live-deploy-aws/nonkube` — modules: tags, ecs, cloudfront; remote state data; outputs
-- `live-deploy-aws/kube` — modules: tags, eks, cloudfront; remote state data; outputs
-- `live-deploy-gcp/scope-shared/durable` — module: vpc; outputs
-- `live-deploy-gcp/scope-shared/nondurable` — module: gcs_bucket; outputs
-- `live-deploy-gcp/kube` — module: gke; outputs
+- `live_deploy_aws/scope_shared/durable` — modules: tags, vpc; outputs only
+- `live_deploy_aws/scope_shared/nondurable` — modules: tags, s3_bucket, ecr; outputs only
+- `live_deploy_aws/nonkube` — modules: tags, ecs, cloudfront; remote state data; outputs
+- `live_deploy_aws/kube` — modules: tags, eks, cloudfront; remote state data; outputs
+- `live_deploy_gcp/scope_shared/durable` — module: vpc; outputs
+- `live_deploy_gcp/scope_shared/nondurable` — module: gcs_bucket; outputs
+- `live_deploy_gcp/kube` — module: gke; outputs
 
 ### 0.3 Durability is a deployment concern, not a module concern
 
@@ -43,10 +43,10 @@ The **new** project uses OpenTofu (Terraform-compatible) without Terragrunt. It 
 ### 0.5 State keys
 
 `tools/aws/backend.py` maps stack dir → state key so S3 keys stay stable across renames:
-- `live-deploy-aws/scope-shared/durable` → `{prefix}/{env}/aws-shared-durable.tfstate`
-- `live-deploy-gcp/scope-shared/durable` → `{prefix}/{env}/gcp-shared-durable.tfstate`
+- `live_deploy_aws/scope_shared/durable` → `{prefix}/{env}/aws-shared-durable.tfstate`
+- `live_deploy_gcp/scope_shared/durable` → `{prefix}/{env}/gcp-shared-durable.tfstate`
 
-Renaming `deploy-aws` → `live-deploy-aws` preserved state keys via explicit mapping.
+Renaming `deploy-aws` → `live_deploy_aws` preserved state keys via explicit mapping.
 
 ### 0.6 S3 state + DynamoDB lock (how they work together)
 

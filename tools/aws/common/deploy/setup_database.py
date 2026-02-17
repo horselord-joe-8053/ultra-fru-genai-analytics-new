@@ -26,14 +26,14 @@ from tools.cloud_shared.logging import logger
 load_dotenv()
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
-SCHEMA_FILE = os.path.join(REPO_ROOT, "core-app", "sql", "schema_pgvector.sql")
+SCHEMA_FILE = os.path.join(REPO_ROOT, "core_app", "sql", "schema_pgvector.sql")
 PARSE_SQL = os.path.join(REPO_ROOT, "tools", "common", "sql", "parse_sql_statements.py")
-ETL_SCRIPT = os.path.join(REPO_ROOT, "core-app", "backend", "etl", "load_openai_embeddings_to_pgvector_rds_api.py")
+ETL_SCRIPT = os.path.join(REPO_ROOT, "core_app", "backend", "etl", "load_openai_embeddings_to_pgvector_rds_api.py")
 
 
 def get_durable_outputs(env: str, region: str | None = None) -> dict:
     """Get Aurora-related outputs from durable stack."""
-    stack_dir = "live-deploy-aws/scope-shared/durable"
+    stack_dir = "live_deploy_aws/scope_shared/durable"
     cfg = backend_config(stack_dir, env, region)
     args = ["init", "-lock=false", "-upgrade", "-reconfigure"]
     for c in cfg:
@@ -155,7 +155,7 @@ def load_data(env: str, cluster_arn: str, secret_arn: str, db_name: str, force: 
         logger.warning(f"ETL script not found: {ETL_SCRIPT}; skipping load_data")
         return
 
-    csv_path = os.path.join(REPO_ROOT, "core-app", "data", "raw", "fridge_sales_with_rating.csv")
+    csv_path = os.path.join(REPO_ROOT, "core_app", "data", "raw", "fridge_sales_with_rating.csv")
     if not os.path.exists(csv_path):
         raise FileNotFoundError(f"CSV not found: {csv_path}")
 
@@ -165,8 +165,8 @@ def load_data(env: str, cluster_arn: str, secret_arn: str, db_name: str, force: 
     env_vars["PGDATABASE"] = db_name
     env_vars["FRU_CSV_PATH"] = csv_path
     env_vars.setdefault("OPENAI_EMBED_MODEL", "text-embedding-3-small")
-    # ETL imports backend.* - need core-app on PYTHONPATH
-    core_app = os.path.join(REPO_ROOT, "core-app")
+    # ETL imports backend.* - need core_app on PYTHONPATH
+    core_app = os.path.join(REPO_ROOT, "core_app")
     env_vars["PYTHONPATH"] = core_app + (os.pathsep + env_vars.get("PYTHONPATH", "")) if env_vars.get("PYTHONPATH") else core_app
 
     # Idempotency: skip if data exists and not forcing (legacy parity)

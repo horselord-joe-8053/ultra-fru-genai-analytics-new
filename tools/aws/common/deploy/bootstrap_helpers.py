@@ -26,7 +26,7 @@ load_dotenv()
 # Log pattern for bootstrap success (from run_analytics.py)
 BOOTSTRAP_SUCCESS_PATTERN = "fru bootstrap success"
 
-# K8s Job/CronJob names and namespace (must match infra-modules/cloud-shared/k8s/)
+# K8s Job/CronJob names and namespace (must match infra_modules/cloud_shared/k8s/)
 JOB_BOOTSTRAP = "fru-analytics-bootstrap-kube"
 CRONJOB_PERIODIC = "fru-analytics-periodic-kube"
 K8S_NAMESPACE = "fru-kube"

@@ -42,7 +42,7 @@ def run_deploy_kube(
     Deploy kube stack: EKS apply, kube_apply bootstrap+schedule, LB wiring, frontend.
     Idempotent and safe to re-run.
     """
-    scope_label = scope_for("live-deploy-aws/kube")
+    scope_label = scope_for("live_deploy_aws/kube")
     if stats:
         stats.set_scope(scope_label)
 
@@ -56,7 +56,7 @@ def run_deploy_kube(
     # Phase 9: Apply EKS stack
     def _apply_eks():
         apply_stack(
-            "live-deploy-aws/kube",
+            "live_deploy_aws/kube",
             env,
             [
                 "-var", f"eks_instance_types=[\"{require('EKS_NODE_INSTANCE_TYPES')}\"]",
@@ -65,12 +65,12 @@ def run_deploy_kube(
             region,
         )
 
-    _timed("Tofu apply", "live-deploy-aws/kube", _apply_eks)
+    _timed("Tofu apply", "live_deploy_aws/kube", _apply_eks)
 
     # Phase 10: K8s bootstrap + schedule
     delta_bucket = snd["delta_bucket"]["value"]
     csv_uploaded = upload_csv_to_delta_bucket(delta_bucket, region)
-    durable = tofu_output_json("live-deploy-aws/scope-shared/durable", env, region)
+    durable = tofu_output_json("live_deploy_aws/scope_shared/durable", env, region)
     aurora_endpoint = durable.get("aurora_endpoint", {}).get("value", "")
     db_secret_arn = durable.get("db_password_plain_secret_arn", {}).get("value", "")
     openai_secret_arn = durable.get("openai_api_key_secret_arn", {}).get("value", "")
@@ -143,7 +143,7 @@ def run_deploy_kube(
 
         def _reapply_kube():
             apply_stack(
-                "live-deploy-aws/kube",
+                "live_deploy_aws/kube",
                 env,
                 [
                     "-var", f"eks_instance_types=[\"{require('EKS_NODE_INSTANCE_TYPES')}\"]",
@@ -153,14 +153,14 @@ def run_deploy_kube(
                 region,
             )
 
-        _timed("Tofu apply (ingress)", "live-deploy-aws/kube (ingress_hostname)", _reapply_kube)
+        _timed("Tofu apply (ingress)", "live_deploy_aws/kube (ingress_hostname)", _reapply_kube)
         logger.success("CloudFront API origin wired to K8s LoadBalancer")
     else:
         logger.warning("LoadBalancer hostname not available; CloudFront API routes may not work until re-applied manually")
 
     # Deploy frontend to S3
     try:
-        stack_out = tofu_output_json("live-deploy-aws/kube", env, region)
+        stack_out = tofu_output_json("live_deploy_aws/kube", env, region)
         frontend_bucket = stack_out.get("frontend_s3_bucket_id", {}).get("value")
         if frontend_bucket:
             deploy_frontend_to_s3(frontend_bucket, env)
