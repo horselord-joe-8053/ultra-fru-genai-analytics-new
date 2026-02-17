@@ -2329,7 +2329,7 @@ We know exactly how Aurora is created: Phase 3 (durable apply) passes `aurora_ma
    - Run: `python tools/aws/ensure_secrets.py --env $FRU_ENV`
 
 2. **Update K8s secret (kube only):**
-   - Quick fix (no full deploy): `python tools/aws/temp-one-off/fix_kube_db_credentials.py --env $FRU_ENV`
+   - Quick fix (no full deploy): `python tools/aws/standalone/temp_one_off/fix_kube_db_credentials.py --env $FRU_ENV`
    - Or re-run bootstrap: `python tools/aws/kube_apply.py --env $FRU_ENV --phase bootstrap ...` (with same args deploy uses, including `--db-secret-arn`)
    - Or manually update the secret and restart the deployment:
      ```bash
@@ -2344,14 +2344,14 @@ We know exactly how Aurora is created: Phase 3 (durable apply) passes `aurora_ma
 
 1. Ensure `AWS_ADMIN_ACCESS_KEY_ID` and `AWS_ADMIN_SECRET_ACCESS_KEY` (or `AWS_BEDROCK_ACCESS_KEY_ID`/`AWS_BEDROCK_SECRET_ACCESS_KEY`) are set in `.env`.
 2. Re-run bootstrap so `kube_apply.py` creates the `aws-credentials` secret and the deployment picks it up.
-3. Or run `python tools/aws/temp-one-off/fix_kube_db_credentials.py --env $FRU_ENV` (it refreshes both db-credentials and aws-credentials).
+3. Or run `python tools/aws/standalone/temp_one_off/fix_kube_db_credentials.py --env $FRU_ENV` (it refreshes both db-credentials and aws-credentials).
 
 ### 44.7 Diagnosis
 
 Use the diagnose script:
 
 ```bash
-python tools/aws/temp-one-off/diagnose_api_db.py --base-url https://your-cloudfront-domain
+python tools/aws/standalone/temp_one_off/diagnose_api_db.py --base-url https://your-cloudfront-domain
 ```
 
 It checks `/health` for `database` status and `database_error`, and explains whether the issue is PGHOST, credentials, or something else.
@@ -2469,7 +2469,7 @@ Relevant files:
 | 4. ECS task definition | Container env includes `AWS_BEDROCK_INFERENCE_PROFILE_ID` and `AWS_BEDROCK_MODEL_ID` |
 
 **Key files:**
-- `tools/aws/terra_var_handling.py` — MAP: `AWS_BEDROCK_INFERENCE_PROFILE_ID` → `bedrock_inference_profile_id`, `AWS_BEDROCK_MODEL_ID` → `bedrock_model_id`
+- `tools/aws/scope_shared/core/terra_var_handling.py` — MAP: `AWS_BEDROCK_INFERENCE_PROFILE_ID` → `bedrock_inference_profile_id`, `AWS_BEDROCK_MODEL_ID` → `bedrock_model_id`
 - `live_deploy_aws/nonkube/main.tf` — `AWS_BEDROCK_INFERENCE_PROFILE_ID = var.bedrock_inference_profile_id`, etc.
 - `live_deploy_aws/nonkube/variables.tf` — `bedrock_inference_profile_id` (default `""`), `bedrock_model_id` (default `anthropic.claude-3-5-haiku-20241022-v1:0`)
 
@@ -2489,7 +2489,7 @@ Relevant files:
    ```
 2. **Kube:** Re-run bootstrap so the deployment gets the vars. Either:
    - Full deploy: `python tools/aws/deploy.py --scope kube --env dev`
-   - Quick fix: `python tools/aws/temp-one-off/fix_kube_db_credentials.py --env dev`
+   - Quick fix: `python tools/aws/standalone/temp_one_off/fix_kube_db_credentials.py --env dev`
 3. **Nonkube:** Re-apply the nonkube stack so ECS task definition picks up the Terraform vars from `get_base_vars()`.
 
 ### 45.9 Takeaway

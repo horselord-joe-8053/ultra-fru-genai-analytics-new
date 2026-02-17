@@ -11,15 +11,15 @@ Steps:
   3. rollout restart (pods pick up new secret)
 
 Usage:
-  python tools/aws/temp_one_off/fix_kube_db_credentials.py --env dev
+  python tools/aws/standalone/temp_one_off/fix_kube_db_credentials.py --env dev
 """
 import argparse
 import os
 import subprocess
 
 from tools.cloud_shared.env import load_dotenv
-from tools.aws.common.core.backend import resolve_region
-from tools.aws.common.deploy.bootstrap_helpers import k8s_rollout_restart_api, wait_for_fru_api_ready
+from tools.aws.scope_shared.core.backend import resolve_region
+from tools.aws.scope_shared.deploy.bootstrap_helpers import k8s_rollout_restart_api, wait_for_fru_api_ready
 from tools.cloud_shared.logging import logger
 
 load_dotenv()
@@ -40,17 +40,17 @@ def main():
 
     logger.step("1. Ensuring secrets in Secrets Manager...")
     subprocess.run(
-        ["python", "tools/aws/common/deploy/ensure_secrets.py", "--env", args.env, "--region", region],
+        ["python", "tools/aws/scope_shared/deploy/ensure_secrets.py", "--env", args.env, "--region", region],
         check=True,
         env=env_vars,
     )
     logger.success("Secrets ensured")
 
     logger.step("2. Refreshing K8s db-credentials (bootstrap --force)...")
-    from tools.aws.common.deploy.deploy_common import init_stack, tofu_output_json
+    from tools.aws.scope_shared.deploy.deploy_common import init_stack, tofu_output_json
     init_stack("live_deploy_aws/scope_shared/durable", args.env, region)
     init_stack("live_deploy_aws/scope_shared/nondurable", args.env, region)
-    from tools.aws.terra_var_handling import get_base_vars
+    from tools.aws.scope_shared.core.terra_var_handling import get_base_vars
     get_base_vars(args.env, region)
     outputs = tofu_output_json("live_deploy_aws/scope_shared/durable", args.env, region)
     aurora_endpoint = outputs.get("aurora_endpoint", {}).get("value", "")

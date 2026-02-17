@@ -3,7 +3,7 @@
 Build and push ECR images for app and spark.
 
 One-liners:
-  python tools/aws/common/deploy/build_and_push_images.py --env dev
+  python tools/aws/scope_shared/deploy/build_and_push_images.py --env dev
 
 This tool:
 - Reads ECR repository URLs from `live_deploy_aws/scope_shared/nondurable` state
@@ -14,8 +14,8 @@ Replace the build contexts to match your legacy project.
 """
 import argparse, os, json, subprocess, sys, re, threading, time
 from tools.cloud_shared.env import load_dotenv, require, get_int_env
-from tools.aws.common.core.terra_runner import get_terra_env
-from tools.aws.common.core.backend import backend_config, resolve_region
+from tools.aws.scope_shared.core.terra_runner import get_terra_env
+from tools.aws.scope_shared.core.backend import backend_config, resolve_region
 from tools.cloud_shared.logging import logger
 
 load_dotenv()

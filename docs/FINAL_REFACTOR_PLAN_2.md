@@ -37,8 +37,8 @@ After implementation, these commands will work:
 
 ```bash
 # Migration (one-time, for existing deployments)
-python tools/aws/temp-one-off/migrate_state_to_region_key.py --env dev --region us-east-1 --dry-run
-python tools/aws/temp-one-off/migrate_state_to_region_key.py --env dev --region us-east-1 --execute
+python tools/aws/standalone/temp_one_off/migrate_state_to_region_key.py --env dev --region us-east-1 --dry-run
+python tools/aws/standalone/temp_one_off/migrate_state_to_region_key.py --env dev --region us-east-1 --execute
 
 # Deploy / teardown
 python tools/aws/deploy.py --scope nonkube --env dev --region us-east-1
@@ -91,9 +91,9 @@ Example: `fru/dev/us-east-1/aws-shared-durable.tfstate`
 | 3 | Add `--region` to `deploy.py`; pass region to all backend/tofu calls | `tools/aws/deploy.py` |
 | 4 | Add `--region` to `teardown.py`; pass region to all backend/tofu calls | `tools/aws/teardown.py` |
 | 5 | Add `--region` to `ensure_secrets.py`, `build_and_push_images.py`, `kube_apply.py`, `doctor.py` (or accept from env) | Various |
-| 6 | Create `migrate_state_to_region_key.py` | `tools/aws/temp-one-off/migrate_state_to_region_key.py` |
+| 6 | Create `migrate_state_to_region_key.py` | `tools/aws/standalone/temp_one_off/migrate_state_to_region_key.py` |
 | 7 | Set `CLOUD_REGION`/`AWS_REGION` in tofu env when running Terraform (so provider uses correct region) | `get_tofu_env()` or callers |
-| 8 | Update `get_base_vars()` / `terra_var_handling` to use region for `aws_region` TF var | `tools/aws/terra_var_handling.py` |
+| 8 | Update `get_base_vars()` / `terra_var_handling` to use region for `aws_region` TF var | `tools/aws/scope_shared/core/terra_var_handling.py` |
 | 9 | Document `AWS_REGION` in `.env.example` | `.env.example` or `docs/` |
 
 ### migrate_state_to_region_key.py
@@ -111,8 +111,8 @@ Example: `fru/dev/us-east-1/aws-shared-durable.tfstate`
 **Usage**:
 
 ```bash
-python tools/aws/temp-one-off/migrate_state_to_region_key.py --env dev --region us-east-1 --dry-run
-python tools/aws/temp-one-off/migrate_state_to_region_key.py --env dev --region us-east-1 --execute
+python tools/aws/standalone/temp_one_off/migrate_state_to_region_key.py --env dev --region us-east-1 --dry-run
+python tools/aws/standalone/temp_one_off/migrate_state_to_region_key.py --env dev --region us-east-1 --execute
 ```
 
 ---
@@ -124,8 +124,8 @@ python tools/aws/temp-one-off/migrate_state_to_region_key.py --env dev --region 
 1. **Before Plan 2**: State at `fru/dev/aws-shared-durable.tfstate`, etc.
 2. **Run migration**:
    ```bash
-   python tools/aws/temp-one-off/migrate_state_to_region_key.py --env dev --region us-east-1 --dry-run
-   python tools/aws/temp-one-off/migrate_state_to_region_key.py --env dev --region us-east-1 --execute
+   python tools/aws/standalone/temp_one_off/migrate_state_to_region_key.py --env dev --region us-east-1 --dry-run
+   python tools/aws/standalone/temp_one_off/migrate_state_to_region_key.py --env dev --region us-east-1 --execute
    ```
 3. **After migration**: State at `fru/dev/us-east-1/aws-shared-durable.tfstate`, etc.
 4. **Deploy/teardown** must use `--region us-east-1` (or `CLOUD_REGION=us-east-1`).

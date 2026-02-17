@@ -7,9 +7,9 @@ Usage:
 """
 import argparse, os
 from tools.cloud_shared.env import load_dotenv, require
-from tools.aws.common.core.terra_runner import terra
-from tools.aws.common.core.backend import backend_config
-from tools.aws.terra_var_handling import get_base_vars
+from tools.aws.scope_shared.core.terra_runner import terra
+from tools.aws.scope_shared.core.backend import backend_config
+from tools.aws.scope_shared.core.terra_var_handling import get_base_vars
 
 load_dotenv()
 

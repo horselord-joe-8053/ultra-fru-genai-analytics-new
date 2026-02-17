@@ -3,7 +3,7 @@
 Ensure Secrets Manager secret values are present (without storing them in Terraform state).
 
 Usage:
-  python tools/aws/common/deploy/ensure_secrets.py --env dev
+  python tools/aws/scope_shared/deploy/ensure_secrets.py --env dev
 
 Reads from `.env`:
 - OPENAI_API_KEY
@@ -11,8 +11,8 @@ Reads from `.env`:
 """
 import argparse, os, subprocess, json, sys
 from tools.cloud_shared.env import load_dotenv, require
-from tools.aws.common.core.terra_runner import get_terra_env
-from tools.aws.common.core.backend import backend_config, resolve_region
+from tools.aws.scope_shared.core.terra_runner import get_terra_env
+from tools.aws.scope_shared.core.backend import backend_config, resolve_region
 from tools.cloud_shared.retry import run_with_retry
 from tools.cloud_shared.logging import logger
 

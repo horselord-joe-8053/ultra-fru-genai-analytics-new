@@ -10,17 +10,17 @@ import time
 from tools.cloud_shared.env import require
 from tools.cloud_shared.logging import logger
 from tools.cloud_shared.stats import DeployStats, scope_for
-from tools.aws.common.deploy.deploy_common import (
+from tools.aws.scope_shared.deploy.deploy_common import (
     apply_stack,
     tofu_output_json,
     upload_csv_to_delta_bucket,
 )
-from tools.aws.common.deploy.deploy_frontend import (
+from tools.aws.scope_shared.deploy.deploy_frontend import (
     deploy_frontend_to_s3,
     invalidate_cloudfront,
     wait_for_invalidation,
 )
-from tools.aws.common.deploy.bootstrap_helpers import (
+from tools.aws.scope_shared.deploy.bootstrap_helpers import (
     K8S_NAMESPACE,
     wait_for_dns_resolvable,
     wait_for_fru_api_ready,

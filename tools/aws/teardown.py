@@ -28,14 +28,14 @@ import subprocess
 
 from tools.cloud_shared.logging import logger
 from tools.cloud_shared.env import load_dotenv
-from tools.aws.common.core.backend import backend_config, resolve_region
+from tools.aws.scope_shared.core.backend import backend_config, resolve_region
 from tools.cloud_shared.stats import TeardownStats, scope_for
 from tools.cloud_shared.phases import PhaseTracker, teardown_phases
-from tools.aws.terra_var_handling import get_base_vars
-from tools.aws.common.deploy.bootstrap_helpers import k8s_remove_bootstrap_and_scheduler
+from tools.aws.scope_shared.core.terra_var_handling import get_base_vars
+from tools.aws.scope_shared.deploy.bootstrap_helpers import k8s_remove_bootstrap_and_scheduler
 from tools.aws.kube.teardown_orphan_cleanup import remove_orphaned_eks_security_groups
 from tools.cloud_shared.retry import run_with_retry, run_with_heartbeat
-from tools.aws.common.core.terra_runner import get_terra_env
+from tools.aws.scope_shared.core.terra_runner import get_terra_env
 
 load_dotenv()
 

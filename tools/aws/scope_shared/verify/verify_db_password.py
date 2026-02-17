@@ -4,7 +4,7 @@ Verify that PGPASSWORD in .env can connect to Aurora, or at least
 that db_password_plain in Secrets Manager matches .env (deploy would sync it).
 
 Usage:
-  python tools/aws/common/verify/verify_db_password.py --env dev
+  python tools/aws/scope_shared/verify/verify_db_password.py --env dev
 
 Exits 0 if connection succeeds or secrets match; 1 otherwise.
 Does not print the password.
@@ -16,8 +16,8 @@ import subprocess
 import sys
 
 from tools.cloud_shared.env import load_dotenv
-from tools.aws.common.core.backend import backend_config, resolve_region
-from tools.aws.common.core.terra_runner import get_terra_env
+from tools.aws.scope_shared.core.backend import backend_config, resolve_region
+from tools.aws.scope_shared.core.terra_runner import get_terra_env
 from tools.cloud_shared.retry import run_with_retry
 from tools.cloud_shared.logging import logger
 

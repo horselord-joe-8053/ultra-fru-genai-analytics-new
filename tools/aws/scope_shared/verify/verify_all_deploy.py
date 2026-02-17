@@ -11,11 +11,11 @@ print("verify_all_deploy: starting...", flush=True)
 
 from tools.cloud_shared.logging import logger
 from tools.cloud_shared.env import load_dotenv, require, get_int_env
-from tools.aws.terra_var_handling import get_base_vars
+from tools.aws.scope_shared.core.terra_var_handling import get_base_vars
 from tools.cloud_shared.retry import poll_until, update_heartbeat
-from tools.aws.common.deploy.bootstrap_helpers import K8S_NAMESPACE
-from tools.aws.common.core.terra_runner import ensure_shared_terra_env
-from tools.aws.common.verify.verify_summary import VerifyRow, print_verify_summary
+from tools.aws.scope_shared.deploy.bootstrap_helpers import K8S_NAMESPACE
+from tools.aws.scope_shared.core.terra_runner import ensure_shared_terra_env
+from tools.aws.scope_shared.verify.verify_summary import VerifyRow, print_verify_summary
 
 load_dotenv()
 print("verify_all_deploy: imports done, entering main()", flush=True)
@@ -45,8 +45,8 @@ VERIFY_RETRIABLE_HTTP_CODES = frozenset({502, 503})
 def get_tofu_output(stack_dir, env):
     """Retrieve output from Tofu (assumed already applied)."""
     ensure_shared_terra_env()
-    from tools.aws.common.deploy.deploy_common import init_stack
-    from tools.aws.common.core.backend import resolve_region
+    from tools.aws.scope_shared.deploy.deploy_common import init_stack
+    from tools.aws.scope_shared.core.backend import resolve_region
     region = resolve_region(None)
     try:
         init_stack(stack_dir, env, region)
