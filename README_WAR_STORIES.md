@@ -1615,7 +1615,7 @@ Nesting them under `deploy-aws/` carried a false implication that these were AWS
 
 ### 35.4 Resolution
 
-Moved `deploy-aws/kube/k8s/` → `infra_modules/cloud_shared/k8s/` alongside other cloud-agnostic components. Updated references in `tools/aws/kube_apply.py`.
+Moved `deploy-aws/kube/k8s/` → `infra_terraform/modules/cloud_shared/k8s/` alongside other cloud-agnostic components. Updated references in `tools/aws/kube_apply.py`.
 
 ### 35.5 Takeaway
 
@@ -1646,7 +1646,7 @@ These modules are **AWS-specific** (S3 is not Azure Blob or GCP Cloud Storage). 
 
 **Option B: Phase 1 (Recommended) — Separate into provider folders**
 ```
-infra_modules/
+infra_terraform/modules/
 ├── shared/primitives/
 │   └── tags/
 ├── aws/primitives/
@@ -1696,7 +1696,7 @@ The reality: **Terraform's lack of polymorphism makes this far more complex than
 
 **Phase 2 File Structure (What It Would Look Like):**
 ```
-infra_modules/
+infra_terraform/modules/
 ├── shared/
 │   ├── primitives/
 │   │   ├── tags/
@@ -1810,21 +1810,21 @@ output "bucket_name" {
 Phase 1 scatters modules by **cloud provider** (clear, separates concerns):
 ```
 deploy-aws/shared/durable/main.tf
-  → source = ../../infra_modules/aws/primitives/s3_bucket
+  → source = ../../infra_terraform/modules/aws/primitives/s3_bucket
 ```
 
 Phase 2 scatters logic by **conditional routing** (couples everything):
 ```
-infra_modules/cloud_shared/primitives/storage_bucket/main.tf
+infra_terraform/modules/cloud_shared/primitives/storage_bucket/main.tf
   → module "aws_impl" { count = var.cloud_provider == "aws" ? 1 : 0 }
   → module "gcp_impl" { count = var.cloud_provider == "gcp" ? 1 : 0 }
 
 deploy-aws/shared/durable/main.tf
-  → source = ../../infra_modules/cloud_shared/primitives/storage_bucket
+  → source = ../../infra_terraform/modules/cloud_shared/primitives/storage_bucket
   → cloud_provider = "aws"
 
 deploy-gcp/shared/durable/main.tf
-  → source = ../../infra_modules/cloud_shared/primitives/storage_bucket
+  → source = ../../infra_terraform/modules/cloud_shared/primitives/storage_bucket
   → cloud_provider = "gcp"
 ```
 
@@ -1984,11 +1984,11 @@ When designing verification retry logic, only tolerate status codes that indicat
 
 ### 39.1 Context
 
-Our project separates **infra_modules** (A: reusable Terraform modules) from **deploy** (B: composition of modules for deployment). Industry best practice (Gruntwork, Terragrunt) dictates that "live" config should be *thin*—purely module composition and variable passing—with no inline `resource` blocks. We discovered that `deploy-aws/nonkube` had ~15 inline resources (Spark EventBridge, IAM roles, CloudWatch), while `deploy-gcp` stacks had inline resources in durable, nondurable, and kube. This violated the "live = config only" principle.
+Our project separates **infra_terraform/modules** (A: reusable Terraform modules) from **deploy** (B: composition of modules for deployment). Industry best practice (Gruntwork, Terragrunt) dictates that "live" config should be *thin*—purely module composition and variable passing—with no inline `resource` blocks. We discovered that `deploy-aws/nonkube` had ~15 inline resources (Spark EventBridge, IAM roles, CloudWatch), while `deploy-gcp` stacks had inline resources in durable, nondurable, and kube. This violated the "live = config only" principle.
 
 ### 39.2 Root Cause
 
-Resources were defined directly in deploy stacks instead of being encapsulated in reusable modules. The same pattern appeared on both AWS and GCP: `resource "aws_*"` and `resource "google_*"` blocks lived in deploy directories rather than in `infra_modules/`.
+Resources were defined directly in deploy stacks instead of being encapsulated in reusable modules. The same pattern appeared on both AWS and GCP: `resource "aws_*"` and `resource "google_*"` blocks lived in deploy directories rather than in `infra_terraform/modules/`.
 
 ### 39.3 Key Insight
 
@@ -1996,15 +1996,15 @@ Resources were defined directly in deploy stacks instead of being encapsulated i
 
 ### 39.4 Resolution
 
-1. **AWS:** Extracted Spark EventBridge wiring into `infra_modules/aws/ecs_spark_schedule/`. Replaced 15 inline resources in `nonkube/main.tf` with a single `module "ecs_spark_schedule"` call.
+1. **AWS:** Extracted Spark EventBridge wiring into `infra_terraform/modules/aws/ecs_spark_schedule/`. Replaced 15 inline resources in `nonkube/main.tf` with a single `module "ecs_spark_schedule"` call.
 
-2. **GCP:** Refactored `deploy-gcp` durable, nondurable, and kube to use existing modules (`infra_modules/gcp/primitives/vpc`, `gcs_bucket`) and a new `infra_modules/gcp/gke` module. Replaced inline `resource` blocks with module composition.
+2. **GCP:** Refactored `deploy-gcp` durable, nondurable, and kube to use existing modules (`infra_terraform/modules/gcp/primitives/vpc`, `gcs_bucket`) and a new `infra_terraform/modules/gcp/gke` module. Replaced inline `resource` blocks with module composition.
 
-3. **Rename:** Renamed `deploy-aws/` → `live_deploy_aws/` and `deploy-gcp/` → `live_deploy_gcp/` to explicitly signal the "live" role. Updated `backend.py` and `init_terra_upgrade_reconfigure.sh` to map `live-deploy-*` to the same state keys (`aws-*`, `gcp-*`) for backward compatibility.
+3. **Rename:** Renamed `deploy-aws/` → `infra_terraform/live_deploy/aws/` and `deploy-gcp/` → `infra_terraform/live_deploy/gcp/` to explicitly signal the "live" role. Updated `backend.py` and `init_terra_upgrade_reconfigure.sh` to map `live-deploy-*` to the same state keys (`aws-*`, `gcp-*`) for backward compatibility.
 
 ### 39.5 Takeaway
 
-Keep deploy stacks thin: module composition only. Extract any `resource` block into a reusable module. Name your deploy directories to reflect their role (e.g. `live_deploy_aws`) so the architecture is self-documenting. When renaming, preserve state key semantics so existing Terraform state remains valid.
+Keep deploy stacks thin: module composition only. Extract any `resource` block into a reusable module. Name your deploy directories to reflect their role (e.g. `infra_terraform/live_deploy/aws`) so the architecture is self-documenting. When renaming, preserve state key semantics so existing Terraform state remains valid.
 
 ---
 
@@ -2450,12 +2450,12 @@ Relevant files:
 | 1. `.env` | `AWS_BEDROCK_INFERENCE_PROFILE_ID` and `AWS_BEDROCK_MODEL_ID` |
 | 2. `deploy.py` | Reads from `.env`, passes `--bedrock-inference-profile-id` and `--bedrock-model-id` to `kube_apply.py` |
 | 3. `fix_kube_db_credentials.py` | Same: passes these args when set in `.env` |
-| 4. `kube_apply.py` | Renders `infra_modules/cloud_shared/k8s/api-deployment.yaml` with `${AWS_BEDROCK_INFERENCE_PROFILE_ID}` and `${AWS_BEDROCK_MODEL_ID}` in `api_subs`. Values come from args **or** `os.getenv()` fallback when args are empty |
+| 4. `kube_apply.py` | Renders `infra_terraform/modules/cloud_shared/k8s/api-deployment.yaml` with `${AWS_BEDROCK_INFERENCE_PROFILE_ID}` and `${AWS_BEDROCK_MODEL_ID}` in `api_subs`. Values come from args **or** `os.getenv()` fallback when args are empty |
 | 5. Deployment | Pods get these as env vars in the container spec |
 
 **Key files:**
 - `tools/aws/kube_apply.py` — `--bedrock-inference-profile-id`, `--bedrock-model-id`; fallback: `args.X or os.getenv("AWS_BEDROCK_X")`
-- `infra_modules/cloud_shared/k8s/api-deployment.yaml` — env vars `AWS_BEDROCK_INFERENCE_PROFILE_ID`, `AWS_BEDROCK_MODEL_ID` with value `${...}`
+- `infra_terraform/modules/cloud_shared/k8s/api-deployment.yaml` — env vars `AWS_BEDROCK_INFERENCE_PROFILE_ID`, `AWS_BEDROCK_MODEL_ID` with value `${...}`
 
 **Permanent fix in kube_apply:** When callers omit the args, `kube_apply` uses `os.getenv()` so values from `.env` are still applied. This ensures `fix_kube_db_credentials` and any other caller that inherits `.env` get the correct Bedrock config.
 
@@ -2465,13 +2465,13 @@ Relevant files:
 |------|--------------|
 | 1. `.env` | `AWS_BEDROCK_INFERENCE_PROFILE_ID` and `AWS_BEDROCK_MODEL_ID` |
 | 2. `get_base_vars()` | Maps `.env` to Terraform vars: `AWS_BEDROCK_INFERENCE_PROFILE_ID` → `TF_VAR_bedrock_inference_profile_id`, `AWS_BEDROCK_MODEL_ID` → `TF_VAR_bedrock_model_id` |
-| 3. Terraform apply | `live_deploy_aws/nonkube/main.tf` passes `var.bedrock_inference_profile_id` and `var.bedrock_model_id` into the ECS module |
+| 3. Terraform apply | `infra_terraform/live_deploy/aws/nonkube/main.tf` passes `var.bedrock_inference_profile_id` and `var.bedrock_model_id` into the ECS module |
 | 4. ECS task definition | Container env includes `AWS_BEDROCK_INFERENCE_PROFILE_ID` and `AWS_BEDROCK_MODEL_ID` |
 
 **Key files:**
 - `tools/aws/scope_shared/core/terra_var_handling.py` — MAP: `AWS_BEDROCK_INFERENCE_PROFILE_ID` → `bedrock_inference_profile_id`, `AWS_BEDROCK_MODEL_ID` → `bedrock_model_id`
-- `live_deploy_aws/nonkube/main.tf` — `AWS_BEDROCK_INFERENCE_PROFILE_ID = var.bedrock_inference_profile_id`, etc.
-- `live_deploy_aws/nonkube/variables.tf` — `bedrock_inference_profile_id` (default `""`), `bedrock_model_id` (default `anthropic.claude-3-5-haiku-20241022-v1:0`)
+- `infra_terraform/live_deploy/aws/nonkube/main.tf` — `AWS_BEDROCK_INFERENCE_PROFILE_ID = var.bedrock_inference_profile_id`, etc.
+- `infra_terraform/live_deploy/aws/nonkube/variables.tf` — `bedrock_inference_profile_id` (default `""`), `bedrock_model_id` (default `anthropic.claude-3-5-haiku-20241022-v1:0`)
 
 ### 45.7 Summary Table
 

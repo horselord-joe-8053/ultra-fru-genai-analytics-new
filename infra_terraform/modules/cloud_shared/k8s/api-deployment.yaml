@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fru-api
+  namespace: fru-kube
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: fru-api
+  template:
+    metadata:
+      labels:
+        app: fru-api
+    spec:
+      containers:
+      - name: api
+        image: ${APP_IMAGE}
+        ports:
+        - containerPort: 5001
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5001
+          initialDelaySeconds: 60
+          periodSeconds: 15
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5001
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 10
+          failureThreshold: 3
+        env:
+        - name: PGHOST
+          value: "${PGHOST}"
+        - name: PGPORT
+          value: "${PGPORT}"
+        - name: PGUSER
+          value: "${PGUSER}"
+        - name: PGDATABASE
+          value: "${PGDATABASE}"
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: PGPASSWORD
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: app-credentials
+              key: OPENAI_API_KEY
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: AWS_ACCESS_KEY_ID
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: AWS_SECRET_ACCESS_KEY
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: ALLOWED_ORIGINS
+          value: "${ALLOWED_ORIGINS}"
+        - name: OPENAI_EMBED_MODEL
+          value: "text-embedding-3-small"
+        - name: USE_AGENT_QUERY
+          value: "true"
+        - name: AWS_REGION
+          value: "${AWS_REGION}"
+        - name: CONTAINER_IMAGE
+          value: "${APP_IMAGE}"
+        - name: CONTAINER_IMAGE_TAGS
+          value: "${CONTAINER_IMAGE_TAGS}"
+        - name: CONTAINER_TYPE
+          value: "eks"
+        - name: DELTA_TABLE_PATH
+          value: "${DELTA_TABLE_PATH}"
+        - name: DELTA_LAKE_PACKAGE
+          value: "${DELTA_LAKE_PACKAGE}"
+        - name: SPARK_HOME
+          value: "${SPARK_HOME}"
+        - name: AWS_BEDROCK_INFERENCE_PROFILE_ID
+          value: "${AWS_BEDROCK_INFERENCE_PROFILE_ID}"
+        - name: AWS_BEDROCK_MODEL_ID
+          value: "${AWS_BEDROCK_MODEL_ID}"
+        - name: ENABLE_ANALYTICS_SCHEDULER
+          value: "${ENABLE_ANALYTICS_SCHEDULER}"
+        - name: ANALYTICS_SCHEDULER_INTERVAL_SECONDS
+          value: "${ANALYTICS_SCHEDULER_INTERVAL_SECONDS}"

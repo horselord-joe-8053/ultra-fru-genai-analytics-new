@@ -117,7 +117,7 @@ subprocess.run([sys.executable, ETL_SCRIPT], env=env_vars, cwd=REPO_ROOT)
 | 2 | Add `PYTHONPATH` for ETL subprocess (include `core_app`) | `tools/aws/setup_database.py` |
 | 3 | OPENAI_API_KEY from K8s Secret (not placeholder) | `kube_apply.py`, `api-deployment.yaml` |
 | 4 | Add Bedrock, DELTA_*, CONTAINER_TYPE to kube API | `api-deployment.yaml`, `kube_apply.py` |
-| 5 | Add Bedrock, DELTA_LAKE_PACKAGE to ECS env_vars | `live_deploy_aws/nonkube/main.tf` |
+| 5 | Add Bedrock, DELTA_LAKE_PACKAGE to ECS env_vars | `infra_terraform/live_deploy/aws/nonkube/main.tf` |
 | 6 | (Optional) Add load idempotency/metadata to setup_database | `tools/aws/setup_database.py` |
 | 7 | (Optional) Add wait-for-pgvector before schema init | `tools/aws/setup_database.py` |
 

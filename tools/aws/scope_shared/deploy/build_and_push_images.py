@@ -6,7 +6,7 @@ One-liners:
   python tools/aws/scope_shared/deploy/build_and_push_images.py --env dev
 
 This tool:
-- Reads ECR repository URLs from `live_deploy_aws/scope_shared/nondurable` state
+- Reads ECR repository URLs from `infra_terraform/live_deploy/aws/scope_shared/nondurable` state
 - Logs into ECR properly
 - Builds and pushes images
 
@@ -202,7 +202,7 @@ def main():
     logger.info(f"[BUILD] Region: {region}")
     
     logger.info("[BUILD] Getting ECR URLs from terraform state...")
-    out = tofu_output_json("live_deploy_aws/scope_shared/nondurable", args.env, region)
+    out = tofu_output_json("infra_terraform/live_deploy/aws/scope_shared/nondurable", args.env, region)
 
     app_repo_url   = out["ecr_app_url"]["value"]
     spark_repo_url = out["ecr_spark_url"]["value"]
@@ -237,13 +237,24 @@ def main():
         spark_build_cmd,
         "Building spark image", 2, 4,
     )
+    total_steps = 6 if app_tag != "latest" else 4
     run_docker_with_progress(
         ["docker","push",f"{app_repo_url}:{app_tag}"],
-        "Pushing app image", 3, 4,
+        "Pushing app image", 3, total_steps,
     )
+    # Also push as latest so --skip-build and future runs can use it (legacy parity)
+    if app_tag != "latest":
+        run_docker_with_progress(
+            ["docker","tag",f"{app_repo_url}:{app_tag}",f"{app_repo_url}:latest"],
+            "Tagging app as latest", 4, total_steps,
+        )
+        run_docker_with_progress(
+            ["docker","push",f"{app_repo_url}:latest"],
+            "Pushing app image (latest)", 5, total_steps,
+        )
     run_docker_with_progress(
         ["docker","push",f"{spark_repo_url}:{spark_tag}"],
-        "Pushing spark image", 4, 4,
+        "Pushing spark image", total_steps, total_steps,
     )
 
     logger.success("All images pushed:")

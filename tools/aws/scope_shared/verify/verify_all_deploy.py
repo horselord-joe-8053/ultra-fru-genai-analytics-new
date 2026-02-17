@@ -294,7 +294,7 @@ def main():
         if scope == "nonkube":
             logger.info("Fetching nonkube tofu outputs (tofu init + output, ~30-60s)...")
             sys.stdout.flush()
-            stack_out = get_tofu_output("live_deploy_aws/nonkube", env)
+            stack_out = get_tofu_output("infra_terraform/live_deploy/aws/nonkube", env)
             cf_domain = stack_out.get("cloudfront_domain_name", {}).get("value")
             alb_dns = stack_out.get("alb_dns_name", {}).get("value")
             base_url = f"https://{cf_domain}" if cf_domain else (f"http://{alb_dns}" if alb_dns else None)
@@ -311,7 +311,7 @@ def main():
         elif scope == "kube":
             logger.info("Fetching kube tofu outputs (tofu init + output, ~30-60s)...")
             sys.stdout.flush()
-            stack_out = get_tofu_output("live_deploy_aws/kube", env)
+            stack_out = get_tofu_output("infra_terraform/live_deploy/aws/kube", env)
             cf_domain = stack_out.get("cloudfront_domain_name", {}).get("value")
             if cf_domain:
                 base_url = f"https://{cf_domain}"

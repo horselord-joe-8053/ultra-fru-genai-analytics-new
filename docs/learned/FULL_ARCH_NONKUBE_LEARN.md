@@ -218,7 +218,7 @@ flowchart LR
 
 ```
 fru-genai-analytics-new/
-├── live_deploy_aws/
+├── infra_terraform/live_deploy/aws/
 │   ├── shared/
 │   │   ├── durable/          # VPC, Aurora (apply first)
 │   │   │   ├── main.tf
@@ -230,7 +230,7 @@ fru-genai-analytics-new/
 │       ├── main.tf
 │       └── outputs: alb_dns_name, cloudfront_domain_name, frontend_s3_bucket_id
 │
-├── infra_modules/
+├── infra_terraform/modules/
 │   └── aws/
 │       ├── primitives/
 │       │   ├── vpc/          # VPC, subnets, NAT, IGW

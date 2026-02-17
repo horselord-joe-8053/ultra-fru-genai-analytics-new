@@ -164,7 +164,7 @@ def wait_for_invalidation(
     return False
 
 
-def deploy_frontend_to_s3(bucket: str, env: str) -> None:
+def deploy_frontend_to_s3(bucket: str, env: str, scope: str = "nonkube") -> None:
     """Build frontend and sync to S3. Idempotent. Caller must provide bucket from Terraform output."""
     logger.step("Deploying frontend to S3...")
     if not os.path.isdir(FRONTEND_DIR):
@@ -180,7 +180,7 @@ def deploy_frontend_to_s3(bucket: str, env: str) -> None:
     logger.info("Building frontend...")
     env_vars = os.environ.copy()
     env_vars.setdefault("VITE_PROVIDER", "aws")
-    env_vars.setdefault("VITE_CONTAINER_TYPE", "ecs")
+    env_vars.setdefault("VITE_SCOPE", scope)
     env_vars.setdefault("VITE_ENVIRONMENT", env)
     subprocess.run(
         ["npm", "run", "build"],

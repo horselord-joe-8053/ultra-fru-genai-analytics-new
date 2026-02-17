@@ -10,13 +10,13 @@
 
 ### Modules (reusable Terraform)
 
-- **Best dir:** `infra_modules/aws/primitives/`
-- Add e.g. `infra_modules/aws/primitives/aurora/` and `infra_modules/aws/primitives/cloudfront/` (or a combined `frontend` module that includes S3 + CloudFront if you mirror legacy).
+- **Best dir:** `infra_terraform/modules/aws/primitives/`
+- Add e.g. `infra_terraform/modules/aws/primitives/aurora/` and `infra_terraform/modules/aws/primitives/cloudfront/` (or a combined `frontend` module that includes S3 + CloudFront if you mirror legacy).
 
 ### Deploy (stack wiring)
 
-- **Reasonable dir:** `live_deploy_aws/scope_shared/nondurable/` for **both** Aurora and CloudFront, if you want all shared, non-VPC resources in one place.
-- **Alternative for CloudFront:** a dedicated stack such as `live_deploy_aws/scope_shared/frontend/` so frontend (S3 + CloudFront) lives in one stack and stays separate from ECR/S3 data buckets.
+- **Reasonable dir:** `infra_terraform/live_deploy/aws/scope_shared/nondurable/` for **both** Aurora and CloudFront, if you want all shared, non-VPC resources in one place.
+- **Alternative for CloudFront:** a dedicated stack such as `infra_terraform/live_deploy/aws/scope_shared/frontend/` so frontend (S3 + CloudFront) lives in one stack and stays separate from ECR/S3 data buckets.
 
 ### Aurora note
 
@@ -35,11 +35,11 @@ So yes: **two different URLs**, each backed by its own CloudFront distribution (
 
 Options for the new project:
 
-- **Option A – Two stacks:** e.g. `live_deploy_aws/scope_shared/frontend-nonkube/` and `live_deploy_aws/scope_shared/frontend-kube/`, each with its own CloudFront distribution (S3 + ALB or NLB origin). Clear separation, two URLs.
-- **Option B – One stack, two distributions:** one stack under `live_deploy_aws/scope_shared/frontend/` that instantiates two CloudFront distributions (one for nonkube ALB, one for kube NLB), with different origins and URLs.
+- **Option A – Two stacks:** e.g. `infra_terraform/live_deploy/aws/scope_shared/frontend-nonkube/` and `infra_terraform/live_deploy/aws/scope_shared/frontend-kube/`, each with its own CloudFront distribution (S3 + ALB or NLB origin). Clear separation, two URLs.
+- **Option B – One stack, two distributions:** one stack under `infra_terraform/live_deploy/aws/scope_shared/frontend/` that instantiates two CloudFront distributions (one for nonkube ALB, one for kube NLB), with different origins and URLs.
 - **Option C – One distribution, two origins:** a single CloudFront distribution with two custom origins (nonkube ALB + kube NLB) and path- or host-based routing. Possible but more complex and couples both backends to one distribution.
 
-Recommendation: **Option A or B** so you keep two distinct URLs (nonkube vs kube) and avoid coupling. Primitives live in `infra_modules/aws/primitives/`; deploy in `live_deploy_aws/scope_shared/nondurable/` or `live_deploy_aws/scope_shared/frontend/` (or two stacks under `scope_shared/` as above).
+Recommendation: **Option A or B** so you keep two distinct URLs (nonkube vs kube) and avoid coupling. Primitives live in `infra_terraform/modules/aws/primitives/`; deploy in `infra_terraform/live_deploy/aws/scope_shared/nondurable/` or `infra_terraform/live_deploy/aws/scope_shared/frontend/` (or two stacks under `scope_shared/` as above).
 
 ---
 

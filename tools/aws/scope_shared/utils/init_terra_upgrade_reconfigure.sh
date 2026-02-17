@@ -17,9 +17,9 @@
 #   ./tools/aws/scope_shared/utils/init_terra_upgrade_reconfigure.sh <stack_dir> [env]
 #
 # Examples:
-#   ./tools/aws/scope_shared/utils/init_terra_upgrade_reconfigure.sh live_deploy_aws/scope_shared/nondurable
-#   ./tools/aws/scope_shared/utils/init_terra_upgrade_reconfigure.sh live_deploy_aws/scope_shared/durable dev
-#   ./tools/aws/scope_shared/utils/init_terra_upgrade_reconfigure.sh live_deploy_aws/nonkube dev
+#   ./tools/aws/scope_shared/utils/init_terra_upgrade_reconfigure.sh infra_terraform/live_deploy/aws/scope_shared/nondurable
+#   ./tools/aws/scope_shared/utils/init_terra_upgrade_reconfigure.sh infra_terraform/live_deploy/aws/scope_shared/durable dev
+#   ./tools/aws/scope_shared/utils/init_terra_upgrade_reconfigure.sh infra_terraform/live_deploy/aws/nonkube dev
 #
 # Then you can run tofu plan / apply / destroy from that stack directory (with
 # TF_DATA_DIR set to repo root tofu_data if you use the project's convention).
@@ -27,7 +27,7 @@
 set -e
 if [ $# -lt 1 ]; then
   echo "Usage: $0 <stack_dir> [env]" >&2
-  echo "  stack_dir  e.g. live_deploy_aws/scope_shared/nondurable or live_deploy_aws/scope_shared/durable" >&2
+  echo "  stack_dir  e.g. infra_terraform/live_deploy/aws/scope_shared/nondurable or infra_terraform/live_deploy/aws/scope_shared/durable" >&2
   echo "  env        default: FRU_ENV or dev" >&2
   echo "Run from repo root. Requires .env with TF_STATE_BUCKET, CLOUD_REGION." >&2
   exit 1
@@ -59,7 +59,7 @@ fi
 PREFIX="${TF_STATE_PREFIX:-${FRU_PREFIX:-fru}}"
 
 # Match backend.py: stack_id_from_dir (cloud=aws from script location; strip first path component)
-# e.g. live_deploy_aws/scope_shared/durable -> aws-shared-durable
+# e.g. infra_terraform/live_deploy/aws/scope_shared/durable -> aws-shared-durable
 PARTS="$(echo "$STACK_DIR" | sed 's|/*$||' | tr '/' '\n')"
 REST="$(echo "$PARTS" | tail -n +2 | tr '\n' '-')"
 STACK_ID="aws-${REST%-}"

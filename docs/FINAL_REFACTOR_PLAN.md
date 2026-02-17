@@ -28,7 +28,7 @@
 The new project (`fru-genai-analytics-new`) refactors the legacy monolithic deployment into a modular, IaC-first architecture. This plan consolidates:
 
 - **Architecture principles** – Durable vs nondurable, teardown scope, state management
-- **Target structure** – core_app, infra_modules, live_deploy_aws (shared durable, shared nondurable, kube, nonkube)
+- **Target structure** – core_app, infra_terraform/modules, infra_terraform/live_deploy/aws (shared durable, shared nondurable, kube, nonkube)
 - **Functionality gap** – Aurora PostgreSQL (pgvector), DB setup flow, PG* env vars for ECS/EKS, kube parity with shared_nondurable
 - **Implementation checklist** – Ordered tasks to complete the refactor
 
@@ -76,7 +76,7 @@ The new project (`fru-genai-analytics-new`) refactors the legacy monolithic depl
 ```mermaid
 flowchart TB
   Core[core_app]
-  Modules[infra_modules]
+  Modules[infra_terraform/modules]
   SD[shared-durable]
   SND[shared-nondurable]
   K[kube]
@@ -100,7 +100,7 @@ flowchart TB
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                         live_deploy_aws/scope_shared/durable                       │
+│                         infra_terraform/live_deploy/aws/scope_shared/durable                       │
 │  VPC + Aurora (pgvector) + Secrets (openai_api_key, db_password)             │
 │  Outputs: vpc_id, subnets, aurora_endpoint, aurora_port, aurora_database_name│
 │           aurora_security_group_id, db_cluster_arn, db_password_secret_arn  │
@@ -108,7 +108,7 @@ flowchart TB
                     │                                    │
                     ▼                                    ▼
 ┌───────────────────────────────────┐    ┌───────────────────────────────────┐
-│  live_deploy_aws/scope_shared/nondurable │    │  DB Setup (tools/aws/setup_database) │
+│  infra_terraform/live_deploy/aws/scope_shared/nondurable │    │  DB Setup (tools/aws/setup_database) │
 │  ECR, S3 (delta, artifacts)       │    │  ensure_pgvector → init_schema →    │
 │  Outputs: ecr_app_url, ecr_spark_   │    │  load_data (RDS Data API)           │
 │  url, delta_bucket                 │    │  Uses: durable outputs               │
@@ -116,7 +116,7 @@ flowchart TB
                     │                                    │
                     ▼                                    ▼
 ┌───────────────────────────────────┐    ┌───────────────────────────────────┐
-│  live_deploy_aws/kube              │    │  live_deploy_aws/nonkube           │
+│  infra_terraform/live_deploy/aws/kube              │    │  infra_terraform/live_deploy/aws/nonkube           │
 │  EKS + frontend                    │    │  ECS + ALB + frontend              │
 │  Uses: durable + nondurable        │    │  Uses: durable + nondurable        │
 │  PG* from durable                  │    │  PG* from durable                  │
@@ -151,17 +151,17 @@ This section consolidates the **Refactor Plan: Multi-Env, Multi-Region, Multi-Cl
 ### 4.2 Multi-Region
 
 - **Current**: Single region (e.g. `us-east-1`) via `CLOUD_REGION` / `var.aws_region`
-- **Future**: Add `us-west-2/` (or similar) under `live_deploy_aws/`; region-specific stacks
-- **Pattern**: `live_deploy_aws/{region}/scope_shared/durable`, `live_deploy_aws/{region}/kube`, etc., or `live_deploy_aws/scope_shared/durable` with `region` var
+- **Future**: Add `us-west-2/` (or similar) under `infra_terraform/live_deploy/aws/`; region-specific stacks
+- **Pattern**: `infra_terraform/live_deploy/aws/{region}/scope_shared/durable`, `infra_terraform/live_deploy/aws/{region}/kube`, etc., or `infra_terraform/live_deploy/aws/scope_shared/durable` with `region` var
 - **State**: Region in state key or path to avoid collisions
 - **Tasks**: Add region to deploy CLI; document cross-region patterns
 - **Follow-on**: [FINAL_REFACTOR_PLAN_2.md](./FINAL_REFACTOR_PLAN_2.md) – `--region` support, state migration
 
 ### 4.3 Multi-Cloud
 
-- **Current**: AWS only; `live_deploy_gcp/` exists but is minimal
+- **Current**: AWS only; `infra_terraform/live_deploy/gcp/` exists but is minimal
 - **Future**: GCP, Oracle, Azure when needed; structure supports `live-deploy-{cloud}/`
-- **Pattern**: Shared `core_app`, shared `infra_modules` where possible; cloud-specific primitives in `infra_modules/{aws,gcp,...}/`
+- **Pattern**: Shared `core_app`, shared `infra_terraform/modules` where possible; cloud-specific primitives in `infra_terraform/modules/{aws,gcp,...}/`
 - **Principle**: Don't abstract multi-cloud until patterns are clear from real deployments
 
 ### 4.4 Kube Parity
@@ -247,8 +247,8 @@ Used only for **Terraform state locking** (`TF_LOCK_TABLE` in `tools/aws/backend
 
 ### Aurora (PostgreSQL + pgvector)
 
-- **Module**: `infra_modules/aws/primitives/aurora/`
-- **Stack**: `live_deploy_aws/scope_shared/durable` (long-lived, depends on VPC)
+- **Module**: `infra_terraform/modules/aws/primitives/aurora/`
+- **Stack**: `infra_terraform/live_deploy/aws/scope_shared/durable` (long-lived, depends on VPC)
 - Aurora is durable; not in nondurable.
 
 ### CloudFront
@@ -259,7 +259,7 @@ Legacy has **two frontend stacks** (nonkube ALB vs kube NLB). Options:
 - **Option B**: One stack, two distributions
 - **Option C**: One distribution, two origins (more complex)
 
-**Recommendation**: Option A or B. Primitives in `infra_modules/aws/primitives/`.
+**Recommendation**: Option A or B. Primitives in `infra_terraform/modules/aws/primitives/`.
 
 ---
 
@@ -267,7 +267,7 @@ Legacy has **two frontend stacks** (nonkube ALB vs kube NLB). Options:
 
 ### 7.1 Aurora Module
 
-**Path**: `infra_modules/aws/primitives/aurora/`
+**Path**: `infra_terraform/modules/aws/primitives/aurora/`
 
 **Source**: Port from legacy `module_infra_basic/aws/terra/modules/aurora/`
 
@@ -277,7 +277,7 @@ Legacy has **two frontend stacks** (nonkube ALB vs kube NLB). Options:
 
 ### 7.2 Durable Stack: Add Aurora
 
-**Path**: `live_deploy_aws/scope_shared/durable/main.tf`
+**Path**: `infra_terraform/live_deploy/aws/scope_shared/durable/main.tf`
 
 - Add `module "aurora"` with VPC wiring
 - Wire `db_password` from Secrets Manager (or RDS-managed secret)
@@ -307,17 +307,17 @@ Legacy has **two frontend stacks** (nonkube ALB vs kube NLB). Options:
 
 | # | Task | Path / Scope |
 |---|------|--------------|
-| 1 | Create Aurora module | `infra_modules/aws/primitives/aurora/` |
-| 2 | Add Aurora to durable stack | `live_deploy_aws/scope_shared/durable/main.tf` |
+| 1 | Create Aurora module | `infra_terraform/modules/aws/primitives/aurora/` |
+| 2 | Add Aurora to durable stack | `infra_terraform/live_deploy/aws/scope_shared/durable/main.tf` |
 | 3 | Add durable outputs | aurora_endpoint, aurora_port, aurora_database_name, aurora_security_group_id, db_cluster_arn, db_secret_arn |
 | 4 | Copy schema file | `core_app/sql/schema_pgvector.sql` |
 | 5 | Create setup_database.py | `tools/aws/setup_database.py` |
 | 6 | Add parse_sql_statements.py (if missing) | `core_app/sql/` or `tools/` |
 | 7 | Insert DB setup phase in deploy.py | After phase 5, before build |
 | 8 | Update deploy_phases in phases.py | Add "Database setup" |
-| 9 | ECS: Add Aurora outputs + env vars | nonkube/main.tf, infra_modules/aws/ecs |
-| 10 | ECS: Add aurora_from_ecs SG rule | infra_modules/aws/ecs/main.tf |
-| 11 | Kube: Add shared_nondurable remote state | live_deploy_aws/kube/main.tf |
+| 9 | ECS: Add Aurora outputs + env vars | nonkube/main.tf, infra_terraform/modules/aws/ecs |
+| 10 | ECS: Add aurora_from_ecs SG rule | infra_terraform/modules/aws/ecs/main.tf |
+| 11 | Kube: Add shared_nondurable remote state | infra_terraform/live_deploy/aws/kube/main.tf |
 | 12 | Kube: Pass ecr_app_url, ecr_spark_url, delta_bucket to kube_apply | kube/main.tf, kube_apply.py |
 | 13 | Kube: Pass PG* to api-deployment | kube_apply.py, api-deployment.yaml |
 | 14 | Kube: Add aurora_from_eks SG rule | EKS module or kube stack |

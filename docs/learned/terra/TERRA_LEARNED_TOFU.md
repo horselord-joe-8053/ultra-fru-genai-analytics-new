@@ -1,13 +1,13 @@
-# OpenTofu / Terraform: live_deploy_aws/scope_shared/durable
+# OpenTofu / Terraform: infra_terraform/live_deploy/aws/scope_shared/durable
 
 Comprehensive reference for the durable shared stack and its layout. Uses OpenTofu (alias `tofu`) or Terraform.
 
 ---
 
-## 1. live_deploy_aws layout
+## 1. infra_terraform/live_deploy/aws layout
 
 ```text
-live_deploy_aws/
+infra_terraform/live_deploy/aws/
 ├── scope_shared/
 │   ├── durable/          ← this stack (VPC, Secrets)
 │   │   ├── main.tf
@@ -118,8 +118,8 @@ flowchart TB
 
 ```text
 durable/main.tf
-├── infra_modules/cloud_shared/primitives/tags
-└── infra_modules/aws/primitives/vpc
+├── infra_terraform/modules/cloud_shared/primitives/tags
+└── infra_terraform/modules/aws/primitives/vpc
 ```
 
 VPC module creates: VPC, IGW, public/private subnets, route tables, NAT gateway. Uses `allow_destroy` (from `allow_destroy_durable`) to choose protected vs unprotected resources; durable passes `false` by default.
@@ -137,4 +137,4 @@ VPC module creates: VPC, IGW, public/private subnets, route tables, NAT gateway.
 
 ---
 
-*Related: [TERRA_LEARNED.md](TERRA_LEARNED.md), [VPC_LEARNED.md](../VPC_LEARNED.md), [infra_modules/README.md](../../../infra_modules/README.md).*
+*Related: [TERRA_LEARNED.md](TERRA_LEARNED.md), [VPC_LEARNED.md](../VPC_LEARNED.md), [infra_terraform/modules/README.md](../../../infra_terraform/modules/README.md).*

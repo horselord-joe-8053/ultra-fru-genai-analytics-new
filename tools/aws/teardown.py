@@ -7,13 +7,13 @@ Usage:
   python tools/aws/teardown.py --scope all --env dev --non-interactive
 
 Rules:
-- Never destroys live_deploy_aws/scope_shared/durable.
+- Never destroys infra_terraform/live_deploy/aws/scope_shared/durable.
 - `all` destroys: nonkube -> kube -> shared-nondurable.
 - Before destroying kube: removes CronJob + Job (scheduler + bootstrap).
 - Before destroying nonkube: removes EventBridge rule, scales ECS service to 0, drains tasks; then destroy.
 - Retry logic: configurable via config/retry_config.json (retriable/non-retriable patterns).
 
-EventBridge rule: Defined in Terraform (infra_modules/aws/ecs). We remove via CLI in pre_destroy
+EventBridge rule: Defined in Terraform (infra_terraform/modules/aws/ecs). We remove via CLI in pre_destroy
 because: (1) timing - must stop rule from firing before draining ECS; (2) orphan safety - if state
 is empty, destroy is no-op and rule stays; CLI delete handles both in-state and orphaned rules.
 
@@ -30,7 +30,7 @@ from tools.cloud_shared.logging import logger
 from tools.cloud_shared.env import load_dotenv
 from tools.aws.scope_shared.core.backend import backend_config, resolve_region
 from tools.cloud_shared.stats import TeardownStats, scope_for
-from tools.cloud_shared.phases import PhaseTracker, teardown_phases
+from tools.aws.scope_shared.core.phases import PhaseTracker, teardown_phases
 from tools.aws.scope_shared.core.terra_var_handling import get_base_vars
 from tools.aws.scope_shared.deploy.bootstrap_helpers import k8s_remove_bootstrap_and_scheduler
 from tools.aws.kube.teardown_orphan_cleanup import remove_orphaned_eks_security_groups
@@ -43,9 +43,9 @@ load_dotenv()
 TEARDOWN_HEARTBEAT_INTERVAL_SEC = int(os.getenv("TEARDOWN_HEARTBEAT_INTERVAL_SEC", "10"))
 
 ORDER = {
-    "kube": ["live_deploy_aws/kube"],
-    "nonkube": ["live_deploy_aws/nonkube"],
-    "all": ["live_deploy_aws/nonkube", "live_deploy_aws/kube", "live_deploy_aws/scope_shared/nondurable"],
+    "kube": ["infra_terraform/live_deploy/aws/kube"],
+    "nonkube": ["infra_terraform/live_deploy/aws/nonkube"],
+    "all": ["infra_terraform/live_deploy/aws/nonkube", "infra_terraform/live_deploy/aws/kube", "infra_terraform/live_deploy/aws/scope_shared/nondurable"],
 }
 
 
@@ -282,10 +282,10 @@ def main():
         phase_idx += 1
         tracker.start_phase(phase_idx)
         stats.set_scope(scope_for(s))
-        if s == "live_deploy_aws/nonkube":
+        if s == "infra_terraform/live_deploy/aws/nonkube":
             logger.step(f"[{phase_idx}/{len(phases)}] Pre-destroy (drain ECS), then destroy...")
             pre_destroy_nonkube(args.env, region, stats=stats)
-        elif s == "live_deploy_aws/kube":
+        elif s == "infra_terraform/live_deploy/aws/kube":
             logger.step(f"[{phase_idx}/{len(phases)}] Pre-destroy (broad kube cleanup), then destroy...")
             pre_destroy_kube(args.env, region, stats=stats)
         logger.step(f"[{phase_idx}/{len(phases)}] Destroying {s}...")

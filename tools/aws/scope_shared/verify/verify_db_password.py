@@ -25,7 +25,7 @@ load_dotenv()
 
 
 def get_durable_outputs(env: str, region: str) -> dict:
-    stack_dir = "live_deploy_aws/scope_shared/durable"
+    stack_dir = "infra_terraform/live_deploy/aws/scope_shared/durable"
     cfg = backend_config(stack_dir, env, region)
     init_args = ["init", "-lock=false", "-upgrade", "-reconfigure"]
     for c in cfg:

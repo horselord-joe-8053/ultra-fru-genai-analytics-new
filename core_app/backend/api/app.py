@@ -471,20 +471,26 @@ def health():
 
 @app.route("/version", methods=["GET"])
 def version():
-    """Returns the backend container image version."""
-    container_image = os.environ.get("CONTAINER_IMAGE", "")
-    
-    # Return error if CONTAINER_IMAGE is not set or is empty/unknown
-    if not container_image or container_image == "unknown":
-        return jsonify({"error": "No Version Info Found"}), 500
-    
-    # Extract tag from full URI if needed (format: registry/repo:tag)
-    if ":" in container_image:
-        image_tag = container_image.split(":")[-1]
+    """Returns the backend container image version(s) as [tag1, tag2, ...]."""
+    tags_raw = os.environ.get("CONTAINER_IMAGE_TAGS", "").strip()
+    if tags_raw:
+        # Comma-separated list from deploy (e.g. "fru_dev_20260218_abc123,latest")
+        tags = [t.strip() for t in tags_raw.split(",") if t.strip()]
     else:
-        image_tag = container_image
-    
-    return jsonify({"version": image_tag})
+        # Fallback: derive from CONTAINER_IMAGE
+        container_image = os.environ.get("CONTAINER_IMAGE", "")
+        if not container_image or container_image == "unknown":
+            return jsonify({"error": "No Version Info Found"}), 500
+        if ":" in container_image:
+            image_tag = container_image.split(":")[-1]
+        else:
+            image_tag = container_image
+        tags = [image_tag] if image_tag else []
+
+    if not tags:
+        return jsonify({"error": "No Version Info Found"}), 500
+
+    return jsonify({"version": tags})
 
 
 @app.route("/query-v2", methods=["POST"])

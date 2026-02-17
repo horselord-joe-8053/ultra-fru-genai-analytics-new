@@ -56,21 +56,25 @@ export async function getBackendVersion(forceRefresh: boolean = false): Promise<
     }
 
     const data = await response.json();
-    
+
     // Check for error in response
     if (data.error) {
       return data.error;
     }
-    
+
     const version = data.version;
-    if (!version || version === "unknown") {
+    if (!version) {
       return "Error: No Version Info Found";
     }
+
+    // version is [tag1, tag2, ...]; format as "[tag1, tag2, ...]" for display
+    const tags = Array.isArray(version) ? version : [version];
+    const display = tags.length > 0 ? `[${tags.join(", ")}]` : "Error: No Version Info Found";
 
     // Cache the result
     try {
       const cache: VersionCache = {
-        version,
+        version: display,
         timestamp: Date.now(),
       };
       localStorage.setItem(VERSION_CACHE_KEY, JSON.stringify(cache));
@@ -78,7 +82,7 @@ export async function getBackendVersion(forceRefresh: boolean = false): Promise<
       // Ignore cache errors
     }
 
-    return version;
+    return display;
   } catch (error) {
     console.warn("Failed to fetch backend version:", error);
     return "Error: No Version Info Found";

@@ -24,10 +24,10 @@ from tools.cloud_shared.logging import logger
 load_dotenv()
 
 STACK_DIRS = [
-    "live_deploy_aws/scope_shared/durable",
-    "live_deploy_aws/scope_shared/nondurable",
-    "live_deploy_aws/kube",
-    "live_deploy_aws/nonkube",
+    "infra_terraform/live_deploy/aws/scope_shared/durable",
+    "infra_terraform/live_deploy/aws/scope_shared/nondurable",
+    "infra_terraform/live_deploy/aws/kube",
+    "infra_terraform/live_deploy/aws/nonkube",
 ]
 
 

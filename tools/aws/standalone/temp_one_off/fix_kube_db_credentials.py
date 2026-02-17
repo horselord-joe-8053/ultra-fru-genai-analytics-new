@@ -48,16 +48,16 @@ def main():
 
     logger.step("2. Refreshing K8s db-credentials (bootstrap --force)...")
     from tools.aws.scope_shared.deploy.deploy_common import init_stack, tofu_output_json
-    init_stack("live_deploy_aws/scope_shared/durable", args.env, region)
-    init_stack("live_deploy_aws/scope_shared/nondurable", args.env, region)
+    init_stack("infra_terraform/live_deploy/aws/scope_shared/durable", args.env, region)
+    init_stack("infra_terraform/live_deploy/aws/scope_shared/nondurable", args.env, region)
     from tools.aws.scope_shared.core.terra_var_handling import get_base_vars
     get_base_vars(args.env, region)
-    outputs = tofu_output_json("live_deploy_aws/scope_shared/durable", args.env, region)
+    outputs = tofu_output_json("infra_terraform/live_deploy/aws/scope_shared/durable", args.env, region)
     aurora_endpoint = outputs.get("aurora_endpoint", {}).get("value", "")
     db_secret_arn = outputs.get("db_password_plain_secret_arn", {}).get("value", "")
     openai_secret_arn = outputs.get("openai_api_key_secret_arn", {}).get("value", "")
 
-    snd_out = tofu_output_json("live_deploy_aws/scope_shared/nondurable", args.env, region)
+    snd_out = tofu_output_json("infra_terraform/live_deploy/aws/scope_shared/nondurable", args.env, region)
     delta_bucket = snd_out.get("delta_bucket", {}).get("value", "")
     app_repo = snd_out.get("ecr_app_url", {}).get("value", "")
     spark_repo = snd_out.get("ecr_spark_url", {}).get("value", "")

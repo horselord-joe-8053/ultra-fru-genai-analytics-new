@@ -7,10 +7,10 @@ export default defineConfig({
     // Inject build timestamp at build time
     // This is evaluated when Vite processes the config, ensuring BUILD_TIME reflects the actual build time
     BUILD_TIME: JSON.stringify(Date.now()),
-    // Inject build context (provider, container type, environment) from environment variables
+    // Inject build context (provider, scope, environment) from environment variables
     // These are set by deployment scripts before npm run build
     BUILD_PROVIDER: JSON.stringify(process.env.VITE_PROVIDER || "local"),
-    BUILD_CONTAINER_TYPE: JSON.stringify(process.env.VITE_CONTAINER_TYPE || "none"),
+    BUILD_SCOPE: JSON.stringify(process.env.VITE_SCOPE || "none"),
     BUILD_ENVIRONMENT: JSON.stringify(process.env.VITE_ENVIRONMENT || "dev"),
   },
   server: {
