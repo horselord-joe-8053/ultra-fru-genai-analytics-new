@@ -7,7 +7,7 @@ from tools._env import require
 from tools.common.logging import logger
 from tools.common.stats import DeployStats, scope_for
 from tools.aws.common.deploy.deploy_common import (
-    apply_stack,
+    apply_stack_nonkube_with_ecs_import_retry,
     tofu_output_json,
     upload_csv_to_delta_bucket,
     clear_delta_table,
@@ -48,7 +48,7 @@ def run_deploy_nonkube(
     app_repo_url = snd["ecr_app_url"]["value"]
 
     def _apply_ecs():
-        apply_stack(
+        apply_stack_nonkube_with_ecs_import_retry(
             "live-deploy-aws/nonkube",
             env,
             [

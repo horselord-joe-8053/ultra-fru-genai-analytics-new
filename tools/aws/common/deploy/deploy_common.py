@@ -7,7 +7,7 @@ import os
 import subprocess
 
 from tools._env import load_dotenv, require
-from tools.aws.common.core.terra_runner import terra, get_terra_env
+from tools.aws.common.core.terra_runner import terra, terra_capture, get_terra_env
 from tools.aws.common.core.backend import backend_config, resolve_region
 from tools.common.logging import logger
 from tools.aws.terra_var_handling import get_base_vars
@@ -15,6 +15,8 @@ from tools.common.retry import run_with_retry
 from tools.aws.common.deploy.bootstrap_helpers import check_ecs_bootstrap_succeeded
 
 load_dotenv()
+
+ECS_NOT_IDEMPOTENT_MSG = "Creation of service was not idempotent"
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
 CSV_PATH = os.path.join(REPO_ROOT, "core-app", "data", "raw", "fridge_sales_with_rating.csv")
@@ -77,6 +79,63 @@ def apply_stack(stack_dir: str, env: str, extra_vars: list[str], region: str | N
     base: list[str] = []
     logger.info(f"[APPLY] Running tofu apply with base vars + extra vars: {extra_vars}")
     terra(["apply", "-auto-approve"] + base + extra_vars, cwd=stack_dir, check=True)
+    logger.success(f"[APPLY OK] {stack_dir}")
+
+
+def apply_stack_nonkube_with_ecs_import_retry(
+    stack_dir: str, env: str, extra_vars: list[str], region: str | None = None
+) -> None:
+    """
+    Apply nonkube stack. On ECS 'Creation of service was not idempotent' error,
+    import the existing service into state and retry apply.
+    """
+    logger.step(f"Applying stack: {stack_dir}")
+    init_stack(stack_dir, env, region)
+    get_base_vars(env, region)
+    prefix = os.getenv("FRU_PREFIX", "fru")
+    cluster_name = f"{prefix}-{env}-ecs"
+    service_name = f"{prefix}-{env}-api-svc"
+    import_id = f"{cluster_name}/{service_name}"
+
+    def _do_apply() -> subprocess.CompletedProcess:
+        cmd = ["apply", "-auto-approve"] + extra_vars
+        return terra_capture(cmd, cwd=stack_dir, region=region)
+
+    result = _do_apply()
+    if result.returncode == 0:
+        logger.success(f"[APPLY OK] {stack_dir}")
+        return
+
+    # Print output so user sees the error
+    if result.stdout:
+        print(result.stdout)
+    if result.stderr:
+        print(result.stderr, file=__import__("sys").stderr)
+
+    if ECS_NOT_IDEMPOTENT_MSG not in (result.stderr or ""):
+        raise subprocess.CalledProcessError(result.returncode, ["tofu", "apply"] + extra_vars)
+
+    logger.warning(f"ECS service already exists; importing {import_id} into state and retrying...")
+    import_result = terra_capture(
+        ["import", "-lock=false", "module.ecs.aws_ecs_service.api", import_id],
+        cwd=stack_dir,
+        region=region,
+    )
+    if import_result.returncode != 0:
+        if import_result.stderr:
+            print(import_result.stderr, file=__import__("sys").stderr)
+        raise subprocess.CalledProcessError(
+            import_result.returncode,
+            ["tofu", "import", "module.ecs.aws_ecs_service.api", import_id],
+        )
+    logger.success("ECS service imported into state")
+    result2 = _do_apply()
+    if result2.returncode != 0:
+        if result2.stdout:
+            print(result2.stdout)
+        if result2.stderr:
+            print(result2.stderr, file=__import__("sys").stderr)
+        raise subprocess.CalledProcessError(result2.returncode, ["tofu", "apply"] + extra_vars)
     logger.success(f"[APPLY OK] {stack_dir}")
 
 
