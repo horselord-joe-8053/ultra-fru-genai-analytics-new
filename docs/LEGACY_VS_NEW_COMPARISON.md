@@ -86,7 +86,7 @@ export FRU_CSV_PATH="${FRU_CSV_PATH:-$CSV_FILE}"
 
 **Legacy** (root_ecs): `AWS_BEDROCK_INFERENCE_PROFILE_ID`, `AWS_BEDROCK_MODEL_ID`, `SPARK_HOME`, `DELTA_LAKE_PACKAGE`.
 
-**New** (nonkube): Now has `AWS_BEDROCK_INFERENCE_PROFILE_ID`, `AWS_BEDROCK_MODEL_ID`, `SPARK_HOME`, `DELTA_LAKE_PACKAGE`, and `DELTA_TABLE_PATH` (s3a://{delta_bucket}/delta/fru_sales). Variables mapped in `_aws_vars.py`.
+**New** (nonkube): Now has `AWS_BEDROCK_INFERENCE_PROFILE_ID`, `AWS_BEDROCK_MODEL_ID`, `SPARK_HOME`, `DELTA_LAKE_PACKAGE`, and `DELTA_TABLE_PATH` (s3a://{delta_bucket}/delta/fru_sales). Variables mapped in `terra_var_handling.py`.
 
 ### 3.2 PG* and Aurora – **OK**
 

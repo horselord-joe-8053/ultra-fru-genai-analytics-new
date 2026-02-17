@@ -11,7 +11,7 @@ print("verify_all_deploy: starting...", flush=True)
 
 from tools.common.logging import logger
 from tools._env import load_dotenv, require, get_int_env
-from tools.aws._aws_vars import get_base_vars
+from tools.aws.terra_var_handling import get_base_vars
 from tools.common.retry import poll_until, update_heartbeat
 from tools.aws.bootstrap_helpers import K8S_NAMESPACE
 from tools.aws.tofu import ensure_shared_tofu_env
@@ -45,7 +45,7 @@ def get_tofu_output(stack_dir, env):
     """Retrieve output from Tofu (assumed already applied)."""
     ensure_shared_tofu_env()
     from tools.aws.deploy import init_stack
-    from tools.aws._backend import resolve_region
+    from tools.aws.backend import resolve_region
     region = resolve_region(None)
     try:
         init_stack(stack_dir, env, region)

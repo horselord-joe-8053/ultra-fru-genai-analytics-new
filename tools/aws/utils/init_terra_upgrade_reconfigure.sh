@@ -58,7 +58,7 @@ fi
 : "${CLOUD_REGION:=us-east-1}"
 PREFIX="${TF_STATE_PREFIX:-${FRU_PREFIX:-fru}}"
 
-# Match _backend.py: stack_id_from_dir (cloud=aws from script location; strip first path component)
+# Match backend.py: stack_id_from_dir (cloud=aws from script location; strip first path component)
 # e.g. live-deploy-aws/shared/durable -> aws-shared-durable
 PARTS="$(echo "$STACK_DIR" | sed 's|/*$||' | tr '/' '\n')"
 REST="$(echo "$PARTS" | tail -n +2 | tr '\n' '-')"

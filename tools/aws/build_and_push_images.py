@@ -15,7 +15,7 @@ Replace the build contexts to match your legacy project.
 import argparse, os, json, subprocess, sys, re, threading, time
 from tools._env import load_dotenv, require, get_int_env
 from tools.aws.tofu import tofu, get_tofu_env
-from tools.aws._backend import backend_config, resolve_region
+from tools.aws.backend import backend_config, resolve_region
 from tools.common.logging import logger
 
 load_dotenv()

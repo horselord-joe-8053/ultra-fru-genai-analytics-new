@@ -14,7 +14,7 @@ This tool:
 """
 import argparse, base64, json, os, subprocess
 from tools._env import load_dotenv, require
-from tools.aws._backend import resolve_region
+from tools.aws.backend import resolve_region
 from tools.aws.bootstrap_helpers import check_k8s_bootstrap_job_succeeded, JOB_BOOTSTRAP, K8S_NAMESPACE
 
 load_dotenv()

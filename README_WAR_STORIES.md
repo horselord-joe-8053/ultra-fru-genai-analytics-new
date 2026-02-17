@@ -2000,7 +2000,7 @@ Resources were defined directly in deploy stacks instead of being encapsulated i
 
 2. **GCP:** Refactored `deploy-gcp` durable, nondurable, and kube to use existing modules (`infra-modules/gcp/primitives/vpc`, `gcs_bucket`) and a new `infra-modules/gcp/gke` module. Replaced inline `resource` blocks with module composition.
 
-3. **Rename:** Renamed `deploy-aws/` → `live-deploy-aws/` and `deploy-gcp/` → `live-deploy-gcp/` to explicitly signal the "live" role. Updated `_backend.py` and `init_terra_upgrade_reconfigure.sh` to map `live-deploy-*` to the same state keys (`aws-*`, `gcp-*`) for backward compatibility.
+3. **Rename:** Renamed `deploy-aws/` → `live-deploy-aws/` and `deploy-gcp/` → `live-deploy-gcp/` to explicitly signal the "live" role. Updated `backend.py` and `init_terra_upgrade_reconfigure.sh` to map `live-deploy-*` to the same state keys (`aws-*`, `gcp-*`) for backward compatibility.
 
 ### 39.5 Takeaway
 
@@ -2469,7 +2469,7 @@ Relevant files:
 | 4. ECS task definition | Container env includes `AWS_BEDROCK_INFERENCE_PROFILE_ID` and `AWS_BEDROCK_MODEL_ID` |
 
 **Key files:**
-- `tools/aws/_aws_vars.py` — MAP: `AWS_BEDROCK_INFERENCE_PROFILE_ID` → `bedrock_inference_profile_id`, `AWS_BEDROCK_MODEL_ID` → `bedrock_model_id`
+- `tools/aws/terra_var_handling.py` — MAP: `AWS_BEDROCK_INFERENCE_PROFILE_ID` → `bedrock_inference_profile_id`, `AWS_BEDROCK_MODEL_ID` → `bedrock_model_id`
 - `live-deploy-aws/nonkube/main.tf` — `AWS_BEDROCK_INFERENCE_PROFILE_ID = var.bedrock_inference_profile_id`, etc.
 - `live-deploy-aws/nonkube/variables.tf` — `bedrock_inference_profile_id` (default `""`), `bedrock_model_id` (default `anthropic.claude-3-5-haiku-20241022-v1:0`)
 

@@ -243,7 +243,7 @@ flowchart LR
 
 ### DynamoDB
 
-Used only for **Terraform state locking** (`TF_LOCK_TABLE` in `tools/aws/_backend.py`). Not for application data.
+Used only for **Terraform state locking** (`TF_LOCK_TABLE` in `tools/aws/backend.py`). Not for application data.
 
 ### Aurora (PostgreSQL + pgvector)
 

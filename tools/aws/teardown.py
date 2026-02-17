@@ -28,10 +28,10 @@ import subprocess
 
 from tools.common.logging import logger
 from tools._env import load_dotenv
-from tools.aws._backend import backend_config, resolve_region
+from tools.aws.backend import backend_config, resolve_region
 from tools.common.stats import TeardownStats, scope_for
 from tools.phases import PhaseTracker, teardown_phases
-from tools.aws._aws_vars import get_base_vars
+from tools.aws.terra_var_handling import get_base_vars
 from tools.aws.bootstrap_helpers import k8s_remove_bootstrap_and_scheduler
 from tools.aws.teardown_orphan_cleanup import remove_orphaned_eks_security_groups
 from tools.common.retry import run_with_retry, run_with_heartbeat

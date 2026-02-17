@@ -33,7 +33,7 @@ import sys
 import time
 
 from tools._env import load_dotenv, require
-from tools.aws._backend import resolve_region
+from tools.aws.backend import resolve_region
 from tools.common.logging import logger
 from tools.phases import PhaseTracker, deploy_phases
 from tools.common.stats import DeployStats, scope_for
