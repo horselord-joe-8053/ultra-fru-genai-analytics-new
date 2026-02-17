@@ -48,7 +48,18 @@ The **new** project uses OpenTofu (Terraform-compatible) without Terragrunt. It 
 
 Renaming `deploy-aws` → `live-deploy-aws` preserved state keys via explicit mapping.
 
-### 0.6 Schema and data are separate from IaC
+### 0.6 S3 state + DynamoDB lock (how they work together)
+
+Terraform/OpenTofu remote state uses two AWS resources:
+
+| Resource | Purpose |
+|----------|---------|
+| **S3 bucket** (e.g. `fru-terraform-state-*`) | Stores the state JSON file per stack. Each state key (e.g. `fru/dev/us-east-1/aws-shared-durable.tfstate`) holds resources, outputs, lineage. |
+| **DynamoDB table** (e.g. `fru-dev-lock`) | Lock table. Before `apply` or `destroy`, Terraform acquires a lock row for that state key; on completion it releases. Prevents concurrent runs from corrupting state. |
+
+**Flow:** `tofu apply` → (1) acquire lock in DynamoDB for state key, (2) download state from S3, (3) plan/apply, (4) upload updated state to S3, (5) release lock. S3 = storage; DynamoDB = locking. Both are durable (never destroyed by teardown).
+
+### 0.7 Schema and data are separate from IaC
 
 Terraform provisions infrastructure. Schema (DDL) and data (ETL) run via **post-provision scripts** (e.g. `setup_database.py`). Industry practice: don't run DDL in Terraform.
 

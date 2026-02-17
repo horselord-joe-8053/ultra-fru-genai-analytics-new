@@ -2495,3 +2495,47 @@ Relevant files:
 ### 45.9 Takeaway
 
 For Claude 3.5 on-demand, use the **inference profile ID** (e.g. `us.anthropic.claude-3-5-haiku-20241022-v1:0`), not the raw model ID. Set `AWS_BEDROCK_INFERENCE_PROFILE_ID` in `.env`. Kube gets it via `kube_apply` (args or `os.getenv` fallback); nonkube gets it via Terraform vars from `get_base_vars()`. Ensure both deploy paths pass these values into the container environment.
+
+---
+
+## 46. Orphan Resources: ECR and VPC Surviving Teardown Because They're Not in State
+
+**creation:** `<260217>`
+**last_updated:** `<260217>`
+
+**keywords:** Terraform state, S3, DynamoDB lock, orphan, ECR, VPC, teardown, empty state, "No changes"
+**difficulty:** 5
+**significance:** 7
+
+### 46.1 Context
+
+After running `teardown --scope all`, some AWS resources remained: an ECR repo `fru-api`, a VPC `fru-dev-vpc`, and legacy Secrets Manager secrets. Teardown reported "No changes. No objects need to be destroyed" for nonkube, kube, and shared-nondurable. The resources were never deleted.
+
+### 46.2 Root Cause
+
+**Terraform only destroys what it manages.** State (in S3) records which resources Terraform created. If state is empty (`resources: []`) for a stack, `tofu destroy` has nothing to destroy—it exits with "No changes." Resources that exist in AWS but are **not** in state are **orphans**: Terraform never created them (or state was lost), so Terraform will never destroy them.
+
+- **fru-api ECR:** Created by a different stack, manual creation, or legacy config. Our nondurable stack would create `fru-dev-api` (from `ECR_REPO_APP`). The `fru-api` repo was never in our Terraform state.
+- **fru-dev-vpc:** A second VPC with different CIDRs (10.0.10/11 vs 10.0.1/2/101/102). The active durable VPC is `fru-dev` (with Aurora). `fru-dev-vpc` had a security group for VPC endpoints but no endpoints—orphaned from an older stack.
+- **Legacy secrets:** Duplicate/legacy naming (`aurora-db-password-plain`, `openai-api-key`, etc.) from Aurora auto-integration or older Terraform. Our stack uses `db_password_plain`, `openai_api_key`.
+
+### 46.3 S3 State + DynamoDB Lock (Quick Reference)
+
+| Resource | Role |
+|----------|------|
+| **S3** | Stores state JSON per stack. Each key = one state file. |
+| **DynamoDB** | Lock table. Acquire before apply/destroy; release after. Prevents concurrent runs from corrupting state. |
+
+Flow: acquire lock → read state from S3 → plan/apply → write state to S3 → release lock. See `docs/learned/terra/TERRA_LEARNED_TOTAL.md` §0.6.
+
+### 46.4 Resolution
+
+- **Orphan cleanup:** Delete orphans manually via AWS CLI when confirmed safe:
+  - Secrets: `aws secretsmanager delete-secret --secret-id <name> --force-delete-without-recovery`
+  - ECR: `aws ecr delete-repository --repository-name <name> --force`
+  - VPC: Detach IGW, delete subnets, delete non-default SGs, delete route tables, then `aws ec2 delete-vpc`.
+- **Verify before delete:** For VPCs, confirm no dependencies (Aurora, NAT, VPC endpoints). `fru-dev-vpc` had no IGW, no VPC endpoints, no Aurora—safe to remove.
+
+### 46.5 Takeaway
+
+Teardown destroys only what's in Terraform state. Orphan resources (created outside our stacks or from lost state) survive. To clean them: identify orphans (AWS console or CLI), verify they're unused, then delete manually. S3 holds state; DynamoDB provides locking. Both are durable and never destroyed by teardown.
