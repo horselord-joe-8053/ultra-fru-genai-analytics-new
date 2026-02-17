@@ -16,7 +16,7 @@ import os
 import subprocess
 from typing import TYPE_CHECKING
 
-from tools._env import load_dotenv
+from tools.common.env import load_dotenv
 
 if TYPE_CHECKING:
     from tools.common.stats import TeardownStats

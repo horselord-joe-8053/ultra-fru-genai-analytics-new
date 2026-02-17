@@ -11,7 +11,7 @@ Usage:
   python tools/aws/common/deploy/bootstrap_state_backend.py
 """
 import os, subprocess
-from tools._env import load_dotenv, require
+from tools.common.env import load_dotenv, require
 
 load_dotenv()
 

@@ -6,7 +6,7 @@ import json
 import os
 import subprocess
 
-from tools._env import load_dotenv, require
+from tools.common.env import load_dotenv, require
 from tools.aws.common.core.terra_runner import terra, terra_capture, get_terra_env
 from tools.aws.common.core.backend import backend_config, resolve_region
 from tools.common.logging import logger

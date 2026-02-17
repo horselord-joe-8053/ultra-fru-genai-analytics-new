@@ -1,6 +1,6 @@
 
 import os
-from tools._env import require
+from tools.common.env import require
 
 # Map .env keys to Terraform variable names
 MAP = {

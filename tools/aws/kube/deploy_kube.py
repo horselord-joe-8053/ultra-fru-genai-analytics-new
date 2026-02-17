@@ -7,7 +7,7 @@ import os
 import subprocess
 import time
 
-from tools._env import require
+from tools.common.env import require
 from tools.common.logging import logger
 from tools.common.stats import DeployStats, scope_for
 from tools.aws.common.deploy.deploy_common import (

@@ -1,6 +1,6 @@
 
 import os
-from tools._env import require
+from tools.common.env import require
 
 def stack_id_from_dir(stack_dir: str, cloud: str = "aws") -> str:
     """Extract logical stack name from path. Cloud comes from caller (tools/aws vs tools/gcp), not from path.

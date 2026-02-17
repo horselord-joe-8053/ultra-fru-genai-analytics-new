@@ -6,7 +6,7 @@ Usage:
   ALLOW_DURABLE_DESTROY=YES python tools/aws/standalone/destroy_durable.py --env dev --force
 """
 import argparse, os
-from tools._env import load_dotenv, require
+from tools.common.env import load_dotenv, require
 from tools.aws.common.core.terra_runner import terra
 from tools.aws.common.core.backend import backend_config
 from tools.aws.terra_var_handling import get_base_vars

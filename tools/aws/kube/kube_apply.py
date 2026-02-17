@@ -13,7 +13,7 @@ This tool:
 - applies Job/CronJob manifests
 """
 import argparse, base64, json, os, subprocess
-from tools._env import load_dotenv, require
+from tools.common.env import load_dotenv, require
 from tools.aws.common.core.backend import resolve_region
 from tools.aws.common.deploy.bootstrap_helpers import check_k8s_bootstrap_job_succeeded, JOB_BOOTSTRAP, K8S_NAMESPACE
 
