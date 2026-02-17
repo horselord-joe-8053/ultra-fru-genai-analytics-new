@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 from tools._env import load_dotenv
 
 if TYPE_CHECKING:
-    from tools.aws.teardown_stats import TeardownStats
+    from tools.common.stats import TeardownStats
 
 load_dotenv()
 
