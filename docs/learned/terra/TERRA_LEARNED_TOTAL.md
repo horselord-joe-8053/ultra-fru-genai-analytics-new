@@ -42,7 +42,7 @@ The **new** project uses OpenTofu (Terraform-compatible) without Terragrunt. It 
 
 ### 0.5 State keys
 
-`tools/aws/_backend.py` maps stack dir → state key so S3 keys stay stable across renames:
+`tools/aws/backend.py` maps stack dir → state key so S3 keys stay stable across renames:
 - `live-deploy-aws/shared/durable` → `{prefix}/{env}/aws-shared-durable.tfstate`
 - `live-deploy-gcp/shared/durable` → `{prefix}/{env}/gcp-shared-durable.tfstate`
 

@@ -33,7 +33,7 @@ MAP = {
 
 def get_base_vars(env: str, region: str | None = None):
     """
-    Set TF_VAR_ environment variables for OpenTofu.
+    Set TF_VAR_ environment variables for OpenTofu/Terraform.
     Returns an empty list to maintain compatibility with existing script signatures.
     If region is provided, uses it for aws_region TF var and sets CLOUD_REGION/AWS_REGION in env for subprocesses.
     """

@@ -18,7 +18,7 @@ import subprocess
 import sys
 
 from tools._env import load_dotenv, require
-from tools.aws._backend import backend_config, stack_id_from_dir
+from tools.aws.backend import backend_config, stack_id_from_dir
 from tools.common.logging import logger
 
 load_dotenv()

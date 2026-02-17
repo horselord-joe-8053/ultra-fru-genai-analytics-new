@@ -2,7 +2,7 @@
 
 ## 1. DynamoDB in the new project
 
-**Same purpose as legacy.** DynamoDB in this repo is used only for **OpenTofu/Terraform state locking**: the optional `TF_LOCK_TABLE` / `TF_STATE_LOCK_TABLE` env var is passed as `dynamodb_table` in the S3 backend config (`tools/aws/_backend.py`). It is not used for application data. Legacy also used DynamoDB for state locking (see commented `dynamodb_table` in legacy `root.hcl` files).
+**Same purpose as legacy.** DynamoDB in this repo is used only for **OpenTofu/Terraform state locking**: the optional `TF_LOCK_TABLE` / `TF_STATE_LOCK_TABLE` env var is passed as `dynamodb_table` in the S3 backend config (`tools/aws/backend.py`). It is not used for application data. Legacy also used DynamoDB for state locking (see commented `dynamodb_table` in legacy `root.hcl` files).
 
 ---
 

@@ -72,7 +72,7 @@ key = {prefix}/{env}/{region}/{stack_id}.tfstate
 
 Example: `fru/dev/us-east-1/aws-shared-durable.tfstate`
 
-**Backend config** (`tools/aws/_backend.py`):
+**Backend config** (`tools/aws/backend.py`):
 
 - Add optional `region` parameter to `backend_config(stack_dir, env, region=None)`
 - When `region` is provided, use key `{prefix}/{env}/{region}/{stack_id}.tfstate`
@@ -86,14 +86,14 @@ Example: `fru/dev/us-east-1/aws-shared-durable.tfstate`
 
 | # | Task | Path / Scope |
 |---|------|--------------|
-| 1 | Add `region` param to `backend_config()` | `tools/aws/_backend.py` |
-| 2 | State key format: `{prefix}/{env}/{region}/{stack_id}.tfstate` when region provided | `tools/aws/_backend.py` |
+| 1 | Add `region` param to `backend_config()` | `tools/aws/backend.py` |
+| 2 | State key format: `{prefix}/{env}/{region}/{stack_id}.tfstate` when region provided | `tools/aws/backend.py` |
 | 3 | Add `--region` to `deploy.py`; pass region to all backend/tofu calls | `tools/aws/deploy.py` |
 | 4 | Add `--region` to `teardown.py`; pass region to all backend/tofu calls | `tools/aws/teardown.py` |
 | 5 | Add `--region` to `ensure_secrets.py`, `build_and_push_images.py`, `kube_apply.py`, `doctor.py` (or accept from env) | Various |
 | 6 | Create `migrate_state_to_region_key.py` | `tools/aws/temp-one-off/migrate_state_to_region_key.py` |
 | 7 | Set `CLOUD_REGION`/`AWS_REGION` in tofu env when running Terraform (so provider uses correct region) | `get_tofu_env()` or callers |
-| 8 | Update `get_base_vars()` / `_aws_vars` to use region for `aws_region` TF var | `tools/aws/_aws_vars.py` |
+| 8 | Update `get_base_vars()` / `terra_var_handling` to use region for `aws_region` TF var | `tools/aws/terra_var_handling.py` |
 | 9 | Document `AWS_REGION` in `.env.example` | `.env.example` or `docs/` |
 
 ### migrate_state_to_region_key.py
@@ -165,6 +165,6 @@ Stacks that use `terraform_remote_state` (e.g. kube, nonkube reading shared_dura
 
 - [FINAL_REFACTOR_PLAN.md](./FINAL_REFACTOR_PLAN.md) – Prerequisite; Phase 5 (Aurora + DB wiring)
 - [FINAL_REFACTOR_PLAN.md § 4.2 Multi-Region](./FINAL_REFACTOR_PLAN.md#42-multi-region) – Design context
-- `tools/aws/_backend.py` – Backend config
+- `tools/aws/backend.py` – Backend config
 - `tools/aws/deploy.py` – Deploy orchestrator
 - `tools/aws/teardown.py` – Teardown orchestrator

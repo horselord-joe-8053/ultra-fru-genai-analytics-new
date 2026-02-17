@@ -8,8 +8,8 @@ Usage:
 import argparse, os
 from tools._env import load_dotenv, require
 from tools.aws.tofu import tofu
-from tools.aws._backend import backend_config
-from tools.aws._aws_vars import get_base_vars
+from tools.aws.backend import backend_config
+from tools.aws.terra_var_handling import get_base_vars
 
 load_dotenv()
 

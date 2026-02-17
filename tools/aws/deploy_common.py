@@ -8,9 +8,9 @@ import subprocess
 
 from tools._env import load_dotenv, require
 from tools.aws.tofu import tofu, get_tofu_env
-from tools.aws._backend import backend_config, resolve_region
+from tools.aws.backend import backend_config, resolve_region
 from tools.common.logging import logger
-from tools.aws._aws_vars import get_base_vars
+from tools.aws.terra_var_handling import get_base_vars
 from tools.common.retry import run_with_retry
 from tools.aws.bootstrap_helpers import check_ecs_bootstrap_succeeded
 

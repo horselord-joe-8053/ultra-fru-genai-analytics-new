@@ -18,7 +18,7 @@ import os
 import subprocess
 
 from tools._env import load_dotenv
-from tools.aws._backend import resolve_region
+from tools.aws.backend import resolve_region
 from tools.aws.bootstrap_helpers import k8s_rollout_restart_api, wait_for_fru_api_ready
 from tools.common.logging import logger
 
@@ -50,7 +50,7 @@ def main():
     from tools.aws.deploy import init_stack, tofu_output_json
     init_stack("live-deploy-aws/shared/durable", args.env, region)
     init_stack("live-deploy-aws/shared/nondurable", args.env, region)
-    from tools.aws._aws_vars import get_base_vars
+    from tools.aws.terra_var_handling import get_base_vars
     get_base_vars(args.env, region)
     outputs = tofu_output_json("live-deploy-aws/shared/durable", args.env, region)
     aurora_endpoint = outputs.get("aurora_endpoint", {}).get("value", "")
