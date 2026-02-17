@@ -43,7 +43,7 @@ python tools/aws/teardown.py --scope all --env dev --force
 
 ## 5. Durable Destroy (Explicit, Dangerous)
 ```bash
-ALLOW_DURABLE_DESTROY=YES python tools/aws/destroy_durable.py --env dev --force
+ALLOW_DURABLE_DESTROY=YES python tools/aws/standalone/destroy_durable.py --env dev --force
 ```
 
 ## 6. Directory Layout

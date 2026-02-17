@@ -3,7 +3,7 @@
 Configure kubectl for EKS.
 
 Usage:
-  python tools/aws/eks_kubeconfig.py --env dev
+  python tools/aws/kube/eks_kubeconfig.py --env dev
 """
 import argparse, os, subprocess
 from tools._env import load_dotenv, require

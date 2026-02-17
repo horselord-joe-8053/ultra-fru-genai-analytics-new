@@ -4,8 +4,8 @@ Database setup: ensure pgvector, init schema, load data.
 Python equivalent of legacy module_infra_db/aws/setup-database.sh.
 
 Usage:
-  python tools/aws/setup_database.py --env dev
-  python tools/aws/setup_database.py --env dev --force-refresh-data
+  python tools/aws/common/deploy/setup_database.py --env dev
+  python tools/aws/common/deploy/setup_database.py --env dev --force-refresh-data
 
 Requires: PGPASSWORD in .env; durable stack applied.
 """
@@ -18,14 +18,14 @@ import json
 import subprocess
 
 from tools._env import load_dotenv, require
-from tools.aws.backend import backend_config, resolve_region
-from tools.aws.tofu import get_tofu_env
+from tools.aws.common.core.backend import backend_config, resolve_region
+from tools.aws.common.core.terra_runner import get_terra_env
 from tools.common.retry import run_with_retry
 from tools.common.logging import logger
 
 load_dotenv()
 
-REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
 SCHEMA_FILE = os.path.join(REPO_ROOT, "core-app", "sql", "schema_pgvector.sql")
 PARSE_SQL = os.path.join(REPO_ROOT, "tools", "common", "sql", "parse_sql_statements.py")
 ETL_SCRIPT = os.path.join(REPO_ROOT, "core-app", "backend", "etl", "load_openai_embeddings_to_pgvector_rds_api.py")
@@ -39,8 +39,8 @@ def get_durable_outputs(env: str, region: str | None = None) -> dict:
     for c in cfg:
         args += ["-backend-config", c]
     exe = os.getenv("FRU_TF_BIN", "tofu")
-    run_with_retry([exe] + args, cwd=stack_dir, env=get_tofu_env(region), description="tofu init for durable")
-    out_raw = subprocess.check_output([exe, "output", "-json"], cwd=stack_dir, text=True, env=get_tofu_env(region))
+    run_with_retry([exe] + args, cwd=stack_dir, env=get_terra_env(region), description="tofu init for durable")
+    out_raw = subprocess.check_output([exe, "output", "-json"], cwd=stack_dir, text=True, env=get_terra_env(region))
     out = json.loads(out_raw)
     cluster_arn = out.get("aurora_cluster_arn", {}).get("value")
     secret_arn = out.get("db_password_secret_arn", {}).get("value") or out.get("db_secret_arn", {}).get("value")

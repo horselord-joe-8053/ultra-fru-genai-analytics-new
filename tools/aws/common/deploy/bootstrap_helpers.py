@@ -71,7 +71,7 @@ def check_k8s_bootstrap_job_succeeded(env: str) -> bool:
     Check if Job fru-analytics-bootstrap-kube exists and has status.succeeded >= 1.
     Returns True if already succeeded (skip re-run).
     """
-    subprocess.run(["python", "tools/aws/eks_kubeconfig.py", "--env", env], check=False)
+    subprocess.run(["python", "tools/aws/kube/eks_kubeconfig.py", "--env", env], check=False)
     try:
         out = subprocess.check_output([
             "kubectl", "get", "job", JOB_BOOTSTRAP, "-n", K8S_NAMESPACE,
@@ -98,7 +98,7 @@ def wait_for_fru_api_ready(
     import time
     from tools.common.logging import logger
 
-    subprocess.run(["python", "tools/aws/eks_kubeconfig.py", "--env", env], check=False)
+    subprocess.run(["python", "tools/aws/kube/eks_kubeconfig.py", "--env", env], check=False)
     env_vars = {**os.environ}
     if region:
         env_vars["CLOUD_REGION"] = region
@@ -224,7 +224,7 @@ def k8s_rollout_restart_api(env: str, region: str | None = None) -> None:
     """
     from tools.common.logging import logger
 
-    subprocess.run(["python", "tools/aws/eks_kubeconfig.py", "--env", env], check=False)
+    subprocess.run(["python", "tools/aws/kube/eks_kubeconfig.py", "--env", env], check=False)
     env_vars = {**os.environ}
     if region:
         env_vars["CLOUD_REGION"] = region
@@ -269,7 +269,7 @@ def k8s_remove_bootstrap_and_scheduler(
 
     # Try to configure kubectl; if cluster is gone, warn and skip kubectl steps
     result = subprocess.run(
-        ["python", "tools/aws/eks_kubeconfig.py", "--env", env],
+        ["python", "tools/aws/kube/eks_kubeconfig.py", "--env", env],
         capture_output=True, text=True, check=False,
     )
     if result.returncode != 0:

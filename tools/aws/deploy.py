@@ -33,14 +33,14 @@ import sys
 import time
 
 from tools._env import load_dotenv, require
-from tools.aws.backend import resolve_region
+from tools.aws.common.core.backend import resolve_region
 from tools.common.logging import logger
 from tools.phases import PhaseTracker, deploy_phases
 from tools.common.stats import DeployStats, scope_for
-from tools.aws.deploy_common import tofu_output_json
-from tools.aws.deploy_kube import run_deploy_kube
-from tools.aws.deploy_nonkube import run_deploy_nonkube
-from tools.aws.bootstrap_helpers import K8S_NAMESPACE
+from tools.aws.common.deploy.deploy_common import tofu_output_json
+from tools.aws.kube.deploy_kube import run_deploy_kube
+from tools.aws.nonkube.deploy_nonkube import run_deploy_nonkube
+from tools.aws.common.deploy.bootstrap_helpers import K8S_NAMESPACE
 
 load_dotenv()
 
@@ -142,7 +142,7 @@ def main():
             logger.step(f"[1/{len(phases)}] Running doctor checks...")
             with stats.timed("Doctor", "doctor checks"):
                 subprocess.run(
-                    ["python", "tools/aws/doctor.py", "--env", env, "--region", region, "--scope", scope],
+                    ["python", "tools/aws/standalone/doctor.py", "--env", env, "--region", region, "--scope", scope],
                     check=True,
                     env={**os.environ, "CLOUD_REGION": region, "AWS_REGION": region},
                 )
@@ -155,14 +155,14 @@ def main():
         tracker.start_phase(2)
         logger.step(f"[2/{len(phases)}] Bootstrapping state backend...")
         with stats.timed("Backend", "bootstrap_state_backend"):
-            subprocess.run(["python", "tools/aws/bootstrap_state_backend.py"], check=True)
+            subprocess.run(["python", "tools/aws/common/deploy/bootstrap_state_backend.py"], check=True)
         logger.success("Backend bootstrapped")
         tracker.end_phase(2)
 
         # Phase 3: Shared durable
         tracker.start_phase(3)
         logger.step(f"[3/{len(phases)}] Applying shared durable stack (VPC + Aurora + Secrets)...")
-        from tools.aws.deploy_common import apply_stack
+        from tools.aws.common.deploy.deploy_common import apply_stack
 
         aurora_pw = os.getenv("PGPASSWORD") or ""
         durable_vars = [
@@ -193,7 +193,7 @@ def main():
         logger.step(f"[5/{len(phases)}] Ensuring secrets in Secrets Manager...")
         with stats.timed("Secrets", "ensure_secrets"):
             subprocess.run(
-                ["python", "tools/aws/ensure_secrets.py", "--env", env, "--region", region],
+                ["python", "tools/aws/common/deploy/ensure_secrets.py", "--env", env, "--region", region],
                 check=True,
                 env={**os.environ, "CLOUD_REGION": region, "AWS_REGION": region},
             )
@@ -206,7 +206,7 @@ def main():
         try:
             with stats.timed("Database", "setup_database"):
                 subprocess.run(
-                    ["python", "tools/aws/setup_database.py", "--env", env, "--region", region],
+                    ["python", "tools/aws/common/deploy/setup_database.py", "--env", env, "--region", region],
                     check=True,
                     env={**os.environ, "CLOUD_REGION": region, "AWS_REGION": region},
                 )
@@ -220,7 +220,7 @@ def main():
         logger.step(f"[7/{len(phases)}] Building and pushing images...")
         build_env = {**os.environ, "CLOUD_REGION": region, "AWS_REGION": region}
         build_env["PYTHONUNBUFFERED"] = "1"
-        build_cmd = ["python", "tools/aws/build_and_push_images.py", "--env", env, "--region", region]
+        build_cmd = ["python", "tools/aws/common/deploy/build_and_push_images.py", "--env", env, "--region", region]
         if args.force_spark_rebuild:
             build_cmd.append("--no-cache")
         with stats.timed("Build & push", "build_and_push_images"):

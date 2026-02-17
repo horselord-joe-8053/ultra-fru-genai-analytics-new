@@ -18,8 +18,8 @@ import os
 import subprocess
 
 from tools._env import load_dotenv
-from tools.aws.backend import resolve_region
-from tools.aws.bootstrap_helpers import k8s_rollout_restart_api, wait_for_fru_api_ready
+from tools.aws.common.core.backend import resolve_region
+from tools.aws.common.deploy.bootstrap_helpers import k8s_rollout_restart_api, wait_for_fru_api_ready
 from tools.common.logging import logger
 
 load_dotenv()
@@ -40,14 +40,14 @@ def main():
 
     logger.step("1. Ensuring secrets in Secrets Manager...")
     subprocess.run(
-        ["python", "tools/aws/ensure_secrets.py", "--env", args.env, "--region", region],
+        ["python", "tools/aws/common/deploy/ensure_secrets.py", "--env", args.env, "--region", region],
         check=True,
         env=env_vars,
     )
     logger.success("Secrets ensured")
 
     logger.step("2. Refreshing K8s db-credentials (bootstrap --force)...")
-    from tools.aws.deploy import init_stack, tofu_output_json
+    from tools.aws.common.deploy.deploy_common import init_stack, tofu_output_json
     init_stack("live-deploy-aws/shared/durable", args.env, region)
     init_stack("live-deploy-aws/shared/nondurable", args.env, region)
     from tools.aws.terra_var_handling import get_base_vars
@@ -66,7 +66,7 @@ def main():
     delta_table_path = f"s3a://{delta_bucket}/delta/fru_sales"
 
     kube_args = [
-        "python", "tools/aws/kube_apply.py", "--env", args.env, "--region", region, "--phase", "bootstrap",
+        "python", "tools/aws/kube/kube_apply.py", "--env", args.env, "--region", region, "--phase", "bootstrap",
         "--spark-image", spark_image, "--app-image", app_image,
         "--delta-bucket", delta_bucket,
         "--pg-host", aurora_endpoint or "localhost",

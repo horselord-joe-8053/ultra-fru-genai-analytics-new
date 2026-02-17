@@ -10,17 +10,17 @@ import time
 from tools._env import require
 from tools.common.logging import logger
 from tools.common.stats import DeployStats, scope_for
-from tools.aws.deploy_common import (
+from tools.aws.common.deploy.deploy_common import (
     apply_stack,
     tofu_output_json,
     upload_csv_to_delta_bucket,
 )
-from tools.aws.deploy_frontend import (
+from tools.aws.common.deploy.deploy_frontend import (
     deploy_frontend_to_s3,
     invalidate_cloudfront,
     wait_for_invalidation,
 )
-from tools.aws.bootstrap_helpers import (
+from tools.aws.common.deploy.bootstrap_helpers import (
     K8S_NAMESPACE,
     wait_for_dns_resolvable,
     wait_for_fru_api_ready,
@@ -77,7 +77,7 @@ def run_deploy_kube(
     delta_table_path = f"s3a://{delta_bucket}/delta/fru_sales"
 
     kube_apply_args = [
-        "python", "tools/aws/kube_apply.py", "--env", env, "--region", region, "--phase", "bootstrap",
+        "python", "tools/aws/kube/kube_apply.py", "--env", env, "--region", region, "--phase", "bootstrap",
         "--spark-image", spark_image_full, "--app-image", app_image_full,
         "--delta-bucket", delta_bucket,
         "--pg-host", aurora_endpoint or "localhost",
@@ -103,7 +103,7 @@ def run_deploy_kube(
     def _kube_bootstrap():
         subprocess.run(kube_apply_args, check=True)
         subprocess.run([
-            "python", "tools/aws/kube_apply.py", "--env", env, "--region", region, "--phase", "schedule",
+            "python", "tools/aws/kube/kube_apply.py", "--env", env, "--region", region, "--phase", "schedule",
             "--spark-image", spark_image_full, "--delta-bucket", delta_bucket,
             "--pg-host", aurora_endpoint or "localhost",
             "--pg-port", str(durable.get("aurora_port", {}).get("value", 5432)),

@@ -3,7 +3,7 @@
 Ensure Secrets Manager secret values are present (without storing them in Terraform state).
 
 Usage:
-  python tools/aws/ensure_secrets.py --env dev
+  python tools/aws/common/deploy/ensure_secrets.py --env dev
 
 Reads from `.env`:
 - OPENAI_API_KEY
@@ -11,8 +11,8 @@ Reads from `.env`:
 """
 import argparse, os, subprocess, json, sys
 from tools._env import load_dotenv, require
-from tools.aws.tofu import get_tofu_env
-from tools.aws.backend import backend_config, resolve_region
+from tools.aws.common.core.terra_runner import get_terra_env
+from tools.aws.common.core.backend import backend_config, resolve_region
 from tools.common.retry import run_with_retry
 from tools.common.logging import logger
 
@@ -26,13 +26,13 @@ def init_stack(env, region=None):
         args += ["-backend-config", c]
     exe = os.getenv("FRU_TF_BIN", "tofu")
     cmd = [exe] + args
-    run_with_retry(cmd, cwd="live-deploy-aws/shared/durable", env=get_tofu_env(region), description="tofu init for secrets")
+    run_with_retry(cmd, cwd="live-deploy-aws/shared/durable", env=get_terra_env(region), description="tofu init for secrets")
     logger.success("[SECRETS] Stack initialized")
 
 def outputs(env, region=None):
     logger.info("[SECRETS] Getting terraform outputs...")
     init_stack(env, region)
-    out = subprocess.check_output([os.getenv("FRU_TF_BIN","tofu"),"output","-json"], cwd="live-deploy-aws/shared/durable", text=True, timeout=30, env=get_tofu_env(region))
+    out = subprocess.check_output([os.getenv("FRU_TF_BIN","tofu"),"output","-json"], cwd="live-deploy-aws/shared/durable", text=True, timeout=30, env=get_terra_env(region))
     result = json.loads(out)
     logger.success("[SECRETS] Outputs retrieved")
     return result

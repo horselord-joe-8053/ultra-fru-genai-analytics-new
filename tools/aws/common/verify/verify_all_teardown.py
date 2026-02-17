@@ -47,7 +47,7 @@ def main():
     
     if args.scope == "kube":
         # Verify namespace is gone
-        from tools.aws.bootstrap_helpers import K8S_NAMESPACE
+        from tools.aws.common.deploy.bootstrap_helpers import K8S_NAMESPACE
         logger.info(f"Verifying Kubernetes namespace '{K8S_NAMESPACE}' is gone...")
         try:
             # If namespace exists, this command succeeds (exit 0)
