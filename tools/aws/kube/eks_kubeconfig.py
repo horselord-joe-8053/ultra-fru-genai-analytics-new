@@ -6,7 +6,7 @@ Usage:
   python tools/aws/kube/eks_kubeconfig.py --env dev
 """
 import argparse, os, subprocess
-from tools.common.env import load_dotenv, require
+from tools.cloud_shared.env import load_dotenv, require
 
 load_dotenv()
 

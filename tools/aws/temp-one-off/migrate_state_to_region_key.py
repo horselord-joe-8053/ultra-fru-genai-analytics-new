@@ -17,15 +17,15 @@ import os
 import subprocess
 import sys
 
-from tools.common.env import load_dotenv, require
+from tools.cloud_shared.env import load_dotenv, require
 from tools.aws.common.core.backend import backend_config, stack_id_from_dir
-from tools.common.logging import logger
+from tools.cloud_shared.logging import logger
 
 load_dotenv()
 
 STACK_DIRS = [
-    "live-deploy-aws/shared/durable",
-    "live-deploy-aws/shared/nondurable",
+    "live-deploy-aws/scope-shared/durable",
+    "live-deploy-aws/scope-shared/nondurable",
     "live-deploy-aws/kube",
     "live-deploy-aws/nonkube",
 ]

@@ -73,8 +73,8 @@ module "storage" {
 
 **Kubernetes manifests are cloud-agnostic:**
 ```bash
-kubectl apply -f infra-modules/shared/k8s/api-service.yaml
-kubectl apply -f infra-modules/shared/k8s/api-deployment.yaml
+kubectl apply -f infra-modules/cloud-shared/k8s/api-service.yaml
+kubectl apply -f infra-modules/cloud-shared/k8s/api-deployment.yaml
 ```
 
 ## Design Philosophy

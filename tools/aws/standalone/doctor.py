@@ -9,7 +9,7 @@ Legacy-aware:
 - Accepts AWS_PROFILE (optional). If set, AWS CLI uses it naturally.
 """
 import argparse, os, subprocess, json, shutil
-from tools.common.env import load_dotenv, require
+from tools.cloud_shared.env import load_dotenv, require
 from tools.aws.common.core.backend import resolve_region
 
 load_dotenv()

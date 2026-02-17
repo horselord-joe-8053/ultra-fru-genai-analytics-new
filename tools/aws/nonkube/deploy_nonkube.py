@@ -3,9 +3,9 @@ Nonkube-specific deploy logic: ECS apply, frontend deploy, ECS bootstrap.
 
 Called by deploy.py when scope is nonkube or all (nonkube first when scope=all).
 """
-from tools.common.env import require
-from tools.common.logging import logger
-from tools.common.stats import DeployStats, scope_for
+from tools.cloud_shared.env import require
+from tools.cloud_shared.logging import logger
+from tools.cloud_shared.stats import DeployStats, scope_for
 from tools.aws.common.deploy.deploy_common import (
     apply_stack_nonkube_with_ecs_import_retry,
     tofu_output_json,

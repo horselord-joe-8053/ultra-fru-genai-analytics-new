@@ -6,7 +6,7 @@ Usage:
   ALLOW_DURABLE_DESTROY=YES python tools/aws/standalone/destroy_durable.py --env dev --force
 """
 import argparse, os
-from tools.common.env import load_dotenv, require
+from tools.cloud_shared.env import load_dotenv, require
 from tools.aws.common.core.terra_runner import terra
 from tools.aws.common.core.backend import backend_config
 from tools.aws.terra_var_handling import get_base_vars
@@ -14,11 +14,11 @@ from tools.aws.terra_var_handling import get_base_vars
 load_dotenv()
 
 def init_stack(env):
-    cfg = backend_config("live-deploy-aws/shared/durable", env, region=None, cloud="aws")
+    cfg = backend_config("live-deploy-aws/scope-shared/durable", env, region=None, cloud="aws")
     args = ["init","-upgrade"]
     for c in cfg:
         args += ["-backend-config", c]
-    terra(args, cwd="live-deploy-aws/shared/durable")
+    terra(args, cwd="live-deploy-aws/scope-shared/durable")
 
 def main():
     ap = argparse.ArgumentParser()
@@ -43,7 +43,7 @@ def main():
         "-var", 'azs=["us-east-1a","us-east-1b"]',
         "-var", 'public_subnet_cidrs=["10.0.1.0/24","10.0.2.0/24"]',
         "-var", 'private_subnet_cidrs=["10.0.101.0/24","10.0.102.0/24"]',
-    ] + base, cwd="live-deploy-aws/shared/durable", check=True)
+    ] + base, cwd="live-deploy-aws/scope-shared/durable", check=True)
 
 if __name__ == "__main__":
     main()

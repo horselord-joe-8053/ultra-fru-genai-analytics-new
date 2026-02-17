@@ -33,8 +33,7 @@ env/
 .env.*
 env.*
 !.env.example
-!tools/common/env.py
-!tools/cloud-shared/env.py
+!tools/cloud_shared/env.py
 
 # Terraform / OpenTofu
 .terraform/

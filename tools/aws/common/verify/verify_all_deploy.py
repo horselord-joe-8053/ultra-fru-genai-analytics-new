@@ -9,10 +9,10 @@ import requests
 # Force immediate output so orchestrator subprocess doesn't appear stuck
 print("verify_all_deploy: starting...", flush=True)
 
-from tools.common.logging import logger
-from tools.common.env import load_dotenv, require, get_int_env
+from tools.cloud_shared.logging import logger
+from tools.cloud_shared.env import load_dotenv, require, get_int_env
 from tools.aws.terra_var_handling import get_base_vars
-from tools.common.retry import poll_until, update_heartbeat
+from tools.cloud_shared.retry import poll_until, update_heartbeat
 from tools.aws.common.deploy.bootstrap_helpers import K8S_NAMESPACE
 from tools.aws.common.core.terra_runner import ensure_shared_terra_env
 from tools.aws.common.verify.verify_summary import VerifyRow, print_verify_summary

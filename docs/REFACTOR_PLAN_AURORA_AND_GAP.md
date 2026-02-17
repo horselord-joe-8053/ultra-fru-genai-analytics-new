@@ -28,7 +28,7 @@ This document defines the wiring and implementation tasks to close these gaps.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                         live-deploy-aws/shared/durable                       │
+│                         live-deploy-aws/scope-shared/durable                       │
 │  VPC + Aurora (pgvector) + Secrets (openai_api_key, db_password)              │
 │  Outputs: vpc_id, subnets, aurora_endpoint, aurora_port, aurora_database_name│
 │           aurora_security_group_id, db_cluster_arn, db_password_secret_arn   │
@@ -36,7 +36,7 @@ This document defines the wiring and implementation tasks to close these gaps.
                     │                                    │
                     ▼                                    ▼
 ┌───────────────────────────────────┐    ┌───────────────────────────────────┐
-│  live-deploy-aws/shared/nondurable │    │  DB Setup (tools/aws/setup_database) │
+│  live-deploy-aws/scope-shared/nondurable │    │  DB Setup (tools/aws/setup_database) │
 │  ECR, S3 (delta, artifacts)       │    │  ensure_pgvector → init_schema →    │
 │  Outputs: ecr_app_url, ecr_spark_  │    │  load_data (RDS Data API)           │
 │  url, delta_bucket                 │    │  Uses: durable outputs              │
@@ -78,7 +78,7 @@ This document defines the wiring and implementation tasks to close these gaps.
 
 ### 3.2 Durable Stack: Add Aurora
 
-**Path**: `live-deploy-aws/shared/durable/main.tf`
+**Path**: `live-deploy-aws/scope-shared/durable/main.tf`
 
 **Changes**:
 1. Add `module "aurora"` calling `infra-modules/aws/primitives/aurora`
@@ -117,7 +117,7 @@ This document defines the wiring and implementation tasks to close these gaps.
 **Purpose**: Python equivalent of legacy `module_infra_db/aws/setup-database.sh`
 
 **Flow**:
-1. Get `DB_CLUSTER_ARN`, `DB_SECRET_ARN`, `aurora_database_name` from `tofu output -json` on `live-deploy-aws/shared/durable`
+1. Get `DB_CLUSTER_ARN`, `DB_SECRET_ARN`, `aurora_database_name` from `tofu output -json` on `live-deploy-aws/scope-shared/durable`
 2. **Ensure pgvector**: `aws rds-data execute-statement` with `CREATE EXTENSION IF NOT EXISTS vector;`
 3. **Init schema**: Parse `core-app/sql/schema_pgvector.sql` (use `parse_sql_statements.py` or equivalent), execute each statement via RDS Data API
 4. **Load data**: Invoke `load_openai_embeddings_to_pgvector_rds_api.py` with `DB_CLUSTER_ARN`, `DB_SECRET_ARN`, `PGDATABASE` in env
@@ -199,7 +199,7 @@ This document defines the wiring and implementation tasks to close these gaps.
 
 #### 3.6.2 K8s API Deployment: PG* Env Vars
 
-**Path**: `infra-modules/shared/k8s/api-deployment.yaml`
+**Path**: `infra-modules/cloud-shared/k8s/api-deployment.yaml`
 
 **Current**: Placeholder values (PGHOST=fru-db, PGPASSWORD=postgres)
 
@@ -236,7 +236,7 @@ This document defines the wiring and implementation tasks to close these gaps.
 | # | Task | Path / Scope |
 |---|------|--------------|
 | 1 | Create Aurora module | `infra-modules/aws/primitives/aurora/` |
-| 2 | Add Aurora to durable stack | `live-deploy-aws/shared/durable/main.tf` |
+| 2 | Add Aurora to durable stack | `live-deploy-aws/scope-shared/durable/main.tf` |
 | 3 | Add durable outputs | aurora_endpoint, aurora_port, aurora_database_name, aurora_security_group_id, db_cluster_arn, db_secret_arn |
 | 4 | Copy schema file | `core-app/sql/schema_pgvector.sql` |
 | 5 | Create setup_database.py | `tools/aws/setup_database.py` |

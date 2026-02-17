@@ -1,5 +1,5 @@
 
-# live-deploy-gcp/shared/durable
+# live-deploy-gcp/scope-shared/durable
 
 Minimal durable GCP resources:
 - VPC network

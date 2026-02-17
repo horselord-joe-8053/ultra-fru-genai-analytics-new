@@ -5,7 +5,7 @@ Uses print() for clean table display with colors. Shared by DeployStats and Tear
 """
 from typing import Protocol
 
-# ANSI colors (aligned with tools.common.logging.logger)
+# ANSI colors (aligned with tools.cloud_shared.logging.logger)
 BLUE = "\033[0;34m"
 GREEN = "\033[0;32m"
 NC = "\033[0m"

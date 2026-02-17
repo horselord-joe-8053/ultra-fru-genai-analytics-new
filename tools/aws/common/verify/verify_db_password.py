@@ -15,17 +15,17 @@ import os
 import subprocess
 import sys
 
-from tools.common.env import load_dotenv
+from tools.cloud_shared.env import load_dotenv
 from tools.aws.common.core.backend import backend_config, resolve_region
 from tools.aws.common.core.terra_runner import get_terra_env
-from tools.common.retry import run_with_retry
-from tools.common.logging import logger
+from tools.cloud_shared.retry import run_with_retry
+from tools.cloud_shared.logging import logger
 
 load_dotenv()
 
 
 def get_durable_outputs(env: str, region: str) -> dict:
-    stack_dir = "live-deploy-aws/shared/durable"
+    stack_dir = "live-deploy-aws/scope-shared/durable"
     cfg = backend_config(stack_dir, env, region)
     init_args = ["init", "-lock=false", "-upgrade", "-reconfigure"]
     for c in cfg:

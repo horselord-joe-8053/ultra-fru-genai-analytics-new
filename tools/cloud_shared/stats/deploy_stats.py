@@ -9,7 +9,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Iterator
 
-from tools.common.stats.table_printer import print_stats_table
+from tools.cloud_shared.stats.table_printer import print_stats_table
 
 # Column widths (match teardown_stats for consistency)
 _SCOPE_W = 20

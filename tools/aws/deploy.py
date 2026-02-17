@@ -32,11 +32,11 @@ import subprocess
 import sys
 import time
 
-from tools.common.env import load_dotenv, require
+from tools.cloud_shared.env import load_dotenv, require
 from tools.aws.common.core.backend import resolve_region
-from tools.common.logging import logger
-from tools.common.phases import PhaseTracker, deploy_phases
-from tools.common.stats import DeployStats, scope_for
+from tools.cloud_shared.logging import logger
+from tools.cloud_shared.phases import PhaseTracker, deploy_phases
+from tools.cloud_shared.stats import DeployStats, scope_for
 from tools.aws.common.deploy.deploy_common import tofu_output_json
 from tools.aws.kube.deploy_kube import run_deploy_kube
 from tools.aws.nonkube.deploy_nonkube import run_deploy_nonkube
@@ -175,16 +175,16 @@ def main():
             durable_vars += ["-var", f"aurora_master_password={aurora_pw}"]
         else:
             logger.warning("PGPASSWORD not set; Aurora creation may fail. Set in .env before deploy.")
-        with stats.timed("Tofu apply", "live-deploy-aws/shared/durable"):
-            apply_stack("live-deploy-aws/shared/durable", env, durable_vars, region)
+        with stats.timed("Tofu apply", "live-deploy-aws/scope-shared/durable"):
+            apply_stack("live-deploy-aws/scope-shared/durable", env, durable_vars, region)
         logger.success("Shared durable applied")
         tracker.end_phase(3)
 
         # Phase 4: Shared nondurable
         tracker.start_phase(4)
         logger.step(f"[4/{len(phases)}] Applying shared nondurable stack (ECR + S3)...")
-        with stats.timed("Tofu apply", "live-deploy-aws/shared/nondurable"):
-            apply_stack("live-deploy-aws/shared/nondurable", env, [], region)
+        with stats.timed("Tofu apply", "live-deploy-aws/scope-shared/nondurable"):
+            apply_stack("live-deploy-aws/scope-shared/nondurable", env, [], region)
         logger.success("Shared nondurable applied")
         tracker.end_phase(4)
 
@@ -233,7 +233,7 @@ def main():
         # Phase 8: ECR URLs
         tracker.start_phase(8)
         logger.step(f"[8/{len(phases)}] Getting ECR image URLs...")
-        snd = tofu_output_json("live-deploy-aws/shared/nondurable", env, region)
+        snd = tofu_output_json("live-deploy-aws/scope-shared/nondurable", env, region)
         app_repo_url = snd["ecr_app_url"]["value"]
         spark_repo_url = snd["ecr_spark_url"]["value"]
         spark_image_full = f"{spark_repo_url}:{require('SPARK_IMAGE_TAG')}"

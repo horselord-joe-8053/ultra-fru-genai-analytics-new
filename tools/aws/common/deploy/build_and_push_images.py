@@ -6,17 +6,17 @@ One-liners:
   python tools/aws/common/deploy/build_and_push_images.py --env dev
 
 This tool:
-- Reads ECR repository URLs from `live-deploy-aws/shared/nondurable` state
+- Reads ECR repository URLs from `live-deploy-aws/scope-shared/nondurable` state
 - Logs into ECR properly
 - Builds and pushes images
 
 Replace the build contexts to match your legacy project.
 """
 import argparse, os, json, subprocess, sys, re, threading, time
-from tools.common.env import load_dotenv, require, get_int_env
+from tools.cloud_shared.env import load_dotenv, require, get_int_env
 from tools.aws.common.core.terra_runner import get_terra_env
 from tools.aws.common.core.backend import backend_config, resolve_region
-from tools.common.logging import logger
+from tools.cloud_shared.logging import logger
 
 load_dotenv()
 
@@ -155,7 +155,7 @@ def _docker_hung_suggestion() -> str:
     return (
         "\n"
         "Docker daemon may be hung or unresponsive. To recover:\n"
-        "  ./tools/common/docker/docker-unstick-desktop-start.sh\n"
+        "  ./tools/cloud_shared/docker/docker-unstick-desktop-start.sh\n"
         "\n"
         "Run from the project root. Requires sudo for vmnetd. Then retry your command."
     )
@@ -202,7 +202,7 @@ def main():
     logger.info(f"[BUILD] Region: {region}")
     
     logger.info("[BUILD] Getting ECR URLs from terraform state...")
-    out = tofu_output_json("live-deploy-aws/shared/nondurable", args.env, region)
+    out = tofu_output_json("live-deploy-aws/scope-shared/nondurable", args.env, region)
 
     app_repo_url   = out["ecr_app_url"]["value"]
     spark_repo_url = out["ecr_spark_url"]["value"]

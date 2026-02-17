@@ -7,9 +7,9 @@ import os
 import subprocess
 import time
 
-from tools.common.env import require
-from tools.common.logging import logger
-from tools.common.stats import DeployStats, scope_for
+from tools.cloud_shared.env import require
+from tools.cloud_shared.logging import logger
+from tools.cloud_shared.stats import DeployStats, scope_for
 from tools.aws.common.deploy.deploy_common import (
     apply_stack,
     tofu_output_json,
@@ -70,7 +70,7 @@ def run_deploy_kube(
     # Phase 10: K8s bootstrap + schedule
     delta_bucket = snd["delta_bucket"]["value"]
     csv_uploaded = upload_csv_to_delta_bucket(delta_bucket, region)
-    durable = tofu_output_json("live-deploy-aws/shared/durable", env, region)
+    durable = tofu_output_json("live-deploy-aws/scope-shared/durable", env, region)
     aurora_endpoint = durable.get("aurora_endpoint", {}).get("value", "")
     db_secret_arn = durable.get("db_password_plain_secret_arn", {}).get("value", "")
     openai_secret_arn = durable.get("openai_api_key_secret_arn", {}).get("value", "")

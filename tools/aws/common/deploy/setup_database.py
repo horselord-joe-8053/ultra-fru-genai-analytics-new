@@ -17,11 +17,11 @@ import sys
 import json
 import subprocess
 
-from tools.common.env import load_dotenv, require
+from tools.cloud_shared.env import load_dotenv, require
 from tools.aws.common.core.backend import backend_config, resolve_region
 from tools.aws.common.core.terra_runner import get_terra_env
-from tools.common.retry import run_with_retry
-from tools.common.logging import logger
+from tools.cloud_shared.retry import run_with_retry
+from tools.cloud_shared.logging import logger
 
 load_dotenv()
 
@@ -33,7 +33,7 @@ ETL_SCRIPT = os.path.join(REPO_ROOT, "core-app", "backend", "etl", "load_openai_
 
 def get_durable_outputs(env: str, region: str | None = None) -> dict:
     """Get Aurora-related outputs from durable stack."""
-    stack_dir = "live-deploy-aws/shared/durable"
+    stack_dir = "live-deploy-aws/scope-shared/durable"
     cfg = backend_config(stack_dir, env, region)
     args = ["init", "-lock=false", "-upgrade", "-reconfigure"]
     for c in cfg:

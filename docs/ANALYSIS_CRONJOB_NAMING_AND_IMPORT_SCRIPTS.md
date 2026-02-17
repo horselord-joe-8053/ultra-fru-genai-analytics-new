@@ -9,7 +9,7 @@
 | **Kube** | Kubernetes Job `fru-analytics-bootstrap` | CronJob `fru-analytics-periodic` | EKS cluster, namespace `fru` |
 | **Nonkube** | ECS one-off RunTask | EventBridge → ECS RunTask | ECS cluster |
 
-- **Kube** uses `kube_apply.py` to apply manifests from `infra-modules/shared/k8s/` (bootstrap-job.yaml, spark-cronjob.yaml). These run in EKS.
+- **Kube** uses `kube_apply.py` to apply manifests from `infra-modules/cloud-shared/k8s/` (bootstrap-job.yaml, spark-cronjob.yaml). These run in EKS.
 - **Nonkube** uses `run_ecs_bootstrap()` in deploy.py — an ECS RunTask. No K8s resources.
 
 They are mutually exclusive deployment targets. The CronJob/Job are **kube-only**.
@@ -38,8 +38,8 @@ They are mutually exclusive deployment targets. The CronJob/Job are **kube-only*
 
 | Stack | State key | Key resources |
 |-------|-----------|---------------|
-| `live-deploy-aws/shared/durable` | `fru/{env}/aws-shared-durable.tfstate` | VPC, subnets |
-| `live-deploy-aws/shared/nondurable` | `fru/{env}/aws-shared-nondurable.tfstate` | S3 (delta, artifacts), ECR (app, spark) |
+| `live-deploy-aws/scope-shared/durable` | `fru/{env}/aws-shared-durable.tfstate` | VPC, subnets |
+| `live-deploy-aws/scope-shared/nondurable` | `fru/{env}/aws-shared-nondurable.tfstate` | S3 (delta, artifacts), ECR (app, spark) |
 | `live-deploy-aws/nonkube` | `fru/{env}/aws-nonkube.tfstate` | ECS, ALB, frontend (CloudFront, S3, OAC), EventBridge, IAM, CloudWatch |
 | `live-deploy-aws/kube` | `fru/{env}/aws-kube.tfstate` | EKS, frontend (CloudFront, S3, OAC) |
 
@@ -116,7 +116,7 @@ Resources are imported by Terraform address and AWS resource ID. IDs are derived
 ### Phase 1: CronJob/Job Naming (Optional) — DONE
 
 - [x] Add `-kube` suffix to Job/CronJob names and namespace `fru-kube`
-- [x] Update: `infra-modules/shared/k8s/bootstrap-job.yaml`, `spark-cronjob.yaml`
+- [x] Update: `infra-modules/cloud-shared/k8s/bootstrap-job.yaml`, `spark-cronjob.yaml`
 - [x] Update: `bootstrap_helpers.py` (JOB_BOOTSTRAP, CRONJOB_PERIODIC, K8S_NAMESPACE)
 - [x] Update: `kube_apply.py` references
 

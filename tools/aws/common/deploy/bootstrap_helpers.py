@@ -16,17 +16,17 @@ import os
 import subprocess
 from typing import TYPE_CHECKING
 
-from tools.common.env import load_dotenv
+from tools.cloud_shared.env import load_dotenv
 
 if TYPE_CHECKING:
-    from tools.common.stats import TeardownStats
+    from tools.cloud_shared.stats import TeardownStats
 
 load_dotenv()
 
 # Log pattern for bootstrap success (from run_analytics.py)
 BOOTSTRAP_SUCCESS_PATTERN = "fru bootstrap success"
 
-# K8s Job/CronJob names and namespace (must match infra-modules/shared/k8s/)
+# K8s Job/CronJob names and namespace (must match infra-modules/cloud-shared/k8s/)
 JOB_BOOTSTRAP = "fru-analytics-bootstrap-kube"
 CRONJOB_PERIODIC = "fru-analytics-periodic-kube"
 K8S_NAMESPACE = "fru-kube"
@@ -96,7 +96,7 @@ def wait_for_fru_api_ready(
     See War Story 43.
     """
     import time
-    from tools.common.logging import logger
+    from tools.cloud_shared.logging import logger
 
     subprocess.run(["python", "tools/aws/kube/eks_kubeconfig.py", "--env", env], check=False)
     env_vars = {**os.environ}
@@ -144,7 +144,7 @@ def wait_for_dns_resolvable(
     propagate. Retries with heartbeat until resolvable or timeout.
     """
     import time
-    from tools.common.logging import logger
+    from tools.cloud_shared.logging import logger
 
     start = time.time()
     last_heartbeat = 0
@@ -176,7 +176,7 @@ def verify_api_db_connected(base_url: str, timeout_seconds: int = 30, max_retrie
     Retries a few times for transient HTTP/connection issues.
     """
     import time
-    from tools.common.logging import logger
+    from tools.cloud_shared.logging import logger
 
     url = f"{base_url.rstrip('/')}/health"
     last_err = None
@@ -222,7 +222,7 @@ def k8s_rollout_restart_api(env: str, region: str | None = None) -> None:
     K8s does not hot-reload secret changes; rollout restart forces new pods.
     See War Story 44.
     """
-    from tools.common.logging import logger
+    from tools.cloud_shared.logging import logger
 
     subprocess.run(["python", "tools/aws/kube/eks_kubeconfig.py", "--env", env], check=False)
     env_vars = {**os.environ}
@@ -258,7 +258,7 @@ def k8s_remove_bootstrap_and_scheduler(
     """
     import time
 
-    from tools.common.logging import logger
+    from tools.cloud_shared.logging import logger
 
     def _timed(component: str, identifier: str, fn):
         if stats:

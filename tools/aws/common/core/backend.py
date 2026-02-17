@@ -1,12 +1,15 @@
 
 import os
-from tools.common.env import require
+from tools.cloud_shared.env import require
 
 def stack_id_from_dir(stack_dir: str, cloud: str = "aws") -> str:
     """Extract logical stack name from path. Cloud comes from caller (tools/aws vs tools/gcp), not from path.
-    Strips first path component (deploy root) without hardcoding names; rest becomes logical id."""
+    Strips first path component (deploy root) without hardcoding names; rest becomes logical id.
+    Backward compat: scope-shared -> shared in state key so existing tfstate remains valid."""
     parts = stack_dir.strip("/").split("/")
     logical = "-".join(parts[1:]) if len(parts) > 1 else (parts[0] if parts else "")
+    if "scope-shared" in logical:
+        logical = logical.replace("scope-shared", "shared")
     return f"{cloud}-{logical}" if logical else cloud
 
 def resolve_region(cli_region: str | None = None) -> str:

@@ -30,7 +30,7 @@ data "terraform_remote_state" "shared_nondurable" {
 }
 
 module "tags" {
-  source = "../../infra-modules/shared/primitives/tags"
+  source = "../../infra-modules/cloud-shared/primitives/tags"
   extra_tags = {
     Project     = "FRU-GenAI"
     ManagedBy   = "OpenTofu/Terraform"

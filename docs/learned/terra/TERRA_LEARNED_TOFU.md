@@ -1,4 +1,4 @@
-# OpenTofu / Terraform: live-deploy-aws/shared/durable
+# OpenTofu / Terraform: live-deploy-aws/scope-shared/durable
 
 Comprehensive reference for the durable shared stack and its layout. Uses OpenTofu (alias `tofu`) or Terraform.
 
@@ -8,7 +8,7 @@ Comprehensive reference for the durable shared stack and its layout. Uses OpenTo
 
 ```text
 live-deploy-aws/
-├── shared/
+├── scope-shared/
 │   ├── durable/          ← this stack (VPC, Secrets)
 │   │   ├── main.tf
 │   │   ├── outputs.tf
@@ -118,7 +118,7 @@ flowchart TB
 
 ```text
 durable/main.tf
-├── infra-modules/shared/primitives/tags
+├── infra-modules/cloud-shared/primitives/tags
 └── infra-modules/aws/primitives/vpc
 ```
 
