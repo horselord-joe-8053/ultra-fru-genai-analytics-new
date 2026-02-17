@@ -45,6 +45,21 @@ def run(cmd, cwd=None, check=False):
     return subprocess.run(cmd, cwd=cwd, check=check, env=get_terra_env())
 
 
+def terra_capture(cmd, cwd=None, region: str | None = None):
+    """Run terra/tofu with capture_output=True. Returns CompletedProcess."""
+    exe = os.getenv("FRU_TF_BIN", "tofu")
+    if cmd[0] in ["init", "plan", "apply", "destroy", "output", "import"]:
+        if "-lock=false" not in cmd and cmd[0] != "import":
+            cmd = [cmd[0], "-lock=false"] + cmd[1:]
+    return subprocess.run(
+        [exe] + cmd,
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        env=get_terra_env(region),
+    )
+
+
 def terra(cmd, cwd=None, check=False):
     """Run Terraform/OpenTofu command. Binary from FRU_TF_BIN env (default: tofu)."""
     exe = os.getenv("FRU_TF_BIN", "tofu")

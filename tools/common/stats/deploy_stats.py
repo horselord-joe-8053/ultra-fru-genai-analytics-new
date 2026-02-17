@@ -9,7 +9,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Iterator
 
-from tools.common.logging import logger
+from tools.common.stats.table_printer import print_stats_table
 
 # Column widths (match teardown_stats for consistency)
 _SCOPE_W = 20
@@ -71,20 +71,5 @@ class DeployStats:
             self.record(component, identifier, duration)
 
     def print_summary(self) -> None:
-        """Print deploy stats table at end of run."""
-        if not self._records:
-            return
-        logger.step("Deploy stats:")
-        header = (
-            f"{'Scope':<{_SCOPE_W}} "
-            f"{'Component':<{_COMPONENT_W}} "
-            f"{'Identifier':<{_IDENTIFIER_W}} "
-            f"{'Duration':>8}"
-        )
-        logger.info(header)
-        logger.info("-" * len(header))
-        for r in self._records:
-            logger.info(str(r))
-        total = sum(r.duration_sec for r in self._records)
-        logger.info("-" * len(header))
-        logger.info(f"{'Total':<{_SCOPE_W}} {'':<{_COMPONENT_W}} {'':<{_IDENTIFIER_W}} {total:>6.1f}s")
+        """Print deploy stats table at end of run (no logger prefix on table rows)."""
+        print_stats_table(self._records, "Deploy stats")

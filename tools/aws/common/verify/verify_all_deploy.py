@@ -15,6 +15,7 @@ from tools.aws.terra_var_handling import get_base_vars
 from tools.common.retry import poll_until, update_heartbeat
 from tools.aws.common.deploy.bootstrap_helpers import K8S_NAMESPACE
 from tools.aws.common.core.terra_runner import ensure_shared_terra_env
+from tools.aws.common.verify.verify_summary import VerifyRow, print_verify_summary
 
 load_dotenv()
 print("verify_all_deploy: imports done, entering main()", flush=True)
@@ -77,21 +78,25 @@ def _parse_sse_complete_answer(text: str) -> str | None:
     return last_answer
 
 
-def verify_api_endpoints(base_url, total_rec: int, timeout_secs=None, heartbeat_interval_sec=None):
+def verify_api_endpoints(
+    base_url: str,
+    total_rec: int,
+    scope: str,
+    timeout_secs=None,
+    heartbeat_interval_sec=None,
+) -> tuple[bool, list]:
     """
-    Poll endpoints until all pass or timeout. Uses poll_until (DRY with retry pattern).
-    HTTP 502/503 and ConnectionError are retriable (ECS/ALB not ready yet). 403 = real failure.
-    total_rec: expected record count from CSV (used for QueryStream answer and Analytics total_records).
+    Poll endpoints until all pass or timeout. Returns (ok, rows) for summary table.
+    HTTP 502/503 and ConnectionError are retriable. 403 = real failure.
     """
     timeout_secs = timeout_secs or VERIFY_TIMEOUT_SEC
     heartbeat_interval_sec = heartbeat_interval_sec or VERIFY_HEARTBEAT_INTERVAL_SEC
-    logger.info(f"Validating API Endpoints at: {base_url} (timeout={timeout_secs}s, heartbeat every {heartbeat_interval_sec}s, total_rec={total_rec})")
+    logger.info(f"Validating API Endpoints at: {base_url} (timeout={timeout_secs}s, total_rec={total_rec})")
 
     def check_query_stream(r):
         if r.status_code != 200:
             return False
         if "Agent-based query processing is disabled" in r.text:
-            logger.info("  (Note: Agent is disabled due to missing DB, but endpoint is reachable)")
             return True
         if "exc_info" in r.text and "unexpected keyword argument" in r.text:
             raise RuntimeError("QueryStream returned AgentLogger exc_info error (non-retriable; needs redeploy)")
@@ -102,7 +107,6 @@ def verify_api_endpoints(base_url, total_rec: int, timeout_secs=None, heartbeat_
             raise RuntimeError(
                 f"QueryStream answer does not contain total_rec={total_rec}: {answer[:100]}..."
             )
-        logger.info(f"  QueryStream OK (query='total number of record'): answer contains total_rec={total_rec}")
         return True
 
     def check_analytics(r):
@@ -112,15 +116,12 @@ def verify_api_endpoints(base_url, total_rec: int, timeout_secs=None, heartbeat_
             data = r.json()
             err = data.get("error") or ""
             if err:
-                # DB unreachable is a config/ops issue, not a deploy failure—endpoint is reachable
                 if "database" in err.lower() and ("not configured" in err.lower() or "unreachable" in err.lower()):
-                    logger.warning(f"  Analytics endpoint UP but DB unreachable: {err[:80]}...")
                     return True
                 raise RuntimeError(f"Analytics error (non-retriable): {err}")
             total_records = data.get("total_records") or 0
             if total_records != total_rec:
                 return False
-            logger.info(f"  Analytics OK: total_records={total_records} (matches CSV total_rec)")
             return True
         except RuntimeError:
             raise
@@ -149,18 +150,15 @@ def verify_api_endpoints(base_url, total_rec: int, timeout_secs=None, heartbeat_
                 last_status[e["name"]] = resp.status_code
                 last_error[e["name"]] = None
                 if e["check"](resp):
-                    logger.success(f"✓ {e['name']} endpoint is UP: {url}")
                     results[e["name"]] = True
                 else:
                     if resp.status_code in VERIFY_RETRIABLE_HTTP_CODES:
                         last_error[e["name"]] = f"HTTP {resp.status_code}"
                     elif resp.status_code >= 500:
                         logger.error(f"✗ {e['name']} returned {resp.status_code} (Server Error)")
-                        logger.error(f"  URL: {url}\n  Body: {resp.text[:200]}")
                         raise RuntimeError(f"Non-retriable: {e['name']} HTTP {resp.status_code}")
                     elif resp.status_code >= 400:
                         logger.error(f"✗ {e['name']} returned {resp.status_code} (Client Error)")
-                        logger.error(f"  URL: {url}")
                         raise RuntimeError(f"Non-retriable: {e['name']} HTTP {resp.status_code}")
             except requests.exceptions.ConnectionError as ex:
                 last_error[e["name"]] = str(ex)
@@ -181,28 +179,39 @@ def verify_api_endpoints(base_url, total_rec: int, timeout_secs=None, heartbeat_
         heartbeat_interval_sec=heartbeat_interval_sec,
         heartbeat_message_fn=heartbeat_msg,
     )
-    if not ok:
-        logger.error(f"\n[VERIFICATION TIMEOUT] Endpoints failed within {timeout_secs}s:")
-        for e in endpoints:
-            if not results[e["name"]]:
-                s = last_status[e["name"]]
-                err = last_error[e["name"]]
-                logger.error(f"  ✗ {e['name']}: {f'HTTP {s}' if s else (err or 'Unknown error')}")
-    return ok
 
-def verify_cloudwatch(env, timeout_mins=None):
+    # Build rows for summary table
+    rows = []
+    for e in endpoints:
+        url = base_url.rstrip("/") + e["path"]
+        if results[e["name"]]:
+            notes = url
+            if e["name"] == "QueryStream":
+                notes = f"total_rec={total_rec} in answer"
+            elif e["name"] == "Analytics":
+                notes = f"total_records={total_rec}"
+        else:
+            s = last_status[e["name"]]
+            err = last_error[e["name"]]
+            notes = f"HTTP {s}" if s else (err or "Unknown error")
+        rows.append(VerifyRow(scope=scope, endpoint=e["name"], ok=results[e["name"]], notes=notes))
+
+    if not ok:
+        logger.error(f"[VERIFICATION TIMEOUT] Endpoints failed within {timeout_secs}s")
+    return ok, rows
+
+def verify_cloudwatch(env, timeout_mins=None) -> tuple[bool, str]:
+    """Return (ok, note) for summary table."""
     region = os.getenv("CLOUD_REGION", "").strip() or require("AWS_REGION")
-    # Use log group from env if set, otherwise default
     log_group = os.getenv("CLOUDWATCH_LOG_GROUP") or f"/fru/{env}/spark"
 
     timeout_secs = (timeout_mins * 60) if timeout_mins else get_int_env("LOGGING_TASK_DEFAULT_TIMEOUT", VERIFY_TIMEOUT_SEC)
     heartbeat_interval = VERIFY_HEARTBEAT_INTERVAL_SEC
 
-    logger.info(f"Monitoring CloudWatch Log Group: {log_group} (timeout={timeout_secs}s, heartbeat every {heartbeat_interval}s)")
+    logger.info(f"Monitoring CloudWatch Log Group: {log_group} (timeout={timeout_secs}s)")
     
     start_time = time.time()
     
-    # Check if log group exists first to avoid looping on ResourceNotFound
     try:
         out = subprocess.check_output([
             "aws", "logs", "describe-log-groups",
@@ -210,14 +219,12 @@ def verify_cloudwatch(env, timeout_mins=None):
             "--region", region
         ], text=True)
         groups = json.loads(out).get("logGroups", [])
-        # Check if we have an exact match or if the list is non-empty and we are happy
-        # Ideally check for exact match
         if not any(g["logGroupName"] == log_group for g in groups):
-             logger.warning(f"Log group {log_group} not found in describe-log-groups output. Skipping log verification.")
-             return True # Treat missing logs as warning, not failure
+            logger.warning(f"Log group {log_group} not found. Skipping log verification.")
+            return True, "log group not found (skipped)"
     except Exception as e:
-        logger.warning(f"Log group {log_group} check failed. Skipping log verification. ({e})")
-        return True  # Treat check failure as warning
+        logger.warning(f"Log group check failed. Skipping log verification. ({e})")
+        return True, "check failed (skipped)"
 
     last_heartbeat = 0
     while (time.time() - start_time) < timeout_secs:
@@ -228,7 +235,6 @@ def verify_cloudwatch(env, timeout_mins=None):
         )
 
         try:
-            # Find latest stream
             streams = subprocess.check_output([
                 "aws", "logs", "describe-log-streams",
                 "--log-group-name", log_group,
@@ -239,7 +245,6 @@ def verify_cloudwatch(env, timeout_mins=None):
             ], text=True)
             
             stream_list = json.loads(streams).get("logStreams", [])
-            found_success = False
             
             for s in stream_list:
                 stream_name = s["logStreamName"]
@@ -253,14 +258,9 @@ def verify_cloudwatch(env, timeout_mins=None):
                 
                 log_content = events.lower()
                 if "fru bootstrap success" in log_content:
-                    logger.success(f"Found success pattern in stream: {stream_name}")
-                    found_success = True
-                    break
+                    return True, f"{log_group} — success pattern in {stream_name}"
                 elif "fru bootstrap start" in log_content:
-                    logger.info(f"... Found starting pattern in {stream_name}, still waiting for success ...")
-            
-            if found_success:
-                return True
+                    pass  # still waiting
                 
         except Exception as e:
             logger.warning(f"Waiting for logs... ({e})")
@@ -268,12 +268,12 @@ def verify_cloudwatch(env, timeout_mins=None):
         time.sleep(min(15, heartbeat_interval))
 
     logger.error(f"Timed out waiting for success logs after {timeout_secs}s.")
-    return False
+    return False, f"timeout after {timeout_secs}s"
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--env", default=os.getenv("FRU_ENV", "dev"))
-    ap.add_argument("--scope", choices=["kube", "nonkube"], default="nonkube")
+    ap.add_argument("--scope", choices=["kube", "nonkube", "all"], default="nonkube")
     args = ap.parse_args()
     
     logger.info("Verify script started (fetching tofu outputs next, may take 30-60s)...")
@@ -285,61 +285,74 @@ def main():
     total_rec = get_total_rec_from_csv()
     logger.step(f"Full Verification Interface (env: {env}, total_rec from CSV: {total_rec})")
     
-    # 1. Endpoint Check
-    endpoint_success = False
-    if args.scope == "nonkube":
-        logger.info("Fetching nonkube tofu outputs (tofu init + output, ~30-60s)...")
-        sys.stdout.flush()
-        stack_out = get_tofu_output("live-deploy-aws/nonkube", env)
-        cf_domain = stack_out.get("cloudfront_domain_name", {}).get("value")
-        alb_dns = stack_out.get("alb_dns_name", {}).get("value")
-        base_url = f"https://{cf_domain}" if cf_domain else (f"http://{alb_dns}" if alb_dns else None)
-        if base_url:
-            endpoint_success = verify_api_endpoints(base_url, total_rec)
-            if not endpoint_success:
-                logger.error("[VERIFICATION FAILED] API endpoints are not responding correctly")
-                sys.exit(1)
-        else:
-            logger.error("Could not find CloudFront domain or ALB DNS in terraform outputs.")
-            sys.exit(1)
+    # When scope=all, verify nonkube first then kube (matches deploy order)
+    scopes_to_verify = ["nonkube", "kube"] if args.scope == "all" else [args.scope]
+    all_rows: list[VerifyRow] = []
     
-    elif args.scope == "kube":
-        logger.info("Fetching kube tofu outputs (tofu init + output, ~30-60s)...")
-        sys.stdout.flush()
-        stack_out = get_tofu_output("live-deploy-aws/kube", env)
-        cf_domain = stack_out.get("cloudfront_domain_name", {}).get("value")
-        if cf_domain:
-            base_url = f"https://{cf_domain}"
-            endpoint_success = verify_api_endpoints(base_url, total_rec)
-            if not endpoint_success:
-                logger.error("[VERIFICATION FAILED] API endpoints are not responding correctly")
-                sys.exit(1)
-        else:
-            # Fallback: wait for K8s LoadBalancer hostname
-            logger.info("Waiting for EKS LoadBalancer hostname...")
-            lb_host = ""
-            for _ in range(30):  # Wait up to 5 minutes for LB hostname
-                try:
-                    cmd = ["kubectl", "get", "svc", "fru-api-svc", "-n", K8S_NAMESPACE, "-o", "jsonpath={.status.loadBalancer.ingress[0].hostname}"]
-                    lb_host = subprocess.check_output(cmd, text=True).strip()
-                    if lb_host:
-                        break
-                except Exception:
-                    pass
-                time.sleep(10)
-
-            if lb_host:
-                endpoint_success = verify_api_endpoints(f"http://{lb_host}", total_rec)
-                if not endpoint_success:
-                    logger.error("[VERIFICATION FAILED] API endpoints are not responding correctly")
+    # 1. Endpoint Check
+    for scope in scopes_to_verify:
+        if scope == "nonkube":
+            logger.info("Fetching nonkube tofu outputs (tofu init + output, ~30-60s)...")
+            sys.stdout.flush()
+            stack_out = get_tofu_output("live-deploy-aws/nonkube", env)
+            cf_domain = stack_out.get("cloudfront_domain_name", {}).get("value")
+            alb_dns = stack_out.get("alb_dns_name", {}).get("value")
+            base_url = f"https://{cf_domain}" if cf_domain else (f"http://{alb_dns}" if alb_dns else None)
+            if base_url:
+                ok, rows = verify_api_endpoints(base_url, total_rec, scope="nonkube")
+                all_rows.extend(rows)
+                if not ok:
+                    logger.error("[VERIFICATION FAILED] API endpoints are not responding correctly (nonkube)")
+                    print_verify_summary(all_rows, env, total_rec)
                     sys.exit(1)
             else:
-                logger.warning("EKS LoadBalancer hostname not available after timeout. Skipping endpoint check.")
+                logger.error("Could not find CloudFront domain or ALB DNS in terraform outputs (nonkube).")
+                sys.exit(1)
+        elif scope == "kube":
+            logger.info("Fetching kube tofu outputs (tofu init + output, ~30-60s)...")
+            sys.stdout.flush()
+            stack_out = get_tofu_output("live-deploy-aws/kube", env)
+            cf_domain = stack_out.get("cloudfront_domain_name", {}).get("value")
+            if cf_domain:
+                base_url = f"https://{cf_domain}"
+                ok, rows = verify_api_endpoints(base_url, total_rec, scope="kube")
+                all_rows.extend(rows)
+                if not ok:
+                    logger.error("[VERIFICATION FAILED] API endpoints are not responding correctly (kube)")
+                    print_verify_summary(all_rows, env, total_rec)
+                    sys.exit(1)
+            else:
+                # Fallback: wait for K8s LoadBalancer hostname
+                logger.info("Waiting for EKS LoadBalancer hostname...")
+                lb_host = ""
+                for _ in range(30):
+                    try:
+                        cmd = ["kubectl", "get", "svc", "fru-api-svc", "-n", K8S_NAMESPACE, "-o", "jsonpath={.status.loadBalancer.ingress[0].hostname}"]
+                        lb_host = subprocess.check_output(cmd, text=True).strip()
+                        if lb_host:
+                            break
+                    except Exception:
+                        pass
+                    time.sleep(10)
+
+                if lb_host:
+                    ok, rows = verify_api_endpoints(f"http://{lb_host}", total_rec, scope="kube")
+                    all_rows.extend(rows)
+                    if not ok:
+                        logger.error("[VERIFICATION FAILED] API endpoints are not responding correctly (kube)")
+                        print_verify_summary(all_rows, env, total_rec)
+                        sys.exit(1)
+                else:
+                    logger.warning("EKS LoadBalancer hostname not available after timeout. Skipping endpoint check (kube).")
 
     # 2. CloudWatch Check
-    success = verify_cloudwatch(env)
+    cw_ok, cw_note = verify_cloudwatch(env)
+    all_rows.append(VerifyRow(scope="shared", endpoint="CloudWatch", ok=cw_ok, notes=cw_note))
     
-    if success:
+    # 3. Print summary table (no logger prefix)
+    print_verify_summary(all_rows, env, total_rec)
+    
+    if cw_ok:
         logger.success("FULL VERIFICATION: SUCCESS")
         sys.exit(0)
     else:
