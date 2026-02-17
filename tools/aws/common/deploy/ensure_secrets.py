@@ -10,7 +10,7 @@ Reads from `.env`:
 - PGPASSWORD
 """
 import argparse, os, subprocess, json, sys
-from tools._env import load_dotenv, require
+from tools.common.env import load_dotenv, require
 from tools.aws.common.core.terra_runner import get_terra_env
 from tools.aws.common.core.backend import backend_config, resolve_region
 from tools.common.retry import run_with_retry

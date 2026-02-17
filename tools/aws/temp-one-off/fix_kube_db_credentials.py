@@ -17,7 +17,7 @@ import argparse
 import os
 import subprocess
 
-from tools._env import load_dotenv
+from tools.common.env import load_dotenv
 from tools.aws.common.core.backend import resolve_region
 from tools.aws.common.deploy.bootstrap_helpers import k8s_rollout_restart_api, wait_for_fru_api_ready
 from tools.common.logging import logger

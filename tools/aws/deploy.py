@@ -32,10 +32,10 @@ import subprocess
 import sys
 import time
 
-from tools._env import load_dotenv, require
+from tools.common.env import load_dotenv, require
 from tools.aws.common.core.backend import resolve_region
 from tools.common.logging import logger
-from tools.phases import PhaseTracker, deploy_phases
+from tools.common.phases import PhaseTracker, deploy_phases
 from tools.common.stats import DeployStats, scope_for
 from tools.aws.common.deploy.deploy_common import tofu_output_json
 from tools.aws.kube.deploy_kube import run_deploy_kube

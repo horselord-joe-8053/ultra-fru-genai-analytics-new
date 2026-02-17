@@ -12,7 +12,7 @@ import random
 import subprocess
 import time
 from tools.common.logging import logger
-from tools._env import load_dotenv
+from tools.common.env import load_dotenv
 
 load_dotenv()
 

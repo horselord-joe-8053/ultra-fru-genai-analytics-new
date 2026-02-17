@@ -13,7 +13,7 @@ This tool:
 Replace the build contexts to match your legacy project.
 """
 import argparse, os, json, subprocess, sys, re, threading, time
-from tools._env import load_dotenv, require, get_int_env
+from tools.common.env import load_dotenv, require, get_int_env
 from tools.aws.common.core.terra_runner import get_terra_env
 from tools.aws.common.core.backend import backend_config, resolve_region
 from tools.common.logging import logger
