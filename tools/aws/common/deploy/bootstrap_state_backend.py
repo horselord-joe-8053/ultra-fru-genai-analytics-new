@@ -8,7 +8,7 @@ Legacy-aligned:
 - Optionally creates a DynamoDB lock table if `TF_STATE_LOCK_TABLE` (or `TF_LOCK_TABLE`) is set.
 
 Usage:
-  python tools/aws/bootstrap_state_backend.py
+  python tools/aws/common/deploy/bootstrap_state_backend.py
 """
 import os, subprocess
 from tools._env import load_dotenv, require

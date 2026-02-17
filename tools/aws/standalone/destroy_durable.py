@@ -3,12 +3,12 @@
 Explicitly destroy shared durable stack.
 
 Usage:
-  ALLOW_DURABLE_DESTROY=YES python tools/aws/destroy_durable.py --env dev --force
+  ALLOW_DURABLE_DESTROY=YES python tools/aws/standalone/destroy_durable.py --env dev --force
 """
 import argparse, os
 from tools._env import load_dotenv, require
-from tools.aws.tofu import tofu
-from tools.aws.backend import backend_config
+from tools.aws.common.core.terra_runner import terra
+from tools.aws.common.core.backend import backend_config
 from tools.aws.terra_var_handling import get_base_vars
 
 load_dotenv()
@@ -18,7 +18,7 @@ def init_stack(env):
     args = ["init","-upgrade"]
     for c in cfg:
         args += ["-backend-config", c]
-    tofu(args, cwd="live-deploy-aws/shared/durable")
+    terra(args, cwd="live-deploy-aws/shared/durable")
 
 def main():
     ap = argparse.ArgumentParser()
@@ -36,7 +36,7 @@ def main():
     init_stack(args.env)
     base = get_base_vars(args.env)
     
-    tofu([
+    terra([
         "destroy", "-auto-approve",
         "-var", "allow_destroy_durable=true",
         "-var", f"vpc_cidr={require('VPC_CIDR')}",

@@ -13,8 +13,8 @@ from tools.common.logging import logger
 from tools._env import load_dotenv, require, get_int_env
 from tools.aws.terra_var_handling import get_base_vars
 from tools.common.retry import poll_until, update_heartbeat
-from tools.aws.bootstrap_helpers import K8S_NAMESPACE
-from tools.aws.tofu import ensure_shared_tofu_env
+from tools.aws.common.deploy.bootstrap_helpers import K8S_NAMESPACE
+from tools.aws.common.core.terra_runner import ensure_shared_terra_env
 
 load_dotenv()
 print("verify_all_deploy: imports done, entering main()", flush=True)
@@ -24,7 +24,7 @@ VERIFY_TIMEOUT_SEC = get_int_env("VERIFY_TIMEOUT_SEC", 900)  # CloudFront propag
 VERIFY_HEARTBEAT_INTERVAL_SEC = get_int_env("VERIFY_HEARTBEAT_INTERVAL_SEC", 30)
 
 # CSV path for total_rec (line count - 1)
-CSV_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "core-app", "data", "raw", "fridge_sales_with_rating.csv")
+CSV_PATH = os.path.join(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..")), "core-app", "data", "raw", "fridge_sales_with_rating.csv")
 
 
 def get_total_rec_from_csv() -> int:
@@ -43,9 +43,9 @@ VERIFY_RETRIABLE_HTTP_CODES = frozenset({502, 503})
 
 def get_tofu_output(stack_dir, env):
     """Retrieve output from Tofu (assumed already applied)."""
-    ensure_shared_tofu_env()
-    from tools.aws.deploy import init_stack
-    from tools.aws.backend import resolve_region
+    ensure_shared_terra_env()
+    from tools.aws.common.deploy.deploy_common import init_stack
+    from tools.aws.common.core.backend import resolve_region
     region = resolve_region(None)
     try:
         init_stack(stack_dir, env, region)

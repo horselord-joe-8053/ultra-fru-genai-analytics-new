@@ -3,7 +3,7 @@
 Build and push ECR images for app and spark.
 
 One-liners:
-  python tools/aws/build_and_push_images.py --env dev
+  python tools/aws/common/deploy/build_and_push_images.py --env dev
 
 This tool:
 - Reads ECR repository URLs from `live-deploy-aws/shared/nondurable` state
@@ -14,8 +14,8 @@ Replace the build contexts to match your legacy project.
 """
 import argparse, os, json, subprocess, sys, re, threading, time
 from tools._env import load_dotenv, require, get_int_env
-from tools.aws.tofu import tofu, get_tofu_env
-from tools.aws.backend import backend_config, resolve_region
+from tools.aws.common.core.terra_runner import get_terra_env
+from tools.aws.common.core.backend import backend_config, resolve_region
 from tools.common.logging import logger
 
 load_dotenv()
@@ -133,8 +133,8 @@ def tofu_output_json(stack_dir: str, env: str, region: str | None = None):
         args = ["init","-upgrade","-reconfigure"]
         for c in cfg:
             args += ["-backend-config", c]
-        subprocess.run([os.getenv("FRU_TF_BIN","tofu")] + args, cwd=stack_dir, check=True, env=get_tofu_env(region))
-        out = subprocess.check_output([os.getenv("FRU_TF_BIN","tofu"),"output","-json"], cwd=stack_dir, text=True, timeout=30, env=get_tofu_env(region))
+        subprocess.run([os.getenv("FRU_TF_BIN","tofu")] + args, cwd=stack_dir, check=True, env=get_terra_env(region))
+        out = subprocess.check_output([os.getenv("FRU_TF_BIN","tofu"),"output","-json"], cwd=stack_dir, text=True, timeout=30, env=get_terra_env(region))
         result = json.loads(out)
         logger.success(f"[TOFU OUTPUT OK] {stack_dir}")
         return result

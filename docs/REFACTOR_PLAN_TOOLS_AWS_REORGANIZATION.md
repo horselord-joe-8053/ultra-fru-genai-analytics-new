@@ -1,6 +1,6 @@
 # tools/aws/ Big Reorganization Refactor Plan
 
-This document describes the planned reorganization of `tools/aws/` into a modular layout with clear separation of concerns. **No code changes have been applied yet**—this is the master plan.
+This document describes the reorganization of `tools/aws/` into a modular layout with clear separation of concerns. **Refactor completed** (see git history).
 
 ---
 

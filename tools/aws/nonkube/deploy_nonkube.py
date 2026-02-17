@@ -6,14 +6,14 @@ Called by deploy.py when scope is nonkube or all (nonkube first when scope=all).
 from tools._env import require
 from tools.common.logging import logger
 from tools.common.stats import DeployStats, scope_for
-from tools.aws.deploy_common import (
+from tools.aws.common.deploy.deploy_common import (
     apply_stack,
     tofu_output_json,
     upload_csv_to_delta_bucket,
     clear_delta_table,
     run_ecs_bootstrap,
 )
-from tools.aws.deploy_frontend import (
+from tools.aws.common.deploy.deploy_frontend import (
     deploy_frontend_to_s3,
     invalidate_cloudfront,
     wait_for_invalidation,

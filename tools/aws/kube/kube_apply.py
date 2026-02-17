@@ -3,8 +3,8 @@
 Apply Kubernetes manifests (bootstrap + schedule) to EKS.
 
 Examples:
-  python tools/aws/kube_apply.py --env dev --phase bootstrap
-  python tools/aws/kube_apply.py --env dev --phase schedule
+  python tools/aws/kube/kube_apply.py --env dev --phase bootstrap
+  python tools/aws/kube/kube_apply.py --env dev --phase schedule
 
 This tool:
 - ensures kubeconfig for EKS
@@ -14,8 +14,8 @@ This tool:
 """
 import argparse, base64, json, os, subprocess
 from tools._env import load_dotenv, require
-from tools.aws.backend import resolve_region
-from tools.aws.bootstrap_helpers import check_k8s_bootstrap_job_succeeded, JOB_BOOTSTRAP, K8S_NAMESPACE
+from tools.aws.common.core.backend import resolve_region
+from tools.aws.common.deploy.bootstrap_helpers import check_k8s_bootstrap_job_succeeded, JOB_BOOTSTRAP, K8S_NAMESPACE
 
 load_dotenv()
 
@@ -73,7 +73,7 @@ def main():
     os.environ["AWS_REGION"] = region
 
     # ensure kubeconfig
-    subprocess.run(["python","tools/aws/eks_kubeconfig.py","--env",args.env], check=False, env={**os.environ, "CLOUD_REGION": region, "AWS_REGION": region})
+    subprocess.run(["python","tools/aws/kube/eks_kubeconfig.py","--env",args.env], check=False, env={**os.environ, "CLOUD_REGION": region, "AWS_REGION": region})
 
     spark_image = args.spark_image
     if not spark_image:

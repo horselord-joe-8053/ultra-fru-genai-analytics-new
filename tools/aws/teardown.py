@@ -28,14 +28,14 @@ import subprocess
 
 from tools.common.logging import logger
 from tools._env import load_dotenv
-from tools.aws.backend import backend_config, resolve_region
+from tools.aws.common.core.backend import backend_config, resolve_region
 from tools.common.stats import TeardownStats, scope_for
 from tools.phases import PhaseTracker, teardown_phases
 from tools.aws.terra_var_handling import get_base_vars
-from tools.aws.bootstrap_helpers import k8s_remove_bootstrap_and_scheduler
-from tools.aws.teardown_orphan_cleanup import remove_orphaned_eks_security_groups
+from tools.aws.common.deploy.bootstrap_helpers import k8s_remove_bootstrap_and_scheduler
+from tools.aws.kube.teardown_orphan_cleanup import remove_orphaned_eks_security_groups
 from tools.common.retry import run_with_retry, run_with_heartbeat
-from tools.aws.tofu import get_tofu_env
+from tools.aws.common.core.terra_runner import get_terra_env
 
 load_dotenv()
 
@@ -206,7 +206,7 @@ def init_stack(stack_dir: str, env: str, region: str | None = None):
     result = run_with_heartbeat(
         init_cmd,
         cwd=stack_dir,
-        env=get_tofu_env(region),
+        env=get_terra_env(region),
         description=description,
         interval_sec=TEARDOWN_HEARTBEAT_INTERVAL_SEC,
     )
@@ -233,7 +233,7 @@ def destroy_stack(stack_dir: str, env: str, region: str | None = None, stats: Te
         run_with_retry(
             cmd,
             cwd=stack_dir,
-            env=get_tofu_env(region),
+            env=get_terra_env(region),
             description=description,
             heartbeat_interval_sec=TEARDOWN_HEARTBEAT_INTERVAL_SEC,
             stream_output=True,  # Stream tofu destroy so user sees per-resource progress

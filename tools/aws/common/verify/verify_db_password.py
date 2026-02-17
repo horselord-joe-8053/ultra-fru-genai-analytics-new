@@ -4,7 +4,7 @@ Verify that PGPASSWORD in .env can connect to Aurora, or at least
 that db_password_plain in Secrets Manager matches .env (deploy would sync it).
 
 Usage:
-  python tools/aws/verify_db_password.py --env dev
+  python tools/aws/common/verify/verify_db_password.py --env dev
 
 Exits 0 if connection succeeds or secrets match; 1 otherwise.
 Does not print the password.
@@ -16,8 +16,8 @@ import subprocess
 import sys
 
 from tools._env import load_dotenv
-from tools.aws.backend import backend_config, resolve_region
-from tools.aws.tofu import get_tofu_env
+from tools.aws.common.core.backend import backend_config, resolve_region
+from tools.aws.common.core.terra_runner import get_terra_env
 from tools.common.retry import run_with_retry
 from tools.common.logging import logger
 
@@ -31,9 +31,9 @@ def get_durable_outputs(env: str, region: str) -> dict:
     for c in cfg:
         init_args += ["-backend-config", c]
     exe = os.getenv("FRU_TF_BIN", "tofu")
-    run_with_retry([exe] + init_args, cwd=stack_dir, env=get_tofu_env(region), description="tofu init")
+    run_with_retry([exe] + init_args, cwd=stack_dir, env=get_terra_env(region), description="tofu init")
     out_raw = subprocess.check_output(
-        [exe, "output", "-json"], cwd=stack_dir, text=True, env=get_tofu_env(region)
+        [exe, "output", "-json"], cwd=stack_dir, text=True, env=get_terra_env(region)
     )
     return json.loads(out_raw)
 
