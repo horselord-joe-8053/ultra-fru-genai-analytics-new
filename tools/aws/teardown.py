@@ -29,7 +29,7 @@ import subprocess
 from tools.common.logging import logger
 from tools._env import load_dotenv
 from tools.aws._backend import backend_config, resolve_region
-from tools.aws.teardown_stats import TeardownStats, scope_for
+from tools.common.stats import TeardownStats, scope_for
 from tools.phases import PhaseTracker, teardown_phases
 from tools.aws._aws_vars import get_base_vars
 from tools.aws.bootstrap_helpers import k8s_remove_bootstrap_and_scheduler
@@ -248,7 +248,12 @@ def destroy_stack(stack_dir: str, env: str, region: str | None = None, stats: Te
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--scope", choices=["kube", "nonkube", "all"], required=True)
+    ap.add_argument(
+        "--scope",
+        choices=["kube", "nonkube", "all"],
+        default=os.getenv("DEFAULT_SCOPE", "nonkube"),
+        help="Teardown scope (default: DEFAULT_SCOPE from .env or nonkube)",
+    )
     ap.add_argument("--env", default=os.getenv("FRU_ENV", "dev"))
     ap.add_argument("--region", default=None, help="Region (default: CLOUD_REGION)")
     ap.add_argument("--non-interactive", action="store_true", help="Skip confirmation prompts")

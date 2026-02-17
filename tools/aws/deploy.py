@@ -1,10 +1,10 @@
-
 """
 AWS Deploy Orchestrator (legacy-aware, best-practice simplification)
 
 Usage:
   python tools/aws/deploy.py --scope kube --env dev
   python tools/aws/deploy.py --scope nonkube --env dev
+  python tools/aws/deploy.py --scope all --env dev
 
 Key behaviors aligned with the legacy repo:
 - Uses `.env` env-map (names follow legacy)
@@ -23,199 +23,96 @@ Flow:
 8) bootstrap analytics once:
    - kube: applies k8s Job then CronJob
    - nonkube: runs ECS one-off task override against the service task def
-"""
-import argparse, os, subprocess, json, sys
-from tools._env import load_dotenv, require
-from tools.aws.tofu import tofu, get_tofu_env
-from tools.aws._backend import backend_config, resolve_region
 
+Scope "all": deploys nonkube first, then kube (idempotent, shared phases run once).
+"""
+import argparse
+import os
+import subprocess
+import sys
+import time
+
+from tools._env import load_dotenv, require
+from tools.aws._backend import resolve_region
 from tools.common.logging import logger
-from tools.aws._aws_vars import get_base_vars
 from tools.phases import PhaseTracker, deploy_phases
-from tools.common.retry import run_with_retry
-from tools.aws.bootstrap_helpers import (
-    wait_for_dns_resolvable,
-    check_ecs_bootstrap_succeeded,
-    K8S_NAMESPACE,
-    wait_for_fru_api_ready,
-    verify_api_db_connected,
-    k8s_rollout_restart_api,
-)
-from tools.aws.deploy_frontend import deploy_frontend_to_s3, invalidate_cloudfront, wait_for_invalidation
+from tools.common.stats import DeployStats, scope_for
+from tools.aws.deploy_common import tofu_output_json
+from tools.aws.deploy_kube import run_deploy_kube
+from tools.aws.deploy_nonkube import run_deploy_nonkube
+from tools.aws.bootstrap_helpers import K8S_NAMESPACE
 
 load_dotenv()
 
-REPO_ROOT = os.path.abspath(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-CSV_PATH = os.path.join(REPO_ROOT, "core-app", "data", "raw", "fridge_sales_with_rating.csv")
 
-
-def upload_csv_to_delta_bucket(delta_bucket: str, region: str) -> bool:
-    """Upload CSV to S3 raw/ (legacy pattern). Spark run_analytics reads from s3a://bucket/raw/... when creating Delta.
-    Returns True if upload succeeded (caller may force bootstrap to refresh Delta)."""
-    if not os.path.exists(CSV_PATH):
-        logger.warning(f"CSV not found: {CSV_PATH}; Spark will use bundled CSV")
-        return False
-    s3_uri = f"s3://{delta_bucket}/raw/fridge_sales_with_rating.csv"
-    logger.info(f"Uploading CSV to {s3_uri} (legacy: ensures 200 rows for batch analytics)")
+def _print_success_url(env: str, region: str, scope: str) -> None:
+    """Print deployment success and frontend URL."""
     try:
-        subprocess.run(
-            ["aws", "s3", "cp", CSV_PATH, s3_uri, "--region", region],
-            cwd=REPO_ROOT,
-            check=True,
-        )
-        logger.success("CSV uploaded to S3")
-        return True
-    except subprocess.CalledProcessError as e:
-        logger.warning(f"CSV upload failed: {e}; Spark may fall back to bundled CSV")
-        return False
+        logger.info("Retrieving frontend URL...")
+        if scope in ("kube", "all"):
+            stack_out = tofu_output_json("live-deploy-aws/kube", env, region)
+            cf_domain = stack_out.get("cloudfront_domain_name", {}).get("value")
+            if cf_domain:
+                frontend_url = f"https://{cf_domain}"
+                _log_success(frontend_url)
+                return
+            # Fallback: LB hostname
+            lb_host = ""
+            for attempt in range(12):
+                try:
+                    lb_host = subprocess.check_output([
+                        "kubectl", "get", "svc", "fru-api-svc", "-n", K8S_NAMESPACE,
+                        "-o", "jsonpath={.status.loadBalancer.ingress[0].hostname}",
+                    ], text=True).strip()
+                    if lb_host:
+                        break
+                except Exception:
+                    pass
+                if attempt < 11:
+                    time.sleep(10)
+            if lb_host:
+                _log_success(f"http://{lb_host}")
+                return
 
-
-def clear_delta_table(delta_bucket: str, region: str) -> None:
-    """Clear existing Delta table in S3 so bootstrap creates fresh from CSV (avoids stale upgrade path)."""
-    prefix = "delta/fru_sales/"
-    s3_uri = f"s3://{delta_bucket}/{prefix}"
-    logger.info(f"Clearing Delta table at {s3_uri} (forces fresh create from CSV)")
-    try:
-        subprocess.run(
-            ["aws", "s3", "rm", s3_uri, "--recursive", "--region", region],
-            cwd=REPO_ROOT,
-            check=True,
-        )
-        logger.success("Delta table cleared")
-    except subprocess.CalledProcessError as e:
-        logger.warning(f"Delta clear failed: {e}; bootstrap may upgrade existing table")
-
-def init_stack(stack_dir: str, env: str, region: str | None = None):
-    logger.info(f"[INIT] {stack_dir}")
-    cfg = backend_config(stack_dir, env, region)
-    args = ["init", "-lock=false", "-upgrade", "-reconfigure"]
-    for c in cfg:
-        args += ["-backend-config", c]
-    exe = os.getenv("FRU_TF_BIN", "tofu")
-    cmd = [exe] + args
-    try:
-        run_with_retry(cmd, cwd=stack_dir, env=get_tofu_env(region), description=f"tofu init in {stack_dir}")
-        logger.success(f"[INIT OK] {stack_dir}")
-    except subprocess.CalledProcessError as e:
-        logger.error(f"[INIT FAILED] {stack_dir}: {e}")
-        raise
-
-def apply_stack(stack_dir: str, env: str, extra_vars: list[str], region: str | None = None):
-    logger.step(f"Applying stack: {stack_dir}")
-    try:
-        init_stack(stack_dir, env, region)
-        get_base_vars(env, region)
-        base = []  # get_base_vars sets TF_VAR_ in env
-        logger.info(f"[APPLY] Running tofu apply with base vars + extra vars: {extra_vars}")
-        tofu(["apply","-auto-approve"] + base + extra_vars, cwd=stack_dir, check=True)
-        logger.success(f"[APPLY OK] {stack_dir}")
-    except subprocess.CalledProcessError as e:
-        logger.error(f"[APPLY FAILED] {stack_dir}: {e}")
-        raise
+        if scope in ("nonkube", "all"):
+            stack_out = tofu_output_json("live-deploy-aws/nonkube", env, region)
+            cf_domain = stack_out.get("cloudfront_domain_name", {}).get("value")
+            alb_dns = stack_out.get("alb_dns_name", {}).get("value")
+            if cf_domain:
+                frontend_url = f"https://{cf_domain}"
+                _log_success(frontend_url, alb_dns=alb_dns)
+                return
+            if alb_dns:
+                _log_success(f"http://{alb_dns}")
     except Exception as e:
-        logger.error(f"[APPLY ERROR] {stack_dir}: {e}")
-        raise
+        logger.warning(f"Could not retrieve frontend URL: {e}")
 
-def tofu_output_json(stack_dir: str, env: str, region: str | None = None):
-    logger.info(f"[OUTPUT] Getting outputs from {stack_dir}")
-    try:
-        init_stack(stack_dir, env, region)
-        out = subprocess.check_output(
-            [os.getenv("FRU_TF_BIN","tofu"),"output","-json"],
-            cwd=stack_dir, text=True, env=get_tofu_env(region)
-        )
-        logger.success(f"[OUTPUT OK] {stack_dir}")
-        return json.loads(out)
-    except subprocess.CalledProcessError as e:
-        logger.error(f"[OUTPUT FAILED] {stack_dir}: {e}")
-        raise
-    except Exception as e:
-        logger.error(f"[OUTPUT ERROR] {stack_dir}: {e}")
-        raise
 
-def aws_json(cmd):
-    logger.info(f"[AWS] Running: {' '.join(cmd)}")
-    try:
-        out = subprocess.check_output(cmd, text=True)
-        result = json.loads(out)
-        logger.success(f"[AWS OK]")
-        return result
-    except subprocess.CalledProcessError as e:
-        logger.error(f"[AWS FAILED]: {e}")
-        raise
-    except Exception as e:
-        logger.error(f"[AWS ERROR]: {e}")
-        raise
+def _log_success(frontend_url: str, alb_dns: str | None = None) -> None:
+    logger.success(f"\n{'='*70}")
+    logger.success("✓ DEPLOYMENT COMPLETE - READY FOR TESTING")
+    logger.success(f"{'='*70}")
+    logger.success(f"\n🌐 CloudFront URL: {frontend_url}")
+    logger.success(f"   Health Check: {frontend_url}/health")
+    logger.success(f"   API Version: {frontend_url}/version")
+    logger.success(f"\n   Open in browser: {frontend_url}")
+    if alb_dns:
+        logger.success(f"   (Direct ALB: http://{alb_dns})")
+    logger.success(f"{'='*70}\n")
 
-def run_ecs_bootstrap(env: str, region: str | None = None, force: bool = False):
-    region = region or os.getenv("CLOUD_REGION", "").strip() or require("AWS_REGION")
-
-    if not force and check_ecs_bootstrap_succeeded(env):
-        logger.success("[ECS BOOTSTRAP] Skip: bootstrap already succeeded (idempotent)")
-        return
-
-    logger.step("Executing ECS analytics bootstrap (Spark run_analytics)")
-    try:
-        out = tofu_output_json("live-deploy-aws/nonkube", env, region)
-        cluster = out.get("ecs_cluster_name", {}).get("value") or f"{require('FRU_PREFIX')}-{env}-ecs"
-        spark_task_def = out.get("spark_task_definition_arn", {}).get("value")
-        if not spark_task_def:
-            raise SystemExit("spark_task_definition_arn not in nonkube outputs")
-
-        durable = tofu_output_json("live-deploy-aws/shared/durable", env, region)
-        private_subnets = durable.get("private_subnet_ids", {}).get("value", [])
-        if not private_subnets:
-            raise SystemExit("Could not determine private subnets for Spark bootstrap.")
-
-        tasks_sg = out.get("ecs_tasks_sg_id", {}).get("value")
-        if not tasks_sg:
-            raise SystemExit("ecs_tasks_sg_id not in nonkube outputs")
-
-        logger.info(f"[ECS BOOTSTRAP] Cluster: {cluster}, Spark task def: {spark_task_def}")
-
-        net_cfg = {
-            "awsvpcConfiguration": {
-                "subnets": private_subnets,
-                "securityGroups": [tasks_sg],
-                "assignPublicIp": "DISABLED",
-            }
-        }
-        overrides = {
-            "containerOverrides": [{
-                "name": "spark",
-                "command": ["/opt/spark/bin/spark-submit", "--packages", "io.delta:delta-spark_2.12:3.1.0,org.apache.hadoop:hadoop-aws:3.3.4", "/opt/fru/jobs/run_analytics.py"]
-            }]
-        }
-
-        logger.info("[ECS BOOTSTRAP] Starting one-off Spark task...")
-        try:
-            proc = subprocess.run([
-                "aws", "ecs", "run-task",
-                "--cluster", cluster,
-                "--task-definition", spark_task_def,
-                "--launch-type", "FARGATE",
-                "--network-configuration", json.dumps(net_cfg),
-                "--overrides", json.dumps(overrides),
-                "--region", region,
-            ], check=True, capture_output=True, text=True, timeout=60)
-            logger.success("ECS bootstrap task started successfully.")
-            logger.info(f"[ECS BOOTSTRAP] Task info: {proc.stdout[:200]}...")
-        except subprocess.TimeoutExpired:
-            logger.error("AWS ECS run-task timed out (CLI hang).")
-        except subprocess.CalledProcessError as e:
-            logger.error(f"[ECS BOOTSTRAP FAILED] Failed to run ECS task: {e.stderr}")
-            raise
-    except Exception as e:
-        logger.error(f"[ECS BOOTSTRAP ERROR] {e}")
-        raise
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--scope", choices=["kube","nonkube"], required=True)
-    ap.add_argument("--env", default=os.getenv("ENVIRONMENT", os.getenv("FRU_ENV","dev")))
+    ap.add_argument(
+        "--scope",
+        choices=["kube", "nonkube", "all"],
+        default=os.getenv("DEFAULT_SCOPE", "nonkube"),
+        help="Deploy scope (default: DEFAULT_SCOPE from .env or nonkube)",
+    )
+    ap.add_argument("--env", default=os.getenv("ENVIRONMENT", os.getenv("FRU_ENV", "dev")))
     ap.add_argument("--region", default="", help="Region (default: CLOUD_REGION)")
     ap.add_argument("--skip-doctor", action="store_true")
-    ap.add_argument("--force-spark-rebuild", action="store_true", help="Build Spark image with --no-cache (ensures fresh run_analytics)")
+    ap.add_argument("--force-spark-rebuild", action="store_true", help="Build Spark image with --no-cache")
     args = ap.parse_args()
 
     env = args.env
@@ -228,9 +125,10 @@ def main():
     logger.step(f"Starting deployment: scope={scope} env={env} region={region}")
     phases = deploy_phases(scope)
     tracker = PhaseTracker("Deploy", phases)
+    stats = DeployStats()
 
-    # War Story 44: Require PGPASSWORD when deploying kube/nonkube (Aurora + db_password_plain must match)
-    if scope in ("kube", "nonkube") and not os.getenv("PGPASSWORD"):
+    # War Story 44: Require PGPASSWORD when deploying kube/nonkube
+    if scope in ("kube", "nonkube", "all") and not os.getenv("PGPASSWORD"):
         logger.error("PGPASSWORD must be set in .env when deploying kube/nonkube.")
         logger.error("Aurora and db_password_plain in Secrets Manager must use the same password.")
         logger.error("See README_WAR_STORIES.md ## 44 for resolution steps.")
@@ -239,9 +137,15 @@ def main():
     try:
         # Phase 1: Doctor
         tracker.start_phase(1)
+        stats.set_scope("shared")
         if not args.skip_doctor:
             logger.step(f"[1/{len(phases)}] Running doctor checks...")
-            subprocess.run(["python","tools/aws/doctor.py","--env",env,"--region",region,"--scope",scope], check=True, env={**os.environ, "CLOUD_REGION": region, "AWS_REGION": region})
+            with stats.timed("Doctor", "doctor checks"):
+                subprocess.run(
+                    ["python", "tools/aws/doctor.py", "--env", env, "--region", region, "--scope", scope],
+                    check=True,
+                    env={**os.environ, "CLOUD_REGION": region, "AWS_REGION": region},
+                )
             logger.success("Doctor OK")
         else:
             logger.info(f"[1/{len(phases)}] Skipping doctor checks")
@@ -250,13 +154,16 @@ def main():
         # Phase 2: Backend
         tracker.start_phase(2)
         logger.step(f"[2/{len(phases)}] Bootstrapping state backend...")
-        subprocess.run(["python","tools/aws/bootstrap_state_backend.py"], check=True)
+        with stats.timed("Backend", "bootstrap_state_backend"):
+            subprocess.run(["python", "tools/aws/bootstrap_state_backend.py"], check=True)
         logger.success("Backend bootstrapped")
         tracker.end_phase(2)
 
         # Phase 3: Shared durable
         tracker.start_phase(3)
         logger.step(f"[3/{len(phases)}] Applying shared durable stack (VPC + Aurora + Secrets)...")
+        from tools.aws.deploy_common import apply_stack
+
         aurora_pw = os.getenv("PGPASSWORD") or ""
         durable_vars = [
             "-var", 'azs=["us-east-1a","us-east-1b"]',
@@ -268,21 +175,28 @@ def main():
             durable_vars += ["-var", f"aurora_master_password={aurora_pw}"]
         else:
             logger.warning("PGPASSWORD not set; Aurora creation may fail. Set in .env before deploy.")
-        apply_stack("live-deploy-aws/shared/durable", env, durable_vars, region)
+        with stats.timed("Tofu apply", "live-deploy-aws/shared/durable"):
+            apply_stack("live-deploy-aws/shared/durable", env, durable_vars, region)
         logger.success("Shared durable applied")
         tracker.end_phase(3)
 
         # Phase 4: Shared nondurable
         tracker.start_phase(4)
         logger.step(f"[4/{len(phases)}] Applying shared nondurable stack (ECR + S3)...")
-        apply_stack("live-deploy-aws/shared/nondurable", env, [], region)
+        with stats.timed("Tofu apply", "live-deploy-aws/shared/nondurable"):
+            apply_stack("live-deploy-aws/shared/nondurable", env, [], region)
         logger.success("Shared nondurable applied")
         tracker.end_phase(4)
 
         # Phase 5: Secrets
         tracker.start_phase(5)
         logger.step(f"[5/{len(phases)}] Ensuring secrets in Secrets Manager...")
-        subprocess.run(["python","tools/aws/ensure_secrets.py","--env",env,"--region",region], check=True, env={**os.environ, "CLOUD_REGION": region, "AWS_REGION": region})
+        with stats.timed("Secrets", "ensure_secrets"):
+            subprocess.run(
+                ["python", "tools/aws/ensure_secrets.py", "--env", env, "--region", region],
+                check=True,
+                env={**os.environ, "CLOUD_REGION": region, "AWS_REGION": region},
+            )
         logger.success("Secrets ensured")
         tracker.end_phase(5)
 
@@ -290,25 +204,27 @@ def main():
         tracker.start_phase(6)
         logger.step(f"[6/{len(phases)}] Setting up database (pgvector, schema, data)...")
         try:
-            subprocess.run(["python","tools/aws/setup_database.py","--env",env,"--region",region], check=True, env={**os.environ, "CLOUD_REGION": region, "AWS_REGION": region})
+            with stats.timed("Database", "setup_database"):
+                subprocess.run(
+                    ["python", "tools/aws/setup_database.py", "--env", env, "--region", region],
+                    check=True,
+                    env={**os.environ, "CLOUD_REGION": region, "AWS_REGION": region},
+                )
             logger.success("Database setup complete")
         except subprocess.CalledProcessError as e:
             logger.warning(f"Database setup had issues (may already be initialized): {e}")
         tracker.end_phase(6)
 
-        # Phase 7: Build & push (build_and_push has its own per-step progress: 1/4, 2/4, etc.)
+        # Phase 7: Build & push
         tracker.start_phase(7)
         logger.step(f"[7/{len(phases)}] Building and pushing images...")
         build_env = {**os.environ, "CLOUD_REGION": region, "AWS_REGION": region}
-        build_env["PYTHONUNBUFFERED"] = "1"  # Flush output immediately (avoids silent hang when run under Cursor/CI)
+        build_env["PYTHONUNBUFFERED"] = "1"
         build_cmd = ["python", "tools/aws/build_and_push_images.py", "--env", env, "--region", region]
         if args.force_spark_rebuild:
             build_cmd.append("--no-cache")
-        proc = subprocess.run(
-            build_cmd,
-            cwd=os.getcwd(),
-            env=build_env,
-        )
+        with stats.timed("Build & push", "build_and_push_images"):
+            proc = subprocess.run(build_cmd, cwd=os.getcwd(), env=build_env)
         if proc.returncode != 0:
             raise subprocess.CalledProcessError(proc.returncode, proc.args)
         logger.success("Images built and pushed")
@@ -327,245 +243,43 @@ def main():
         logger.success("ECR URLs obtained")
         tracker.end_phase(8)
 
-        if scope == "kube":
+        # Scope-specific deploy: nonkube first when scope=all, then kube
+        if scope == "all":
+            phase_idx = 8
+            phase_idx += 1
+            tracker.start_phase(phase_idx)
+            run_deploy_nonkube(env, region, snd, app_image_full, spark_image_full, args, stats=stats)
+            tracker.end_phase(phase_idx)
+
+            phase_idx += 1
+            tracker.start_phase(phase_idx)
+            run_deploy_kube(env, region, snd, app_image_full, spark_image_full, args, stats=stats)
+            tracker.end_phase(phase_idx)
+        elif scope == "kube":
             tracker.start_phase(9)
-            logger.step(f"[9/{len(phases)}] Applying EKS stack...")
-            apply_stack("live-deploy-aws/kube", env, [
-                "-var", f"eks_instance_types=[\"{require('EKS_NODE_INSTANCE_TYPES')}\"]",
-                "-var", f"eks_desired_nodes={require('EKS_DESIRED_NODES')}",
-            ], region)
-            logger.success("EKS stack applied")
+            run_deploy_kube(env, region, snd, app_image_full, spark_image_full, args, stats=stats)
             tracker.end_phase(9)
-
-            tracker.start_phase(10)
-            logger.step(f"[10/{len(phases)}] Running Kubernetes bootstrap and schedule...")
-            delta_bucket = snd["delta_bucket"]["value"]
-            csv_uploaded = upload_csv_to_delta_bucket(delta_bucket, region)
-            durable = tofu_output_json("live-deploy-aws/shared/durable", env, region)
-            aurora_endpoint = durable.get("aurora_endpoint", {}).get("value", "")
-            db_secret_arn = durable.get("db_password_plain_secret_arn", {}).get("value", "")
-            openai_secret_arn = durable.get("openai_api_key_secret_arn", {}).get("value", "")
-            region = os.getenv("CLOUD_REGION", os.getenv("AWS_REGION", "us-east-1"))
-            delta_table_path = f"s3a://{delta_bucket}/delta/fru_sales"
-            kube_apply_args = [
-                "python", "tools/aws/kube_apply.py", "--env", env, "--region", region, "--phase", "bootstrap",
-                "--spark-image", spark_image_full, "--app-image", app_image_full,
-                "--delta-bucket", delta_bucket,
-                "--pg-host", aurora_endpoint or "localhost",
-                "--pg-port", str(durable.get("aurora_port", {}).get("value", 5432)),
-                "--pg-database", durable.get("aurora_database_name", {}).get("value", "fru_db"),
-                "--pg-user", "postgres",
-                "--aws-region", region,
-                "--delta-table-path", delta_table_path,
-            ]
-            if db_secret_arn:
-                kube_apply_args += ["--db-secret-arn", db_secret_arn]
-            if openai_secret_arn:
-                kube_apply_args += ["--openai-secret-arn", openai_secret_arn]
-            bedrock_profile = os.getenv("AWS_BEDROCK_INFERENCE_PROFILE_ID", "")
-            bedrock_model = os.getenv("AWS_BEDROCK_MODEL_ID", "anthropic.claude-3-5-haiku-20241022-v1:0")
-            if bedrock_profile:
-                kube_apply_args += ["--bedrock-inference-profile-id", bedrock_profile]
-            if bedrock_model:
-                kube_apply_args += ["--bedrock-model-id", bedrock_model]
-            if csv_uploaded:
-                kube_apply_args += ["--force"]
-            subprocess.run(kube_apply_args, check=True)
-            subprocess.run([
-                "python", "tools/aws/kube_apply.py", "--env", env, "--region", region, "--phase", "schedule",
-                "--spark-image", spark_image_full, "--delta-bucket", delta_bucket,
-                "--pg-host", aurora_endpoint or "localhost",
-                "--pg-port", str(durable.get("aurora_port", {}).get("value", 5432)),
-                "--pg-database", durable.get("aurora_database_name", {}).get("value", "fru_db"),
-                "--pg-user", "postgres",
-                "--delta-table-path", delta_table_path,
-            ], check=True, env={**os.environ, "CLOUD_REGION": region, "AWS_REGION": region})
-            logger.success("Kubernetes bootstrap and schedule complete")
-
-            # War Story 44: Restart pods so they pick up updated db-credentials (K8s does not hot-reload secrets)
-            k8s_rollout_restart_api(env, region=region)
-
-            # Fail-fast: wait for API pods to be ready before wiring CloudFront (War Story 43)
-            logger.step("Waiting for fru-api pods to be ready...")
-            wait_for_fru_api_ready(env, timeout_seconds=600, check_interval_seconds=15, region=region)
-            logger.success("fru-api pods ready")
-            tracker.end_phase(10)
-
-            # Wire K8s LoadBalancer into CloudFront API origin (ingress_hostname was null at first apply)
-            import time as time_module
-            lb_host = ""
-            for attempt in range(18):  # Up to ~3 minutes for LB to get hostname
-                try:
-                    lb_host = subprocess.check_output([
-                        "kubectl", "get", "svc", "fru-api-svc", "-n", K8S_NAMESPACE,
-                        "-o", "jsonpath={.status.loadBalancer.ingress[0].hostname}"
-                    ], text=True, env={**os.environ, "CLOUD_REGION": region, "AWS_REGION": region}).strip()
-                    if lb_host:
-                        break
-                except Exception:
-                    pass
-                if attempt < 17:
-                    time_module.sleep(10)
-            if lb_host:
-                # AWS NLB DNS can take 1-2 min to propagate; wait before health check
-                wait_for_dns_resolvable(lb_host, timeout_seconds=120, check_interval_sec=5, heartbeat_interval_sec=30)
-                # War Story 44: Verify DB connected before declaring success (catch password mismatch)
-                verify_api_db_connected(f"http://{lb_host}", timeout_seconds=60)
-                logger.step("Re-applying kube stack with LoadBalancer hostname for CloudFront API origin...")
-                apply_stack("live-deploy-aws/kube", env, [
-                    "-var", f"eks_instance_types=[\"{require('EKS_NODE_INSTANCE_TYPES')}\"]",
-                    "-var", f"eks_desired_nodes={require('EKS_DESIRED_NODES')}",
-                    "-var", f"ingress_hostname={lb_host}",
-                ], region)
-                logger.success("CloudFront API origin wired to K8s LoadBalancer")
-            else:
-                logger.warning("LoadBalancer hostname not available; CloudFront API routes may not work until re-applied manually")
-
-            # Deploy frontend to S3 (kube parity with nonkube)
-            try:
-                stack_out = tofu_output_json("live-deploy-aws/kube", env, region)
-                frontend_bucket = stack_out.get("frontend_s3_bucket_id", {}).get("value")
-                if frontend_bucket:
-                    deploy_frontend_to_s3(frontend_bucket, env)
-                    cf_dist_id = stack_out.get("cloudfront_distribution_id", {}).get("value")
-                    if cf_dist_id:
-                        ok, inv_id = invalidate_cloudfront(cf_dist_id, region)
-                        if ok and inv_id:
-                            if not wait_for_invalidation(cf_dist_id, inv_id, timeout_minutes=15, non_blocking=True, region=region):
-                                logger.warning("[CloudFront Invalidation] Did not complete within timeout; deployment continues.")
-                    else:
-                        logger.warning("[CloudFront Invalidation] Skipped: cloudfront_distribution_id not in kube stack output")
-                else:
-                    logger.warning("frontend_s3_bucket_id not found; skipping kube frontend deploy")
-            except Exception as e:
-                logger.warning(f"Could not deploy kube frontend: {e}")
-
-            # Get CloudFront / K8s LoadBalancer URL for manual testing
-            try:
-                logger.info("Retrieving frontend URL...")
-                stack_out = tofu_output_json("live-deploy-aws/kube", env, region)
-                cf_domain = stack_out.get("cloudfront_domain_name", {}).get("value")
-                if cf_domain:
-                    frontend_url = f"https://{cf_domain}"
-                    logger.success(f"\n{'='*70}")
-                    logger.success(f"✓ DEPLOYMENT COMPLETE - READY FOR TESTING")
-                    logger.success(f"{'='*70}")
-                    logger.success(f"\n🌐 CloudFront URL: {frontend_url}")
-                    logger.success(f"   Health Check: {frontend_url}/health")
-                    logger.success(f"   API Version: {frontend_url}/version")
-                    logger.success(f"\n   Open in browser: {frontend_url}")
-                    logger.success(f"{'='*70}\n")
-                else:
-                    import time as time_module
-                    lb_host = ""
-                    for attempt in range(12):  # Try for up to 2 minutes
-                        try:
-                            lb_host = subprocess.check_output([
-                                "kubectl", "get", "svc", "fru-api-svc", "-n", K8S_NAMESPACE,
-                                "-o", "jsonpath={.status.loadBalancer.ingress[0].hostname}"
-                            ], text=True).strip()
-                            if lb_host:
-                                break
-                        except Exception:
-                            pass
-                        if attempt < 11:
-                            time_module.sleep(10)
-
-                    if lb_host:
-                        frontend_url = f"http://{lb_host}"
-                        logger.success(f"\n{'='*70}")
-                        logger.success(f"✓ DEPLOYMENT COMPLETE - READY FOR TESTING")
-                        logger.success(f"{'='*70}")
-                        logger.success(f"\n🌐 Frontend URL: {frontend_url}")
-                        logger.success(f"   Health Check: {frontend_url}/health")
-                        logger.success(f"   API Version: {frontend_url}/version")
-                        logger.success(f"\n   Open in browser: {frontend_url}")
-                        logger.success(f"{'='*70}\n")
-                    else:
-                        logger.warning("LoadBalancer URL not yet available (may take a few minutes)")
-            except Exception as e:
-                logger.warning(f"Could not retrieve frontend URL: {e}")
         else:
+            # scope == "nonkube"
             tracker.start_phase(9)
-            logger.step(f"[9/{len(phases)}] Applying ECS stack...")
-            apply_stack("live-deploy-aws/nonkube", env, [
-                "-var", f"app_image={app_repo_url}:{require('APP_IMAGE_TAG')}",
-                "-var", f"spark_image={spark_image_full}",
-            ], region)
-            logger.success("ECS stack applied")
+            run_deploy_nonkube(env, region, snd, app_image_full, spark_image_full, args, stats=stats)
             tracker.end_phase(9)
 
-            # Deploy frontend to S3 (build + sync) - matches legacy deploy-frontend.sh; fixes 403 Access Denied
-            stack_out = tofu_output_json("live-deploy-aws/nonkube", env, region)
-            frontend_bucket = stack_out.get("frontend_s3_bucket_id", {}).get("value")
-            if frontend_bucket:
-                deploy_frontend_to_s3(frontend_bucket, env)
-                cf_dist_id = stack_out.get("cloudfront_distribution_id", {}).get("value")
-                if cf_dist_id:
-                    ok, inv_id = invalidate_cloudfront(cf_dist_id, region)
-                    if ok and inv_id:
-                        if not wait_for_invalidation(cf_dist_id, inv_id, timeout_minutes=15, non_blocking=True, region=region):
-                            logger.warning("[CloudFront Invalidation] Did not complete within timeout; deployment continues.")
-                else:
-                    logger.warning("[CloudFront Invalidation] Skipped: cloudfront_distribution_id not in nonkube stack output")
-            else:
-                logger.warning("frontend_s3_bucket_id not found; skipping frontend deploy")
-
-            tracker.start_phase(10)
-            logger.step(f"[10/{len(phases)}] Running ECS bootstrap...")
-            snd = tofu_output_json("live-deploy-aws/shared/nondurable", env, region)
-            delta_bucket = snd.get("delta_bucket", {}).get("value", "")
-            csv_uploaded = False
-            if delta_bucket:
-                csv_uploaded = upload_csv_to_delta_bucket(delta_bucket, region)
-                if csv_uploaded:
-                    clear_delta_table(delta_bucket, region)
-            run_ecs_bootstrap(env, region, force=csv_uploaded)
-            logger.success("ECS bootstrap complete")
-            tracker.end_phase(10)
-
-            # Get CloudFront / ALB URLs for manual testing
-            try:
-                logger.info("Retrieving frontend URL...")
-                stack_out = tofu_output_json("live-deploy-aws/nonkube", env, region)
-                cf_domain = stack_out.get("cloudfront_domain_name", {}).get("value")
-                alb_dns = stack_out.get("alb_dns_name", {}).get("value")
-                if cf_domain:
-                    frontend_url = f"https://{cf_domain}"
-                    logger.success(f"\n{'='*70}")
-                    logger.success(f"✓ DEPLOYMENT COMPLETE - READY FOR TESTING")
-                    logger.success(f"{'='*70}")
-                    logger.success(f"\n🌐 CloudFront URL: {frontend_url}")
-                    logger.success(f"   Health Check: {frontend_url}/health")
-                    logger.success(f"   API Version: {frontend_url}/version")
-                    logger.success(f"\n   Open in browser: {frontend_url}")
-                    if alb_dns:
-                        logger.success(f"   (Direct ALB: http://{alb_dns})")
-                    logger.success(f"{'='*70}\n")
-                elif alb_dns:
-                    frontend_url = f"http://{alb_dns}"
-                    logger.success(f"\n{'='*70}")
-                    logger.success(f"✓ DEPLOYMENT COMPLETE - READY FOR TESTING")
-                    logger.success(f"{'='*70}")
-                    logger.success(f"\n🌐 Frontend URL: {frontend_url}")
-                    logger.success(f"   Health Check: {frontend_url}/health")
-                    logger.success(f"   API Version: {frontend_url}/version")
-                    logger.success(f"\n   Open in browser: {frontend_url}")
-                    logger.success(f"{'='*70}\n")
-            except Exception as e:
-                logger.warning(f"Could not retrieve frontend URL: {e}")
-
+        stats.print_summary()
         logger.success(f"✓ Deployment sequence complete! Scope: {scope}, Env: {env}")
+        _print_success_url(env, region, scope)
         sys.exit(0)
-        
+
     except subprocess.CalledProcessError as e:
         logger.error(f"Deployment failed at step: {e}")
         sys.exit(1)
     except Exception as e:
         logger.error(f"Deployment error: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

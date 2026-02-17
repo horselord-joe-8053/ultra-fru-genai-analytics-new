@@ -53,7 +53,7 @@ class PhaseTracker:
 
 def deploy_phases(scope: str) -> list[str]:
     """Return phase names for deploy (order matches deploy.py main loop)."""
-    return [
+    shared = [
         "Doctor checks",
         "State backend bootstrap",
         "Shared durable (VPC + Aurora + Secrets)",
@@ -62,9 +62,16 @@ def deploy_phases(scope: str) -> list[str]:
         "Database setup (pgvector, schema, data)",
         "Build and push images",
         "ECR image URLs",
-        "Apply stack (kube/nonkube)",
-        "Bootstrap (K8s/ECS)",
     ]
+    if scope == "all":
+        return shared + [
+            "Deploy nonkube (ECS + frontend + bootstrap)",
+            "Deploy kube (EKS + K8s bootstrap + frontend)",
+        ]
+    if scope == "kube":
+        return shared + ["Apply EKS stack", "K8s bootstrap"]
+    # scope == "nonkube"
+    return shared + ["Apply ECS stack", "ECS bootstrap"]
 
 
 def teardown_phases(scope: str) -> list[str]:
