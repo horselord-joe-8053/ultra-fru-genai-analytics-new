@@ -5,9 +5,20 @@ from tools.cloud_shared.env import require
 def stack_id_from_dir(stack_dir: str, cloud: str = "aws") -> str:
     """Extract logical stack name from path. Cloud comes from caller (tools/aws vs tools/gcp), not from path.
     Strips first path component (deploy root) without hardcoding names; rest becomes logical id.
-    Backward compat: scope-shared -> shared in state key so existing tfstate remains valid."""
-    parts = stack_dir.strip("/").split("/")
-    logical = "-".join(parts[1:]) if len(parts) > 1 else (parts[0] if parts else "")
+    Backward compat: scope-shared -> shared in state key so existing tfstate remains valid.
+    infra_terraform/live_deploy/{cloud}/... -> same keys as live_deploy_{cloud}/... (Option A)."""
+    path = stack_dir.strip("/")
+    parts = path.split("/")
+
+    # infra_terraform/live_deploy/aws/scope_shared/durable -> extract aws/scope_shared/durable, use cloud from path
+    if path.startswith("infra_terraform/live_deploy/") and len(parts) >= 4:
+        path_cloud = parts[2]  # aws or gcp (infra_terraform=0, live_deploy=1, cloud=2)
+        suffix_parts = parts[3:]  # scope_shared, durable etc
+        logical = "-".join(suffix_parts) if suffix_parts else ""
+        cloud = path_cloud
+    else:
+        logical = "-".join(parts[1:]) if len(parts) > 1 else (parts[0] if parts else "")
+
     if "scope-shared" in logical or "scope_shared" in logical:
         logical = logical.replace("scope-shared", "shared").replace("scope_shared", "shared")
     return f"{cloud}-{logical}" if logical else cloud

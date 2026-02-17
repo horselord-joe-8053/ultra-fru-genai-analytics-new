@@ -164,7 +164,7 @@ data:
                 "AWS_SECRET_ACCESS_KEY": require("AWS_ADMIN_SECRET_ACCESS_KEY"),
                 "AWS_REGION": os.getenv("CLOUD_REGION", "").strip() or require("AWS_REGION")
             }
-            txt = render("infra_modules/cloud_shared/k8s/bootstrap-job.yaml", subs)
+            txt = render("infra_terraform/modules/cloud_shared/k8s/bootstrap-job.yaml", subs)
             kubectl(["delete", "job", JOB_BOOTSTRAP, "--ignore-not-found", "-n", K8S_NAMESPACE])
             kubectl(["apply", "-f", "-"], input_text=txt)
 
@@ -173,6 +173,7 @@ data:
             delta_table_path = args.delta_table_path or f"s3a://{delta_bucket}/delta/fru_sales"
             api_subs = {
                 "APP_IMAGE": app_image,
+                "CONTAINER_IMAGE_TAGS": os.getenv("CONTAINER_IMAGE_TAGS", ""),
                 "PGHOST": args.pg_host or "localhost",
                 "PGPORT": args.pg_port,
                 "PGUSER": args.pg_user,
@@ -187,9 +188,9 @@ data:
                 "ENABLE_ANALYTICS_SCHEDULER": os.getenv("ENABLE_ANALYTICS_SCHEDULER", "true"),
                 "ANALYTICS_SCHEDULER_INTERVAL_SECONDS": os.getenv("ANALYTICS_SCHEDULER_INTERVAL_SECONDS", "180"),
             }
-            txt = render("infra_modules/cloud_shared/k8s/api-deployment.yaml", api_subs)
+            txt = render("infra_terraform/modules/cloud_shared/k8s/api-deployment.yaml", api_subs)
             kubectl(["apply","-f","-"], input_text=txt)
-            txt = render("infra_modules/cloud_shared/k8s/api-service.yaml", {})
+            txt = render("infra_terraform/modules/cloud_shared/k8s/api-service.yaml", {})
             kubectl(["apply","-f","-"], input_text=txt)
         except FileNotFoundError:
             print("WARN: API manifests not found, skipping API deployment.")
@@ -204,7 +205,7 @@ data:
             "PGDATABASE": args.pg_database,
             "PGUSER": args.pg_user,
         }
-        txt = render("infra_modules/cloud_shared/k8s/spark-cronjob.yaml", subs)
+        txt = render("infra_terraform/modules/cloud_shared/k8s/spark-cronjob.yaml", subs)
         kubectl(["apply","-f","-"], input_text=txt)
 
 if __name__ == "__main__":

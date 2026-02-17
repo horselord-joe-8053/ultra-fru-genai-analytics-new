@@ -162,13 +162,13 @@ def run_ecs_bootstrap(env: str, region: str | None = None, force: bool = False) 
         return
 
     logger.step("Executing ECS analytics bootstrap (Spark run_analytics)")
-    out = tofu_output_json("live_deploy_aws/nonkube", env, region)
+    out = tofu_output_json("infra_terraform/live_deploy/aws/nonkube", env, region)
     cluster = out.get("ecs_cluster_name", {}).get("value") or f"{require('FRU_PREFIX')}-{env}-ecs"
     spark_task_def = out.get("spark_task_definition_arn", {}).get("value")
     if not spark_task_def:
         raise SystemExit("spark_task_definition_arn not in nonkube outputs")
 
-    durable = tofu_output_json("live_deploy_aws/scope_shared/durable", env, region)
+    durable = tofu_output_json("infra_terraform/live_deploy/aws/scope_shared/durable", env, region)
     private_subnets = durable.get("private_subnet_ids", {}).get("value", [])
     if not private_subnets:
         raise SystemExit("Could not determine private subnets for Spark bootstrap.")

@@ -1,13 +1,13 @@
 /**
  * Build version utility
- * Generates version string in format V_YYMMDD-HHMMSS_PROVIDER_CONTAINER_ENV
- * Example: V_260118-120000_aws_eks_dev
+ * Generates version string in format V_YYMMDD-HHMMSS_PROVIDER_SCOPE_ENV
+ * Example: V_260118-120000_aws_kube_dev or V_260118-120000_aws_nonkube_dev
  */
 
 // Declare build context constants injected by Vite
 declare const BUILD_TIME: number;
 declare const BUILD_PROVIDER: string;
-declare const BUILD_CONTAINER_TYPE: string;
+declare const BUILD_SCOPE: string;
 declare const BUILD_ENVIRONMENT: string;
 
 /**
@@ -26,7 +26,7 @@ function formatBuildTime(date: Date): string {
 
 /**
  * Gets the build version
- * Uses BUILD_TIME and build context (provider, container type, environment) from Vite at build time
+ * Uses BUILD_TIME and build context (provider, scope, environment) from Vite at build time
  * Falls back to fixed values if not available (ensures version stays static)
  */
 export function getBuildVersion(): string {
@@ -36,11 +36,11 @@ export function getBuildVersion(): string {
   const buildDate = new Date(buildTime);
   const timestamp = formatBuildTime(buildDate);
   
-  // Build context (provider, container type, environment) - injected by Vite from env vars
+  // Build context (provider, scope, environment) - injected by Vite from env vars
   const provider = typeof BUILD_PROVIDER !== "undefined" ? BUILD_PROVIDER : "local";
-  const containerType = typeof BUILD_CONTAINER_TYPE !== "undefined" ? BUILD_CONTAINER_TYPE : "none";
+  const scope = typeof BUILD_SCOPE !== "undefined" ? BUILD_SCOPE : "none";
   const environment = typeof BUILD_ENVIRONMENT !== "undefined" ? BUILD_ENVIRONMENT : "dev";
-  
-  return `V_${timestamp}_${provider}_${containerType}_${environment}`;
+
+  return `V_${timestamp}_${provider}_${scope}_${environment}`;
 }
 

@@ -35,7 +35,7 @@ import time
 from tools.cloud_shared.env import load_dotenv, require
 from tools.aws.scope_shared.core.backend import resolve_region
 from tools.cloud_shared.logging import logger
-from tools.cloud_shared.phases import PhaseTracker, deploy_phases
+from tools.aws.scope_shared.core.phases import PhaseTracker, deploy_phases
 from tools.cloud_shared.stats import DeployStats, scope_for
 from tools.aws.scope_shared.deploy.deploy_common import tofu_output_json
 from tools.aws.kube.deploy_kube import run_deploy_kube
@@ -50,7 +50,7 @@ def _print_success_url(env: str, region: str, scope: str) -> None:
     try:
         logger.info("Retrieving frontend URL...")
         if scope in ("kube", "all"):
-            stack_out = tofu_output_json("live_deploy_aws/kube", env, region)
+            stack_out = tofu_output_json("infra_terraform/live_deploy/aws/kube", env, region)
             cf_domain = stack_out.get("cloudfront_domain_name", {}).get("value")
             if cf_domain:
                 frontend_url = f"https://{cf_domain}"
@@ -75,7 +75,7 @@ def _print_success_url(env: str, region: str, scope: str) -> None:
                 return
 
         if scope in ("nonkube", "all"):
-            stack_out = tofu_output_json("live_deploy_aws/nonkube", env, region)
+            stack_out = tofu_output_json("infra_terraform/live_deploy/aws/nonkube", env, region)
             cf_domain = stack_out.get("cloudfront_domain_name", {}).get("value")
             alb_dns = stack_out.get("alb_dns_name", {}).get("value")
             if cf_domain:
@@ -175,16 +175,16 @@ def main():
             durable_vars += ["-var", f"aurora_master_password={aurora_pw}"]
         else:
             logger.warning("PGPASSWORD not set; Aurora creation may fail. Set in .env before deploy.")
-        with stats.timed("Tofu apply", "live_deploy_aws/scope_shared/durable"):
-            apply_stack("live_deploy_aws/scope_shared/durable", env, durable_vars, region)
+        with stats.timed("Tofu apply", "infra_terraform/live_deploy/aws/scope_shared/durable"):
+            apply_stack("infra_terraform/live_deploy/aws/scope_shared/durable", env, durable_vars, region)
         logger.success("Shared durable applied")
         tracker.end_phase(3)
 
         # Phase 4: Shared nondurable
         tracker.start_phase(4)
         logger.step(f"[4/{len(phases)}] Applying shared nondurable stack (ECR + S3)...")
-        with stats.timed("Tofu apply", "live_deploy_aws/scope_shared/nondurable"):
-            apply_stack("live_deploy_aws/scope_shared/nondurable", env, [], region)
+        with stats.timed("Tofu apply", "infra_terraform/live_deploy/aws/scope_shared/nondurable"):
+            apply_stack("infra_terraform/live_deploy/aws/scope_shared/nondurable", env, [], region)
         logger.success("Shared nondurable applied")
         tracker.end_phase(4)
 
@@ -218,6 +218,16 @@ def main():
         # Phase 7: Build & push
         tracker.start_phase(7)
         logger.step(f"[7/{len(phases)}] Building and pushing images...")
+        # When APP_IMAGE_TAG is "latest", generate version tag and push both (legacy parity)
+        app_tag = os.getenv("APP_IMAGE_TAG", "latest")
+        if app_tag == "latest":
+            from tools.aws.scope_shared.deploy.image_tag import generate_image_tag, get_container_image_tags
+            version_tag = generate_image_tag(env)
+            os.environ["APP_IMAGE_TAG"] = version_tag
+            os.environ["CONTAINER_IMAGE_TAGS"] = get_container_image_tags(version_tag)
+            logger.info(f"[BUILD] Generated version tag: {version_tag} (will also push latest)")
+        else:
+            os.environ["CONTAINER_IMAGE_TAGS"] = app_tag
         build_env = {**os.environ, "CLOUD_REGION": region, "AWS_REGION": region}
         build_env["PYTHONUNBUFFERED"] = "1"
         build_cmd = ["python", "tools/aws/scope_shared/deploy/build_and_push_images.py", "--env", env, "--region", region]
@@ -233,7 +243,7 @@ def main():
         # Phase 8: ECR URLs
         tracker.start_phase(8)
         logger.step(f"[8/{len(phases)}] Getting ECR image URLs...")
-        snd = tofu_output_json("live_deploy_aws/scope_shared/nondurable", env, region)
+        snd = tofu_output_json("infra_terraform/live_deploy/aws/scope_shared/nondurable", env, region)
         app_repo_url = snd["ecr_app_url"]["value"]
         spark_repo_url = snd["ecr_spark_url"]["value"]
         spark_image_full = f"{spark_repo_url}:{require('SPARK_IMAGE_TAG')}"

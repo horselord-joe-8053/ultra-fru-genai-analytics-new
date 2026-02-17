@@ -47,12 +47,12 @@ ALLOW_DURABLE_DESTROY=YES python tools/aws/standalone/destroy_durable.py --env d
 ```
 
 ## 6. Directory Layout
-- `live_deploy_aws/`
+- `infra_terraform/live_deploy/aws/`
   - `shared/durable/`
   - `shared/nondurable/`
   - `kube/`
   - `nonkube/`
-- `live_deploy_gcp/` (phase-1 minimal parity)
+- `infra_terraform/live_deploy/gcp/` (phase-1 minimal parity)
 
 ## 7. State Recovery
 See `STATE_RECOVERY.md`.

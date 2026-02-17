@@ -33,19 +33,19 @@ def _log_prefix(level: str) -> str:
     return f"[{ts} {tz}] {color}[{level}]{NC} "
 
 def info(msg: str):
-    print(f"{_log_prefix('INFO')}{msg}")
+    print(f"{_log_prefix('INFO')}{msg}", flush=True)
 
 def success(msg: str):
-    print(f"{_log_prefix('SUCCESS')}{msg}")
+    print(f"{_log_prefix('SUCCESS')}{msg}", flush=True)
 
 def warning(msg: str):
-    print(f"{_log_prefix('WARNING')}{msg}")
+    print(f"{_log_prefix('WARNING')}{msg}", flush=True)
 
 def error(msg: str):
-    print(f"{_log_prefix('ERROR')}{msg}", file=sys.stderr)
+    print(f"{_log_prefix('ERROR')}{msg}", file=sys.stderr, flush=True)
 
 def step(msg: str):
-    print(f"\n{_log_prefix('SUCCESS')}{GREEN}==>{NC} {BLUE}{msg}{NC}")
+    print(f"\n{_log_prefix('SUCCESS')}{GREEN}==>{NC} {BLUE}{msg}{NC}", flush=True)
 
 class Heartbeat:
     """

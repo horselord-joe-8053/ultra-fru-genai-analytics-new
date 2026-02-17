@@ -14,11 +14,11 @@ from tools.aws.scope_shared.core.terra_var_handling import get_base_vars
 load_dotenv()
 
 def init_stack(env):
-    cfg = backend_config("live_deploy_aws/scope_shared/durable", env, region=None, cloud="aws")
+    cfg = backend_config("infra_terraform/live_deploy/aws/scope_shared/durable", env, region=None, cloud="aws")
     args = ["init","-upgrade"]
     for c in cfg:
         args += ["-backend-config", c]
-    terra(args, cwd="live_deploy_aws/scope_shared/durable")
+    terra(args, cwd="infra_terraform/live_deploy/aws/scope_shared/durable")
 
 def main():
     ap = argparse.ArgumentParser()
@@ -43,7 +43,7 @@ def main():
         "-var", 'azs=["us-east-1a","us-east-1b"]',
         "-var", 'public_subnet_cidrs=["10.0.1.0/24","10.0.2.0/24"]',
         "-var", 'private_subnet_cidrs=["10.0.101.0/24","10.0.102.0/24"]',
-    ] + base, cwd="live_deploy_aws/scope_shared/durable", check=True)
+    ] + base, cwd="infra_terraform/live_deploy/aws/scope_shared/durable", check=True)
 
 if __name__ == "__main__":
     main()

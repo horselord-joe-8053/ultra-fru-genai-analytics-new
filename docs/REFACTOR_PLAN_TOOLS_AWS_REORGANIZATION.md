@@ -278,7 +278,7 @@ Update all docs that reference `tools/aws/` paths:
 | `docs/FINAL_REFACTOR_PLAN_2.md` | backend, terra_var_handling |
 | `docs/LEGACY_VS_NEW_COMPARISON.md` | setup_database, terra_var_handling |
 | `docs/AWS_AURORA_CLOUDFRONT_PLACEMENT.md` | backend |
-| `live_deploy_aws/scope_shared/durable/README.md` | deploy |
+| `infra_terraform/live_deploy/aws/scope_shared/durable/README.md` | deploy |
 | `tools/aws/scope_shared/utils/init_terra_upgrade_reconfigure.sh` | Comment referencing backend.py |
 
 ---

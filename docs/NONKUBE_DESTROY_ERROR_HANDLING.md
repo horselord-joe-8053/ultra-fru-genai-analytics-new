@@ -2,7 +2,7 @@
 
 ## Stack in Question
 
-**`live_deploy_aws/nonkube`** — Yes. This stack contains:
+**`infra_terraform/live_deploy/aws/nonkube`** — Yes. This stack contains:
 
 | Resource group | Resources | Typical destroy order (last → first) |
 |----------------|-----------|-------------------------------------|
@@ -170,8 +170,8 @@ def destroy_with_retry(stack_dir, env, cmd, extra):
 
 | Change | Reduces | File |
 |--------|---------|------|
-| `force_destroy = true` on frontend S3 bucket | `BucketNotEmpty` | `infra_modules/aws/primitives/cloudfront/main.tf` |
-| Resilient ECS cluster data source | `INACTIVE` on import | `live_deploy_aws/nonkube/main.tf` |
+| `force_destroy = true` on frontend S3 bucket | `BucketNotEmpty` | `infra_terraform/modules/aws/primitives/cloudfront/main.tf` |
+| Resilient ECS cluster data source | `INACTIVE` on import | `infra_terraform/live_deploy/aws/nonkube/main.tf` |
 
 ---
 
