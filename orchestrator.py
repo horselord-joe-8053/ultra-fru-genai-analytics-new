@@ -77,7 +77,7 @@ def handle_aws(args):
                 run_command(["python", teardown_script] + teardown_args)
                 
             # 2. Verify Teardown
-            verify_teardown_script = f"{base_path}/common/verify/verify_all_teardown.py"
+            verify_teardown_script = f"{base_path}/scope_shared/verify/verify_all_teardown.py"
             run_command(["python", verify_teardown_script] + cmd_args + ["--scope", args.scope])
             
         # 3. Deploy
@@ -91,7 +91,7 @@ def handle_aws(args):
         
         # 4. Auto-verify after successful deploy (Verify Deploy)
         logger.step("Initiating automatic verification...")
-        verify_script = f"{base_path}/common/verify/verify_all_deploy.py"
+        verify_script = f"{base_path}/scope_shared/verify/verify_all_deploy.py"
         verify_args = cmd_args + ["--scope", args.scope]  # verify does not accept --skip-doctor
         run_command(["python", verify_script] + verify_args)
         
@@ -113,7 +113,7 @@ def handle_aws(args):
         if not args.scope:
             logger.error("Error: --scope required for verify")
             sys.exit(1)
-        script = f"{base_path}/common/verify/verify_all_deploy.py"
+        script = f"{base_path}/scope_shared/verify/verify_all_deploy.py"
         cmd_args.extend(["--scope", args.scope])
         # verify_all_deploy.py itself polls, so we wrap it here for a top-level heartbeat
         with logger.Heartbeat(f"Verification scope={args.scope} env={args.env}"):

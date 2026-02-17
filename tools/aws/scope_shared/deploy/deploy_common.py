@@ -7,12 +7,12 @@ import os
 import subprocess
 
 from tools.cloud_shared.env import load_dotenv, require
-from tools.aws.common.core.terra_runner import terra, terra_capture, get_terra_env
-from tools.aws.common.core.backend import backend_config, resolve_region
+from tools.aws.scope_shared.core.terra_runner import terra, terra_capture, get_terra_env
+from tools.aws.scope_shared.core.backend import backend_config, resolve_region
 from tools.cloud_shared.logging import logger
-from tools.aws.terra_var_handling import get_base_vars
+from tools.aws.scope_shared.core.terra_var_handling import get_base_vars
 from tools.cloud_shared.retry import run_with_retry
-from tools.aws.common.deploy.bootstrap_helpers import check_ecs_bootstrap_succeeded
+from tools.aws.scope_shared.deploy.bootstrap_helpers import check_ecs_bootstrap_succeeded
 
 load_dotenv()
 

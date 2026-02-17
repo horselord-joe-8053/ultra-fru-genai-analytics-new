@@ -7,15 +7,15 @@
 **How to run:** From the **repo root** only:
 
 ```bash
-./tools/aws/common/utils/init_terra_upgrade_reconfigure.sh <stack_dir> [env]
+./tools/aws/scope_shared/utils/init_terra_upgrade_reconfigure.sh <stack_dir> [env]
 ```
 
 Examples:
 
 ```bash
-./tools/aws/common/utils/init_terra_upgrade_reconfigure.sh live_deploy_aws/scope_shared/nondurable
-./tools/aws/common/utils/init_terra_upgrade_reconfigure.sh live_deploy_aws/scope_shared/durable dev
-./tools/aws/common/utils/init_terra_upgrade_reconfigure.sh live_deploy_aws/nonkube dev
+./tools/aws/scope_shared/utils/init_terra_upgrade_reconfigure.sh live_deploy_aws/scope_shared/nondurable
+./tools/aws/scope_shared/utils/init_terra_upgrade_reconfigure.sh live_deploy_aws/scope_shared/durable dev
+./tools/aws/scope_shared/utils/init_terra_upgrade_reconfigure.sh live_deploy_aws/nonkube dev
 ```
 
 **Requirements:** `.env` (or `.env.fru`) with at least `TF_STATE_BUCKET`, `CLOUD_REGION`. Optional: `TF_STATE_PREFIX`/`FRU_PREFIX`, `FRU_ENV`, `TF_LOCK_TABLE`/`TF_STATE_LOCK_TABLE`.

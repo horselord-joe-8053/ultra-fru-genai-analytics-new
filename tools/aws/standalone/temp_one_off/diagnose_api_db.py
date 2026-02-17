@@ -3,8 +3,8 @@
 Diagnose API database and agent connectivity.
 
 Usage:
-  python tools/aws/temp_one_off/diagnose_api_db.py --base-url https://your-cloudfront-domain
-  python tools/aws/temp_one_off/diagnose_api_db.py --base-url http://alb-dns-name  # direct ALB
+  python tools/aws/standalone/temp_one_off/diagnose_api_db.py --base-url https://your-cloudfront-domain
+  python tools/aws/standalone/temp_one_off/diagnose_api_db.py --base-url http://alb-dns-name  # direct ALB
 
 Helps narrow down:
 - /analytics "Database not configured or unreachable"
@@ -48,7 +48,7 @@ def main():
             logger.info("  → Fix: Ensure PGHOST, PGPORT, PGDATABASE, PGUSER, PGPASSWORD reach API container")
             logger.info("  → Nonkube: Check ECS task env_vars + secret_arns (db_password_plain)")
             logger.info("  → Kube: Check deployment env + db-credentials secret")
-            logger.info("  → Run: python tools/aws/common/deploy/ensure_secrets.py --env $FRU_ENV")
+            logger.info("  → Run: python tools/aws/scope_shared/deploy/ensure_secrets.py --env $FRU_ENV")
     except Exception as e:
         logger.error(f"✗ /health failed: {e}")
         sys.exit(1)
@@ -89,7 +89,7 @@ def main():
 
     logger.info("")
     logger.info("Next steps if DB disconnected:")
-    logger.info("  1. python tools/aws/common/deploy/ensure_secrets.py --env $FRU_ENV  # set PGPASSWORD in Secrets Manager")
+    logger.info("  1. python tools/aws/scope_shared/deploy/ensure_secrets.py --env $FRU_ENV  # set PGPASSWORD in Secrets Manager")
     logger.info("  2. Redeploy or force new ECS task / K8s rollout to pick up env")
     logger.info("  3. Nonkube: Verify ECS task has PGHOST from durable aurora_endpoint")
     logger.info("  4. Kube: Verify aurora_from_eks SG rule allows EKS nodes → Aurora 5432")

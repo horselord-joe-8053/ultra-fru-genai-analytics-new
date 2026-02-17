@@ -14,12 +14,12 @@
 # TF_STATE_BUCKET, CLOUD_REGION; optional TF_STATE_PREFIX/FRU_PREFIX, FRU_ENV,
 # TF_LOCK_TABLE/TF_STATE_LOCK_TABLE.
 #
-#   ./tools/aws/common/utils/init_terra_upgrade_reconfigure.sh <stack_dir> [env]
+#   ./tools/aws/scope_shared/utils/init_terra_upgrade_reconfigure.sh <stack_dir> [env]
 #
 # Examples:
-#   ./tools/aws/common/utils/init_terra_upgrade_reconfigure.sh live_deploy_aws/scope_shared/nondurable
-#   ./tools/aws/common/utils/init_terra_upgrade_reconfigure.sh live_deploy_aws/scope_shared/durable dev
-#   ./tools/aws/common/utils/init_terra_upgrade_reconfigure.sh live_deploy_aws/nonkube dev
+#   ./tools/aws/scope_shared/utils/init_terra_upgrade_reconfigure.sh live_deploy_aws/scope_shared/nondurable
+#   ./tools/aws/scope_shared/utils/init_terra_upgrade_reconfigure.sh live_deploy_aws/scope_shared/durable dev
+#   ./tools/aws/scope_shared/utils/init_terra_upgrade_reconfigure.sh live_deploy_aws/nonkube dev
 #
 # Then you can run tofu plan / apply / destroy from that stack directory (with
 # TF_DATA_DIR set to repo root tofu_data if you use the project's convention).
@@ -36,7 +36,7 @@ fi
 STACK_DIR="$1"
 ENV="${2:-${FRU_ENV:-${ENVIRONMENT:-dev}}}"
 
-# Repo root: assume script lives in tools/aws/common/utils/
+# Repo root: assume script lives in tools/aws/scope_shared/utils/
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 cd "$REPO_ROOT"

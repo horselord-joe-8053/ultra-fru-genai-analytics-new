@@ -4,8 +4,8 @@ Database setup: ensure pgvector, init schema, load data.
 Python equivalent of legacy module_infra_db/aws/setup-database.sh.
 
 Usage:
-  python tools/aws/common/deploy/setup_database.py --env dev
-  python tools/aws/common/deploy/setup_database.py --env dev --force-refresh-data
+  python tools/aws/scope_shared/deploy/setup_database.py --env dev
+  python tools/aws/scope_shared/deploy/setup_database.py --env dev --force-refresh-data
 
 Requires: PGPASSWORD in .env; durable stack applied.
 """
@@ -18,8 +18,8 @@ import json
 import subprocess
 
 from tools.cloud_shared.env import load_dotenv, require
-from tools.aws.common.core.backend import backend_config, resolve_region
-from tools.aws.common.core.terra_runner import get_terra_env
+from tools.aws.scope_shared.core.backend import backend_config, resolve_region
+from tools.aws.scope_shared.core.terra_runner import get_terra_env
 from tools.cloud_shared.retry import run_with_retry
 from tools.cloud_shared.logging import logger
 

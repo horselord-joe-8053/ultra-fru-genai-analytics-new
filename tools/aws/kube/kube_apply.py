@@ -14,8 +14,8 @@ This tool:
 """
 import argparse, base64, json, os, subprocess
 from tools.cloud_shared.env import load_dotenv, require
-from tools.aws.common.core.backend import resolve_region
-from tools.aws.common.deploy.bootstrap_helpers import check_k8s_bootstrap_job_succeeded, JOB_BOOTSTRAP, K8S_NAMESPACE
+from tools.aws.scope_shared.core.backend import resolve_region
+from tools.aws.scope_shared.deploy.bootstrap_helpers import check_k8s_bootstrap_job_succeeded, JOB_BOOTSTRAP, K8S_NAMESPACE
 
 load_dotenv()
 

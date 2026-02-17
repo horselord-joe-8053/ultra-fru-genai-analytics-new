@@ -2,8 +2,8 @@
 One-time migration of Terraform state from legacy key to region-scoped key.
 
 Usage:
-  python tools/aws/temp_one_off/migrate_state_to_region_key.py --env dev --region us-east-1 --dry-run
-  python tools/aws/temp_one_off/migrate_state_to_region_key.py --env dev --region us-east-1 --execute
+  python tools/aws/standalone/temp_one_off/migrate_state_to_region_key.py --env dev --region us-east-1 --dry-run
+  python tools/aws/standalone/temp_one_off/migrate_state_to_region_key.py --env dev --region us-east-1 --execute
 
 Migrates state from:
   {prefix}/{env}/{stack_id}.tfstate
@@ -18,7 +18,7 @@ import subprocess
 import sys
 
 from tools.cloud_shared.env import load_dotenv, require
-from tools.aws.common.core.backend import backend_config, stack_id_from_dir
+from tools.aws.scope_shared.core.backend import backend_config, stack_id_from_dir
 from tools.cloud_shared.logging import logger
 
 load_dotenv()

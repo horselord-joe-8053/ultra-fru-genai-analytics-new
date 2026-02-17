@@ -10,7 +10,7 @@ Legacy-aware:
 """
 import argparse, os, subprocess, json, shutil
 from tools.cloud_shared.env import load_dotenv, require
-from tools.aws.common.core.backend import resolve_region
+from tools.aws.scope_shared.core.backend import resolve_region
 
 load_dotenv()
 

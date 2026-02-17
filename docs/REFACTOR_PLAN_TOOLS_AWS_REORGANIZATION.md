@@ -58,7 +58,7 @@ tools/aws/
 │   ├── deploy_nonkube.py
 │   └── ecs_spark_schedule.py
 │
-└── temp-one-off/                  # One-off scripts (unchanged)
+└── standalone/temp_one_off/                  # One-off scripts (unchanged)
     ├── import_state.py
     ├── fix_kube_db_credentials.py
     ├── diagnose_api_db.py
@@ -98,7 +98,7 @@ tools/aws/
 | `deploy.py` | **Stays** at root |
 | `teardown.py` | **Stays** at root |
 | `terra_var_handling.py` | **Stays** at root |
-| `temp-one-off/*` | **Stays** at root |
+| `standalone/temp_one_off/*` | **Stays** at root |
 
 ---
 
@@ -126,16 +126,16 @@ Update references from "tofu" to "Terraform/OpenTofu" where appropriate in `terr
 
 | Old Import | New Import |
 |------------|------------|
-| `from tools.aws.backend import ...` | `from tools.aws.common.core.backend import ...` |
-| `from tools.aws.tofu import tofu, get_tofu_env, ensure_shared_tofu_env` | `from tools.aws.common.core.terra_runner import terra, get_terra_env, ensure_shared_terra_env` |
+| `from tools.aws.backend import ...` | `from tools.aws.scope_shared.core.backend import ...` |
+| `from tools.aws.tofu import tofu, get_tofu_env, ensure_shared_tofu_env` | `from tools.aws.scope_shared.core.terra_runner import terra, get_terra_env, ensure_shared_terra_env` |
 
 ### 4.2 Deploy
 
 | Old Import | New Import |
 |------------|------------|
-| `from tools.aws.deploy_common import ...` | `from tools.aws.common.deploy.deploy_common import ...` |
-| `from tools.aws.deploy_frontend import ...` | `from tools.aws.common.deploy.deploy_frontend import ...` |
-| `from tools.aws.bootstrap_helpers import ...` | `from tools.aws.common.deploy.bootstrap_helpers import ...` |
+| `from tools.aws.deploy_common import ...` | `from tools.aws.scope_shared.deploy.deploy_common import ...` |
+| `from tools.aws.deploy_frontend import ...` | `from tools.aws.scope_shared.deploy.deploy_frontend import ...` |
+| `from tools.aws.bootstrap_helpers import ...` | `from tools.aws.scope_shared.deploy.bootstrap_helpers import ...` |
 
 ### 4.3 Verify
 
@@ -178,10 +178,10 @@ All `subprocess.run(["python", "tools/aws/..."], ...)` and similar invocations m
 | Old Path | New Path |
 |----------|----------|
 | `tools/aws/doctor.py` | `tools/aws/standalone/doctor.py` |
-| `tools/aws/bootstrap_state_backend.py` | `tools/aws/common/deploy/bootstrap_state_backend.py` |
-| `tools/aws/ensure_secrets.py` | `tools/aws/common/deploy/ensure_secrets.py` |
-| `tools/aws/setup_database.py` | `tools/aws/common/deploy/setup_database.py` |
-| `tools/aws/build_and_push_images.py` | `tools/aws/common/deploy/build_and_push_images.py` |
+| `tools/aws/bootstrap_state_backend.py` | `tools/aws/scope_shared/deploy/bootstrap_state_backend.py` |
+| `tools/aws/ensure_secrets.py` | `tools/aws/scope_shared/deploy/ensure_secrets.py` |
+| `tools/aws/setup_database.py` | `tools/aws/scope_shared/deploy/setup_database.py` |
+| `tools/aws/build_and_push_images.py` | `tools/aws/scope_shared/deploy/build_and_push_images.py` |
 
 ### 5.2 deploy_kube.py (→ kube/deploy_kube.py)
 
@@ -201,11 +201,11 @@ All `subprocess.run(["python", "tools/aws/..."], ...)` and similar invocations m
 |----------|----------|
 | `tools/aws/eks_kubeconfig.py` | `tools/aws/kube/eks_kubeconfig.py` |
 
-### 5.5 temp-one-off/fix_kube_db_credentials.py
+### 5.5 standalone/temp_one_off/fix_kube_db_credentials.py
 
 | Old Path | New Path |
 |----------|----------|
-| `tools/aws/ensure_secrets.py` | `tools/aws/common/deploy/ensure_secrets.py` |
+| `tools/aws/ensure_secrets.py` | `tools/aws/scope_shared/deploy/ensure_secrets.py` |
 | `tools/aws/kube_apply.py` | `tools/aws/kube/kube_apply.py` |
 
 ### 5.6 orchestrator.py (repo root)
@@ -213,8 +213,8 @@ All `subprocess.run(["python", "tools/aws/..."], ...)` and similar invocations m
 | Old Path | New Path |
 |----------|----------|
 | `tools/aws/doctor.py` | `tools/aws/standalone/doctor.py` |
-| `tools/aws/verify_all_teardown.py` | `tools/aws/common/verify/verify_all_teardown.py` |
-| `tools/aws/verify_all_deploy.py` | `tools/aws/common/verify/verify_all_deploy.py` |
+| `tools/aws/verify_all_teardown.py` | `tools/aws/scope_shared/verify/verify_all_teardown.py` |
+| `tools/aws/verify_all_deploy.py` | `tools/aws/scope_shared/verify/verify_all_deploy.py` |
 
 ---
 
@@ -237,7 +237,7 @@ All callers of `tofu()`, `get_tofu_env()`, `ensure_shared_tofu_env()` must be up
 - `setup_database.py` → `common/deploy/setup_database.py`
 - `verify_db_password.py` → `common/verify/verify_db_password.py`
 - `verify_all_deploy.py` → `common/verify/verify_all_deploy.py`
-- `temp-one-off/import_state.py`
+- `standalone/temp_one_off/import_state.py`
 
 ---
 
@@ -245,7 +245,7 @@ All callers of `tofu()`, `get_tofu_env()`, `ensure_shared_tofu_env()` must be up
 
 - `init_stack()` and `tofu_output_json()` live in `deploy_common.py`.
 - `verify_all_deploy.py` and `fix_kube_db_credentials.py` currently import `from tools.aws.deploy import init_stack`—`deploy.py` does not export this. They should import from `deploy_common` instead.
-- **After refactor:** `from tools.aws.common.deploy.deploy_common import init_stack, tofu_output_json`
+- **After refactor:** `from tools.aws.scope_shared.deploy.deploy_common import init_stack, tofu_output_json`
 
 ---
 
@@ -256,7 +256,7 @@ If external code or scripts import from `tools.aws`, consider adding re-exports 
 ```python
 # tools/aws/__init__.py
 from tools.aws.terra_var_handling import get_base_vars
-from tools.aws.common.core.backend import resolve_region, backend_config, stack_id_from_dir
+from tools.aws.scope_shared.core.backend import resolve_region, backend_config, stack_id_from_dir
 # ... etc.
 ```
 
@@ -279,7 +279,7 @@ Update all docs that reference `tools/aws/` paths:
 | `docs/LEGACY_VS_NEW_COMPARISON.md` | setup_database, terra_var_handling |
 | `docs/AWS_AURORA_CLOUDFRONT_PLACEMENT.md` | backend |
 | `live_deploy_aws/scope_shared/durable/README.md` | deploy |
-| `tools/aws/common/utils/init_terra_upgrade_reconfigure.sh` | Comment referencing backend.py |
+| `tools/aws/scope_shared/utils/init_terra_upgrade_reconfigure.sh` | Comment referencing backend.py |
 
 ---
 
@@ -340,4 +340,4 @@ python orchestrator.py verify --scope kube --env dev
 | `common/deploy/` | Shared deploy logic (tofu apply, bootstrap, build, secrets, DB) |
 | `common/verify/` | Post-deploy and post-teardown verification |
 | `tofu/` → `terra_runner.py` | Single file; no subdir; name reflects Terraform/OpenTofu |
-| `temp-one-off/` at root | One-off scripts; separate from main flow |
+| `standalone/temp_one_off/` at root | One-off scripts; separate from main flow |
