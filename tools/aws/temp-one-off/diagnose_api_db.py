@@ -3,8 +3,8 @@
 Diagnose API database and agent connectivity.
 
 Usage:
-  python tools/aws/diagnose_api_db.py --base-url https://your-cloudfront-domain
-  python tools/aws/diagnose_api_db.py --base-url http://alb-dns-name  # direct ALB
+  python tools/aws/temp-one-off/diagnose_api_db.py --base-url https://your-cloudfront-domain
+  python tools/aws/temp-one-off/diagnose_api_db.py --base-url http://alb-dns-name  # direct ALB
 
 Helps narrow down:
 - /analytics "Database not configured or unreachable"
@@ -17,7 +17,7 @@ import sys
 
 import requests
 
-from tools import logger
+from tools.common.logging import logger
 from tools._env import load_dotenv
 
 load_dotenv()

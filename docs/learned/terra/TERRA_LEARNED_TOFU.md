@@ -69,7 +69,7 @@ flowchart TB
 | **.terraform/** | Provider binaries, module cache | `tofu init`. Contains provider plugins and module downloads. | **Stale** when `TF_DATA_DIR` is set. Use `tofu_data/` instead; per-stack `.terraform/` dirs removed. |
 | **.terraform.lock.hcl** | Provider version lock | `tofu init`. Pins provider versions for reproducible runs. | **Gitignored** (not committed). Created per stack; used when running from that stack. |
 | **terraform.tfstate** | Local state (if used) | Normally state lives in S3; local state only if backend not configured. | State is remote (S3). |
-| **tofu_data/** | Shared provider cache (repo root) | Set by `TF_DATA_DIR` so all stacks share one cache. | **Canonical** location. `init_terra_upgrade_reconfigure.sh` and `tofu_runner.py` set `TF_DATA_DIR=$REPO_ROOT/tofu_data`. |
+| **tofu_data/** | Shared provider cache (repo root) | Set by `TF_DATA_DIR` so all stacks share one cache. | **Canonical** location. `init_terra_upgrade_reconfigure.sh` and `tools/aws/tofu/tofu_runner.py` set `TF_DATA_DIR=$REPO_ROOT/tofu_data`. |
 
 State is stored remotely in S3; key format: `{prefix}/{env}/aws-shared-durable.tfstate`.
 
@@ -107,7 +107,6 @@ flowchart TB
 | Caller | Action | Backend config |
 |--------|--------|----------------|
 | `tools/aws/deploy.py` | `tofu init -upgrade -reconfigure` + `tofu apply` | From `tools/aws/_backend.py` via `-backend-config bucket=... -backend-config key=...` etc. |
-| `tools/aws/deploy-orchestrator-aws.py` | Same | Same |
 | `tools/aws/ensure_secrets.py` | init + output read | Uses durable stack for secret ARNs |
 | `tools/aws/destroy_durable.py` | `tofu destroy` | Same; requires `ALLOW_DURABLE_DESTROY=YES` and confirmation token |
 

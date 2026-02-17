@@ -7,4 +7,4 @@ Durable shared AWS infra:
 Protected by `prevent_destroy`.
 
 Deploy via:
-`python tools/deploy-orchestrator-aws.py --scope kube|nonkube --env dev`
+`python tools/aws/deploy.py --scope kube|nonkube --env dev`

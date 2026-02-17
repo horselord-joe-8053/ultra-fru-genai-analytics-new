@@ -26,17 +26,16 @@ import json
 import os
 import subprocess
 
-from tools import logger
+from tools.common.logging import logger
 from tools._env import load_dotenv
 from tools.aws._backend import backend_config, resolve_region
-from tools.aws.teardown_stats import TeardownStats
+from tools.aws.teardown_stats import TeardownStats, scope_for
 from tools.phases import PhaseTracker, teardown_phases
 from tools.aws._aws_vars import get_base_vars
 from tools.aws.bootstrap_helpers import k8s_remove_bootstrap_and_scheduler
 from tools.aws.teardown_orphan_cleanup import remove_orphaned_eks_security_groups
-from tools.subprocess_retry import run_with_retry
-from tools.tofu_runner import get_tofu_env
-from tools.with_heartbeat import run_with_heartbeat
+from tools.common.retry import run_with_retry, run_with_heartbeat
+from tools.aws.tofu import get_tofu_env
 
 load_dotenv()
 
@@ -277,6 +276,7 @@ def main():
     for s in ORDER[args.scope]:
         phase_idx += 1
         tracker.start_phase(phase_idx)
+        stats.set_scope(scope_for(s))
         if s == "live-deploy-aws/nonkube":
             logger.step(f"[{phase_idx}/{len(phases)}] Pre-destroy (drain ECS), then destroy...")
             pre_destroy_nonkube(args.env, region, stats=stats)

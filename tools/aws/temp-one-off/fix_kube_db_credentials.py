@@ -11,7 +11,7 @@ Steps:
   3. rollout restart (pods pick up new secret)
 
 Usage:
-  python tools/aws/fix_kube_db_credentials.py --env dev
+  python tools/aws/temp-one-off/fix_kube_db_credentials.py --env dev
 """
 import argparse
 import os
@@ -20,7 +20,7 @@ import subprocess
 from tools._env import load_dotenv
 from tools.aws._backend import resolve_region
 from tools.aws.bootstrap_helpers import k8s_rollout_restart_api, wait_for_fru_api_ready
-from tools import logger
+from tools.common.logging import logger
 
 load_dotenv()
 

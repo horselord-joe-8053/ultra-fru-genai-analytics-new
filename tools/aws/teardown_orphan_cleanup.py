@@ -28,7 +28,7 @@ def remove_orphaned_eks_security_groups(
     destroy. Terraform has no state for them—post-destroy CLI cleanup is the
     common industry practice. Idempotent. See README_WAR_STORIES ##41.
     """
-    from tools import logger
+    from tools.common.logging import logger
 
     region = region or os.getenv("CLOUD_REGION", os.getenv("AWS_REGION", "us-east-1"))
     cluster_name = os.getenv("EKS_CLUSTER_NAME") or f"{os.getenv('FRU_PREFIX', 'fru')}-{env}-eks"

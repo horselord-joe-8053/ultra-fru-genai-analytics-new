@@ -17,9 +17,9 @@ import sys
 
 from tools._env import load_dotenv
 from tools.aws._backend import backend_config, resolve_region
-from tools.tofu_runner import get_tofu_env
-from tools.subprocess_retry import run_with_retry
-from tools import logger
+from tools.aws.tofu import get_tofu_env
+from tools.common.retry import run_with_retry
+from tools.common.logging import logger
 
 load_dotenv()
 

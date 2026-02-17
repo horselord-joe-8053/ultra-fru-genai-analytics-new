@@ -26,15 +26,15 @@ Flow:
 """
 import argparse, os, subprocess, json, sys
 from tools._env import load_dotenv, require
-from tools.tofu_runner import tofu
+from tools.aws.tofu import tofu, get_tofu_env
 from tools.aws._backend import backend_config, resolve_region
 
-from tools import logger
+from tools.common.logging import logger
 from tools.aws._aws_vars import get_base_vars
 from tools.phases import PhaseTracker, deploy_phases
-from tools.subprocess_retry import run_with_retry
-from tools.tofu_runner import get_tofu_env
+from tools.common.retry import run_with_retry
 from tools.aws.bootstrap_helpers import (
+    wait_for_dns_resolvable,
     check_ecs_bootstrap_succeeded,
     K8S_NAMESPACE,
     wait_for_fru_api_ready,
@@ -407,6 +407,8 @@ def main():
                 if attempt < 17:
                     time_module.sleep(10)
             if lb_host:
+                # AWS NLB DNS can take 1-2 min to propagate; wait before health check
+                wait_for_dns_resolvable(lb_host, timeout_seconds=120, check_interval_sec=5, heartbeat_interval_sec=30)
                 # War Story 44: Verify DB connected before declaring success (catch password mismatch)
                 verify_api_db_connected(f"http://{lb_host}", timeout_seconds=60)
                 logger.step("Re-applying kube stack with LoadBalancer hostname for CloudFront API origin...")
