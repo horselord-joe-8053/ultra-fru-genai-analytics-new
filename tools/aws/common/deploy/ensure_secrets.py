@@ -20,19 +20,19 @@ load_dotenv()
 
 def init_stack(env, region=None):
     logger.info("[SECRETS] Initializing shared/durable stack...")
-    cfg = backend_config("live-deploy-aws/scope-shared/durable", env, region)
+    cfg = backend_config("live_deploy_aws/scope_shared/durable", env, region)
     args = ["init", "-lock=false", "-upgrade", "-reconfigure"]
     for c in cfg:
         args += ["-backend-config", c]
     exe = os.getenv("FRU_TF_BIN", "tofu")
     cmd = [exe] + args
-    run_with_retry(cmd, cwd="live-deploy-aws/scope-shared/durable", env=get_terra_env(region), description="tofu init for secrets")
+    run_with_retry(cmd, cwd="live_deploy_aws/scope_shared/durable", env=get_terra_env(region), description="tofu init for secrets")
     logger.success("[SECRETS] Stack initialized")
 
 def outputs(env, region=None):
     logger.info("[SECRETS] Getting terraform outputs...")
     init_stack(env, region)
-    out = subprocess.check_output([os.getenv("FRU_TF_BIN","tofu"),"output","-json"], cwd="live-deploy-aws/scope-shared/durable", text=True, timeout=30, env=get_terra_env(region))
+    out = subprocess.check_output([os.getenv("FRU_TF_BIN","tofu"),"output","-json"], cwd="live_deploy_aws/scope_shared/durable", text=True, timeout=30, env=get_terra_env(region))
     result = json.loads(out)
     logger.success("[SECRETS] Outputs retrieved")
     return result

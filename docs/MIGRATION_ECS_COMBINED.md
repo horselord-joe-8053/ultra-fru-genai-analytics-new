@@ -1,19 +1,19 @@
 # Migration: ecs_alb + ecs_spark_schedule → ecs
 
-After combining `ecs_alb` and `ecs_spark_schedule` into `infra-modules/aws/ecs`, existing nonkube state must be migrated to avoid destroy/recreate.
+After combining `ecs_alb` and `ecs_spark_schedule` into `infra_modules/aws/ecs`, existing nonkube state must be migrated to avoid destroy/recreate.
 
 ## Prerequisites
 
 - Run from repo root with `.env` loaded
 - `tofu` (or `terraform`) in PATH
-- Backend configured for `live-deploy-aws/nonkube`
+- Backend configured for `live_deploy_aws/nonkube`
 
 ## Option A: State migration (preserves resources)
 
 From repo root, with `TF_DATA_DIR` set and backend init done:
 
 ```bash
-cd live-deploy-aws/nonkube
+cd live_deploy_aws/nonkube
 export TF_DATA_DIR="$(pwd)/../tofu_data"
 
 # Move ecs_alb resources into module.ecs

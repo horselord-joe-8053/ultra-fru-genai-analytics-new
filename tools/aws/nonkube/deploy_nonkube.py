@@ -33,7 +33,7 @@ def run_deploy_nonkube(
     Deploy nonkube stack: ECS apply, frontend, ECS bootstrap.
     Idempotent and safe to re-run.
     """
-    scope_label = scope_for("live-deploy-aws/nonkube")
+    scope_label = scope_for("live_deploy_aws/nonkube")
     if stats:
         stats.set_scope(scope_label)
 
@@ -49,7 +49,7 @@ def run_deploy_nonkube(
 
     def _apply_ecs():
         apply_stack_nonkube_with_ecs_import_retry(
-            "live-deploy-aws/nonkube",
+            "live_deploy_aws/nonkube",
             env,
             [
                 "-var", f"app_image={app_repo_url}:{require('APP_IMAGE_TAG')}",
@@ -58,10 +58,10 @@ def run_deploy_nonkube(
             region,
         )
 
-    _timed("Tofu apply", "live-deploy-aws/nonkube", _apply_ecs)
+    _timed("Tofu apply", "live_deploy_aws/nonkube", _apply_ecs)
 
     # Deploy frontend to S3
-    stack_out = tofu_output_json("live-deploy-aws/nonkube", env, region)
+    stack_out = tofu_output_json("live_deploy_aws/nonkube", env, region)
     frontend_bucket = stack_out.get("frontend_s3_bucket_id", {}).get("value")
     if frontend_bucket:
         deploy_frontend_to_s3(frontend_bucket, env)

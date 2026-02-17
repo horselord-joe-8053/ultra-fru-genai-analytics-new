@@ -60,7 +60,7 @@ override.tf.json
 *.swo
 
 # Node (frontend)
-core-app/frontend/node_modules/
+core_app/frontend/node_modules/
 
 # Project specific
 .DS_Store

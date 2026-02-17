@@ -6,7 +6,7 @@ One-liners:
   python tools/aws/common/deploy/build_and_push_images.py --env dev
 
 This tool:
-- Reads ECR repository URLs from `live-deploy-aws/scope-shared/nondurable` state
+- Reads ECR repository URLs from `live_deploy_aws/scope_shared/nondurable` state
 - Logs into ECR properly
 - Builds and pushes images
 
@@ -202,7 +202,7 @@ def main():
     logger.info(f"[BUILD] Region: {region}")
     
     logger.info("[BUILD] Getting ECR URLs from terraform state...")
-    out = tofu_output_json("live-deploy-aws/scope-shared/nondurable", args.env, region)
+    out = tofu_output_json("live_deploy_aws/scope_shared/nondurable", args.env, region)
 
     app_repo_url   = out["ecr_app_url"]["value"]
     spark_repo_url = out["ecr_spark_url"]["value"]
@@ -226,10 +226,10 @@ def main():
     # Build and push with per-step progress (1/4, 2/4, etc.) and heartbeat so we know which step and elapsed time
     # --progress=plain for line-by-line output; avoids silent buffering in Cursor/CI
     run_docker_with_progress(
-        ["docker","build","--progress=plain","--platform",platform,"-t",f"{app_repo_url}:{app_tag}","core-app"],
+        ["docker","build","--progress=plain","--platform",platform,"-t",f"{app_repo_url}:{app_tag}","core_app"],
         "Building app image", 1, 4,
     )
-    spark_build_cmd = ["docker","build","--progress=plain","--platform",platform,"-t",f"{spark_repo_url}:{spark_tag}","-f","core-app/analytics/docker/Dockerfile","core-app"]
+    spark_build_cmd = ["docker","build","--progress=plain","--platform",platform,"-t",f"{spark_repo_url}:{spark_tag}","-f","core_app/analytics/docker/Dockerfile","core_app"]
     if args.no_cache:
         spark_build_cmd.insert(2, "--no-cache")
         logger.info("[BUILD] Spark: --no-cache (fresh build)")

@@ -28,7 +28,7 @@ This document defines the wiring and implementation tasks to close these gaps.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                         live-deploy-aws/scope-shared/durable                       │
+│                         live_deploy_aws/scope_shared/durable                       │
 │  VPC + Aurora (pgvector) + Secrets (openai_api_key, db_password)              │
 │  Outputs: vpc_id, subnets, aurora_endpoint, aurora_port, aurora_database_name│
 │           aurora_security_group_id, db_cluster_arn, db_password_secret_arn   │
@@ -36,7 +36,7 @@ This document defines the wiring and implementation tasks to close these gaps.
                     │                                    │
                     ▼                                    ▼
 ┌───────────────────────────────────┐    ┌───────────────────────────────────┐
-│  live-deploy-aws/scope-shared/nondurable │    │  DB Setup (tools/aws/setup_database) │
+│  live_deploy_aws/scope_shared/nondurable │    │  DB Setup (tools/aws/setup_database) │
 │  ECR, S3 (delta, artifacts)       │    │  ensure_pgvector → init_schema →    │
 │  Outputs: ecr_app_url, ecr_spark_  │    │  load_data (RDS Data API)           │
 │  url, delta_bucket                 │    │  Uses: durable outputs              │
@@ -44,7 +44,7 @@ This document defines the wiring and implementation tasks to close these gaps.
                     │                                    │
                     ▼                                    ▼
 ┌───────────────────────────────────┐    ┌───────────────────────────────────┐
-│  live-deploy-aws/kube              │    │  live-deploy-aws/nonkube           │
+│  live_deploy_aws/kube              │    │  live_deploy_aws/nonkube           │
 │  EKS + frontend                    │    │  ECS + ALB + frontend              │
 │  Uses: durable + nondurable        │    │  Uses: durable + nondurable        │
 │  PG* from durable                  │    │  PG* from durable                  │
@@ -57,7 +57,7 @@ This document defines the wiring and implementation tasks to close these gaps.
 
 ### 3.1 Aurora Module
 
-**Path**: `infra-modules/aws/primitives/aurora/`
+**Path**: `infra_modules/aws/primitives/aurora/`
 
 **Source**: Port from legacy `module_infra_basic/aws/terra/modules/aurora/`
 
@@ -78,10 +78,10 @@ This document defines the wiring and implementation tasks to close these gaps.
 
 ### 3.2 Durable Stack: Add Aurora
 
-**Path**: `live-deploy-aws/scope-shared/durable/main.tf`
+**Path**: `live_deploy_aws/scope_shared/durable/main.tf`
 
 **Changes**:
-1. Add `module "aurora"` calling `infra-modules/aws/primitives/aurora`
+1. Add `module "aurora"` calling `infra_modules/aws/primitives/aurora`
 2. Wire VPC outputs (private_subnet_ids, vpc_id) to Aurora module
 3. Wire `db_password` from Secrets Manager:
    - Option A: Use `data "aws_secretsmanager_secret_version" "db_password"` and pass to Aurora
@@ -104,7 +104,7 @@ This document defines the wiring and implementation tasks to close these gaps.
 
 #### 3.3.1 Schema File
 
-**Path**: `core-app/sql/schema_pgvector.sql`
+**Path**: `core_app/sql/schema_pgvector.sql`
 
 **Action**: Copy from legacy `module_app_core/sql/schema_pgvector.sql`
 
@@ -117,12 +117,12 @@ This document defines the wiring and implementation tasks to close these gaps.
 **Purpose**: Python equivalent of legacy `module_infra_db/aws/setup-database.sh`
 
 **Flow**:
-1. Get `DB_CLUSTER_ARN`, `DB_SECRET_ARN`, `aurora_database_name` from `tofu output -json` on `live-deploy-aws/scope-shared/durable`
+1. Get `DB_CLUSTER_ARN`, `DB_SECRET_ARN`, `aurora_database_name` from `tofu output -json` on `live_deploy_aws/scope_shared/durable`
 2. **Ensure pgvector**: `aws rds-data execute-statement` with `CREATE EXTENSION IF NOT EXISTS vector;`
-3. **Init schema**: Parse `core-app/sql/schema_pgvector.sql` (use `parse_sql_statements.py` or equivalent), execute each statement via RDS Data API
+3. **Init schema**: Parse `core_app/sql/schema_pgvector.sql` (use `parse_sql_statements.py` or equivalent), execute each statement via RDS Data API
 4. **Load data**: Invoke `load_openai_embeddings_to_pgvector_rds_api.py` with `DB_CLUSTER_ARN`, `DB_SECRET_ARN`, `PGDATABASE` in env
 
-**Dependencies**: boto3, existing `core-app/backend/etl/load_openai_embeddings_to_pgvector_rds_api.py`
+**Dependencies**: boto3, existing `core_app/backend/etl/load_openai_embeddings_to_pgvector_rds_api.py`
 
 **Reference**: Legacy `module_infra_db/aws/setup-database.sh`, `init_schema_aws.sh`, `load_data_aws.sh`
 
@@ -157,7 +157,7 @@ This document defines the wiring and implementation tasks to close these gaps.
 
 ### 3.5 ECS (Nonkube) Wiring
 
-**Path**: `live-deploy-aws/nonkube/main.tf`
+**Path**: `live_deploy_aws/nonkube/main.tf`
 
 **Changes**:
 1. Pass Aurora outputs from `shared_durable` to ECS module:
@@ -166,7 +166,7 @@ This document defines the wiring and implementation tasks to close these gaps.
 3. ECS module `env_vars`: Add `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER` (from durable outputs)
 4. `secret_arns`: Keep `PGPASSWORD` from durable (already present)
 
-**Path**: `infra-modules/aws/ecs/variables.tf`
+**Path**: `infra_modules/aws/ecs/variables.tf`
 
 **New variables**:
 - `aurora_endpoint`
@@ -174,7 +174,7 @@ This document defines the wiring and implementation tasks to close these gaps.
 - `aurora_database_name`
 - `aurora_security_group_id` (for SG rule)
 
-**Path**: `infra-modules/aws/ecs/main.tf`
+**Path**: `infra_modules/aws/ecs/main.tf`
 
 **Changes**:
 - Add `aws_security_group_rule.aurora_from_ecs` when `aurora_security_group_id != ""`
@@ -188,7 +188,7 @@ This document defines the wiring and implementation tasks to close these gaps.
 
 #### 3.6.1 Kube Stack: shared_nondurable + Aurora
 
-**Path**: `live-deploy-aws/kube/main.tf`
+**Path**: `live_deploy_aws/kube/main.tf`
 
 **Changes**:
 1. Add `data "terraform_remote_state" "shared_nondurable"` (same pattern as nonkube)
@@ -199,7 +199,7 @@ This document defines the wiring and implementation tasks to close these gaps.
 
 #### 3.6.2 K8s API Deployment: PG* Env Vars
 
-**Path**: `infra-modules/cloud-shared/k8s/api-deployment.yaml`
+**Path**: `infra_modules/cloud_shared/k8s/api-deployment.yaml`
 
 **Current**: Placeholder values (PGHOST=fru-db, PGPASSWORD=postgres)
 
@@ -218,7 +218,7 @@ This document defines the wiring and implementation tasks to close these gaps.
 
 ### 3.7 ETL Wiring
 
-**Path**: `core-app/backend/etl/load_openai_embeddings_to_pgvector_rds_api.py`
+**Path**: `core_app/backend/etl/load_openai_embeddings_to_pgvector_rds_api.py`
 
 **Expects**: `DB_CLUSTER_ARN`, `DB_SECRET_ARN` (and `PGDATABASE` if used)
 
@@ -235,17 +235,17 @@ This document defines the wiring and implementation tasks to close these gaps.
 
 | # | Task | Path / Scope |
 |---|------|--------------|
-| 1 | Create Aurora module | `infra-modules/aws/primitives/aurora/` |
-| 2 | Add Aurora to durable stack | `live-deploy-aws/scope-shared/durable/main.tf` |
+| 1 | Create Aurora module | `infra_modules/aws/primitives/aurora/` |
+| 2 | Add Aurora to durable stack | `live_deploy_aws/scope_shared/durable/main.tf` |
 | 3 | Add durable outputs | aurora_endpoint, aurora_port, aurora_database_name, aurora_security_group_id, db_cluster_arn, db_secret_arn |
-| 4 | Copy schema file | `core-app/sql/schema_pgvector.sql` |
+| 4 | Copy schema file | `core_app/sql/schema_pgvector.sql` |
 | 5 | Create setup_database.py | `tools/aws/setup_database.py` |
-| 6 | Add parse_sql_statements.py (if missing) | `core-app/sql/` or `tools/` |
+| 6 | Add parse_sql_statements.py (if missing) | `core_app/sql/` or `tools/` |
 | 7 | Insert DB setup phase in deploy.py | After phase 5, before build |
 | 8 | Update deploy_phases in phases.py | Add "Database setup" |
-| 9 | ECS: Add Aurora outputs + env vars | nonkube/main.tf, infra-modules/aws/ecs |
-| 10 | ECS: Add aurora_from_ecs SG rule | infra-modules/aws/ecs/main.tf |
-| 11 | Kube: Add shared_nondurable remote state | live-deploy-aws/kube/main.tf |
+| 9 | ECS: Add Aurora outputs + env vars | nonkube/main.tf, infra_modules/aws/ecs |
+| 10 | ECS: Add aurora_from_ecs SG rule | infra_modules/aws/ecs/main.tf |
+| 11 | Kube: Add shared_nondurable remote state | live_deploy_aws/kube/main.tf |
 | 12 | Kube: Pass ecr_app_url, ecr_spark_url, delta_bucket to kube_apply | kube/main.tf, kube_apply.py |
 | 13 | Kube: Pass PG* to api-deployment | kube_apply.py, api-deployment.yaml |
 | 14 | Kube: Add aurora_from_eks SG rule | EKS module or kube stack |

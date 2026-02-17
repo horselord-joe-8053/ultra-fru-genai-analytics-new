@@ -50,7 +50,7 @@ def _print_success_url(env: str, region: str, scope: str) -> None:
     try:
         logger.info("Retrieving frontend URL...")
         if scope in ("kube", "all"):
-            stack_out = tofu_output_json("live-deploy-aws/kube", env, region)
+            stack_out = tofu_output_json("live_deploy_aws/kube", env, region)
             cf_domain = stack_out.get("cloudfront_domain_name", {}).get("value")
             if cf_domain:
                 frontend_url = f"https://{cf_domain}"
@@ -75,7 +75,7 @@ def _print_success_url(env: str, region: str, scope: str) -> None:
                 return
 
         if scope in ("nonkube", "all"):
-            stack_out = tofu_output_json("live-deploy-aws/nonkube", env, region)
+            stack_out = tofu_output_json("live_deploy_aws/nonkube", env, region)
             cf_domain = stack_out.get("cloudfront_domain_name", {}).get("value")
             alb_dns = stack_out.get("alb_dns_name", {}).get("value")
             if cf_domain:
@@ -175,16 +175,16 @@ def main():
             durable_vars += ["-var", f"aurora_master_password={aurora_pw}"]
         else:
             logger.warning("PGPASSWORD not set; Aurora creation may fail. Set in .env before deploy.")
-        with stats.timed("Tofu apply", "live-deploy-aws/scope-shared/durable"):
-            apply_stack("live-deploy-aws/scope-shared/durable", env, durable_vars, region)
+        with stats.timed("Tofu apply", "live_deploy_aws/scope_shared/durable"):
+            apply_stack("live_deploy_aws/scope_shared/durable", env, durable_vars, region)
         logger.success("Shared durable applied")
         tracker.end_phase(3)
 
         # Phase 4: Shared nondurable
         tracker.start_phase(4)
         logger.step(f"[4/{len(phases)}] Applying shared nondurable stack (ECR + S3)...")
-        with stats.timed("Tofu apply", "live-deploy-aws/scope-shared/nondurable"):
-            apply_stack("live-deploy-aws/scope-shared/nondurable", env, [], region)
+        with stats.timed("Tofu apply", "live_deploy_aws/scope_shared/nondurable"):
+            apply_stack("live_deploy_aws/scope_shared/nondurable", env, [], region)
         logger.success("Shared nondurable applied")
         tracker.end_phase(4)
 
@@ -233,7 +233,7 @@ def main():
         # Phase 8: ECR URLs
         tracker.start_phase(8)
         logger.step(f"[8/{len(phases)}] Getting ECR image URLs...")
-        snd = tofu_output_json("live-deploy-aws/scope-shared/nondurable", env, region)
+        snd = tofu_output_json("live_deploy_aws/scope_shared/nondurable", env, region)
         app_repo_url = snd["ecr_app_url"]["value"]
         spark_repo_url = snd["ecr_spark_url"]["value"]
         spark_image_full = f"{spark_repo_url}:{require('SPARK_IMAGE_TAG')}"

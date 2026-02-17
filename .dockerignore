@@ -1,6 +1,6 @@
-core-app/frontend/node_modules
-core-app/frontend/dist
-core-app/backend/__pycache__
+core_app/frontend/node_modules
+core_app/frontend/dist
+core_app/backend/__pycache__
 .git
 .env
 tofu_data

@@ -25,7 +25,7 @@ VERIFY_TIMEOUT_SEC = get_int_env("VERIFY_TIMEOUT_SEC", 900)  # CloudFront propag
 VERIFY_HEARTBEAT_INTERVAL_SEC = get_int_env("VERIFY_HEARTBEAT_INTERVAL_SEC", 30)
 
 # CSV path for total_rec (line count - 1)
-CSV_PATH = os.path.join(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..")), "core-app", "data", "raw", "fridge_sales_with_rating.csv")
+CSV_PATH = os.path.join(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..")), "core_app", "data", "raw", "fridge_sales_with_rating.csv")
 
 
 def get_total_rec_from_csv() -> int:
@@ -294,7 +294,7 @@ def main():
         if scope == "nonkube":
             logger.info("Fetching nonkube tofu outputs (tofu init + output, ~30-60s)...")
             sys.stdout.flush()
-            stack_out = get_tofu_output("live-deploy-aws/nonkube", env)
+            stack_out = get_tofu_output("live_deploy_aws/nonkube", env)
             cf_domain = stack_out.get("cloudfront_domain_name", {}).get("value")
             alb_dns = stack_out.get("alb_dns_name", {}).get("value")
             base_url = f"https://{cf_domain}" if cf_domain else (f"http://{alb_dns}" if alb_dns else None)
@@ -311,7 +311,7 @@ def main():
         elif scope == "kube":
             logger.info("Fetching kube tofu outputs (tofu init + output, ~30-60s)...")
             sys.stdout.flush()
-            stack_out = get_tofu_output("live-deploy-aws/kube", env)
+            stack_out = get_tofu_output("live_deploy_aws/kube", env)
             cf_domain = stack_out.get("cloudfront_domain_name", {}).get("value")
             if cf_domain:
                 base_url = f"https://{cf_domain}"

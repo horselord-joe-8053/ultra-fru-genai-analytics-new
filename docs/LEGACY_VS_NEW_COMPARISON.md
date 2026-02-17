@@ -29,7 +29,7 @@ CSV_FILE="$REPO_ROOT/module_app_core/data/raw/fridge_sales_with_rating.csv"
 export FRU_CSV_PATH="${FRU_CSV_PATH:-$CSV_FILE}"
 ```
 
-**New** (`setup_database.py`): Now sets `FRU_CSV_PATH` to `core-app/data/raw/fridge_sales_with_rating.csv` (absolute path) and `PYTHONPATH` to include `core-app` before running ETL.
+**New** (`setup_database.py`): Now sets `FRU_CSV_PATH` to `core_app/data/raw/fridge_sales_with_rating.csv` (absolute path) and `PYTHONPATH` to include `core_app` before running ETL.
 
 ### 1.2 Load Idempotency & Metadata – **Fixed**
 
@@ -97,15 +97,15 @@ Nonkube correctly wires PG* from durable and `aurora_from_ecs` SG rule.
 ## 4. ETL Script Path
 
 **Legacy**: `module_app_core/backend/etl/load_openai_embeddings_to_pgvector_rds_api.py`  
-**New**: `core-app/backend/etl/load_openai_embeddings_to_pgvector_rds_api.py`
+**New**: `core_app/backend/etl/load_openai_embeddings_to_pgvector_rds_api.py`
 
-Path is correct; ETL is invoked with `cwd=REPO_ROOT`. ETL uses `backend.etl` so `PYTHONPATH` must include `core-app`. `setup_database.py` runs:
+Path is correct; ETL is invoked with `cwd=REPO_ROOT`. ETL uses `backend.etl` so `PYTHONPATH` must include `core_app`. `setup_database.py` runs:
 
 ```python
 subprocess.run([sys.executable, ETL_SCRIPT], env=env_vars, cwd=REPO_ROOT)
 ```
 
-`ETL_SCRIPT` is an absolute path; the script is run directly. The ETL imports `backend.utils.env_helpers` – that requires `core-app` on `PYTHONPATH`. **Fixed**: `PYTHONPATH` is now set to `core-app` in `env_vars` before running ETL.
+`ETL_SCRIPT` is an absolute path; the script is run directly. The ETL imports `backend.utils.env_helpers` – that requires `core_app` on `PYTHONPATH`. **Fixed**: `PYTHONPATH` is now set to `core_app` in `env_vars` before running ETL.
 
 ---
 
@@ -114,10 +114,10 @@ subprocess.run([sys.executable, ETL_SCRIPT], env=env_vars, cwd=REPO_ROOT)
 | # | Fix | File(s) |
 |---|-----|---------|
 | 1 | Set `FRU_CSV_PATH` in setup_database load_data | `tools/aws/setup_database.py` |
-| 2 | Add `PYTHONPATH` for ETL subprocess (include `core-app`) | `tools/aws/setup_database.py` |
+| 2 | Add `PYTHONPATH` for ETL subprocess (include `core_app`) | `tools/aws/setup_database.py` |
 | 3 | OPENAI_API_KEY from K8s Secret (not placeholder) | `kube_apply.py`, `api-deployment.yaml` |
 | 4 | Add Bedrock, DELTA_*, CONTAINER_TYPE to kube API | `api-deployment.yaml`, `kube_apply.py` |
-| 5 | Add Bedrock, DELTA_LAKE_PACKAGE to ECS env_vars | `live-deploy-aws/nonkube/main.tf` |
+| 5 | Add Bedrock, DELTA_LAKE_PACKAGE to ECS env_vars | `live_deploy_aws/nonkube/main.tf` |
 | 6 | (Optional) Add load idempotency/metadata to setup_database | `tools/aws/setup_database.py` |
 | 7 | (Optional) Add wait-for-pgvector before schema init | `tools/aws/setup_database.py` |
 
@@ -127,7 +127,7 @@ subprocess.run([sys.executable, ETL_SCRIPT], env=env_vars, cwd=REPO_ROOT)
 
 After fixes (all implemented):
 
-- [x] FRU_CSV_PATH set; PYTHONPATH includes core-app
+- [x] FRU_CSV_PATH set; PYTHONPATH includes core_app
 - [x] Load idempotency (skip if rows exist)
 - [x] wait-for-pgvector before schema
 - [x] Schema verification (embedding column)

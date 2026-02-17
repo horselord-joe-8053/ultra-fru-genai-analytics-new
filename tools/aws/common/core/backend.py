@@ -8,8 +8,8 @@ def stack_id_from_dir(stack_dir: str, cloud: str = "aws") -> str:
     Backward compat: scope-shared -> shared in state key so existing tfstate remains valid."""
     parts = stack_dir.strip("/").split("/")
     logical = "-".join(parts[1:]) if len(parts) > 1 else (parts[0] if parts else "")
-    if "scope-shared" in logical:
-        logical = logical.replace("scope-shared", "shared")
+    if "scope-shared" in logical or "scope_shared" in logical:
+        logical = logical.replace("scope-shared", "shared").replace("scope_shared", "shared")
     return f"{cloud}-{logical}" if logical else cloud
 
 def resolve_region(cli_region: str | None = None) -> str:

@@ -17,7 +17,7 @@ from tools.cloud_shared.env import load_dotenv
 load_dotenv()
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
-FRONTEND_DIR = os.path.join(REPO_ROOT, "core-app", "frontend")
+FRONTEND_DIR = os.path.join(REPO_ROOT, "core_app", "frontend")
 DIST_DIR = os.path.join(FRONTEND_DIR, "dist")
 
 # Wait-for-invalidation constants (legacy parity: cloudfront-invalidation.sh)
