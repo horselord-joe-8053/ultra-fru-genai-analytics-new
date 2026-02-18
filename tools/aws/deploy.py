@@ -5,6 +5,7 @@ Usage:
   python tools/aws/deploy.py --scope kube --env dev
   python tools/aws/deploy.py --scope nonkube --env dev
   python tools/aws/deploy.py --scope all --env dev
+  python tools/aws/deploy.py --scope all --env dev --skip-build   # Use repo:latest from ECR, no build
 
 Key behaviors aligned with the legacy repo:
 - Uses `.env` env-map (names follow legacy)
@@ -113,6 +114,7 @@ def main():
     ap.add_argument("--region", default="", help="Region (default: CLOUD_REGION)")
     ap.add_argument("--skip-doctor", action="store_true")
     ap.add_argument("--force-spark-rebuild", action="store_true", help="Build Spark image with --no-cache")
+    ap.add_argument("--skip-build", action="store_true", help="Skip build; use repo:latest from ECR and query tags for display")
     args = ap.parse_args()
 
     env = args.env
@@ -215,39 +217,82 @@ def main():
             logger.warning(f"Database setup had issues (may already be initialized): {e}")
         tracker.end_phase(6)
 
-        # Phase 7: Build & push
+        # Phase 7: Build & push (skip if --skip-build)
         tracker.start_phase(7)
-        logger.step(f"[7/{len(phases)}] Building and pushing images...")
-        # When APP_IMAGE_TAG is "latest", generate version tag and push both (legacy parity)
-        app_tag = os.getenv("APP_IMAGE_TAG", "latest")
-        if app_tag == "latest":
-            from tools.aws.scope_shared.deploy.image_tag import generate_image_tag, get_container_image_tags
-            version_tag = generate_image_tag(env)
-            os.environ["APP_IMAGE_TAG"] = version_tag
-            os.environ["CONTAINER_IMAGE_TAGS"] = get_container_image_tags(version_tag)
-            logger.info(f"[BUILD] Generated version tag: {version_tag} (will also push latest)")
+        if args.skip_build:
+            logger.step(f"[7/{len(phases)}] Skipping build (--skip-build); will use repo:latest from ECR")
+            # Set defaults for phase 8; actual image/tags resolved from ECR there
+            if not os.getenv("APP_IMAGE_TAG"):
+                os.environ["APP_IMAGE_TAG"] = "latest"
+            if not os.getenv("SPARK_IMAGE_TAG"):
+                os.environ["SPARK_IMAGE_TAG"] = "latest"
+            tracker.end_phase(7)
         else:
-            os.environ["CONTAINER_IMAGE_TAGS"] = app_tag
-        build_env = {**os.environ, "CLOUD_REGION": region, "AWS_REGION": region}
-        build_env["PYTHONUNBUFFERED"] = "1"
-        build_cmd = ["python", "tools/aws/scope_shared/deploy/build_and_push_images.py", "--env", env, "--region", region]
-        if args.force_spark_rebuild:
-            build_cmd.append("--no-cache")
-        with stats.timed("Build & push", "build_and_push_images"):
-            proc = subprocess.run(build_cmd, cwd=os.getcwd(), env=build_env)
-        if proc.returncode != 0:
-            raise subprocess.CalledProcessError(proc.returncode, proc.args)
-        logger.success("Images built and pushed")
-        tracker.end_phase(7)
+            logger.step(f"[7/{len(phases)}] Building and pushing images...")
+            # Default SPARK_IMAGE_TAG when not in .env (e.g. commented out)
+            if not os.getenv("SPARK_IMAGE_TAG"):
+                os.environ["SPARK_IMAGE_TAG"] = "latest"
+            # When APP_IMAGE_TAG is "latest" or unset, generate version tag and push both
+            app_tag = os.getenv("APP_IMAGE_TAG", "latest")
+            if app_tag == "latest":
+                from tools.aws.scope_shared.deploy.image_tag import generate_image_tag, get_container_image_tags
+                version_tag = generate_image_tag(env)
+                os.environ["APP_IMAGE_TAG"] = version_tag
+                os.environ["CONTAINER_IMAGE_TAGS"] = get_container_image_tags(version_tag)
+                logger.info(f"[BUILD] Generated version tag: {version_tag} (will also push latest)")
+            else:
+                os.environ["CONTAINER_IMAGE_TAGS"] = app_tag
+            build_env = {**os.environ, "CLOUD_REGION": region, "AWS_REGION": region}
+            build_env["PYTHONUNBUFFERED"] = "1"
+            build_cmd = ["python", "tools/aws/scope_shared/deploy/build_and_push_images.py", "--env", env, "--region", region]
+            if args.force_spark_rebuild:
+                build_cmd.append("--no-cache")
+            with stats.timed("Build & push", "build_and_push_images"):
+                proc = subprocess.run(build_cmd, cwd=os.getcwd(), env=build_env)
+            if proc.returncode != 0:
+                raise subprocess.CalledProcessError(proc.returncode, proc.args)
+            logger.success("Images built and pushed")
+            tracker.end_phase(7)
 
-        # Phase 8: ECR URLs
+        # Phase 8: ECR URLs (and for --skip-build: query ECR for latest image tags)
         tracker.start_phase(8)
         logger.step(f"[8/{len(phases)}] Getting ECR image URLs...")
         snd = tofu_output_json("infra_terraform/live_deploy/aws/scope_shared/nondurable", env, region)
         app_repo_url = snd["ecr_app_url"]["value"]
         spark_repo_url = snd["ecr_spark_url"]["value"]
-        spark_image_full = f"{spark_repo_url}:{require('SPARK_IMAGE_TAG')}"
-        app_image_full = f"{app_repo_url}:{require('APP_IMAGE_TAG')}"
+        if args.skip_build:
+            app_image_full = f"{app_repo_url}:latest"
+            spark_image_full = f"{spark_repo_url}:latest"
+            # Query ECR for all tags on the image with tag=latest (for frontend display)
+            repo_name = app_repo_url.split("/")[-1]
+            try:
+                out = subprocess.check_output(
+                    [
+                        "aws", "ecr", "describe-images",
+                        "--repository-name", repo_name,
+                        "--image-ids", "imageTag=latest",
+                        "--region", region,
+                        "--query", "imageDetails[0].imageTags",
+                        "--output", "text",
+                    ],
+                    text=True,
+                    timeout=15,
+                )
+                tags_str = out.strip().replace("\t", ",").replace(" ", ",")
+                # Normalize: "tag1\ttag2" or "tag1 tag2" -> "tag1,tag2"
+                tags_list = [t for t in tags_str.split(",") if t]
+                if tags_list:
+                    os.environ["CONTAINER_IMAGE_TAGS"] = ",".join(tags_list)
+                    logger.info(f"[SKIP-BUILD] App image tags from ECR: {os.environ['CONTAINER_IMAGE_TAGS']}")
+                else:
+                    os.environ["CONTAINER_IMAGE_TAGS"] = "latest"
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+                logger.error(f"[SKIP-BUILD] Failed to get tags for repo:latest: {e}")
+                logger.error("Ensure a full deploy has run at least once so 'latest' exists in ECR.")
+                raise SystemExit(1)
+        else:
+            spark_image_full = f"{spark_repo_url}:{require('SPARK_IMAGE_TAG')}"
+            app_image_full = f"{app_repo_url}:{require('APP_IMAGE_TAG')}"
         logger.info(f"App image: {app_image_full}")
         logger.info(f"Spark image: {spark_image_full}")
         logger.success("ECR URLs obtained")

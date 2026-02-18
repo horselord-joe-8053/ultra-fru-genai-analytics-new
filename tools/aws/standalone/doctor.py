@@ -32,7 +32,8 @@ def main():
     os.environ["CLOUD_REGION"] = region
     os.environ["AWS_REGION"] = region
 
-    for k in ["TF_STATE_BUCKET","FRU_PREFIX","S3_DELTA_BUCKET","S3_ARTIFACT_BUCKET","ECR_REPO_APP","ECR_REPO_SPARK","APP_IMAGE_TAG","SPARK_IMAGE_TAG"]:
+    # APP_IMAGE_TAG and SPARK_IMAGE_TAG are optional; deploy auto-generates when commented out in .env
+    for k in ["TF_STATE_BUCKET","FRU_PREFIX","S3_DELTA_BUCKET","S3_ARTIFACT_BUCKET","ECR_REPO_APP","ECR_REPO_SPARK"]:
         require(k)
 
     tfbin = os.getenv("FRU_TF_BIN","tofu")
