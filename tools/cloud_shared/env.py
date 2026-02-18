@@ -2,7 +2,13 @@
 import os
 from pathlib import Path
 
-def load_dotenv(path: str = ".env"):
+def load_dotenv(path: str = ".env", override: bool = False):
+    """
+    Load .env into os.environ.
+    When override=False (default), do not overwrite existing env vars.
+    This allows callers (e.g. deploy) to set values that child scripts (e.g. build) will keep.
+    When override=True, always overwrite (legacy behavior).
+    """
     # Fallback to env.fru if default .env is missing and env.fru exists
     if path == ".env" and not Path(".env").exists() and Path("env.fru").exists():
         path = "env.fru"
@@ -14,7 +20,9 @@ def load_dotenv(path: str = ".env"):
         if not line or line.startswith("#") or "=" not in line:
             continue
         k, v = line.split("=", 1)
-        os.environ[k.strip()] = v.strip()
+        key = k.strip()
+        if override or key not in os.environ:
+            os.environ[key] = v.strip()
 
 def require(name: str) -> str:
     v = os.getenv(name)

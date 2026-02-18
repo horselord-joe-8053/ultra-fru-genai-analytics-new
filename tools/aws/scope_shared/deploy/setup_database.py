@@ -27,7 +27,7 @@ load_dotenv()
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
 SCHEMA_FILE = os.path.join(REPO_ROOT, "core_app", "sql", "schema_pgvector.sql")
-PARSE_SQL = os.path.join(REPO_ROOT, "tools", "common", "sql", "parse_sql_statements.py")
+PARSE_SQL = os.path.join(REPO_ROOT, "tools", "cloud_shared", "sql", "parse_sql_statements.py")
 ETL_SCRIPT = os.path.join(REPO_ROOT, "core_app", "backend", "etl", "load_openai_embeddings_to_pgvector_rds_api.py")
 
 

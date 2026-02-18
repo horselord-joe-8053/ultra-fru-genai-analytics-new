@@ -2,6 +2,8 @@
 
 Evaluation of how to add multi-region deployment for AWS (e.g. us-east-1, us-west-2).
 
+> **Note:** Run scripts with `PYTHONPATH=.` from project root, e.g. `PYTHONPATH=. python tools/aws/teardown.py --scope all --env dev --non-interactive`
+
 ## Options
 
 ### Option A: Region as Directory

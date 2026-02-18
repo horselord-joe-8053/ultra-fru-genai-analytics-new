@@ -42,5 +42,37 @@ ETAG=$(aws cloudfront get-distribution-config --id $DIST_ID --query 'ETag' --out
 aws cloudfront delete-distribution --id $DIST_ID --if-match $ETAG
 
 # 4. Run teardown to remove OAC from state
-python orchestrator.py teardown --scope nonkube --non-interactive --env dev
+PYTHONPATH=. python tools/aws/teardown.py --scope nonkube --env dev --non-interactive
+```
+
+## Workaround: Remove OAC from state to unblock teardown
+
+If OAC delete keeps failing after retries (OriginAccessControlInUse), remove it from state so teardown can proceed. The OAC will remain in AWS until CloudFront releases it (or delete manually later):
+
+```bash
+cd infra_terraform/live_deploy/aws/nonkube
+# Init with backend (use same backend-config as teardown)
+tofu init -lock=false -upgrade -reconfigure -backend-config bucket=... -backend-config key=fru/dev/us-east-1/aws-nonkube.tfstate ...
+tofu state rm 'module.frontend.aws_cloudfront_origin_access_control.frontend'
+# Then run teardown again
+PYTHONPATH=. python tools/aws/teardown.py --scope all --env dev --non-interactive
+```
+
+## Deploy: Import OAC when it exists in AWS but not in state
+
+If OAC was removed from state (per workaround above) but the CloudFront distribution still exists and uses it, a subsequent deploy will fail with `OriginAccessControlAlreadyExists`. Import the existing OAC into state:
+
+```bash
+# OAC ID: look up via AWS Console or: aws cloudfront list-origin-access-controls --query "OriginAccessControlList.Items[?Name=='fru-dev-frontend-nonkube-oac'].Id" --output text
+cd infra_terraform/live_deploy/aws/nonkube
+# Set TF vars (deploy uses get_base_vars)
+PYTHONPATH=. python -c "
+from tools.aws.scope_shared.core.terra_var_handling import get_base_vars
+import subprocess, os
+get_base_vars('dev', 'us-east-1')
+subprocess.run(['tofu', 'import', '-lock=false', 'module.frontend.aws_cloudfront_origin_access_control.frontend', 'E268PVJGN2YYRR'],
+  cwd='infra_terraform/live_deploy/aws/nonkube', env=os.environ, check=True)
+"
+# Then re-run deploy
+PYTHONPATH=. python tools/aws/deploy.py --scope all --env dev
 ```

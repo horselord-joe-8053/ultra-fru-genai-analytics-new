@@ -5,7 +5,6 @@ Called by deploy.py when scope is nonkube or all (nonkube first when scope=all).
 """
 import os
 
-from tools.cloud_shared.env import require
 from tools.cloud_shared.logging import logger
 from tools.cloud_shared.stats import DeployStats, scope_for
 from tools.aws.scope_shared.deploy.deploy_common import (
@@ -47,11 +46,9 @@ def run_deploy_nonkube(
             fn()
 
     # Phase 9: Apply ECS stack
-    app_repo_url = snd["ecr_app_url"]["value"]
-
     def _apply_ecs():
         extra = [
-            "-var", f"app_image={app_repo_url}:{require('APP_IMAGE_TAG')}",
+            "-var", f"app_image={app_image_full}",
             "-var", f"spark_image={spark_image_full}",
         ]
         img_tags = os.getenv("CONTAINER_IMAGE_TAGS", "")
