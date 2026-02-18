@@ -9,6 +9,7 @@ This tool:
 - Reads ECR repository URLs from `infra_terraform/live_deploy/aws/scope_shared/nondurable` state
 - Logs into ECR properly
 - Builds and pushes images
+- Removes local images after successful push (use --skip-cleanup to keep them)
 
 Replace the build contexts to match your legacy project.
 """
@@ -161,6 +162,80 @@ def _docker_hung_suggestion() -> str:
     )
 
 
+def _ecr_image_exists(repo_name: str, tag: str, region: str) -> bool:
+    """Verify image exists in ECR before removing local copy (safety check)."""
+    try:
+        subprocess.check_output(
+            [
+                "aws", "ecr", "describe-images",
+                "--repository-name", repo_name,
+                "--image-ids", f"imageTag={tag}",
+                "--region", region,
+            ],
+            stderr=subprocess.DEVNULL,
+            timeout=15,
+        )
+        return True
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        return False
+
+
+def _cleanup_local_images_after_push(
+    app_repo_url: str,
+    spark_repo_url: str,
+    app_tag: str,
+    spark_tag: str,
+    region: str,
+) -> None:
+    """
+    Remove local Docker images after successful ECR push (legacy parity).
+    Verifies each image exists in ECR before removal. Non-fatal: errors are warnings.
+    """
+    app_repo_name = app_repo_url.split("/")[-1]
+    spark_repo_name = spark_repo_url.split("/")[-1]
+
+    images_to_remove: list[str] = [
+        f"{app_repo_url}:{app_tag}",
+        f"{spark_repo_url}:{spark_tag}",
+    ]
+    if app_tag != "latest":
+        images_to_remove.append(f"{app_repo_url}:latest")
+
+    logger.info("[CLEANUP] Verifying images in ECR before local removal...")
+    if not _ecr_image_exists(app_repo_name, app_tag, region):
+        logger.warning("[CLEANUP] App image not found in ECR - skipping local cleanup for safety")
+        return
+    if app_tag != "latest" and not _ecr_image_exists(app_repo_name, "latest", region):
+        logger.warning("[CLEANUP] App:latest not found in ECR - skipping local cleanup for safety")
+        return
+    if not _ecr_image_exists(spark_repo_name, spark_tag, region):
+        logger.warning("[CLEANUP] Spark image not found in ECR - skipping local cleanup for safety")
+        return
+
+    logger.success("[CLEANUP] ECR images verified, removing local copies...")
+    removed = 0
+    for image_ref in images_to_remove:
+        try:
+            result = subprocess.run(
+                ["docker", "rmi", "-f", image_ref],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if result.returncode == 0:
+                removed += 1
+                logger.success(f"  ✓ Removed: {image_ref}")
+            else:
+                logger.warning(f"  ✗ Could not remove {image_ref} (may be in use)")
+        except subprocess.TimeoutExpired:
+            logger.warning(f"  ✗ Timeout removing {image_ref}")
+        except Exception as e:
+            logger.warning(f"  ✗ Could not remove {image_ref}: {e}")
+
+    if removed > 0:
+        logger.success(f"[CLEANUP] Local images removed ({removed})")
+
+
 def ecr_login(registry: str, region: str):
     logger.info(f"[ECR LOGIN] Logging in to {registry}")
     timeout = _docker_basic_timeout()
@@ -192,6 +267,7 @@ def main():
     ap.add_argument("--env", default=os.getenv("FRU_ENV","dev"))
     ap.add_argument("--region", default=None, help="Region (default: CLOUD_REGION)")
     ap.add_argument("--no-cache", action="store_true", help="Build Spark image without cache (ensures fresh run_analytics.py)")
+    ap.add_argument("--skip-cleanup", action="store_true", help="Skip local image removal after push")
     args = ap.parse_args()
 
     region = resolve_region(args.region)
@@ -260,7 +336,12 @@ def main():
     logger.success("All images pushed:")
     print("  ", f"{app_repo_url}:{app_tag}")
     print("  ", f"{spark_repo_url}:{spark_tag}")
-    
+
+    if not args.skip_cleanup:
+        _cleanup_local_images_after_push(
+            app_repo_url, spark_repo_url, app_tag, spark_tag, region
+        )
+
     sys.exit(0)
 
 if __name__ == "__main__":

@@ -1,3 +1,13 @@
+"""
+Unified Orchestrator for deploy, teardown, doctor, verify.
+
+Usage (from project root, with venv):
+  .venv/bin/python orchestrator.py deploy --scope all --env dev
+  .venv/bin/python orchestrator.py verify --scope all --env dev
+
+No PYTHONPATH=. needed: orchestrator sets it for subprocesses.
+Deploy runs 'pip install -r requirements.txt' first (use --skip-ensure-deps to skip).
+"""
 import os
 import argparse
 import sys
@@ -47,6 +57,17 @@ def run_command(cmd, cwd=None):
         logger.error(f"Error running command: {e}")
         sys.exit(1)
 
+def ensure_deps():
+    """Install deps from requirements.txt so venv is ready. Idempotent; fast when already satisfied."""
+    req_file = os.path.join(os.getcwd(), "requirements.txt")
+    if os.path.exists(req_file):
+        logger.info("Ensuring dependencies (pip install -r requirements.txt)...")
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-r", req_file, "--quiet"],
+            check=True,
+            cwd=os.getcwd(),
+        )
+
 def handle_aws(args):
     """Route commands to AWS tools."""
     base_path = "tools/aws"
@@ -64,6 +85,9 @@ def handle_aws(args):
         if not args.scope:
             logger.error("Error: --scope required for deploy")
             sys.exit(1)
+        
+        if not args.skip_ensure_deps:
+            ensure_deps()
             
         # Preempt logic: Teardown -> Verify Teardown
         if args.preempt:
@@ -146,6 +170,7 @@ def main():
     parser.add_argument("--non-interactive", action="store_true", help="Skip confirmation prompts")
     parser.add_argument("--force", action="store_true", help="Legacy alias for --non-interactive")
     parser.add_argument("--skip-doctor", action="store_true", help="Skip preflight checks (deploy only)")
+    parser.add_argument("--skip-ensure-deps", action="store_true", help="Skip pip install -r requirements.txt (deploy only)")
     parser.add_argument("--preempt", action="store_true", help="Run full teardown and verification before deploy")
 
     # Parse args
