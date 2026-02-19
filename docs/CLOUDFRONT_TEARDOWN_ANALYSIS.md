@@ -58,9 +58,13 @@ tofu state rm 'module.frontend.aws_cloudfront_origin_access_control.frontend'
 PYTHONPATH=. python tools/aws/teardown.py --scope all --env dev --non-interactive
 ```
 
-## Deploy: Import OAC when it exists in AWS but not in state
+## Pre-destroy now deletes OAC
 
-If OAC was removed from state (per workaround above) but the CloudFront distribution still exists and uses it, a subsequent deploy will fail with `OriginAccessControlAlreadyExists`. Import the existing OAC into state:
+The CloudFront pre-destroy step (run before tofu destroy) now also deletes the OAC via AWS API after the distribution is gone. OAC deletion is synchronous, so no wait is needed. This handles orphaned OAC (removed from state via `state rm`): we delete it via API, so no import is needed on next deploy.
+
+## Deploy: Import OAC when it exists in AWS but not in state (legacy)
+
+If OAC was removed from state (per workaround above) but the CloudFront distribution still exists and uses it, a subsequent deploy will fail with `OriginAccessControlAlreadyExists`. With pre-destroy now deleting OAC, this should be rare. If needed, import the existing OAC into state:
 
 ```bash
 # OAC ID: look up via AWS Console or: aws cloudfront list-origin-access-controls --query "OriginAccessControlList.Items[?Name=='fru-dev-frontend-nonkube-oac'].Id" --output text
