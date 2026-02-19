@@ -8,7 +8,7 @@ import subprocess
 
 from tools.cloud_shared.env import load_dotenv, require
 from tools.aws.scope_shared.core.terra_runner import terra, terra_capture, get_terra_env
-from tools.aws.scope_shared.core.backend import backend_config, resolve_region
+from tools.aws.scope_shared.core.backend import resolve_region
 from tools.cloud_shared.logging import logger
 from tools.aws.scope_shared.core.terra_var_handling import get_base_vars
 from tools.cloud_shared.retry import run_with_retry
@@ -59,15 +59,11 @@ def clear_delta_table(delta_bucket: str, region: str) -> None:
 
 
 def init_stack(stack_dir: str, env: str, region: str | None = None) -> None:
-    """Init stack with backend config."""
+    """Init stack with backend config. Delegates to core.terra_init."""
     logger.info(f"[INIT] {stack_dir}")
-    cfg = backend_config(stack_dir, env, region)
-    args = ["init", "-lock=false", "-upgrade", "-reconfigure"]
-    for c in cfg:
-        args += ["-backend-config", c]
-    exe = os.getenv("FRU_TF_BIN", "tofu")
-    cmd = [exe] + args
-    run_with_retry(cmd, cwd=stack_dir, env=get_terra_env(region), description=f"tofu init in {stack_dir}")
+    from tools.aws.scope_shared.core.terra_init import init_stack as _init_stack
+
+    _init_stack(stack_dir, env, region)
     logger.success(f"[INIT OK] {stack_dir}")
 
 
