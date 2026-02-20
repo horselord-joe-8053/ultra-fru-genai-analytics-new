@@ -70,10 +70,9 @@ def main():
 
     region = resolve_region(args.region)
     os.environ["CLOUD_REGION"] = region
-    os.environ["AWS_DEFAULT_REGION"] = region
 
     # ensure kubeconfig
-    subprocess.run(["python","tools/aws/kube/eks_kubeconfig.py","--env",args.env], check=False, env={**os.environ, "CLOUD_REGION": region, "AWS_DEFAULT_REGION": region})
+    subprocess.run(["python","tools/aws/kube/eks_kubeconfig.py","--env",args.env], check=False, env={**os.environ, "CLOUD_REGION": region})
 
     spark_image = args.spark_image
     if not spark_image:
@@ -162,7 +161,7 @@ data:
                 "PGUSER": args.pg_user,
                 "AWS_ACCESS_KEY_ID": require("AWS_ADMIN_ACCESS_KEY_ID"),
                 "AWS_SECRET_ACCESS_KEY": require("AWS_ADMIN_SECRET_ACCESS_KEY"),
-                "AWS_REGION": os.getenv("CLOUD_REGION", "").strip() or require("CLOUD_REGION")
+                "CLOUD_REGION": os.getenv("CLOUD_REGION", "").strip() or require("CLOUD_REGION")
             }
             txt = render("infra_terraform/modules/cloud_shared/k8s/bootstrap-job.yaml", subs)
             kubectl(["delete", "job", JOB_BOOTSTRAP, "--ignore-not-found", "-n", K8S_NAMESPACE])
@@ -179,7 +178,7 @@ data:
                 "PGUSER": args.pg_user,
                 "PGDATABASE": args.pg_database,
                 "ALLOWED_ORIGINS": "*",
-                "AWS_REGION": args.aws_region or os.getenv("CLOUD_REGION", "").strip() or require("CLOUD_REGION"),
+                "CLOUD_REGION": args.aws_region or os.getenv("CLOUD_REGION", "").strip() or require("CLOUD_REGION"),
                 "DELTA_TABLE_PATH": delta_table_path,
                 "DELTA_LAKE_PACKAGE": args.delta_lake_package,
                 "SPARK_HOME": "/opt/spark",

@@ -251,7 +251,6 @@ def main():
         logger.error(str(e))
         sys.exit(1)
     os.environ["CLOUD_REGION"] = region
-    os.environ["AWS_DEFAULT_REGION"] = region
     os.environ["PYTHONUNBUFFERED"] = "1"  # Flush output immediately (avoids silent hang when run under Cursor/CI)
 
     token = f"{args.scope}-{args.env}-destroy"

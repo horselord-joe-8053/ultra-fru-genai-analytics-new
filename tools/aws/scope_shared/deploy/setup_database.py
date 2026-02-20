@@ -172,7 +172,7 @@ def load_data(env: str, cluster_arn: str, secret_arn: str, db_name: str, force: 
     # Idempotency: skip if data exists and not forcing (legacy parity)
     if not force:
         import boto3
-        rds = boto3.client("rds-data", region_name=env_vars.get("CLOUD_REGION", "").strip() or env_vars.get("AWS_DEFAULT_REGION", ""))
+        rds = boto3.client("rds-data", region_name=env_vars.get("CLOUD_REGION", "").strip())
         try:
             resp = rds.execute_statement(
                 resourceArn=cluster_arn,
@@ -209,7 +209,6 @@ def main():
 
     region = resolve_region(args.region)
     os.environ["CLOUD_REGION"] = region
-    os.environ["AWS_DEFAULT_REGION"] = region
 
     logger.step("Setting up database (pgvector, schema, data)")
 

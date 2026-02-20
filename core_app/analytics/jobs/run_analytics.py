@@ -120,7 +120,7 @@ def main(delta_path: str = None, output_dir: str = None):
         .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
     )
     # S3 access: ECS Fargate uses container metadata (no EC2 instance metadata)
-    aws_region = os.environ.get("AWS_REGION") or os.environ.get("CLOUD_REGION") or "us-east-1"
+    aws_region = os.environ.get("CLOUD_REGION") or "us-east-1"
     builder = builder.config("spark.hadoop.fs.s3a.endpoint.region", aws_region)
     # ContainerCredentialsProvider first (ECS Fargate), then default chain (local/EC2)
     builder = builder.config(

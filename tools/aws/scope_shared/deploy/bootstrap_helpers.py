@@ -103,7 +103,6 @@ def wait_for_fru_api_ready(
     env_vars = {**os.environ}
     if region:
         env_vars["CLOUD_REGION"] = region
-        env_vars["AWS_DEFAULT_REGION"] = region
 
     start = time.time()
     last_log = 0.0
@@ -229,7 +228,6 @@ def k8s_rollout_restart_api(env: str, region: str | None = None) -> None:
     env_vars = {**os.environ}
     if region:
         env_vars["CLOUD_REGION"] = region
-        env_vars["AWS_DEFAULT_REGION"] = region
     result = subprocess.run(
         ["kubectl", "rollout", "restart", "deployment/fru-api", "-n", K8S_NAMESPACE],
         capture_output=True, text=True, timeout=60, env=env_vars,

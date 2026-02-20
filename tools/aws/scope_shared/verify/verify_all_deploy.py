@@ -52,7 +52,7 @@ def get_tofu_output(stack_dir, env):
         init_stack(stack_dir, env, region)
         out = subprocess.check_output(
             [os.getenv("FRU_TF_BIN", "tofu"), "output", "-json"],
-            cwd=stack_dir, text=True, env={**os.environ, "CLOUD_REGION": region, "AWS_DEFAULT_REGION": region}
+            cwd=stack_dir, text=True, env={**os.environ, "CLOUD_REGION": region}
         )
         return json.loads(out)
     except Exception as e:

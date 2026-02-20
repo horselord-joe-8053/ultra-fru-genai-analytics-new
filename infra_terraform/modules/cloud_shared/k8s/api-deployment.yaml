@@ -71,8 +71,8 @@ spec:
           value: "text-embedding-3-small"
         - name: USE_AGENT_QUERY
           value: "true"
-        - name: AWS_REGION
-          value: "${AWS_REGION}"
+        - name: CLOUD_REGION
+          value: "${CLOUD_REGION}"
         - name: CONTAINER_IMAGE
           value: "${APP_IMAGE}"
         - name: CONTAINER_IMAGE_TAGS
