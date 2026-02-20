@@ -21,7 +21,7 @@ class AWSBedrockClient(LLMClient):
     """AWS Bedrock client (AWS production)."""
     
     def __init__(self):
-        region = get_required_env("AWS_REGION", "AWS region for Bedrock API")
+        region = get_required_env("CLOUD_REGION", "Cloud region for Bedrock API")
         profile = os.environ.get("AWS_PROFILE", "")
         
         if profile:

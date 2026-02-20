@@ -24,7 +24,7 @@ def create_llm_client() -> LLMClient:
     
     Priority:
     1. CLAUDE_API_KEY set → Local Claude API client
-    2. AWS_REGION + Bedrock config → AWS Bedrock client
+    2. CLOUD_REGION + Bedrock config → AWS Bedrock client
     3. Future: Azure/GCP config → respective clients
     
     Returns:
@@ -47,7 +47,7 @@ def create_llm_client() -> LLMClient:
             raise
     
     # Priority 2: Check for AWS Bedrock
-    aws_region = os.environ.get("AWS_REGION", "").strip()
+    aws_region = os.environ.get("CLOUD_REGION", "").strip()
     bedrock_profile_id = os.environ.get("AWS_BEDROCK_INFERENCE_PROFILE_ID", "").strip()
     bedrock_model_id = os.environ.get("AWS_BEDROCK_MODEL_ID", "").strip()
     
@@ -69,7 +69,7 @@ def create_llm_client() -> LLMClient:
     raise ValueError(
         "No LLM client available. Set one of:\n"
         "  - CLAUDE_API_KEY (for local Claude API)\n"
-        "  - AWS_REGION + AWS_BEDROCK_INFERENCE_PROFILE_ID or AWS_BEDROCK_MODEL_ID (for AWS Bedrock)"
+        "  - CLOUD_REGION + AWS_BEDROCK_INFERENCE_PROFILE_ID or AWS_BEDROCK_MODEL_ID (for AWS Bedrock)"
     )
 
 
@@ -102,7 +102,7 @@ def get_bedrock_client():
     from backend.utils.env_helpers import get_required_env
     import boto3
     
-    region = get_required_env("AWS_REGION", "AWS region for Bedrock API")
+    region = get_required_env("CLOUD_REGION", "Cloud region for Bedrock API")
     profile = os.environ.get("AWS_PROFILE", "")
     
     if profile:

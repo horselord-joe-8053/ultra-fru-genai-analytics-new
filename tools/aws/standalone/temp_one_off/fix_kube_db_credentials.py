@@ -36,7 +36,7 @@ def main():
         raise SystemExit(1)
 
     region = resolve_region(args.region)
-    env_vars = {**os.environ, "CLOUD_REGION": region, "AWS_DEFAULT_REGION": region}
+    env_vars = {**os.environ, "CLOUD_REGION": region}
 
     logger.step("1. Ensuring secrets in Secrets Manager...")
     subprocess.run(

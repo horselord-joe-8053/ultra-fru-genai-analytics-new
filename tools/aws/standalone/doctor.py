@@ -34,7 +34,6 @@ def main():
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
     os.environ["CLOUD_REGION"] = region
-    os.environ["AWS_DEFAULT_REGION"] = region
 
     # APP_IMAGE_TAG and SPARK_IMAGE_TAG are optional; deploy auto-generates when commented out in .env
     for k in ["TF_STATE_BUCKET","FRU_PREFIX","S3_DELTA_BUCKET","S3_ARTIFACT_BUCKET","ECR_REPO_APP","ECR_REPO_SPARK"]:

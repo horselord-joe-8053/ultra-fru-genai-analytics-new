@@ -35,13 +35,12 @@ def get_base_vars(env: str, region: str | None = None):
     """
     Set TF_VAR_ environment variables for OpenTofu/Terraform.
     Returns an empty list to maintain compatibility with existing script signatures.
-    If region is provided, uses it for aws_region TF var and sets CLOUD_REGION/AWS_DEFAULT_REGION in env for subprocesses.
+    If region is provided, uses it for aws_region TF var and sets CLOUD_REGION in env for subprocesses.
     """
     prefix = os.getenv("FRU_PREFIX", "fru")
 
     if region:
         os.environ["CLOUD_REGION"] = region
-        os.environ["AWS_DEFAULT_REGION"] = region
 
     # helper to set TF_VAR
     def set_tf(name, val):

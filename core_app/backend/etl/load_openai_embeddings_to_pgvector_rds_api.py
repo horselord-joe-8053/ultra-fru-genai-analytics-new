@@ -24,7 +24,7 @@ def get_openai_client() -> OpenAI:
 
 def get_rds_data_client():
     """Get RDS Data API client using AWS credentials."""
-    region = get_required_env("AWS_REGION", "AWS region")
+    region = get_required_env("CLOUD_REGION", "Cloud region")
     profile = os.environ.get("AWS_PROFILE", "").strip()
     
     if profile:

@@ -125,7 +125,6 @@ def main():
         logger.error(str(e))
         sys.exit(1)
     os.environ["CLOUD_REGION"] = region
-    os.environ["AWS_DEFAULT_REGION"] = region  # AWS CLI / boto3
 
     logger.step(f"Starting deployment: scope={scope} env={env} region={region}")
     phases = deploy_phases(scope)
@@ -149,7 +148,7 @@ def main():
                 subprocess.run(
                     ["python", "tools/aws/standalone/doctor.py", "--env", env, "--region", region, "--scope", scope],
                     check=True,
-                    env={**os.environ, "CLOUD_REGION": region, "AWS_DEFAULT_REGION": region},
+                    env={**os.environ, "CLOUD_REGION": region},
                 )
             logger.success("Doctor OK")
         else:
@@ -200,7 +199,7 @@ def main():
             subprocess.run(
                 ["python", "tools/aws/scope_shared/deploy/ensure_secrets.py", "--env", env, "--region", region],
                 check=True,
-                env={**os.environ, "CLOUD_REGION": region, "AWS_DEFAULT_REGION": region},
+                env={**os.environ, "CLOUD_REGION": region},
             )
         logger.success("Secrets ensured")
         tracker.end_phase(5)
@@ -213,7 +212,7 @@ def main():
                 subprocess.run(
                     ["python", "tools/aws/scope_shared/deploy/setup_database.py", "--env", env, "--region", region],
                     check=True,
-                    env={**os.environ, "CLOUD_REGION": region, "AWS_DEFAULT_REGION": region},
+                    env={**os.environ, "CLOUD_REGION": region},
                 )
             logger.success("Database setup complete")
         except subprocess.CalledProcessError as e:
@@ -245,7 +244,7 @@ def main():
                 logger.info(f"[BUILD] Generated version tag: {version_tag} (will also push latest)")
             else:
                 os.environ["CONTAINER_IMAGE_TAGS"] = app_tag
-            build_env = {**os.environ, "CLOUD_REGION": region, "AWS_DEFAULT_REGION": region}
+            build_env = {**os.environ, "CLOUD_REGION": region}
             build_env["PYTHONUNBUFFERED"] = "1"
             build_cmd = ["python", "tools/aws/scope_shared/deploy/build_and_push_images.py", "--env", env, "--region", region]
             if args.force_spark_rebuild:
