@@ -25,9 +25,10 @@ import argparse
 import json
 import os
 import subprocess
+import sys
 
 from tools.cloud_shared.logging import logger
-from tools.cloud_shared.env import load_dotenv
+from tools.cloud_shared.env import load_dotenv, EnvVarNotFound
 from tools.aws.scope_shared.core.backend import resolve_region
 from tools.cloud_shared.stats import TeardownStats, scope_for
 from tools.aws.scope_shared.core.phases import PhaseTracker, teardown_phases
@@ -49,6 +50,7 @@ ORDER = {
     "nonkube": ["infra_terraform/live_deploy/aws/nonkube"],
     "all": ["infra_terraform/live_deploy/aws/nonkube", "infra_terraform/live_deploy/aws/kube", "infra_terraform/live_deploy/aws/scope_shared/nondurable"],
 }
+DURABLE_STACK = "infra_terraform/live_deploy/aws/scope_shared/durable"
 
 # Stacks that have CloudFront frontend (require pre-destroy before tofu destroy)
 STACKS_WITH_CLOUDFRONT = tuple(ORDER["nonkube"] + ORDER["kube"])
@@ -93,7 +95,7 @@ def pre_destroy_nonkube(env: str, region: str | None = None, stats: TeardownStat
     """
     import time
 
-    region = region or os.getenv("CLOUD_REGION", os.getenv("AWS_REGION", "us-east-1"))
+    region = region or resolve_region(None)
     prefix = os.getenv("FRU_PREFIX", "fru")
     cluster = os.getenv("ECS_CLUSTER_NAME") or f"{prefix}-{env}-ecs"
     service = f"{prefix}-{env}-api-svc"
@@ -239,12 +241,17 @@ def main():
     )
     ap.add_argument("--env", default=os.getenv("FRU_ENV", "dev"))
     ap.add_argument("--region", default=None, help="Region (default: CLOUD_REGION)")
+    ap.add_argument("--incl-dura", action="store_true", help="Include shared durable stack in destroy (scope=all only)")
     ap.add_argument("--non-interactive", action="store_true", help="Skip confirmation prompts")
     args = ap.parse_args()
 
-    region = resolve_region(args.region)
+    try:
+        region = resolve_region(args.region)
+    except EnvVarNotFound as e:
+        logger.error(str(e))
+        sys.exit(1)
     os.environ["CLOUD_REGION"] = region
-    os.environ["AWS_REGION"] = region
+    os.environ["AWS_DEFAULT_REGION"] = region
     os.environ["PYTHONUNBUFFERED"] = "1"  # Flush output immediately (avoids silent hang when run under Cursor/CI)
 
     token = f"{args.scope}-{args.env}-destroy"
@@ -254,14 +261,21 @@ def main():
         if resp != token:
             raise SystemExit("Confirmation failed. Exiting.")
 
+    stacks_to_destroy = list(ORDER[args.scope])
+    if args.incl_dura and args.scope == "all":
+        stacks_to_destroy.append(DURABLE_STACK)
+        logger.info(f"Including durable stack (--incl-dura): will destroy after shared-nondurable")
+
     phases = teardown_phases(args.scope)
+    if args.incl_dura and args.scope == "all":
+        phases = phases + ["Destroy shared-durable"]
     tracker = PhaseTracker("Teardown", phases)
     stats = TeardownStats()
     phase_idx = 0
 
     logger.step(f"Starting teardown: scope={args.scope} env={args.env} region={region}")
 
-    for s in ORDER[args.scope]:
+    for s in stacks_to_destroy:
         phase_idx += 1
         tracker.start_phase(phase_idx)
         # Pre-destroy steps use scope "pre-destroy"
@@ -281,7 +295,7 @@ def main():
         tracker.end_phase(phase_idx)
 
     stats.print_summary()
-    logger.success("Done. (Shared durable remains.)")
+    logger.success("Done." + (" (Shared durable remains.)" if not (args.incl_dura and args.scope == "all") else ""))
 
 
 if __name__ == "__main__":

@@ -24,14 +24,13 @@ def get_terra_env(region: str | None = None):
     """Env for Terraform/OpenTofu subprocesses. Needed when calling subprocess.run(..., capture_output=True) directly:
     must pass env= explicitly. Sets TF_DATA_DIR (shared provider cache) and maps AWS_ADMIN_* to
     AWS_ACCESS_KEY_ID/SECRET so the binary uses admin credentials.
-    If region is provided, sets CLOUD_REGION and AWS_REGION so Terraform provider uses that region."""
+    If region is provided, sets CLOUD_REGION and AWS_DEFAULT_REGION so Terraform provider uses that region."""
     ensure_shared_terra_env()
     shared = os.path.abspath(_shared_terra_data_dir())
     env = os.environ.copy()
     env["TF_DATA_DIR"] = shared
     if region:
         env["CLOUD_REGION"] = region
-        env["AWS_REGION"] = region
         env["AWS_DEFAULT_REGION"] = region
     if env.get("AWS_ADMIN_ACCESS_KEY_ID"):
         env["AWS_ACCESS_KEY_ID"] = env["AWS_ADMIN_ACCESS_KEY_ID"]

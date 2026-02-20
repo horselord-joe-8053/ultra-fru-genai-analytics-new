@@ -2,6 +2,21 @@
 import os
 from pathlib import Path
 
+__all__ = ["load_dotenv", "require", "get_int_env", "EnvVarNotFound"]
+
+
+class EnvVarNotFound(Exception):
+    """Raised when a required env var is missing."""
+
+    def __init__(self, name: str, hint: str = ""):
+        self.name = name
+        self.hint = hint
+        msg = f"Required env var '{name}' is not set."
+        if hint:
+            msg += f" {hint}"
+        super().__init__(msg)
+
+
 def load_dotenv(path: str = ".env", override: bool = False):
     """
     Load .env into os.environ.
@@ -27,7 +42,7 @@ def load_dotenv(path: str = ".env", override: bool = False):
 def require(name: str) -> str:
     v = os.getenv(name)
     if not v:
-        raise SystemExit(f"Missing required env var: {name}")
+        raise EnvVarNotFound(name)
     return v
 
 def get_int_env(name: str, default: int) -> int:

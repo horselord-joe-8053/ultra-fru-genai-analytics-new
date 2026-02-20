@@ -75,6 +75,8 @@ def handle_aws(args):
     cmd_args = []
     if args.env:
         cmd_args.extend(["--env", args.env])
+    if args.cloud_region:
+        cmd_args.extend(["--region", args.cloud_region])
     
     if args.command == "doctor":
         script = f"{base_path}/standalone/doctor.py"
@@ -97,6 +99,8 @@ def handle_aws(args):
             teardown_script = f"{base_path}/teardown.py"
             # Ensure non-interactive for preempt
             teardown_args = cmd_args + ["--non-interactive", "--scope", args.scope]
+            if args.incl_dura:
+                teardown_args.append("--incl-dura")
             with logger.Heartbeat(f"Preempt Teardown scope={args.scope} env={args.env}"):
                 run_command(["python", teardown_script] + teardown_args)
                 
@@ -125,7 +129,8 @@ def handle_aws(args):
             sys.exit(1)
         script = f"{base_path}/teardown.py"
         cmd_args.extend(["--scope", args.scope])
-        
+        if args.incl_dura:
+            cmd_args.append("--incl-dura")
         # Translate --force to --non-interactive for compatibility if user habitually uses force
         if args.non_interactive or args.force:
             cmd_args.append("--non-interactive")
@@ -167,11 +172,13 @@ def main():
     # Passthrough arguments (common across providers)
     parser.add_argument("--scope", choices=["kube", "nonkube", "all"], help="Scope of operation (deployment targets)")
     parser.add_argument("--env", default=os.getenv("FRU_ENV", "dev"), help="Environment (dev, prod, etc.)")
+    parser.add_argument("--cloud-region", default=None, help="Cloud region (default: CLOUD_REGION from .env); passed as --region to deploy/teardown/verify/doctor")
     parser.add_argument("--non-interactive", action="store_true", help="Skip confirmation prompts")
     parser.add_argument("--force", action="store_true", help="Legacy alias for --non-interactive")
     parser.add_argument("--skip-doctor", action="store_true", help="Skip preflight checks (deploy only)")
     parser.add_argument("--skip-ensure-deps", action="store_true", help="Skip pip install -r requirements.txt (deploy only)")
     parser.add_argument("--preempt", action="store_true", help="Run full teardown and verification before deploy")
+    parser.add_argument("--incl-dura", action="store_true", help="Include shared durable in teardown (scope=all only)")
 
     # Parse args
     args = parser.parse_args()

@@ -10,7 +10,7 @@ import requests
 print("verify_all_deploy: starting...", flush=True)
 
 from tools.cloud_shared.logging import logger
-from tools.cloud_shared.env import load_dotenv, require, get_int_env
+from tools.cloud_shared.env import load_dotenv, require, get_int_env, EnvVarNotFound
 from tools.aws.scope_shared.core.terra_var_handling import get_base_vars
 from tools.cloud_shared.retry import poll_until, update_heartbeat
 from tools.aws.scope_shared.deploy.bootstrap_helpers import K8S_NAMESPACE
@@ -52,7 +52,7 @@ def get_tofu_output(stack_dir, env):
         init_stack(stack_dir, env, region)
         out = subprocess.check_output(
             [os.getenv("FRU_TF_BIN", "tofu"), "output", "-json"],
-            cwd=stack_dir, text=True, env={**os.environ, "CLOUD_REGION": region, "AWS_REGION": region}
+            cwd=stack_dir, text=True, env={**os.environ, "CLOUD_REGION": region, "AWS_DEFAULT_REGION": region}
         )
         return json.loads(out)
     except Exception as e:
@@ -202,7 +202,8 @@ def verify_api_endpoints(
 
 def verify_cloudwatch(env, timeout_mins=None) -> tuple[bool, str]:
     """Return (ok, note) for summary table."""
-    region = os.getenv("CLOUD_REGION", "").strip() or require("AWS_REGION")
+    from tools.aws.scope_shared.core.backend import resolve_region
+    region = resolve_region(None)
     log_group = os.getenv("CLOUDWATCH_LOG_GROUP") or f"/fru/{env}/spark"
 
     timeout_secs = (timeout_mins * 60) if timeout_mins else get_int_env("LOGGING_TASK_DEFAULT_TIMEOUT", VERIFY_TIMEOUT_SEC)
@@ -360,4 +361,8 @@ def main():
         sys.exit(1)
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except EnvVarNotFound as e:
+        logger.error(str(e))
+        sys.exit(1)

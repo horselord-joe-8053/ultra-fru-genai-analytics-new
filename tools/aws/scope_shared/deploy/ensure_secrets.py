@@ -58,7 +58,7 @@ def main():
 
     region = resolve_region(args.region)
     os.environ["CLOUD_REGION"] = region
-    os.environ["AWS_REGION"] = region
+    os.environ["AWS_DEFAULT_REGION"] = region
 
     logger.step("Ensuring secrets in AWS Secrets Manager")
 

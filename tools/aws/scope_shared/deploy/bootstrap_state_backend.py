@@ -49,7 +49,8 @@ def create_ddb(table):
 
 def main():
     bucket = require("TF_STATE_BUCKET")
-    region = os.getenv("CLOUD_REGION", "").strip() or require("AWS_REGION")
+    from tools.aws.scope_shared.core.backend import resolve_region
+    region = resolve_region(None)
 
     if not exists_s3(bucket):
         print("Creating state bucket:", bucket)

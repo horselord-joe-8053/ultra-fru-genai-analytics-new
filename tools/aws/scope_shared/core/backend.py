@@ -1,6 +1,6 @@
 
 import os
-from tools.cloud_shared.env import require
+from tools.cloud_shared.env import require, EnvVarNotFound
 
 def stack_id_from_dir(stack_dir: str, cloud: str = "aws") -> str:
     """Extract logical stack name from path. Cloud comes from caller (tools/aws vs tools/gcp), not from path.
@@ -24,18 +24,20 @@ def stack_id_from_dir(stack_dir: str, cloud: str = "aws") -> str:
     return f"{cloud}-{logical}" if logical else cloud
 
 def resolve_region(cli_region: str | None = None) -> str:
-    """Region resolution order: --region (CLI), CLOUD_REGION (env), AWS_REGION (env), us-east-1."""
-    if cli_region and cli_region.strip():
-        return cli_region.strip()
-    return (
-        os.getenv("CLOUD_REGION", "").strip()
-        or os.getenv("AWS_REGION", "").strip()
-        or "us-east-1"
-    )
+    """Region resolution order: --region (CLI), CLOUD_REGION (env). Fails if none set."""
+    if cli_region and str(cli_region).strip():
+        return str(cli_region).strip()
+    region = os.getenv("CLOUD_REGION", "").strip()
+    if not region:
+        raise EnvVarNotFound(
+            "CLOUD_REGION",
+            hint="Set CLOUD_REGION in .env or pass --cloud-region (orchestrator) / --region (deploy/teardown).",
+        )
+    return region
 
 def backend_config(stack_dir: str, env: str, region: str | None = None, cloud: str = "aws") -> list[str]:
     bucket = require("TF_STATE_BUCKET")
-    backend_region = os.getenv("CLOUD_REGION", "").strip() or require("AWS_REGION")
+    backend_region = region or resolve_region(None)
     prefix = os.getenv("TF_STATE_PREFIX", require("FRU_PREFIX"))
     stack_id = stack_id_from_dir(stack_dir, cloud)
     if region:

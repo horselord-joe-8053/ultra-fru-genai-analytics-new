@@ -165,7 +165,8 @@ def pre_destroy_cloudfront(
     """
     import boto3
 
-    region = region or os.getenv("CLOUD_REGION", os.getenv("AWS_REGION", "us-east-1"))
+    from tools.aws.scope_shared.core.backend import resolve_region
+    region = region or resolve_region(None)
     prefix = os.getenv("FRU_PREFIX", "fru")
     suffix = _suffix_from_stack_dir(stack_dir)
     if not suffix:

@@ -38,7 +38,8 @@ def check_ecs_bootstrap_succeeded(env: str, log_group: str | None = None) -> boo
     Returns True if 'fru bootstrap success' found in log_group streams.
     Log group: /fru/{env}/spark (Spark task logs).
     """
-    region = os.getenv("CLOUD_REGION", os.getenv("AWS_REGION", "us-east-1"))
+    from tools.aws.scope_shared.core.backend import resolve_region
+    region = resolve_region(None)
     lg = log_group or os.getenv("CLOUDWATCH_LOG_GROUP") or f"/fru/{env}/spark"
     try:
         out = subprocess.check_output([
@@ -102,7 +103,7 @@ def wait_for_fru_api_ready(
     env_vars = {**os.environ}
     if region:
         env_vars["CLOUD_REGION"] = region
-        env_vars["AWS_REGION"] = region
+        env_vars["AWS_DEFAULT_REGION"] = region
 
     start = time.time()
     last_log = 0.0
@@ -228,7 +229,7 @@ def k8s_rollout_restart_api(env: str, region: str | None = None) -> None:
     env_vars = {**os.environ}
     if region:
         env_vars["CLOUD_REGION"] = region
-        env_vars["AWS_REGION"] = region
+        env_vars["AWS_DEFAULT_REGION"] = region
     result = subprocess.run(
         ["kubectl", "rollout", "restart", "deployment/fru-api", "-n", K8S_NAMESPACE],
         capture_output=True, text=True, timeout=60, env=env_vars,
@@ -277,7 +278,7 @@ def k8s_remove_bootstrap_and_scheduler(
         if "ResourceNotFoundException" in err or "No cluster found" in err.lower():
             cluster_name = os.getenv("EKS_CLUSTER_NAME") or f"{os.getenv('FRU_PREFIX', 'fru')}-{env}-eks"
             logger.warning(
-                f"EKS cluster not found (name={cluster_name}, region={os.getenv('CLOUD_REGION', os.getenv('AWS_REGION', 'us-east-1'))}), "
+                f"EKS cluster not found (name={cluster_name}, region={os.getenv('CLOUD_REGION', '').strip() or 'not set'}), "
                 "likely already removed. Skipping pre-destroy kube cleanup."
             )
             return

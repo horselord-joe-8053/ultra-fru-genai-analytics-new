@@ -151,7 +151,8 @@ def tofu_output_json(stack_dir: str, env: str, region: str | None = None) -> dic
 
 def run_ecs_bootstrap(env: str, region: str | None = None, force: bool = False) -> None:
     """Run ECS one-off Spark task (run_analytics). Idempotent: skips if already succeeded."""
-    region = region or os.getenv("CLOUD_REGION", "").strip() or require("AWS_REGION")
+    from tools.aws.scope_shared.core.backend import resolve_region
+    region = region or resolve_region(None)
 
     if not force and check_ecs_bootstrap_succeeded(env):
         logger.success("[ECS BOOTSTRAP] Skip: bootstrap already succeeded (idempotent)")
