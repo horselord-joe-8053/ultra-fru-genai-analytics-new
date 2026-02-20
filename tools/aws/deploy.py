@@ -33,7 +33,7 @@ import subprocess
 import sys
 import time
 
-from tools.cloud_shared.env import load_dotenv, require
+from tools.cloud_shared.env import load_dotenv, require, EnvVarNotFound
 from tools.aws.scope_shared.core.backend import resolve_region
 from tools.cloud_shared.logging import logger
 from tools.aws.scope_shared.core.phases import PhaseTracker, deploy_phases
@@ -119,10 +119,13 @@ def main():
 
     env = args.env
     scope = args.scope
-    region = resolve_region(args.region or None)
+    try:
+        region = resolve_region(args.region or None)
+    except EnvVarNotFound as e:
+        logger.error(str(e))
+        sys.exit(1)
     os.environ["CLOUD_REGION"] = region
-    os.environ["AWS_REGION"] = region
-    os.environ["AWS_DEFAULT_REGION"] = region
+    os.environ["AWS_DEFAULT_REGION"] = region  # AWS CLI / boto3
 
     logger.step(f"Starting deployment: scope={scope} env={env} region={region}")
     phases = deploy_phases(scope)
@@ -146,7 +149,7 @@ def main():
                 subprocess.run(
                     ["python", "tools/aws/standalone/doctor.py", "--env", env, "--region", region, "--scope", scope],
                     check=True,
-                    env={**os.environ, "CLOUD_REGION": region, "AWS_REGION": region},
+                    env={**os.environ, "CLOUD_REGION": region, "AWS_DEFAULT_REGION": region},
                 )
             logger.success("Doctor OK")
         else:
@@ -197,7 +200,7 @@ def main():
             subprocess.run(
                 ["python", "tools/aws/scope_shared/deploy/ensure_secrets.py", "--env", env, "--region", region],
                 check=True,
-                env={**os.environ, "CLOUD_REGION": region, "AWS_REGION": region},
+                env={**os.environ, "CLOUD_REGION": region, "AWS_DEFAULT_REGION": region},
             )
         logger.success("Secrets ensured")
         tracker.end_phase(5)
@@ -210,7 +213,7 @@ def main():
                 subprocess.run(
                     ["python", "tools/aws/scope_shared/deploy/setup_database.py", "--env", env, "--region", region],
                     check=True,
-                    env={**os.environ, "CLOUD_REGION": region, "AWS_REGION": region},
+                    env={**os.environ, "CLOUD_REGION": region, "AWS_DEFAULT_REGION": region},
                 )
             logger.success("Database setup complete")
         except subprocess.CalledProcessError as e:
@@ -242,7 +245,7 @@ def main():
                 logger.info(f"[BUILD] Generated version tag: {version_tag} (will also push latest)")
             else:
                 os.environ["CONTAINER_IMAGE_TAGS"] = app_tag
-            build_env = {**os.environ, "CLOUD_REGION": region, "AWS_REGION": region}
+            build_env = {**os.environ, "CLOUD_REGION": region, "AWS_DEFAULT_REGION": region}
             build_env["PYTHONUNBUFFERED"] = "1"
             build_cmd = ["python", "tools/aws/scope_shared/deploy/build_and_push_images.py", "--env", env, "--region", region]
             if args.force_spark_rebuild:
@@ -325,6 +328,9 @@ def main():
         _print_success_url(env, region, scope)
         sys.exit(0)
 
+    except EnvVarNotFound as e:
+        logger.error(str(e))
+        sys.exit(1)
     except subprocess.CalledProcessError as e:
         logger.error(f"Deployment failed at step: {e}")
         sys.exit(1)

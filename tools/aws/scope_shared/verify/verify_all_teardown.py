@@ -5,7 +5,8 @@ import sys
 import subprocess
 import requests
 from tools.cloud_shared.logging import logger
-from tools.cloud_shared.env import load_dotenv
+from tools.cloud_shared.env import load_dotenv, EnvVarNotFound
+from tools.aws.scope_shared.core.backend import resolve_region
 
 load_dotenv()
 
@@ -26,7 +27,14 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--env", default=os.getenv("FRU_ENV", "dev"))
     ap.add_argument("--scope", choices=["kube", "nonkube"], default="nonkube")
+    ap.add_argument("--region", default=None, help="Region (default: CLOUD_REGION)")
     args = ap.parse_args()
+
+    try:
+        region = resolve_region(args.region)
+    except EnvVarNotFound as e:
+        logger.error(str(e))
+        sys.exit(1)
 
     # We assume verify_all_deploy was run previously or we know the URL pattern?
     # Or we try to get outputs from tofu. If tofu destroy was successful, outputs might be empty/gone.
@@ -70,7 +78,7 @@ def main():
             out = subprocess.check_output([
                 "aws", "ecs", "describe-clusters", 
                 "--clusters", cluster_name,
-                "--region", os.getenv("CLOUD_REGION", os.getenv("AWS_REGION", "us-east-1"))
+                "--region", region,
             ], text=True)
             data = json.loads(out)
             

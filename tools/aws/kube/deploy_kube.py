@@ -110,7 +110,7 @@ def run_deploy_kube(
             "--pg-database", durable.get("aurora_database_name", {}).get("value", "fru_db"),
             "--pg-user", "postgres",
             "--delta-table-path", delta_table_path,
-        ], check=True, env={**os.environ, "CLOUD_REGION": region, "AWS_REGION": region})
+        ], check=True, env={**os.environ, "CLOUD_REGION": region, "AWS_DEFAULT_REGION": region})
 
     _timed("K8s bootstrap + schedule", "kube_apply bootstrap+schedule", _kube_bootstrap)
 
@@ -128,7 +128,7 @@ def run_deploy_kube(
             lb_host = subprocess.check_output([
                 "kubectl", "get", "svc", "fru-api-svc", "-n", K8S_NAMESPACE,
                 "-o", "jsonpath={.status.loadBalancer.ingress[0].hostname}",
-            ], text=True, env={**os.environ, "CLOUD_REGION": region, "AWS_REGION": region}).strip()
+            ], text=True, env={**os.environ, "CLOUD_REGION": region, "AWS_DEFAULT_REGION": region}).strip()
             if lb_host:
                 break
         except Exception:

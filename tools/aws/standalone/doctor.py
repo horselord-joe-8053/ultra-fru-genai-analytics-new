@@ -8,8 +8,8 @@ Usage:
 Legacy-aware:
 - Accepts AWS_PROFILE (optional). If set, AWS CLI uses it naturally.
 """
-import argparse, os, subprocess, json, shutil
-from tools.cloud_shared.env import load_dotenv, require
+import argparse, os, subprocess, json, shutil, sys
+from tools.cloud_shared.env import load_dotenv, require, EnvVarNotFound
 from tools.aws.scope_shared.core.backend import resolve_region
 
 load_dotenv()
@@ -28,9 +28,13 @@ def main():
     ap.add_argument("--scope", choices=["kube", "nonkube", "all"], default=None, help="Deploy scope (kube requires kubectl)")
     args = ap.parse_args()
 
-    region = resolve_region(args.region)
+    try:
+        region = resolve_region(args.region)
+    except EnvVarNotFound as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
     os.environ["CLOUD_REGION"] = region
-    os.environ["AWS_REGION"] = region
+    os.environ["AWS_DEFAULT_REGION"] = region
 
     # APP_IMAGE_TAG and SPARK_IMAGE_TAG are optional; deploy auto-generates when commented out in .env
     for k in ["TF_STATE_BUCKET","FRU_PREFIX","S3_DELTA_BUCKET","S3_ARTIFACT_BUCKET","ECR_REPO_APP","ECR_REPO_SPARK"]:

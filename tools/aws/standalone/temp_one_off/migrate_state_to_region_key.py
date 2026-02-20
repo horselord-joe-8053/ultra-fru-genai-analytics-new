@@ -80,7 +80,7 @@ def main():
 
     region = args.region.strip()
     os.environ["CLOUD_REGION"] = region
-    os.environ["AWS_REGION"] = region
+    os.environ["AWS_DEFAULT_REGION"] = region
 
     bucket = require("TF_STATE_BUCKET")
     prefix = os.getenv("TF_STATE_PREFIX", require("FRU_PREFIX"))

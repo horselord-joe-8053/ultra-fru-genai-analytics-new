@@ -30,7 +30,8 @@ def remove_orphaned_eks_security_groups(
     """
     from tools.cloud_shared.logging import logger
 
-    region = region or os.getenv("CLOUD_REGION", os.getenv("AWS_REGION", "us-east-1"))
+    from tools.aws.scope_shared.core.backend import resolve_region
+    region = region or resolve_region(None)
     cluster_name = os.getenv("EKS_CLUSTER_NAME") or f"{os.getenv('FRU_PREFIX', 'fru')}-{env}-eks"
     nodes_sg_name = f"{cluster_name}-nodes-sg"
     cluster_sg_name = f"{cluster_name}-cluster-sg"
