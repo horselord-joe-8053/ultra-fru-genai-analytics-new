@@ -35,6 +35,9 @@ env.*
 !.env.example
 !tools/cloud_shared/env.py
 
+# Orphan scan data (generated at runtime)
+tools/aws/standalone/temp_one_off/resources_scan/orphan_data/*.json
+
 # Terraform / OpenTofu
 .terraform/
 tofu_data/
