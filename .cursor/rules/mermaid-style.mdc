@@ -1,0 +1,28 @@
+---
+description: Default Mermaid diagram style (font, shape size)
+globs: "**/*.md"
+alwaysApply: false
+---
+
+# Mermaid Diagram Style
+
+When creating or editing Mermaid diagrams in Markdown, use this init block as the first line inside every ` ```mermaid ` code block:
+
+```
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '11px', 'fontFamily': 'sans-serif' }, 'flowchart': { 'padding': 8, 'nodeSpacing': 25, 'rankSpacing': 30 }}}%%
+```
+
+**For denser diagrams** (e.g. Phase 2 file structure with many nodes), use 10px font:
+
+```
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '10px', 'fontFamily': 'sans-serif' }, 'flowchart': { 'padding': 8, 'nodeSpacing': 25, 'rankSpacing': 30 }}}%%
+```
+
+**Example:**
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '11px', 'fontFamily': 'sans-serif' }, 'flowchart': { 'padding': 8, 'nodeSpacing': 25, 'rankSpacing': 30 }}}%%
+flowchart TB
+    A[Start] --> B[Process]
+    B --> C[End]
+```

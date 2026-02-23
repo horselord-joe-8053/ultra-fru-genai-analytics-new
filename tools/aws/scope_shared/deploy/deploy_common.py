@@ -58,6 +58,21 @@ def clear_delta_table(delta_bucket: str, region: str) -> None:
         logger.warning(f"Delta clear failed: {e}; bootstrap may upgrade existing table")
 
 
+def plan_shows_no_changes(
+    stack_dir: str, env: str, region: str | None, extra_vars: list[str]
+) -> bool:
+    """
+    Run tofu plan -detailed-exitcode. Return True if no changes (exit 0).
+    DEPLOYMENT_OPTIMIZATION §2.3: Skip import when state is clean.
+    """
+    result = terra_capture(
+        ["plan", "-detailed-exitcode"] + extra_vars,
+        cwd=stack_dir,
+        region=region,
+    )
+    return result.returncode == 0
+
+
 def init_stack(stack_dir: str, env: str, region: str | None = None) -> None:
     """Init stack with backend config. Delegates to core.terra_init."""
     logger.info(f"[INIT] {stack_dir}")
@@ -109,6 +124,12 @@ def apply_stack_nonkube_with_ecs_import_retry(
         print(result.stderr, file=__import__("sys").stderr)
 
     if ECS_NOT_IDEMPOTENT_MSG not in (result.stderr or ""):
+        stderr = result.stderr or ""
+        if "OriginAccessControlAlreadyExists" in stderr:
+            logger.warning(
+                "CloudFront OAC already exists (global resource). Import phase should adopt it. "
+                "If import ran before apply, re-run deploy; otherwise run: python tools/aws/scope_shared/import_preexist/run_import.py --scope nonkube"
+            )
         raise subprocess.CalledProcessError(result.returncode, ["tofu", "apply"] + extra_vars)
 
     logger.warning(f"ECS service already exists; importing {import_id} into state and retrying...")
@@ -193,7 +214,7 @@ def run_ecs_bootstrap(env: str, region: str | None = None, force: bool = False) 
     }
 
     logger.info("[ECS BOOTSTRAP] Starting one-off Spark task...")
-    subprocess.run(
+    result = subprocess.run(
         [
             "aws", "ecs", "run-task",
             "--cluster", cluster,
@@ -203,9 +224,13 @@ def run_ecs_bootstrap(env: str, region: str | None = None, force: bool = False) 
             "--overrides", json.dumps(overrides),
             "--region", region,
         ],
-        check=True,
         capture_output=True,
         text=True,
         timeout=60,
     )
+    if result.returncode != 0:
+        for line in (result.stderr or result.stdout or "").strip().split("\n"):
+            if line.strip():
+                logger.error(f"  [ECS BOOTSTRAP] {line}")
+        raise SystemExit(f"aws ecs run-task failed (exit {result.returncode})")
     logger.success("ECS bootstrap task started successfully.")

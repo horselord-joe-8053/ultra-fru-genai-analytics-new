@@ -18,7 +18,11 @@ def main():
     region = resolve_region(None)
     cluster = os.getenv("EKS_CLUSTER_NAME") or os.getenv("TF_VAR_eks_cluster_name") or f"{os.getenv('FRU_PREFIX', 'fru')}-{args.env}-eks"
     print("+ aws eks update-kubeconfig")
-    subprocess.run(["aws","eks","update-kubeconfig","--region",region,"--name",cluster], check=False)
+    subprocess.run(
+        ["aws", "eks", "update-kubeconfig", "--region", region, "--name", cluster],
+        check=False,
+        timeout=30,
+    )
 
 if __name__ == "__main__":
     main()

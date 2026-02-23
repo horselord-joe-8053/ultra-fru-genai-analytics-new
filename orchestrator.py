@@ -113,6 +113,10 @@ def handle_aws(args):
         deploy_args = cmd_args + ["--scope", args.scope]
         if args.skip_doctor:
             deploy_args.append("--skip-doctor")
+        if args.skip_build:
+            deploy_args.append("--skip-build")
+        if args.force_build:
+            deploy_args.append("--force-build")
             
         with logger.Heartbeat(f"Deployment scope={args.scope} env={args.env}"):
             run_command(["python", script] + deploy_args)
@@ -135,7 +139,10 @@ def handle_aws(args):
         if args.non_interactive or args.force:
             cmd_args.append("--non-interactive")
             
-        with logger.Heartbeat(f"Teardown scope={args.scope} env={args.env}"):
+        hb_msg = f"Teardown scope={args.scope} env={args.env}"
+        if args.cloud_region:
+            hb_msg += f" region={args.cloud_region}"
+        with logger.Heartbeat(hb_msg):
             run_command(["python", script] + cmd_args)
         
     elif args.command == "verify":
@@ -177,6 +184,8 @@ def main():
     parser.add_argument("--force", action="store_true", help="Legacy alias for --non-interactive")
     parser.add_argument("--skip-doctor", action="store_true", help="Skip preflight checks (deploy only)")
     parser.add_argument("--skip-ensure-deps", action="store_true", help="Skip pip install -r requirements.txt (deploy only)")
+    parser.add_argument("--skip-build", action="store_true", help="Skip build; use repo:latest from ECR (deploy only)")
+    parser.add_argument("--force-build", action="store_true", help="Force build even when content hash matches (deploy only)")
     parser.add_argument("--preempt", action="store_true", help="Run full teardown and verification before deploy")
     parser.add_argument("--incl-dura", action="store_true", help="Include shared durable in teardown (scope=all only)")
 

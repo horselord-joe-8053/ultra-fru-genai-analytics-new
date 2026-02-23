@@ -10,6 +10,10 @@ RUN ./node_modules/.bin/vite build
 
 # Stage 2: Runtime (Python + Nginx)
 FROM python:3.11-slim
+# Content-based build skip: hash of build context, passed as --build-arg by build_and_push_images.py.
+# Stored in image for traceability; deploy uses S3-stored hash to skip build when unchanged.
+ARG BUILD_CONTEXT_HASH
+LABEL build_context_hash=${BUILD_CONTEXT_HASH}
 
 # Install Nginx and runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \

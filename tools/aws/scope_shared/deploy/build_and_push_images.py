@@ -10,6 +10,10 @@ This tool:
 - Logs into ECR properly
 - Builds and pushes images
 - Removes local images after successful push (use --skip-cleanup to keep them)
+- Content-based skip: deploy.py checks build-context hash before calling this; when hash
+  matches stored value in S3, deploy skips entirely. When this script runs, it always
+  builds. After push, it stores the hash to S3 for future skip checks. See
+  docs/BUILD_CONTENT_SKIP.md for details.
 
 Replace the build contexts to match your legacy project.
 """
@@ -18,6 +22,10 @@ from tools.cloud_shared.env import load_dotenv, require, get_int_env
 from tools.aws.scope_shared.core.terra_runner import get_terra_env
 from tools.aws.scope_shared.core.backend import backend_config, resolve_region
 from tools.cloud_shared.logging import logger
+from tools.aws.scope_shared.deploy.build_context_hash import (
+    compute_build_context_hash,
+    store_build_hash,
+)
 
 load_dotenv()
 
@@ -268,6 +276,7 @@ def main():
     ap.add_argument("--region", default=None, help="Region (default: CLOUD_REGION)")
     ap.add_argument("--no-cache", action="store_true", help="Build Spark image without cache (ensures fresh run_analytics.py)")
     ap.add_argument("--skip-cleanup", action="store_true", help="Skip local image removal after push")
+    ap.add_argument("--force-build", action="store_true", help="Force build (passed by deploy when user requests; no-op here)")
     args = ap.parse_args()
 
     region = resolve_region(args.region)
@@ -281,14 +290,10 @@ def main():
 
     app_repo_url   = out["ecr_app_url"]["value"]
     spark_repo_url = out["ecr_spark_url"]["value"]
+    artifacts_bucket = out.get("artifacts_bucket", {}).get("value", "")
     
     logger.info(f"[BUILD] App repo: {app_repo_url}")
     logger.info(f"[BUILD] Spark repo: {spark_repo_url}")
-
-    registry = app_repo_url.split("/")[0]
-    
-    logger.info("[BUILD] Logging in to ECR...")
-    ecr_login(registry, region)
 
     app_tag = require("APP_IMAGE_TAG")
     spark_tag = require("SPARK_IMAGE_TAG")
@@ -298,13 +303,30 @@ def main():
     logger.info(f"[BUILD] App tag: {app_tag}")
     logger.info(f"[BUILD] Spark tag: {spark_tag}")
 
-    # Build and push with per-step progress (1/4, 2/4, etc.) and heartbeat so we know which step and elapsed time
-    # --progress=plain for line-by-line output; avoids silent buffering in Cursor/CI
+    registry = app_repo_url.split("/")[0]
+    
+    logger.info("[BUILD] Logging in to ECR...")
+    ecr_login(registry, region)
+
+    # Content-based skip: compute hash of build context (source files + Dockerfile).
+    # Stored as image label and in S3 after push. Deploy uses this to skip build
+    # on future runs when nothing changed. Captures both committed and uncommitted
+    # changes—local edits before commit will trigger rebuild.
+    app_hash = compute_build_context_hash("core_app", "Dockerfile")
+    spark_hash = compute_build_context_hash("core_app", "analytics/docker/Dockerfile")
+
+    # Build and push with per-step progress (1/4, 2/4, etc.) and heartbeat.
+    # --progress=plain: line-by-line output; avoids silent buffering in Cursor/CI.
+    # --build-arg BUILD_CONTEXT_HASH: stored as image label for traceability.
     run_docker_with_progress(
-        ["docker","build","--progress=plain","--platform",platform,"-t",f"{app_repo_url}:{app_tag}","core_app"],
+        ["docker","build","--progress=plain","--platform",platform,
+         "--build-arg",f"BUILD_CONTEXT_HASH={app_hash}",
+         "-t",f"{app_repo_url}:{app_tag}","core_app"],
         "Building app image", 1, 4,
     )
-    spark_build_cmd = ["docker","build","--progress=plain","--platform",platform,"-t",f"{spark_repo_url}:{spark_tag}","-f","core_app/analytics/docker/Dockerfile","core_app"]
+    spark_build_cmd = ["docker","build","--progress=plain","--platform",platform,
+         "--build-arg",f"BUILD_CONTEXT_HASH={spark_hash}",
+         "-t",f"{spark_repo_url}:{spark_tag}","-f","core_app/analytics/docker/Dockerfile","core_app"]
     if args.no_cache:
         spark_build_cmd.insert(2, "--no-cache")
         logger.info("[BUILD] Spark: --no-cache (fresh build)")
@@ -331,6 +353,18 @@ def main():
         ["docker","push",f"{spark_repo_url}:{spark_tag}"],
         "Pushing spark image", total_steps, total_steps,
     )
+
+    # Store build-context hashes to S3 so deploy can skip build on future runs
+    # when compute_build_context_hash() matches. Path: build-metadata/{env}/*.json
+    if artifacts_bucket:
+        app_key = f"build-metadata/{args.env}/app-build-hash.json"
+        spark_key = f"build-metadata/{args.env}/spark-build-hash.json"
+        try:
+            store_build_hash(artifacts_bucket, app_key, region, app_hash, app_tag)
+            store_build_hash(artifacts_bucket, spark_key, region, spark_hash, spark_tag)
+            logger.info(f"[BUILD] Stored build-context hashes for content-based skip (app={app_hash[:8]}..., spark={spark_hash[:8]}...)")
+        except subprocess.CalledProcessError as e:
+            logger.warning(f"[BUILD] Could not store build hashes to S3 (non-fatal): {e}")
 
     logger.success("All images pushed:")
     print("  ", f"{app_repo_url}:{app_tag}")

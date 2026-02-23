@@ -9,9 +9,13 @@ import time
 
 from tools.cloud_shared.env import require
 from tools.cloud_shared.logging import logger
+from tools.aws.scope_shared.core.terra_init import init_stack
+from tools.aws.scope_shared.core.terra_var_handling import get_base_vars
+from tools.aws.scope_shared.import_preexist.kube import run_import_kube
 from tools.cloud_shared.stats import DeployStats, scope_for
 from tools.aws.scope_shared.deploy.deploy_common import (
     apply_stack,
+    plan_shows_no_changes,
     tofu_output_json,
     upload_csv_to_delta_bucket,
 )
@@ -27,6 +31,34 @@ from tools.aws.scope_shared.deploy.bootstrap_helpers import (
     verify_api_db_connected,
     k8s_rollout_restart_api,
 )
+
+
+def _try_get_lb_hostname(env: str, region: str) -> str:
+    """Try to get NLB hostname from kubectl (re-deploy: LB usually already exists). Returns empty if not found."""
+    try:
+        out = subprocess.check_output(
+            [
+                "kubectl", "get", "svc", "fru-api-svc", "-n", K8S_NAMESPACE,
+                "-o", "jsonpath={.status.loadBalancer.ingress[0].hostname}",
+            ],
+            text=True,
+            env={**os.environ, "CLOUD_REGION": region},
+            timeout=10,
+        )
+        return (out or "").strip()
+    except Exception:
+        return ""
+
+
+def _poll_lb_hostname(env: str, region: str, max_attempts: int = 18, interval_sec: int = 10) -> str:
+    """Poll kubectl for NLB hostname until available or max_attempts. Returns empty if not found."""
+    for attempt in range(max_attempts):
+        hostname = _try_get_lb_hostname(env, region)
+        if hostname:
+            return hostname
+        if attempt < max_attempts - 1:
+            time.sleep(interval_sec)
+    return ""
 
 
 def run_deploy_kube(
@@ -53,17 +85,58 @@ def run_deploy_kube(
         else:
             fn()
 
-    # Phase 9: Apply EKS stack
-    def _apply_eks():
-        apply_stack(
-            "infra_terraform/live_deploy/aws/kube",
+    # Phase 8.5: Import pre-existing resources (state/reality reconciliation)
+    # DEPLOYMENT_OPTIMIZATION §2.3: Skip import and apply when plan shows no changes (state clean).
+    kube_stack = "infra_terraform/live_deploy/aws/kube"
+    hostname_before_first_apply = _try_get_lb_hostname(env, region)
+    if hostname_before_first_apply:
+        logger.info(f"[Kube] NLB hostname known before apply: {hostname_before_first_apply}; single apply (skip second)")
+    plan_vars = [
+        "-var", f"eks_instance_types=[\"{require('EKS_NODE_INSTANCE_TYPES')}\"]",
+        "-var", f"eks_desired_nodes={require('EKS_DESIRED_NODES')}",
+    ]
+    if hostname_before_first_apply:
+        plan_vars += ["-var", f"ingress_hostname={hostname_before_first_apply}"]
+
+    plan_clean = False  # set after init
+
+    def _import_preexist():
+        nonlocal plan_clean
+        init_stack(kube_stack, env, region)
+        get_base_vars(env, region)
+        plan_clean = plan_shows_no_changes(kube_stack, env, region, plan_vars)
+        if plan_clean:
+            logger.info("[Import] Skipping kube: plan shows no changes (state clean)")
+            return
+        logger.info("[Import] Reconciling state with AWS (broader import for deploy convenience)")
+        prefix = os.getenv("FRU_PREFIX", "fru")
+        eks_cluster_name = os.getenv("EKS_CLUSTER_NAME") or f"{prefix}-{env}-eks"
+        failed = run_import_kube(
+            kube_stack,
             env,
-            [
-                "-var", f"eks_instance_types=[\"{require('EKS_NODE_INSTANCE_TYPES')}\"]",
-                "-var", f"eks_desired_nodes={require('EKS_DESIRED_NODES')}",
-            ],
             region,
+            prefix=prefix,
+            eks_cluster_name=eks_cluster_name,
         )
+        if failed > 0:
+            raise SystemExit(
+                f"Import failed for {failed} resource(s). Fix state (run import manually) and retry. "
+                "See tools/aws/scope_shared/import_preexist/run_import.py --scope kube"
+            )
+    _timed("Import pre-existing", "kube", _import_preexist)
+
+    # Phase 9: Apply EKS stack (skip when plan showed no changes — §2.3)
+    def _apply_eks():
+        if plan_clean:
+            logger.info("[Kube] Skipping tofu apply: plan showed no changes (state clean)")
+            return
+        extra_vars = [
+            "-var", f"eks_instance_types=[\"{require('EKS_NODE_INSTANCE_TYPES')}\"]",
+            "-var", f"eks_desired_nodes={require('EKS_DESIRED_NODES')}",
+        ]
+        if hostname_before_first_apply:
+            extra_vars += ["-var", f"ingress_hostname={hostname_before_first_apply}"]
+        apply_stack(kube_stack, env, extra_vars, region)
 
     _timed("Tofu apply", "infra_terraform/live_deploy/aws/kube", _apply_eks)
 
@@ -122,23 +195,15 @@ def run_deploy_kube(
     logger.success("fru-api pods ready")
 
     # Wire K8s LoadBalancer into CloudFront API origin
-    lb_host = ""
-    for attempt in range(18):
-        try:
-            lb_host = subprocess.check_output([
-                "kubectl", "get", "svc", "fru-api-svc", "-n", K8S_NAMESPACE,
-                "-o", "jsonpath={.status.loadBalancer.ingress[0].hostname}",
-            ], text=True, env={**os.environ, "CLOUD_REGION": region}).strip()
-            if lb_host:
-                break
-        except Exception:
-            pass
-        if attempt < 17:
-            time.sleep(10)
+    # DEPLOYMENT_OPTIMIZATION §2.2: Second apply only when we got hostname from poll (didn't have before first apply).
+    hostname_after_poll = hostname_before_first_apply or _poll_lb_hostname(env, region)
+    need_second_apply = not hostname_before_first_apply and hostname_after_poll
 
-    if lb_host:
-        wait_for_dns_resolvable(lb_host, timeout_seconds=120, check_interval_sec=5, heartbeat_interval_sec=30)
-        verify_api_db_connected(f"http://{lb_host}", timeout_seconds=60)
+    if hostname_after_poll:
+        wait_for_dns_resolvable(hostname_after_poll, timeout_seconds=120, check_interval_sec=5, heartbeat_interval_sec=30)
+        verify_api_db_connected(f"http://{hostname_after_poll}", timeout_seconds=60)
+
+    if need_second_apply:
         logger.step("Re-applying kube stack with LoadBalancer hostname for CloudFront API origin...")
 
         def _reapply_kube():
@@ -148,14 +213,16 @@ def run_deploy_kube(
                 [
                     "-var", f"eks_instance_types=[\"{require('EKS_NODE_INSTANCE_TYPES')}\"]",
                     "-var", f"eks_desired_nodes={require('EKS_DESIRED_NODES')}",
-                    "-var", f"ingress_hostname={lb_host}",
+                    "-var", f"ingress_hostname={hostname_after_poll}",
                 ],
                 region,
             )
 
         _timed("Tofu apply (ingress)", "infra_terraform/live_deploy/aws/kube (ingress_hostname)", _reapply_kube)
         logger.success("CloudFront API origin wired to K8s LoadBalancer")
-    else:
+    elif hostname_before_first_apply:
+        logger.success("CloudFront API origin already wired (hostname was known before first apply)")
+    elif not hostname_after_poll:
         logger.warning("LoadBalancer hostname not available; CloudFront API routes may not work until re-applied manually")
 
     # Deploy frontend to S3

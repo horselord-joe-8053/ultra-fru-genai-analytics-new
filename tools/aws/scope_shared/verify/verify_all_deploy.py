@@ -5,6 +5,7 @@ import json
 import subprocess
 import argparse
 import requests
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Force immediate output so orchestrator subprocess doesn't appear stuck
 print("verify_all_deploy: starting...", flush=True)

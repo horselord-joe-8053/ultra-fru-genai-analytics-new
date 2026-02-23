@@ -6,6 +6,10 @@ Usage:
   python tools/aws/deploy.py --scope nonkube --env dev
   python tools/aws/deploy.py --scope all --env dev
   python tools/aws/deploy.py --scope all --env dev --skip-build   # Use repo:latest from ECR, no build
+  python tools/aws/deploy.py --scope all --env dev --force-build  # Force build (bypass content-based skip)
+
+Build skip: When build-context hash matches stored hash in S3, deploy skips build and uses repo:latest.
+Use --force-build when code changed. See docs/BUILD_CONTENT_SKIP.md.
 
 Key behaviors aligned with the legacy repo:
 - Uses `.env` env-map (names follow legacy)
@@ -28,13 +32,14 @@ Flow:
 Scope "all": deploys nonkube first, then kube (idempotent, shared phases run once).
 """
 import argparse
+import json
 import os
 import subprocess
 import sys
 import time
 
 from tools.cloud_shared.env import load_dotenv, require, EnvVarNotFound
-from tools.aws.scope_shared.core.backend import resolve_region
+from tools.aws.scope_shared.core.backend import resolve_region, durable_azs_for_region
 from tools.cloud_shared.logging import logger
 from tools.aws.scope_shared.core.phases import PhaseTracker, deploy_phases
 from tools.cloud_shared.stats import DeployStats, scope_for
@@ -115,6 +120,8 @@ def main():
     ap.add_argument("--skip-doctor", action="store_true")
     ap.add_argument("--force-spark-rebuild", action="store_true", help="Build Spark image with --no-cache")
     ap.add_argument("--skip-build", action="store_true", help="Skip build; use repo:latest from ECR and query tags for display")
+    ap.add_argument("--force-build", action="store_true",
+        help="Force build even when content hash matches (bypasses content-based skip; use when code changed or you want a fresh image)")
     args = ap.parse_args()
 
     env = args.env
@@ -169,8 +176,10 @@ def main():
         from tools.aws.scope_shared.deploy.deploy_common import apply_stack
 
         aurora_pw = os.getenv("PGPASSWORD") or ""
+        azs = durable_azs_for_region(region)
+        azs_json = json.dumps(azs)
         durable_vars = [
-            "-var", 'azs=["us-east-1a","us-east-1b"]',
+            "-var", f"azs={azs_json}",
             "-var", 'public_subnet_cidrs=["10.0.1.0/24","10.0.2.0/24"]',
             "-var", 'private_subnet_cidrs=["10.0.101.0/24","10.0.102.0/24"]',
             "-var", "allow_destroy_durable=false",
@@ -219,8 +228,36 @@ def main():
             logger.warning(f"Database setup had issues (may already be initialized): {e}")
         tracker.end_phase(6)
 
-        # Phase 7: Build & push (skip if --skip-build)
+        # Phase 7: Build & push (skip if --skip-build or content-based skip)
         tracker.start_phase(7)
+        content_skip = False
+        # Content-based skip: hash build context (source + Dockerfile); if it matches
+        # the hash stored in S3 from the last successful build, skip. Captures both
+        # committed and uncommitted changes. --force-build bypasses this check.
+        if not args.skip_build and not args.force_build:
+            snd = tofu_output_json("infra_terraform/live_deploy/aws/scope_shared/nondurable", env, region)
+            artifacts_bucket = snd.get("artifacts_bucket", {}).get("value", "")
+            if artifacts_bucket:
+                from tools.aws.scope_shared.deploy.build_context_hash import (
+                    compute_build_context_hash,
+                    get_stored_build_hash,
+                )
+                app_hash = compute_build_context_hash("core_app", "Dockerfile")
+                spark_hash = compute_build_context_hash("core_app", "analytics/docker/Dockerfile")
+                app_key = f"build-metadata/{env}/app-build-hash.json"
+                spark_key = f"build-metadata/{env}/spark-build-hash.json"
+                stored_app = get_stored_build_hash(artifacts_bucket, app_key, region)
+                stored_spark = get_stored_build_hash(artifacts_bucket, spark_key, region)
+                if stored_app == app_hash and stored_spark == spark_hash:
+                    content_skip = True
+                    logger.step(f"[7/{len(phases)}] Skipping build (content hash matches); will use repo:latest from ECR")
+                    logger.info(f"[BUILD] App hash {app_hash[:8]}..., spark {spark_hash[:8]}... match stored. Use --force-build to rebuild.")
+                    if not os.getenv("APP_IMAGE_TAG"):
+                        os.environ["APP_IMAGE_TAG"] = "latest"
+                    if not os.getenv("SPARK_IMAGE_TAG"):
+                        os.environ["SPARK_IMAGE_TAG"] = "latest"
+                    tracker.end_phase(7)
+
         if args.skip_build:
             logger.step(f"[7/{len(phases)}] Skipping build (--skip-build); will use repo:latest from ECR")
             # Set defaults for phase 8; actual image/tags resolved from ECR there
@@ -229,6 +266,8 @@ def main():
             if not os.getenv("SPARK_IMAGE_TAG"):
                 os.environ["SPARK_IMAGE_TAG"] = "latest"
             tracker.end_phase(7)
+        elif content_skip:
+            pass  # Already ended phase 7 above
         else:
             logger.step(f"[7/{len(phases)}] Building and pushing images...")
             # Default SPARK_IMAGE_TAG when not in .env (e.g. commented out)
@@ -249,6 +288,8 @@ def main():
             build_cmd = ["python", "tools/aws/scope_shared/deploy/build_and_push_images.py", "--env", env, "--region", region]
             if args.force_spark_rebuild:
                 build_cmd.append("--no-cache")
+            if args.force_build:
+                build_cmd.append("--force-build")
             with stats.timed("Build & push", "build_and_push_images"):
                 proc = subprocess.run(build_cmd, cwd=os.getcwd(), env=build_env)
             if proc.returncode != 0:
@@ -256,13 +297,13 @@ def main():
             logger.success("Images built and pushed")
             tracker.end_phase(7)
 
-        # Phase 8: ECR URLs (and for --skip-build: query ECR for latest image tags)
+        # Phase 8: ECR URLs (and for --skip-build / content-skip: query ECR for latest image tags)
         tracker.start_phase(8)
         logger.step(f"[8/{len(phases)}] Getting ECR image URLs...")
         snd = tofu_output_json("infra_terraform/live_deploy/aws/scope_shared/nondurable", env, region)
         app_repo_url = snd["ecr_app_url"]["value"]
         spark_repo_url = snd["ecr_spark_url"]["value"]
-        if args.skip_build:
+        if args.skip_build or content_skip:
             app_image_full = f"{app_repo_url}:latest"
             spark_image_full = f"{spark_repo_url}:latest"
             # Query ECR for all tags on the image with tag=latest (for frontend display)

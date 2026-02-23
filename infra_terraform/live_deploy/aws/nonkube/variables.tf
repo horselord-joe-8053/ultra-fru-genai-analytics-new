@@ -67,6 +67,7 @@ variable "bedrock_model_id" {
 }
 
 variable "tf_state_bucket" { type = string }
+variable "tf_state_bucket_region" { type = string }
 variable "tf_state_prefix" { type = string }
 
 variable "cloudfront_price_class" {

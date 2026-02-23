@@ -81,7 +81,8 @@ def main():
     region = args.region.strip()
     os.environ["CLOUD_REGION"] = region
 
-    bucket = require("TF_STATE_BUCKET")
+    from tools.aws.scope_shared.core.backend import resolve_state_bucket
+    bucket = resolve_state_bucket(region)
     prefix = os.getenv("TF_STATE_PREFIX", require("FRU_PREFIX"))
 
     logger.step(f"State migration: env={args.env}, region={region}, bucket={bucket}")

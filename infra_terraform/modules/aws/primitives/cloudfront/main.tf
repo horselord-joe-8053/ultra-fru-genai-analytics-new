@@ -1,6 +1,6 @@
-# S3 bucket for frontend static assets
+# S3 bucket for frontend static assets. Region in name so each --cloud-region gets its own bucket.
 resource "aws_s3_bucket" "frontend" {
-  bucket        = "${var.prefix}-${var.env}-frontend-${var.suffix}-${data.aws_caller_identity.current.account_id}"
+  bucket        = "${var.prefix}-${var.env}-frontend-${var.suffix}-${var.aws_region}-${data.aws_caller_identity.current.account_id}"
   force_destroy = true # Empty bucket before delete; avoids BucketNotEmpty on teardown
 
   tags = merge(var.tags, {
@@ -36,10 +36,11 @@ resource "aws_s3_bucket_public_access_block" "frontend" {
   restrict_public_buckets = true
 }
 
-# CloudFront Origin Access Control (OAC)
+# CloudFront Origin Access Control (OAC). Region in name so each region has its own OAC;
+# avoids OriginAccessControlInUse on teardown when another region's distribution still references it.
 resource "aws_cloudfront_origin_access_control" "frontend" {
-  name                              = "${var.prefix}-${var.env}-frontend-${var.suffix}-oac"
-  description                       = "OAC for ${var.prefix}-${var.env}-frontend-${var.suffix}"
+  name                              = "${var.prefix}-${var.env}-frontend-${var.suffix}-${var.aws_region}-oac"
+  description                       = "OAC for ${var.prefix}-${var.env}-frontend-${var.suffix} (${var.aws_region})"
   origin_access_control_origin_type = "s3"
   signing_behavior                  = "always"
   signing_protocol                  = "sigv4"
@@ -82,7 +83,7 @@ locals {
 resource "aws_cloudfront_distribution" "frontend" {
   enabled             = true
   is_ipv6_enabled     = true
-  comment             = "${var.prefix}-${var.env}-frontend-${var.suffix}"
+  comment             = "${var.prefix}-${var.env}-frontend-${var.suffix}-${var.aws_region}"
   default_root_object = "index.html"
   price_class         = var.cloudfront_price_class
 

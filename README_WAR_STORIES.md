@@ -307,19 +307,23 @@ During brutal-force AWS resource removal (scripted teardown from a resource-inve
 
 VPC and its resources form a strict dependency graph. Deleting in the wrong order leaves "downstream" resources still referencing "upstream" ones, so AWS correctly refuses to delete. The relevant structure is:
 
-```
-VPC
-├─ Subnets
-│  ├─ ENIs
-│  │  ├─ EC2 / ECS / EKS / RDS / ALB / NAT
-│  │  └─ VPC Endpoints (interface)
-│  └─ Route Tables (subnet associations)
-├─ Internet Gateway
-├─ NAT Gateways
-├─ Load Balancers
-├─ VPC Endpoints (gateway)
-├─ Security Groups
-└─ Network ACLs (rarely block deletion)
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '11px', 'fontFamily': 'sans-serif' }, 'flowchart': { 'padding': 8, 'nodeSpacing': 25, 'rankSpacing': 30 }}}%%
+flowchart TB
+    VPC["VPC"]
+    VPC --> SUBNETS["Subnets"]
+    VPC --> IGW["Internet Gateway"]
+    VPC --> NAT["NAT Gateways"]
+    VPC --> LB["Load Balancers"]
+    VPC --> VPCGW["VPC Endpoints (gateway)"]
+    VPC --> SG["Security Groups"]
+    VPC --> NACL["Network ACLs (rarely block deletion)"]
+    SUBNETS --> ENIS["ENIs"]
+    SUBNETS --> RT["Route Tables (subnet associations)"]
+    ENIS --> ENI_CHILD["EC2 / ECS / EKS / RDS / ALB / NAT"]
+    ENIS --> VPC_IF["VPC Endpoints (interface)"]
+    style VPC fill:#e3f2fd
+    style ENIS fill:#fff3e0
 ```
 
 The script had **no step for ENIs** and **no step for VPC endpoints**. ENIs (network interfaces) are created by ALBs, NAT gateways, EC2, RDS, EKS, etc. They live in subnets and reference security groups. Until those ENIs are gone, you cannot delete the subnet or (in many cases) the security groups. Similarly, VPC endpoints (interface or gateway) must be deleted before the VPC. Deletion must follow a **safe order** that respects this graph.
@@ -978,7 +982,7 @@ The one-off Spark job that creates the Delta table (CSV → Delta in S3) used to
 - **Image:** Same app image (API + Spark) ran in ECS for the task; no local Docker needed.
 
 ```mermaid
-%%{init: {'theme':'base', 'themeVariables': {'fontSize':'10px'}}}%%
+%%{init: {'theme':'base', 'themeVariables': {'fontSize':'10px'}, 'flowchart': {'padding': 8, 'nodeSpacing': 25, 'rankSpacing': 30 }}}%%
 flowchart LR
   subgraph local[" "]
     direction TB
@@ -1008,7 +1012,7 @@ flowchart LR
 - **Tradeoff:** The image is **fat** (Java, Spark, Hadoop, Python, backend, spark_jobs). You must **pull** it from ECR and **run** it locally. If the raw CSV changes and you want to refresh the Delta table, you re-run the same step (or later, a scheduled job in AWS); you don’t need the VM or Docker running 24/7, only when you actually run the job.
 
 ```mermaid
-%%{init: {'theme':'base', 'themeVariables': {'fontSize':'10px'}}}%%
+%%{init: {'theme':'base', 'themeVariables': {'fontSize':'10px'}, 'flowchart': {'padding': 8, 'nodeSpacing': 25, 'rankSpacing': 30 }}}%%
 flowchart LR
   subgraph local["Operator machine"]
     direction TB
@@ -1225,7 +1229,7 @@ The kube NLB is created by Kubernetes (NGINX Ingress Controller's LoadBalancer S
 ## 26. CloudFront 502 for EKS: Why Post-Deploy Origin Update is Kube-Only
 
 **creation:** `<260203>`
-**last_updated:** `<260203>`
+**last_updated:** `<260222>`
 
 **keywords:** CloudFront, 502 Bad Gateway, EKS, NLB, API origin, frontend-eks, update-cloudfront-loadbalancer, kube-only
 **difficulty:** 6
@@ -1262,9 +1266,24 @@ ECS uses Terraform-owned infrastructure; EKS uses the cloud-provider agnostic NL
 
 See `docs/CLOUDFRONT_ORIGIN_WALKTHROUGH.md` and `docs/README_CLOUDFRONT_SCRIPTS.md` for details.
 
-### 26.5 Takeaway
+### 26.5 Two-Phase CloudFront Origin Flow (Kube Deploy)
 
-502 for API paths through CloudFront on EKS usually means CloudFront's API origin was never updated to the EKS NLB. The post-deploy script must read `cloudfront_distribution_id` from the **frontend-eks** layer (where it's defined), not the EKS layer. This step is kube-only because EKS uses a Kubernetes-created NLB whose hostname appears only after deploy.
+The kube deploy uses a **two-phase apply** for CloudFront:
+
+| Phase | When | ingress_hostname | CloudFront origins |
+|-------|------|------------------|--------------------|
+| **1** | First tofu apply (before kubectl) | null | S3 only; API paths route to S3 (wrong) |
+| **2** | After kubectl apply (Ingress + NLB exist) | NLB hostname | S3 + ALB; API paths route to NLB (correct) |
+
+**Phase 1:** Terraform applies the kube stack. At this moment, the NLB does not exist—it is created by Kubernetes when the Ingress and NGINX Ingress Controller are applied. So `ingress_hostname` is null, and the frontend module creates CloudFront with only the S3 origin. Cache behaviors for `/query`, `/analytics`, etc. point at S3 (or a placeholder), which is wrong.
+
+**Phase 2:** `kubectl apply` creates the Ingress and NGINX provisions the NLB. A post-deploy step (or second tofu apply) reads the NLB hostname, sets `ingress_hostname`, and re-applies the frontend. CloudFront gets the ALB origin and cache behaviors are updated to route API paths to the NLB.
+
+This "chicken and egg"—CloudFront needs the NLB hostname, but the NLB only exists after k8s apply—is why kube requires the two-phase flow. ECS does not: Terraform creates the ALB at apply time, so `alb_dns_name` is available from the start.
+
+### 26.6 Takeaway
+
+502 for API paths through CloudFront on EKS usually means CloudFront's API origin was never updated to the EKS NLB. The post-deploy script must read `cloudfront_distribution_id` from the **frontend-eks** layer (where it's defined), not the EKS layer. This step is kube-only because EKS uses a Kubernetes-created NLB whose hostname appears only after deploy. The two-phase flow (apply without origin → kubectl → apply with origin) is inherent to this design.
 
 ---
 
@@ -1645,17 +1664,24 @@ These modules are **AWS-specific** (S3 is not Azure Blob or GCP Cloud Storage). 
 - Con: Doesn't prepare for multi-cloud
 
 **Option B: Phase 1 (Recommended) — Separate into provider folders**
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '11px', 'fontFamily': 'sans-serif' }, 'flowchart': { 'padding': 8, 'nodeSpacing': 25, 'rankSpacing': 30 }}}%%
+flowchart TB
+    ROOT["infra_terraform/modules/"]
+    ROOT --> SHARED["shared/primitives/"]
+    ROOT --> AWS["aws/primitives/"]
+    ROOT --> GCP["gcp/primitives/"]
+    SHARED --> TAGS["tags/"]
+    AWS --> S3["s3_bucket/"]
+    AWS --> VPC["vpc/"]
+    GCP --> GCS["gcs_bucket/"]
+    GCP --> GCPVPC["vpc/"]
+    style SHARED fill:#e8eaf6
+    style AWS fill:#e3f2fd
+    style GCP fill:#fff3e0
 ```
-infra_terraform/modules/
-├── shared/primitives/
-│   └── tags/
-├── aws/primitives/
-│   ├── s3_bucket/
-│   └── vpc/
-└── gcp/primitives/
-    ├── gcs_bucket/
-    └── vpc/
-```
+
 - Pro: Clear semantic separation (aws/primitives = AWS resources)
 - Pro: Scales naturally for GCP
 - Cost: 3 terraform source updates + 1 move
@@ -1695,39 +1721,44 @@ At first glance, Phase 2 seems justified: "We have AWS and GCP. Why duplicate? L
 The reality: **Terraform's lack of polymorphism makes this far more complex than it appears in typed languages.**
 
 **Phase 2 File Structure (What It Would Look Like):**
-```
-infra_terraform/modules/
-├── shared/
-│   ├── primitives/
-│   │   ├── tags/
-│   │   ├── storage_bucket/              ← INTERFACE: abstract storage
-│   │   │   ├── main.tf                  ← conditional logic routing to impl
-│   │   │   ├── variables.tf
-│   │   │   └── outputs.tf
-│   │   └── network/                     ← INTERFACE: abstract networking
-│   │       ├── main.tf
-│   │       ├── variables.tf
-│   │       └── outputs.tf
-├── aws/
-│   └── primitives/impl/
-│       ├── s3_bucket_impl/              ← IMPLEMENTATION: S3-specific
-│       │   ├── main.tf
-│       │   ├── variables.tf
-│       │   └── outputs.tf
-│       └── vpc_impl/                    ← IMPLEMENTATION: AWS VPC-specific
-│           ├── main.tf
-│           ├── variables.tf
-│           └── outputs.tf
-└── gcp/
-    └── primitives/impl/
-        ├── gcs_bucket_impl/             ← IMPLEMENTATION: GCS-specific
-        │   ├── main.tf
-        │   ├── variables.tf
-        │   └── outputs.tf
-        └── vpc_impl/                    ← IMPLEMENTATION: GCP VPC-specific
-            ├── main.tf
-            ├── variables.tf
-            └── outputs.tf
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '10px', 'fontFamily': 'sans-serif' }, 'flowchart': { 'padding': 8, 'nodeSpacing': 25, 'rankSpacing': 30 }}}%%
+flowchart TB
+    subgraph SHARED["shared/primitives/"]
+        TAGS["tags/"]
+        SB["storage_bucket/ (INTERFACE)"]
+        NW["network/ (INTERFACE)"]
+        SB --> SB1["main.tf"]
+        SB --> SB2["variables.tf"]
+        SB --> SB3["outputs.tf"]
+        NW --> NW1["main.tf"]
+        NW --> NW2["variables.tf"]
+        NW --> NW3["outputs.tf"]
+    end
+    subgraph AWS["aws/primitives/impl/"]
+        S3["s3_bucket_impl/ (S3-specific)"]
+        VPC["vpc_impl/ (AWS VPC-specific)"]
+        S3 --> S3A["main.tf"]
+        S3 --> S3B["variables.tf"]
+        S3 --> S3C["outputs.tf"]
+        VPC --> VPCA["main.tf"]
+        VPC --> VPCB["variables.tf"]
+        VPC --> VPCC["outputs.tf"]
+    end
+    subgraph GCP["gcp/primitives/impl/"]
+        GCS["gcs_bucket_impl/ (GCS-specific)"]
+        GCPVPC["vpc_impl/ (GCP VPC-specific)"]
+        GCS --> GCSA["main.tf"]
+        GCS --> GCSB["variables.tf"]
+        GCS --> GCSC["outputs.tf"]
+        GCPVPC --> GCPVPCA["main.tf"]
+        GCPVPC --> GCPVPCB["variables.tf"]
+        GCPVPC --> GCPVPCC["outputs.tf"]
+    end
+    style SHARED fill:#e8eaf6
+    style AWS fill:#e3f2fd
+    style GCP fill:#fff3e0
 ```
 
 **The Core Problem: Terraform Has No Polymorphism**
@@ -2568,28 +2599,30 @@ We build and push two Docker images (app + spark) to ECR. Each image can have mu
 
 ### 47.3 Deployment Flow: Which Tag Is Used When
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ FULL DEPLOY (no --skip-build)                                                │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ 1. deploy.py: APP_IMAGE_TAG unset? → generate version_tag (e.g. fru_dev_...)  │
-│ 2. deploy.py: Set APP_IMAGE_TAG=version_tag, CONTAINER_IMAGE_TAGS=tag,latest │
-│ 3. build_and_push_images.py: Builds, pushes version_tag, then tags+pushes   │
-│    latest (same image, two tags in ECR)                                       │
-│ 4. deploy.py: Uses app_repo:version_tag for K8s/ECS (e.g. fru_dev_...)  │
-│ 5. /version endpoint: Shows CONTAINER_IMAGE_TAGS (version_tag,latest)        │
-└─────────────────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ --skip-build                                                                 │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ 1. deploy.py: Skips build; sets app_image_full = repo:latest                │
-│ 2. deploy.py: Queries ECR for all tags on image with tag=latest             │
-│ 3. deploy.py: Sets CONTAINER_IMAGE_TAGS from ECR (e.g. fru_dev_...,latest)   │
-│ 4. deploy.py: Uses repo:latest for K8s/ECS                                  │
-│ 5. /version endpoint: Shows tags from ECR                                   │
-│ 6. Fails fast if latest not in ECR (run full deploy first)                  │
-└─────────────────────────────────────────────────────────────────────────────┘
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '11px', 'fontFamily': 'sans-serif' }, 'flowchart': { 'padding': 8, 'nodeSpacing': 25, 'rankSpacing': 30 }}}%%
+flowchart LR
+    subgraph FULL["FULL DEPLOY (no --skip-build)"]
+        direction TB
+        F1["1. deploy.py: APP_IMAGE_TAG unset? → generate version_tag"]
+        F2["2. Set APP_IMAGE_TAG, CONTAINER_IMAGE_TAGS=tag,latest"]
+        F3["3. build_and_push_images: Builds, pushes version_tag + latest"]
+        F4["4. Uses app_repo:version_tag for K8s/ECS"]
+        F5["5. /version shows CONTAINER_IMAGE_TAGS"]
+        F1 --> F2 --> F3 --> F4 --> F5
+    end
+    subgraph SKIP["--skip-build"]
+        direction TB
+        S1["1. Skips build; app_image_full = repo:latest"]
+        S2["2. Queries ECR for all tags on image with tag=latest"]
+        S3["3. Sets CONTAINER_IMAGE_TAGS from ECR"]
+        S4["4. Uses repo:latest for K8s/ECS"]
+        S5["5. /version shows tags from ECR"]
+        S6["6. Fails fast if latest not in ECR"]
+        S1 --> S2 --> S3 --> S4 --> S5 --> S6
+    end
+    style FULL fill:#e3f2fd
+    style SKIP fill:#e8f5e9
 ```
 
 ### 47.4 .env Behavior: APP_IMAGE_TAG and SPARK_IMAGE_TAG
@@ -2627,3 +2660,653 @@ We build and push two Docker images (app + spark) to ECR. Each image can have mu
 ### 47.7 Takeaway
 
 Use two tags: a **version tag** for deployment (unique per build) and **latest** for fast re-deploys without building (`--skip-build`). Always push both when building. Use `load_dotenv(override=False)` so parent scripts (deploy) can set env vars that child scripts (build) will keep. When `APP_IMAGE_TAG` and `SPARK_IMAGE_TAG` are commented out in `.env`, deploy auto-generates the version tag and everything works.
+
+---
+
+## 48. Import vs Terraform Refresh: State Reconciliation and the Cross-Region Orphan
+
+**creation:** `<260210>`
+**last_updated:** `<260210>`
+
+**keywords:** Terraform, import, state, refresh, orphan resources, S3 bucket, cross-region
+**difficulty:** 6
+**significance:** 7
+
+### 48.1 Context
+
+We changed the frontend S3 bucket naming to include region (`fru-dev-frontend-nonkube-us-east-1-{account_id}`) so each `--cloud-region` gets its own bucket. An old bucket (`fru-dev-frontend-nonkube-{account_id}`) existed in a different region (us-east-2). The import step tried to import the new bucket name, which didn't exist. Should import fail and block deploy, or skip and let apply create it?
+
+### 48.2 Key Insight: Import Does Not Affect Terraform's Refresh Behavior
+
+> Terraform's built-in refresh (during plan/apply) determines what Terraform will do. Import runs *before* apply and only **adds** resources to state—it does not change how Terraform plans to destroy, update, or create resources.
+
+| Old resource in state? | Terraform behavior (with or without import) |
+|------------------------|---------------------------------------------|
+| Yes | Destroy old, create new (when config changes resource identity) |
+| No | Create new only; old resource becomes orphan in AWS |
+
+Import looks for resources that **exist in AWS but not in state**. It adopts them so apply doesn't fail with "EntityAlreadyExists". Import does *not* add the old bucket to state when we're looking for the *new* bucket name. So the old bucket's fate is determined solely by whether it was ever in state.
+
+### 48.3 Import as an Extra Layer of Protection
+
+Import adds another layer of protection: it reconciles state with reality *before* apply. When resources exist in AWS (e.g. IAM roles, OAC) but were never in state (e.g. after partial teardown, state loss), import adopts them. Without import, apply would try to create them and fail with "EntityAlreadyExists". Import prevents that.
+
+### 48.4 The Cross-Region Orphan: Special Case
+
+When we change resource naming (e.g. add region to bucket name), the *new* resource doesn't exist yet. Import tries to find it, doesn't, and with `allow_skip_nonexistent=True` we skip and proceed. Apply creates the new bucket. The old bucket (different name, possibly different region) is never in state—Terraform doesn't know about it. It becomes an **orphan**: exists in AWS, not managed by Terraform.
+
+**Approach:** Treat cross-region (or naming-change) orphans as a special case. Use `allow_skip_nonexistent=True` so deploy succeeds. After deploy, manually delete the orphan once CloudFront and other references have been updated to the new bucket. Verify no references before deletion.
+
+### 48.5 Pattern: Change TF → Import (skip if not found) → Deploy → Delete Orphan
+
+1. Change TF config (e.g. bucket naming)
+2. Import runs; skips resources that don't exist
+3. Apply creates new resources, updates references (e.g. CloudFront origin)
+4. Old resource is orphaned
+5. Manual cleanup: delete orphan after verifying no references
+
+### 48.6 Takeaway
+
+Terraform naturally handles refresh; import adds another layer of protection by adopting existing resources into state. Import does not change Terraform's plan for resources it doesn't touch. For naming changes that create new resource identities, use `allow_skip_nonexistent=True` and treat the resulting orphan as a one-time manual cleanup.
+
+---
+
+## 49. ResourceAlreadyExistsException: Broader Pre-Deploy Import vs. Ideal Minimal Import
+
+**creation:** `<260210>`
+**last_updated:** `<260210>`
+
+**keywords:** Terraform, import, ResourceAlreadyExistsException, state reconciliation, ECS, CloudWatch, ALB
+**difficulty:** 5
+**significance:** 7
+
+### 49.1 Context
+
+After brutal removal or partial teardown, deploy failed with `ResourceAlreadyExistsException` for CloudWatch log groups, ALB, target group, and security groups. These existed in AWS but not in Terraform state; apply tried to create them and AWS rejected.
+
+### 49.2 Two Approaches
+
+| Approach | Import | Other "already exists" |
+|----------|--------|------------------------|
+| **Ideal** | IAM roles only | Treat as surprise → destroy in AWS, recreate via apply |
+| **Current** | All resources that commonly cause "already exists" | Import them before apply |
+
+We use the **broader import** for convenience and simplicity: one deploy command works without manual destroy/recreate. Trade-off: we may adopt resources created outside Terraform; plan will show drift if config changed.
+
+### 49.3 Takeaway
+
+Prefer Terraform-based teardown so state stays in sync. When state/reality drift occurs, broader pre-deploy import unblocks deploy quickly. See **docs/learned/terra/TERRA_LEARN_IMPORT_PREEXIST.md** for the ideal approach and implementation details.
+
+---
+
+## 50. OriginAccessControlAlreadyExists: CloudFront API Is us-east-1 Only
+
+**creation:** `<260210>`
+**last_updated:** `<260222>`
+
+**keywords:** CloudFront, OAC, Origin Access Control, us-east-1, multi-region, Terraform import, AWS API, region-scoped OAC
+**difficulty:** 6
+**significance:** 7
+
+### 50.1 Context
+
+During deploy to **us-east-2**, apply failed with:
+
+```
+Error: creating CloudFront Origin Access Control (fru-dev-frontend-nonkube-oac): 
+OriginAccessControlAlreadyExists: An origin access control with the same name already exists.
+```
+
+The OAC existed in AWS (created by a prior us-east-1 deploy) but was not in us-east-2's Terraform state. The import phase should have adopted it before apply; instead, the import failed to find it, so apply tried to create it and AWS rejected.
+
+### 50.2 Root Cause
+
+**CloudFront OAC is global**—one per account, shared across regions. The OAC name `fru-dev-frontend-nonkube-oac` is the same regardless of deploy region.
+
+**CloudFront's control-plane API is only in us-east-1.** [AWS documents this](https://docs.aws.amazon.com/general/latest/gr/cf_region.html): the CloudFront service endpoints table lists only `us-east-1` (US East N. Virginia) for `cloudfront.amazonaws.com`. There is no us-east-2 endpoint.
+
+When deploying to us-east-2, our import script used `get_terra_env(region)` which set `AWS_REGION=us-east-2`. The AWS CLI then called `aws cloudfront list-origin-access-controls` with that region. The CloudFront API may not respond correctly from non–us-east-1 endpoints, so the lookup returned empty. The import skipped the OAC, and apply tried to create it → `OriginAccessControlAlreadyExists`.
+
+### 50.3 Resolution
+
+Use `--region us-east-1` explicitly when calling CloudFront APIs in the import script:
+
+```python
+# tools/aws/scope_shared/import_preexist/nonkube.py (and kube.py)
+data = _aws_json(cmd, "us-east-1", env)  # CloudFront API is us-east-1 only
+```
+
+Added pagination support for `list-origin-access-controls` in case the account has many OACs. Added clear logging when OAC is not found and when apply fails with `OriginAccessControlAlreadyExists`.
+
+### 50.4 Region-Scoped OAC (260222)
+
+OAC is now **region-scoped**: name includes `{aws_region}` (e.g. `fru-dev-frontend-nonkube-us-east-1-oac`). Each region has its own OAC. This avoids `OriginAccessControlInUse` on teardown when tearing down one region while another region's distribution still references the OAC.
+
+### 50.5 Takeaway
+
+CloudFront resources (OAC, distributions) are global, but the **API endpoint** is regional—us-east-1 only. When scripting AWS CLI calls for CloudFront, always pass `--region us-east-1` regardless of the deploy region. For Terraform, the AWS provider handles this; for custom scripts (e.g. import lookup), you must specify it explicitly. OAC names are region-scoped to avoid cross-region teardown conflicts. See [Amazon CloudFront endpoints and quotas](https://docs.aws.amazon.com/general/latest/gr/cf_region.html).
+
+---
+
+## 51. Terraform Import Idempotency: "Resource already managed" as Success
+
+**creation:** `<260222>`
+**last_updated:** `<260222>`
+
+**keywords:** Terraform, OpenTofu, import, idempotency, Resource already managed, state
+**difficulty:** 4
+**significance:** 6
+
+### 51.1 Context
+
+When running `tofu import` for a resource that is **already in Terraform state**, the command fails (exit 1) with:
+
+```
+Error: Resource already managed by OpenTofu
+OpenTofu is already managing a remote object for module.frontend.aws_s3_bucket.frontend.
+To import to this address you must first remove the existing object from the state.
+```
+
+This is expected when import runs idempotently (e.g. deploy scope=all, where kube and nonkube both import the same global resource; or re-running deploy after a partial run).
+
+### 51.2 Root Cause
+
+Terraform/OpenTofu import is **not** idempotent by default. If the resource is already in state, import fails. Our import script runs before every apply to reconcile state with AWS. When we import a resource that was already imported (by the same deploy or a prior run), we hit this error.
+
+### 51.3 Resolution
+
+Treat "Resource already managed" as **success**, not failure. Pattern-match on stderr for `Resource already managed` (or `already managed by Terraform`). When matched, log and return success. The script is idempotent: import succeeds if the resource is adopted, and also succeeds if it was already in state.
+
+Distinguish three outcomes: (1) **Imported**—resource adopted into state; (2) **Already in state**—import skipped, harmless; (3) **Does not exist**—skip if `allow_skip_nonexistent`; (4) **Real failure**—log and fail.
+
+### 51.4 Takeaway
+
+Import scripts can be idempotent by recognizing "already in state" as OK. Use pattern matching on import output; do not treat non-zero exit as failure when the message indicates the resource is already managed. Log clearly: "OK (already in state—import skipped; harmless, not an error)" so operators know it is not a problem.
+
+---
+
+## 52. Multi-Region S3 Bucket Naming: Global Uniqueness Requires Region in Name
+
+**creation:** `<260222>`
+**last_updated:** `<260222>`
+
+**keywords:** S3, bucket naming, multi-region, global uniqueness, Terraform
+**difficulty:** 4
+**significance:** 6
+
+### 52.1 Context
+
+When deploying to **us-east-2** after a prior us-east-1 deploy, the frontend S3 bucket changed from `fru-dev-frontend-kube-744139897900` to `fru-dev-frontend-kube-us-east-2-744139897900`. Terraform planned to replace the bucket (destroy + create).
+
+### 52.2 Root Cause
+
+**S3 bucket names are globally unique** across all AWS accounts and regions. A single bucket name cannot be reused in another region. The original bucket name did not include the region; when we added multi-region support, the same logical name would have collided if we tried to create a bucket in us-east-2 with the same name.
+
+The module was updated to include `aws_region` in the bucket name: `fru-dev-frontend-${suffix}-${aws_region}-${account_id}`. Each region gets its own bucket.
+
+### 52.3 Resolution
+
+Include the region in the bucket name for resources that must be region-specific. For frontend, the bucket holds static assets; each region gets its own bucket and CloudFront origin. The Terraform plan showed replacement because the bucket identity changed.
+
+### 52.4 Takeaway
+
+S3 bucket names are globally unique. For multi-region deployments, include the region in the name to avoid collisions. Expect Terraform to plan replacement when the naming convention changes.
+
+---
+
+## 53. Deploy scope=all and Shared Global Resources: Import Idempotency Across Scopes
+
+**creation:** `<260222>`
+**last_updated:** `<260222>`
+
+**keywords:** Terraform import, scope=all, kube, nonkube, CloudFront OAC, global resources
+**difficulty:** 5
+**significance:** 6
+
+### 53.1 Context
+
+When running `deploy --scope all` (kube + nonkube), both scopes run import before apply. CloudFront OAC is **global**—one per account. The kube and nonkube frontends both use the same OAC (e.g. `fru-dev-frontend-kube-oac` and `fru-dev-frontend-nonkube-oac` are distinct, but each scope imports its own).
+
+When deploying to **us-east-1** with scope=all, kube might import first and adopt the OAC. When nonkube runs import for the same resource (or when the same scope runs import twice due to orchestration), the second import fails with "Resource already managed by OpenTofu."
+
+### 53.2 Root Cause
+
+Import runs per-scope. Global resources (OAC, some IAM) can be imported by one scope and then "already in state" from another scope's perspective—or the same scope re-running. If we treat "Resource already managed" as failure, deploy would fail unnecessarily.
+
+### 53.3 Resolution
+
+Treat "Resource already managed" as success (War Story 51). The import script is idempotent: the first import adopts the resource; subsequent imports (same or different scope) see "already in state" and succeed. No manual state removal needed.
+
+### 53.4 Takeaway
+
+When deploying multiple scopes (e.g. all = kube + nonkube), global resources may be imported by one scope and then "already managed" for another. Import idempotency makes this harmless. Ensure the import script recognizes "Resource already managed" as OK.
+
+---
+
+## 54. OpenTofu vs Terraform: Provider-Agnostic Error Pattern Matching
+
+**creation:** `<260222>`
+**last_updated:** `<260222>`
+
+**keywords:** OpenTofu, Terraform, import, error handling, pattern matching
+**difficulty:** 3
+**significance:** 5
+
+### 54.1 Context
+
+Our import script pattern-matches on stderr to detect "Resource already managed." Terraform says "Resource already managed by Terraform"; OpenTofu says "Resource already managed by OpenTofu." We use a single regex.
+
+### 54.2 Root Cause
+
+We migrated from Terraform to OpenTofu. Error messages changed slightly (vendor name in the string). A regex that matched only "Terraform" would miss OpenTofu's message.
+
+### 54.3 Resolution
+
+Match on the **common substring** `Resource already managed` instead of the full phrase. That matches both Terraform and OpenTofu. Same for "already managed by Terraform"—both work. Prefer provider-agnostic patterns when the semantic meaning is the same.
+
+### 54.4 Takeaway
+
+When supporting both Terraform and OpenTofu (or multiple providers), use error patterns that match the shared semantic content, not vendor-specific wording. `Resource already managed` works for both.
+
+---
+
+## 55. AWS Orphan Scan and Removal: Pattern-Based Detection, Phased Deletion, and ENI Wait
+
+**creation:** `<260223>`
+**last_updated:** `<260223>`
+
+**keywords:** AWS orphan, resources scan, Terraform state, pattern-based classification, phased deletion, ELB ENI, DependencyViolation, security group, Classic ELB, CloudFront OAC, heartbeat
+**difficulty:** 7
+**significance:** 8
+
+### 55.1 Context
+
+After teardown, some AWS resources survived: Classic ELBs, security groups (`k8s-elb-*`), target groups (`k8s-ingressn-*`), CloudFront OACs (legacy format), and IAM roles (e.g. AWS Load Balancer Controller). These are **orphans**—not in Terraform state, so `tofu destroy` never touches them. War Story 46 describes the problem; here we built a **scan-and-remove** pipeline to detect and delete them systematically.
+
+### 55.2 How We Scan and Detect Orphans
+
+**Step 1: Scan all resources (no prefix filter)**  
+`scan_aws_remaining.py` lists resources across regions: ECS, EKS, load balancers (ALB, NLB, Classic), target groups, security groups, log groups, secrets, EBS, EventBridge, VPC, RDS, ECR, S3, IAM roles, CloudFront distributions and OACs. It uses AWS CLI with pagination.
+
+**Step 2: Classify into buckets**  
+Each resource is classified into one of:
+- **Orphans (definitely)** — pattern-based rules say "never in our Terraform"
+- **Orphans (likely)** — pattern suggests orphan, not 100% certain
+- **Project resources** — belong to this project (prefix/env)
+- **Other projects** — may incur cost
+- **AWS built-in** — AWS-managed, typically no cost
+
+**Step 3: Pattern-based orphan rules (no hardcoding)**  
+`orphan_rules.py` uses dynamic `prefix` and `env` to classify:
+
+| Resource Type | Definitely Orphan When |
+|---------------|-------------------------|
+| CloudFront OAC | Name is `{prefix}-{env}-frontend-oac` (legacy; Terraform creates `*-{suffix}-{region}-oac`) |
+| IAM role | Name contains `-aws-load-balancer-controller` or `-csi-driver-role` (external controllers) |
+| Load balancer | Type is Classic (we use ALB/NLB only) |
+| Security group | Name starts with `k8s-elb-` and has our EKS cluster tag |
+| Target group | Name starts with `k8s-` (created by K8s Ingress, not Terraform) |
+
+**Step 4: Write orphans JSON**  
+The scan writes `orphan_data/orphans_<YYMMDD-hhmmss>.json` with structured records (resource_type, name, region, extra IDs) and recovery hints. This serves as both input for removal and an audit trail.
+
+### 55.3 How We Remove Orphans (Phased Deletion)
+
+**Problem:** Deleting a Classic ELB triggers async ENI release. The security group `k8s-elb-{lb_name}` cannot be deleted until AWS releases those ENIs (10–30 min). If we delete the SG first, we get `DependencyViolation: resource has a dependent object`. See War Story 7.
+
+**Solution: Phased deletion with dependency inference**
+
+1. **Dependency inference (dynamic)**  
+   `orphan_deps.py` infers: if we have `security_group` with name `k8s-elb-{X}` and `load_balancer` with name `{X}`, then the SG depends on the LB.
+
+2. **Phase 1 (roots):** Delete resources that nothing else depends on, **with load_balancer first** to start the ENI release clock:
+   - load_balancer (Classic ELB)
+   - target_group, cloudfront_oac, iam_role
+   - security_groups with no LB dependency
+
+3. **Phase 2 (after wait):** Delete security groups that depend on LBs we just deleted. For each such SG, **poll delete with retry** until success or timeout (default 30 min), with heartbeat every 30s so the user sees progress.
+
+4. **Recovery record**  
+   On successful removal, write `removed_<ts>.json` with what was deleted and when—audit trail in case something was needed.
+
+### 55.4 Usage (Clear and Easy to Follow)
+
+```bash
+# 1. Scan (creates orphan_data/orphans_<ts>.json)
+PYTHONPATH=. python tools/aws/standalone/temp_one_off/resources_scan/scan_aws_remaining.py \
+  --cloud-regions us-east-1,us-east-2 --env dev --prefix fru
+
+# 2. Remove — dry-run first
+PYTHONPATH=. python tools/aws/standalone/temp_one_off/resources_scan/remove_for_orphans_data.py --dry-run
+
+# 3. Remove for real (uses latest orphans file by default)
+PYTHONPATH=. python tools/aws/standalone/temp_one_off/resources_scan/remove_for_orphans_data.py
+
+# 4. Or specify a data file
+PYTHONPATH=. python tools/aws/standalone/temp_one_off/resources_scan/remove_for_orphans_data.py \
+  --data-file orphan_data/orphans_250210-143022.json
+```
+
+**Config (optional):**  
+- `ORPHAN_REMOVAL_WAIT_TIMEOUT_SEC` — max wait for SG to become deletable (default 1800)  
+- `ORPHAN_REMOVAL_POLL_INTERVAL_SEC` — poll interval (default 30)
+
+### 55.5 Key Insights
+
+> **No hardcoding.** Orphan rules use `prefix` and `env` from args/env. Recovery hints live in a registry; new resource types add one entry. Deletion order is inferred from the orphan set, not hardcoded.
+
+> **Phased deletion mirrors teardown.** Delete roots first (ELB), wait for async cleanup (ENI release), then delete dependents (SG). Same pattern as CloudFront pre-destroy (War Story 7, cloudfront_pre_destroy.py).
+
+> **Heartbeat for long ops.** AWS CLI calls use `run_with_heartbeat`; SG wait loop uses `update_heartbeat`. Users see progress instead of a silent hang.
+
+### 55.6 Takeaway
+
+Orphan resources survive teardown because they're not in Terraform state. Build a scan (list all, classify by pattern) and a removal script with **phased deletion** and **dependency inference**. Delete roots first; for dependents that need async cleanup (e.g. SG after ELB), poll with timeout and heartbeat. Store structured JSON for removal input and audit. Avoid hardcoding—use prefix/env and pattern-based rules so the same logic works across projects and environments.
+
+---
+
+## 56. AWS Authentication: Access Keys vs SSO vs Profile — Expiry, Session Limits, and When Each Fails
+
+**creation:** `<260210>`
+**last_updated:** `<260210>`
+
+**keywords:** AWS credentials, access key, SSO, profile, SignatureDoesNotMatch, AuthFailure, session expiry, refresh token, FRU_AWS_USE_PROFILE
+**difficulty:** 6
+**significance:** 8
+
+### 56.1 Context
+
+Deploy and Terraform runs failed with `SignatureDoesNotMatch` or `AuthFailure` at seemingly random times. The same `.env` and commands worked yesterday. Credentials were set in `.env` (access keys) or via `aws sso login` (SSO). The errors were opaque and led to confusion about whether the problem was keys, SSO, or something else.
+
+### 56.2 The Three Credential Paths
+
+| Method | Source | Typical expiry / limits | Common failure modes |
+|--------|--------|-------------------------|----------------------|
+| **Access keys** (`.env`: `AWS_ADMIN_ACCESS_KEY_ID`, `AWS_ADMIN_SECRET_ACCESS_KEY`) | Long-lived IAM user keys | Keys don't expire by default; **session tokens** (if using STS) have max 12h. Rotated keys in `.env` but not updated → `AuthFailure`. | Keys rotated in console; `.env` still has old keys. Clock skew → `SignatureDoesNotMatch`. |
+| **SSO** (`aws sso login` + `AWS_PROFILE`) | Temporary credentials from IAM Identity Center | **Session max 12h** (configurable). Refresh token can expire (e.g. 7 days unused). | `aws sso login` not run; session expired. "Unable to locate credentials" or `AuthFailure`. |
+| **Profile** (`~/.aws/credentials` via `AWS_PROFILE`) | Long-lived keys or SSO-cached creds | Same as above depending on what the profile uses. Profile itself doesn't expire. | Profile uses SSO → same as SSO. Profile uses keys → same as keys. |
+
+### 56.3 Visual Summary: Credential Chain and Failure Points
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '11px', 'fontFamily': 'sans-serif' }, 'flowchart': { 'padding': 8, 'nodeSpacing': 25, 'rankSpacing': 30 }}}%%
+flowchart TB
+    subgraph KEYS["Access Keys (.env)"]
+        K1["AWS_ADMIN_* or AWS_BEDROCK_*"]
+        K2["✓ No login step"]
+        K3["✗ Rotate → update .env or AuthFailure"]
+        K4["✗ Clock skew → SignatureDoesNotMatch"]
+    end
+    subgraph SSO["SSO (aws sso login)"]
+        S1["+ AWS_PROFILE"]
+        S2["✗ Must run aws sso login"]
+        S3["✗ Session max 12h"]
+        S4["✗ Refresh token expiry (e.g. 7d)"]
+    end
+    subgraph PROFILE["Profile (credentials)"]
+        P1["~/.aws/credentials [admin]"]
+        P2["✓ No login if keys"]
+        P3["✗ SSO profile = same as SSO"]
+        P4["✓ Keys in profile = stable, no SSO"]
+    end
+    KEYS --> DEC
+    SSO --> DEC
+    PROFILE --> DEC
+    DEC["When FRU_AWS_USE_PROFILE=true: prefer profile over .env keys"]
+    NOTE["Avoids AuthFailure when .env keys are rotated but profile is current"]
+    DEC --> NOTE
+    style KEYS fill:#e3f2fd
+    style SSO fill:#fff3e0
+    style PROFILE fill:#e8f5e9
+    style DEC fill:#f3e5f5
+```
+
+### 56.4 Error Messages and What They Mean
+
+| Error | Likely cause | Fix |
+|-------|--------------|-----|
+| `SignatureDoesNotMatch` | Clock skew (local time vs AWS); expired session token | Sync clock (NTP); re-run `aws sso login`; or use fresh keys |
+| `AuthFailure: AWS was not able to validate the provided access credentials` | Stale/rotated keys; expired SSO session | Update `.env` keys; run `aws sso login`; or set `FRU_AWS_USE_PROFILE=true` to use profile |
+| `Unable to locate credentials` | No keys, no profile, or SSO session expired | Set keys in `.env`; run `aws sso login`; or configure `AWS_PROFILE` |
+
+### 56.5 Session Max Expiry (SSO and STS)
+
+- **SSO session:** Configurable in IAM Identity Center; default max 12 hours. After expiry, `aws sso login` required.
+- **STS AssumeRole:** Max 12 hours for `AssumeRole`; 1 hour for `GetSessionToken` (unless MFA extends it).
+- **Refresh token:** If you don't use SSO for 7+ days (configurable), the refresh token may expire; you must log in again via browser.
+
+### 56.6 Resolution: Prefer Profile When Keys Are Stale
+
+We added `FRU_AWS_USE_PROFILE=true` so deploy uses `AWS_PROFILE` (from `~/.aws/credentials`) instead of `AWS_ADMIN_*` from `.env`. When `.env` keys are rotated but the profile (e.g. populated by `setup-aws-profiles.sh` or SSO) is current, deploy succeeds. See `tools/aws/scope_shared/core/terra_runner.py` and `tools/aws/diagnose_auth.py`.
+
+### 56.7 Takeaway
+
+| Method | Best for | Caveat |
+|--------|----------|--------|
+| **Access keys in .env** | CI, scripts, automation | Rotate keys → update `.env` or use profile |
+| **SSO** | Human devs, short sessions | Run `aws sso login` before deploy; watch session expiry |
+| **Profile (long-lived keys)** | Stable automation | No expiry issues; keep keys secure |
+| **Profile (SSO-backed)** | Human devs | Same as SSO; profile is just the pointer |
+
+Use `FRU_AWS_USE_PROFILE=true` when `.env` keys may be stale but your profile is current. Run `python tools/aws/diagnose_auth.py` to inspect which credential source deploy will use.
+
+---
+
+## 57. AI-Generated Logic Can Still Have Major Errors — Inverted Condition and Variable Reuse
+
+**creation:** `<260210>`
+**last_updated:** `<260210>`
+
+**keywords:** AI-generated code, pseudocode, logic bug, inverted condition, variable reuse, state transition, conditional logic, code review
+**difficulty:** 5
+**significance:** 8
+
+### 57.1 Context
+
+While documenting a refactor plan for "Kube Apply Ran Twice" (see `docs/DEPLOYMENT_OPTIMIZATION_REFACTOR_PLANS.md` §2.2), AI-generated pseudocode was proposed for a two-phase deploy flow: first Terraform apply (possibly without NLB hostname), then kube_apply + poll for hostname, then a second Terraform apply to set CloudFront's API origin to the NLB DNS. The pseudocode looked plausible but contained a major logic bug.
+
+### 57.2 The Buggy Pseudocode
+
+```python
+lb_host = _try_get_lb_hostname(env, region)  # kubectl or tofu output
+ingress_var = ["-var", f"ingress_hostname={lb_host}"] if lb_host else []
+
+# First apply (with hostname if available)
+apply_stack(..., extra_vars=ingress_var)
+
+# After kube_apply + wait:
+lb_host = lb_host or _poll_lb_hostname(...)
+if not lb_host:  # ← BUG: runs when we DON'T have hostname
+    apply_stack(..., extra_vars=["-var", f"ingress_hostname={lb_host}"])  # passes empty!
+```
+
+### 57.3 Root Cause
+
+The bug had two parts:
+
+1. **Inverted condition:** The comment said "Second apply only when we didn't have it before." The code used `if not lb_host`, which checks "we don't have it now." Those are different. "Didn't have before" = we didn't have before the first apply; "don't have now" = we still don't have after polling. The second apply should run when we *got* it from polling (i.e., we didn't have it before but we have it now). The condition was backwards: we ran when we had nothing, and skipped when we had something.
+
+2. **Variable reuse:** `lb_host` was reused for both "before first apply" and "after poll." After `lb_host = lb_host or _poll_lb_hostname(...)`, it only represents the "after" state. The condition `if not lb_host` then checks the wrong thing—we can't distinguish "didn't have before" from "don't have now" with a single variable.
+
+**Concrete trace (fresh deploy):** Before first apply: `lb_host` is `None`. After poll: `lb_host` becomes the real hostname. `if not lb_host` is `False`, so we skip the second apply. We would never update CloudFront when we needed to.
+
+### 57.4 Corrected Version
+
+```python
+hostname_before_first_apply = _try_get_lb_hostname(env, region)
+ingress_var = ["-var", f"ingress_hostname={hostname_before_first_apply}"] if hostname_before_first_apply else []
+
+apply_stack(..., extra_vars=ingress_var)
+
+hostname_after_poll = hostname_before_first_apply or _poll_lb_hostname(...)
+need_second_apply = not hostname_before_first_apply and hostname_after_poll  # got it from poll, must update CloudFront
+if need_second_apply:
+    apply_stack(..., extra_vars=["-var", f"ingress_hostname={hostname_after_poll}"])
+```
+
+### 57.5 Why the Bug Happened
+
+| Factor | Explanation |
+|--------|-------------|
+| **Comment vs. condition mismatch** | "Didn't have before" was interpreted as "don't have now" when scanning quickly. |
+| **Variable reuse** | One variable for two phases made it impossible to express "didn't have before" and "have now" correctly. |
+| **Negative condition** | `if not lb_host` is a negative condition; easier to misread than "when do we need to run?" |
+| **No execution/trace** | Pseudocode wasn't traced through with concrete values; a fresh-deploy trace would have exposed the bug. |
+
+### 57.6 Takeaway
+
+AI-generated logic and pseudocode can contain major errors. Treat it as a draft, not production-ready. **Watch out for:**
+
+1. **Variable reuse across state transitions** — Use distinct names for distinct phases (e.g., `hostname_before_first_apply` vs `hostname_after_poll`).
+2. **"When we didn't have X before"** — Requires two checks: (a) didn't have before, (b) have now. A single variable for "current value" can't express both.
+3. **Negative conditions** — Prefer explicit booleans (`need_second_apply`) over `if not x`.
+4. **Trace with concrete scenarios** — For each branch: "What values are passed? Is that correct?" If the second apply runs when hostname is empty, that would pass an empty value—obviously wrong.
+5. **Review AI-generated control flow carefully** — State transitions and "when to run" logic are easy to get wrong without execution or tracing.
+
+---
+
+## 58. VPC Subnet Tag Drift: Durable vs Kube and lifecycle ignore_changes
+
+**creation:** `<260210>`
+**last_updated:** `<260210>`
+
+**keywords:** Terraform, VPC, subnet tags, kubernetes.io/role/elb, aws_ec2_tag, lifecycle ignore_changes, tag drift, durable vs kube
+**difficulty:** 6
+**significance:** 7
+
+### 58.1 Context
+
+Durable creates VPC and subnets; kube adds `kubernetes.io/role/elb` and `kubernetes.io/cluster/<name>` tags via `aws_ec2_tag` so the AWS Load Balancer Controller can place internet-facing NLBs in public subnets. Without these tags, CloudFront gets 502 (War Story 43). Durable's `aws_subnet` desired state did not include these tags. On durable's next apply, Terraform planned to remove them; kube's next apply re-added them. Endless drift cycle.
+
+### 58.2 Root Cause
+
+Terraform enforces desired state. Durable's desired state = `tags = merge(var.tags, { Name = ... })` only. Kube adds tags via `aws_ec2_tag` to the same subnets. Durable's `aws_subnet` sees "extra" tags in AWS and plans to remove them. Apply removes them; kube re-adds; repeat.
+
+### 58.3 Resolution
+
+Add `lifecycle { ignore_changes = [tags] }` to all subnet resources in `infra_terraform/modules/aws/primitives/vpc/main.tf`. Durable sets initial tags on create; subsequent applies do not touch tags. Kube's `aws_ec2_tag` can add k8s tags without durable removing them. Trade-off: durable cannot change its own tags later; acceptable if tags are stable.
+
+### 58.4 Savings
+
+| | Estimated | Actual (2026-02-23 full-scope re-deploy) |
+|---|-----------|------------------------------------------|
+| **Typical** | ~30–60 s | Avoids durable apply touching subnets; kube no longer re-adds tags. |
+| **This run** | — | Preventive; not directly measurable. Durable showed "No changes." |
+
+### 58.5 Takeaway
+
+When two stacks manage the same resource (durable owns subnets; kube adds tags), use `lifecycle { ignore_changes = [tags] }` on the owning resource so the other stack's `aws_ec2_tag` additions are not reverted. See `docs/DEPLOYMENT_OPTIMIZATION_REFACTOR_PLANS.md` §2.1.
+
+---
+
+## 59. Kube Apply Ran Twice: Single Apply When NLB Hostname Known
+
+**creation:** `<260210>`
+**last_updated:** `<260210>`
+
+**keywords:** EKS, kube deploy, ingress_hostname, CloudFront, NLB, two-phase apply, re-deploy optimization
+**difficulty:** 6
+**significance:** 8
+
+### 59.1 Context
+
+Kube deploy required two Terraform applies: (1) first apply without `ingress_hostname` (NLB doesn't exist yet); (2) after kube_apply creates the NLB, poll for hostname, then second apply with `ingress_hostname` to wire CloudFront's API origin. On re-deploys, the NLB hostname is usually stable—we could get it before the first apply and skip the second.
+
+### 59.2 Root Cause
+
+The NLB hostname is not known until Kubernetes creates the Service and AWS provisions the NLB. Terraform needs that hostname for the CloudFront module. Original flow: first apply (no hostname) → kube_apply → poll → second apply (with hostname). On re-deploy, we never tried to get the hostname first.
+
+### 59.3 Resolution
+
+Before the first apply, try `kubectl get svc fru-api-svc ... -o jsonpath={.status.loadBalancer.ingress[0].hostname}`. If non-empty, pass `ingress_hostname` in the first (and only) apply. After kube_apply + poll, run the second apply only when we got the hostname from poll (didn't have it before). See `tools/aws/kube/deploy_kube.py` and War Story 57 for the correct logic (avoid inverted condition).
+
+### 59.4 Savings
+
+| | Estimated | Actual (2026-02-23 full-scope re-deploy) |
+|---|-----------|------------------------------------------|
+| **Typical** | ~1–5 min | Re-deploy: hostname known → skip second apply. |
+| **This run** | — | Second kube apply skipped (kube tofu apply: 0.0s). Nonkube apply was 24.9s; kube similar. **~1 min saved.** |
+
+### 59.5 Takeaway
+
+When a Terraform var depends on async output (e.g. NLB hostname from k8s), try to fetch it before the first apply on re-deploys. Use distinct variables for "before" and "after" states to avoid logic bugs (War Story 57).
+
+---
+
+## 60. Import and Apply Skip When Plan Shows No Changes
+
+**creation:** `<260210>`
+**last_updated:** `<260210>`
+
+**keywords:** Terraform, import, plan, detailed-exitcode, state clean, deploy optimization
+**difficulty:** 5
+**significance:** 8
+
+### 60.1 Context
+
+Before each kube/nonkube apply, we run a broad import to reconcile state with AWS. When infrastructure is already in sync (plan shows "No changes"), import adds no value—we won't create anything, so we won't hit "already exists." Running import and apply anyway wastes time.
+
+### 60.2 Root Cause
+
+Import was always run before apply. No check for whether plan would show changes. On re-deploys when nothing changed, we still ran import (many `tofu import` calls) and apply (no-op but still runs).
+
+### 60.3 Resolution
+
+Before import for a stack, run `tofu plan -detailed-exitcode` with the same vars as apply. Exit 0 = no changes → skip import and skip apply for that stack. Exit 2 = changes → run import, then apply. Implemented in `tools/aws/scope_shared/deploy/deploy_common.py` (`plan_shows_no_changes`) and wired into `deploy_kube.py` and `deploy_nonkube.py`.
+
+### 60.4 Savings
+
+| | Estimated | Actual (2026-02-23 full-scope re-deploy) |
+|---|-----------|------------------------------------------|
+| **Typical** | ~2–8 min per stack | Plan clean → skip import + apply. |
+| **This run** | — | Kube import + apply skipped. Nonkube import 161.9s; kube import ~60–90s. Kube apply ~25–60s. **~2.5 min saved.** |
+
+### 60.5 Takeaway
+
+When import is "just in case" (reconcile state before apply), run `plan -detailed-exitcode` first. If no changes, skip import and apply. Saves time on re-deploys when infrastructure is already in sync. See `docs/DEPLOYMENT_OPTIMIZATION_REFACTOR_PLANS.md` §2.3.
+
+---
+
+## 61. Content-Based Build Skip: Hash vs Stored Hash
+
+**creation:** `<260210>`
+**last_updated:** `<260210>`
+
+**keywords:** Docker build, deploy, content hash, build skip, --skip-build, --force-build, ECR
+**difficulty:** 5
+**significance:** 8
+
+### 61.1 Context
+
+Deploy's build phase (Docker build + push) takes 5–15 minutes. On re-deploys where only Terraform or config changed (not app/spark code), we were building anyway. Using `repo:latest` without verification could deploy stale code if the last build was from different code.
+
+### 61.2 Root Cause
+
+No content-aware skip. Options were: always build (slow) or `--skip-build` (use `repo:latest` blindly—risky if code changed). Git SHA alone is insufficient: uncommitted changes would not change the hash.
+
+### 61.3 Resolution
+
+Compute a hash of the build context (files in `core_app/` + Dockerfile path). Store it in S3 after each successful build. Before build, compare current hash to stored hash. If both app and spark match, skip build and use `repo:latest`. `--force-build` bypasses. Uncommitted changes change the hash. See `docs/BUILD_CONTENT_SKIP.md` and `tools/aws/scope_shared/deploy/build_context_hash.py`.
+
+### 61.4 Overhead: Hash Check Cost Is Negligible
+
+The time to compute the hash and check it against S3 must be insignificant compared to the build time we save. Measured (2026-02-23, us-east-2):
+
+| Step | Time |
+|------|------|
+| Hash compute (app + spark) + S3 fetch (2 JSON files) + compare | **~2–3 s** |
+| Full Docker build + push (Phase 7 when building) | **~95–106 s** |
+| **Overhead ratio** | **~2–3%** of time saved |
+
+Phase 7 when skipping: 11 s total (includes ~8 s `tofu_output_json` for `artifacts_bucket`; the hash+S3+compare is ~2–3 s). The hash check overhead is negligible—we spend ~2–3 s to avoid ~95 s of build. The optimization pays for itself many times over.
+
+### 61.5 Savings
+
+| | Estimated | Actual (2026-02-23 full-scope re-deploy, us-east-2) |
+|---|-----------|------------------------------------------------------|
+| **Typical** | ~3–10 min | Hash matches → skip Docker build and push. |
+| **Measured** | — | Run 1 (no stored hash): built, 594s total. Run 2 (hash match): skipped, 327s total. **~4.5 min saved.** Phase 7: 106s → 11s. |
+
+### 61.6 Takeaway
+
+Use content-based hashing (not Git SHA) for build skip so uncommitted changes trigger rebuild. Store hash in S3; skip when current hash matches. `--force-build` for explicit override. The hash check overhead (~2–3 s) is negligible vs. build time saved (~95 s). See `docs/BUILD_CONTENT_SKIP.md`. Related: War Story 20 (CONTAINER_IMAGE and --skip-build in background process).

@@ -46,6 +46,19 @@ _CLOUDFRONT_API_REGION = "us-east-1"
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ORPHAN_DATA_DIR = os.path.join(_SCRIPT_DIR, "orphan_data")
 
+# Brief hint for S3 only: explains why Terraform state bucket appears in one region.
+# Backend (state storage) lives in one region; deploy targets/destinations are in different regions.
+_REGION_HINTS: dict[str, str] = {
+    "s3": "Backend: all Terraform state for all regions stored in different keys in this one bucket; deploy targets are in other regions",
+}
+
+
+def _region_hint(item: str, region: str) -> str:
+    """Return a brief explanation for region-specific resources, else ''."""
+    rt = item.split(":")[0] if ":" in item else ""
+    hint = _REGION_HINTS.get(rt, "")
+    return f" ({hint})" if hint else ""
+
 
 def _orphan_record(
     resource_type: str,
@@ -673,7 +686,8 @@ def format_output(
                 if items:
                     lines.append(f"    [{cat}]")
                     for item in sorted(items):
-                        lines.append(f"      {item}")
+                        hint = _region_hint(item, region)
+                        lines.append(f"      {item}{hint}")
     if any(iam_result.project.values()) or any(cf_result.project.values()):
         lines.append("\n  [global: IAM, CloudFront]")
         for cat in FRU_CATEGORIES:

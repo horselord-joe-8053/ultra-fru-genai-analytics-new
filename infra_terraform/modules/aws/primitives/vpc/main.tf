@@ -13,7 +13,6 @@ resource "aws_vpc" "protected" {
   enable_dns_support   = true
   enable_dns_hostnames = true
   tags                 = merge(var.tags, { Name = var.name })
-  lifecycle { prevent_destroy = true }
 }
 
 resource "aws_vpc" "unprotected" {
@@ -33,7 +32,6 @@ resource "aws_internet_gateway" "protected" {
   count  = local.protected
   vpc_id = local.vpc_id
   tags   = merge(var.tags, { Name = "${var.name}-igw" })
-  lifecycle { prevent_destroy = true }
 }
 resource "aws_internet_gateway" "unprotected" {
   count  = local.unprotected
@@ -42,6 +40,8 @@ resource "aws_internet_gateway" "unprotected" {
 }
 
 # ---------- Public Subnets ----------
+# lifecycle ignore_changes on tags: kube stack adds kubernetes.io/* tags via aws_ec2_tag.
+# Without this, durable apply would remove them (tag drift cycle). See DEPLOYMENT_OPTIMIZATION_REFACTOR_PLANS.md §2.1.
 resource "aws_subnet" "public_protected" {
   count                   = local.protected * length(var.public_subnet_cidrs)
   vpc_id                  = local.vpc_id
@@ -49,7 +49,8 @@ resource "aws_subnet" "public_protected" {
   map_public_ip_on_launch = true
   availability_zone       = var.azs[count.index]
   tags                    = merge(var.tags, { Name = "${var.name}-public-${count.index}" })
-  lifecycle { prevent_destroy = true }
+
+  lifecycle { ignore_changes = [tags] }
 }
 
 resource "aws_subnet" "public_unprotected" {
@@ -59,6 +60,8 @@ resource "aws_subnet" "public_unprotected" {
   map_public_ip_on_launch = true
   availability_zone       = var.azs[count.index]
   tags                    = merge(var.tags, { Name = "${var.name}-public-${count.index}" })
+
+  lifecycle { ignore_changes = [tags] }
 }
 
 locals {
@@ -66,13 +69,15 @@ locals {
 }
 
 # ---------- Private Subnets ----------
+# lifecycle ignore_changes on tags: kube may add tags; durable should not remove them.
 resource "aws_subnet" "private_protected" {
   count             = local.protected * length(var.private_subnet_cidrs)
   vpc_id            = local.vpc_id
   cidr_block        = var.private_subnet_cidrs[count.index]
   availability_zone = var.azs[count.index]
   tags              = merge(var.tags, { Name = "${var.name}-private-${count.index}" })
-  lifecycle { prevent_destroy = true }
+
+  lifecycle { ignore_changes = [tags] }
 }
 
 resource "aws_subnet" "private_unprotected" {
@@ -81,6 +86,8 @@ resource "aws_subnet" "private_unprotected" {
   cidr_block        = var.private_subnet_cidrs[count.index]
   availability_zone = var.azs[count.index]
   tags              = merge(var.tags, { Name = "${var.name}-private-${count.index}" })
+
+  lifecycle { ignore_changes = [tags] }
 }
 
 locals {
@@ -92,7 +99,6 @@ resource "aws_route_table" "public_protected" {
   count  = local.protected
   vpc_id = local.vpc_id
   tags   = merge(var.tags, { Name = "${var.name}-public-rt" })
-  lifecycle { prevent_destroy = true }
 }
 resource "aws_route_table" "public_unprotected" {
   count  = local.unprotected
@@ -121,7 +127,6 @@ resource "aws_eip" "nat_protected" {
   count  = (var.enable_nat ? local.protected : 0)
   domain = "vpc"
   tags   = merge(var.tags, { Name = "${var.name}-nat-eip" })
-  lifecycle { prevent_destroy = true }
 }
 resource "aws_eip" "nat_unprotected" {
   count  = (var.enable_nat ? local.unprotected : 0)
@@ -134,7 +139,6 @@ resource "aws_nat_gateway" "nat_protected" {
   allocation_id = aws_eip.nat_protected[0].id
   subnet_id     = local.public_subnet_ids[0]
   tags          = merge(var.tags, { Name = "${var.name}-nat" })
-  lifecycle { prevent_destroy = true }
 }
 
 resource "aws_nat_gateway" "nat_unprotected" {
@@ -152,7 +156,6 @@ resource "aws_route_table" "private_protected" {
   count  = (var.enable_nat ? local.protected : 0)
   vpc_id = local.vpc_id
   tags   = merge(var.tags, { Name = "${var.name}-private-rt" })
-  lifecycle { prevent_destroy = true }
 }
 resource "aws_route_table" "private_unprotected" {
   count  = (var.enable_nat ? local.unprotected : 0)

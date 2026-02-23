@@ -7,17 +7,21 @@ references it. This pre-destroy:
   1. Disables distribution, waits for Deployed, deletes, waits for 404
   2. Deletes OAC by name (sync; no wait needed once distribution is gone)
 
+OAC is region-scoped: {prefix}-{env}-frontend-{suffix}-{region}-oac. Each region has
+its own OAC, avoiding OriginAccessControlInUse when tearing down one region while
+another still has a distribution.
+
 Handles orphaned OAC (removed from state via state rm): we delete it via API so no
 import is needed on next deploy.
 
 Resolves distribution ID: tofu output first (from state), fallback to comment search.
-OAC: looked up by name {prefix}-{env}-frontend-{suffix}-oac.
 """
 import os
 import subprocess
 import time
 
 from tools.cloud_shared.logging import logger
+from tools.cloud_shared.retry import update_heartbeat
 from tools.cloud_shared.stats import TeardownStats
 from tools.aws.scope_shared.core.terra_init import init_stack
 from tools.aws.scope_shared.core.terra_runner import get_terra_env
@@ -115,11 +119,13 @@ def _delete_oac(client, oac_id: str) -> None:
 
 
 def _wait_for_deployed(dist_id: str, timeout_sec: int) -> bool:
-    """Poll until distribution status is Deployed."""
+    """Poll until distribution status is Deployed. Logs progress; exits early if already gone."""
     import boto3
 
     client = boto3.client("cloudfront")
     deadline = time.monotonic() + timeout_sec
+    start = time.monotonic()
+    last_heartbeat = 0
     while time.monotonic() < deadline:
         try:
             resp = client.get_distribution(Id=dist_id)
@@ -128,18 +134,26 @@ def _wait_for_deployed(dist_id: str, timeout_sec: int) -> bool:
                 return True
         except Exception as e:
             if _is_no_such_distribution(e):
-                return True  # Already gone
+                logger.info(f"Pre-destroy CloudFront: distribution {dist_id} already gone (NoSuchDistribution); skipping wait.")
+                return True
             raise
+        elapsed = int(time.monotonic() - start)
+        last_heartbeat = update_heartbeat(
+            elapsed, last_heartbeat, POLL_INTERVAL_SEC,
+            f"Pre-destroy CloudFront: waiting for {dist_id} to reach Deployed (AWS propagation, can take 5–15 min) ... ({elapsed}s elapsed)",
+        )
         time.sleep(POLL_INTERVAL_SEC)
     return False
 
 
 def _wait_for_gone(dist_id: str, timeout_sec: int) -> bool:
-    """Poll until distribution returns 404."""
+    """Poll until distribution returns 404. Logs progress; exits early if already gone."""
     import boto3
 
     client = boto3.client("cloudfront")
     deadline = time.monotonic() + timeout_sec
+    start = time.monotonic()
+    last_heartbeat = 0
     while time.monotonic() < deadline:
         try:
             client.get_distribution(Id=dist_id)
@@ -147,6 +161,11 @@ def _wait_for_gone(dist_id: str, timeout_sec: int) -> bool:
             if _is_no_such_distribution(e):
                 return True
             raise
+        elapsed = int(time.monotonic() - start)
+        last_heartbeat = update_heartbeat(
+            elapsed, last_heartbeat, POLL_INTERVAL_SEC,
+            f"Pre-destroy CloudFront: waiting for {dist_id} to be fully removed (AWS async delete, can take 5–15 min) ... ({elapsed}s elapsed)",
+        )
         time.sleep(POLL_INTERVAL_SEC)
     return False
 
@@ -172,23 +191,33 @@ def pre_destroy_cloudfront(
     if not suffix:
         return
 
+    logger.info(f"Pre-destroy CloudFront: resolving distribution for {suffix} ({region})...")
     dist_id = _get_distribution_id_from_tofu(stack_dir, env, region)
+    dist_source = "tofu output"
     if not dist_id:
-        comment = f"{prefix}-{env}-frontend-{suffix}"
+        comment = f"{prefix}-{env}-frontend-{suffix}-{region}"
         dist_id = _find_distribution_id_by_comment(comment, region)
+        dist_source = "comment fallback"
     if not dist_id:
-        logger.info(f"Pre-destroy CloudFront: no distribution found (terra output or comment). Will still try to delete orphaned OAC.")
+        logger.info(
+            f"Pre-destroy CloudFront: no distribution found (terra output or comment). "
+            f"Distribution may have been deleted by earlier teardown. Will still try to delete orphaned OAC."
+        )
 
     def _do():
         client = boto3.client("cloudfront")
 
         if dist_id:
-            # 1. Disable (distribution may already be gone if state was stale)
+            logger.info(f"Pre-destroy CloudFront: distribution {dist_id} ({suffix}, {region}) from {dist_source}; disabling...")
+            # 1. Disable (distribution may already be gone if state was stale or wrong-region teardown)
             try:
                 cfg_resp = client.get_distribution_config(Id=dist_id)
             except Exception as e:
                 if _is_no_such_distribution(e):
-                    logger.info(f"Pre-destroy CloudFront: distribution {dist_id} not found, skipping to OAC.")
+                    logger.info(
+                        f"Pre-destroy CloudFront: distribution {dist_id} not found in AWS "
+                        f"(may have been deleted by earlier teardown); skipping to OAC."
+                    )
                 else:
                     raise
             else:
@@ -196,6 +225,7 @@ def pre_destroy_cloudfront(
                 config = cfg_resp["DistributionConfig"]
                 config["Enabled"] = False
                 client.update_distribution(Id=dist_id, IfMatch=etag, DistributionConfig=config)
+                logger.info(f"Pre-destroy CloudFront: disabled {dist_id}; waiting for propagation...")
 
                 # 2. Wait for Deployed
                 half = TIMEOUT_SEC // 2
@@ -203,6 +233,7 @@ def pre_destroy_cloudfront(
                     raise RuntimeError(f"CloudFront {dist_id} did not reach Deployed within {half}s")
 
                 # 3. Delete
+                logger.info(f"Pre-destroy CloudFront: deleting {dist_id}...")
                 cfg_resp = client.get_distribution_config(Id=dist_id)
                 etag = cfg_resp["ETag"]
                 client.delete_distribution(Id=dist_id, IfMatch=etag)
@@ -214,7 +245,8 @@ def pre_destroy_cloudfront(
                 logger.info(f"Pre-destroy CloudFront: distribution {dist_id} deleted.")
 
         # 5. Delete OAC (sync; distribution is gone or was never found, so OAC can be deleted if orphaned)
-        oac_name = f"{prefix}-{env}-frontend-{suffix}-oac"
+        # OAC is region-scoped (name includes region) to avoid OriginAccessControlInUse when another region uses it
+        oac_name = f"{prefix}-{env}-frontend-{suffix}-{region}-oac"
         oac_id = _find_oac_id_by_name(client, oac_name)
         if oac_id:
             try:
