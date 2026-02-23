@@ -133,7 +133,8 @@ def main():
         sys.exit(1)
     os.environ["CLOUD_REGION"] = region
 
-    logger.step(f"Starting deployment: scope={scope} env={env} region={region}")
+    deploy_start = time.time()
+    logger.operation_start("Deploy", scope, env, region)
     phases = deploy_phases(scope)
     tracker = PhaseTracker("Deploy", phases)
     stats = DeployStats()
@@ -366,19 +367,23 @@ def main():
         stats.print_summary()
         logger.success(f"✓ Deployment sequence complete! Scope: {scope}, Env: {env}")
         _print_success_url(env, region, scope)
+        logger.operation_end("Deploy", scope, env, region, int(time.time() - deploy_start), ok=True)
         sys.exit(0)
 
     except EnvVarNotFound as e:
         logger.error(str(e))
+        logger.operation_end("Deploy", scope, env, region, int(time.time() - deploy_start), ok=False)
         sys.exit(1)
     except subprocess.CalledProcessError as e:
         logger.error(f"Deployment failed at step: {e}")
+        logger.operation_end("Deploy", scope, env, region, int(time.time() - deploy_start), ok=False)
         sys.exit(1)
     except Exception as e:
         logger.error(f"Deployment error: {e}")
         import traceback
 
         traceback.print_exc()
+        logger.operation_end("Deploy", scope, env, region, int(time.time() - deploy_start), ok=False)
         sys.exit(1)
 
 

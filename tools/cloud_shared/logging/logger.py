@@ -47,6 +47,31 @@ def error(msg: str):
 def step(msg: str):
     print(f"\n{_log_prefix('SUCCESS')}{GREEN}==>{NC} {BLUE}{msg}{NC}", flush=True)
 
+
+def phase_start(phase_num: int, total: int, name: str):
+    """Emit phase start marker. Use for deploy/teardown/verify stage boundaries."""
+    print(f"\n{_log_prefix('INFO')}{BLUE}═══ [{phase_num}/{total}] {name} ── START{NC}", flush=True)
+
+
+def phase_end(phase_num: int, total: int, name: str, duration_sec: int):
+    """Emit phase end marker. Use for deploy/teardown/verify stage boundaries."""
+    dur = f"{duration_sec}s" if duration_sec < 60 else f"{duration_sec // 60}m{duration_sec % 60}s"
+    print(f"{_log_prefix('SUCCESS')}{GREEN}═══ [{phase_num}/{total}] {name} ── DONE ({dur}){NC}", flush=True)
+
+
+def operation_start(operation: str, scope: str, env: str, region: str):
+    """Emit operation start marker (deploy/teardown/verify)."""
+    print(f"\n{_log_prefix('SUCCESS')}{GREEN}═══ {operation} START: scope={scope} env={env} region={region} ═══{NC}", flush=True)
+
+
+def operation_end(operation: str, scope: str, env: str, region: str, duration_sec: int, ok: bool = True):
+    """Emit operation end marker (deploy/teardown/verify)."""
+    dur = f"{duration_sec}s" if duration_sec < 60 else f"{duration_sec // 60}m{duration_sec % 60}s"
+    status = "DONE" if ok else "FAILED"
+    prefix = _log_prefix("SUCCESS" if ok else "ERROR")
+    color = GREEN if ok else RED
+    print(f"\n{prefix}{color}═══ {operation} {status}: scope={scope} env={env} region={region} ({dur}) ═══{NC}", flush=True)
+
 class Heartbeat:
     """
     Context manager for background heartbeats.
