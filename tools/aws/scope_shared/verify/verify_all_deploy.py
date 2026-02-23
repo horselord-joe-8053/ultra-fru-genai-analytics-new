@@ -24,6 +24,11 @@ print("verify_all_deploy: imports done, entering main()", flush=True)
 VERIFY_TIMEOUT_SEC = get_int_env("VERIFY_TIMEOUT_SEC", 900)  # CloudFront propagation can take 5-15 min
 VERIFY_HEARTBEAT_INTERVAL_SEC = get_int_env("VERIFY_HEARTBEAT_INTERVAL_SEC", 30)
 
+# Per-request timeout for QueryStream: LLM streaming via Bedrock can take 60–120+ seconds.
+# A short timeout (e.g. 60s) yields a generic "Read timed out" that obscures the real cause.
+# We allow 3 min so the stream can complete; override via VERIFY_QUERY_STREAM_TIMEOUT_PER_REQUEST_SEC.
+QUERY_STREAM_TIMEOUT_PER_REQUEST_SEC = get_int_env("VERIFY_QUERY_STREAM_TIMEOUT_PER_REQUEST_SEC", 180)
+
 # CSV path for total_rec (line count - 1)
 CSV_PATH = os.path.join(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..")), "core_app", "data", "raw", "fridge_sales_with_rating.csv")
 
@@ -132,7 +137,8 @@ def verify_api_endpoints(
         {"path": "/health", "name": "Health", "check": lambda r: r.status_code == 200, "timeout": 10},
         {"path": "/version", "name": "Version", "check": lambda r: r.status_code == 200, "timeout": 10},
         {"path": "/", "name": "Frontend", "check": lambda r: r.status_code == 200 and "<html" in r.text.lower(), "timeout": 10},
-        {"path": "/query/stream?query=total%20number%20of%20record", "name": "QueryStream", "check": check_query_stream, "timeout": 60},
+        # QueryStream: per-request timeout 3 min (LLM streaming via Bedrock is slow)
+        {"path": "/query/stream?query=total%20number%20of%20record", "name": "QueryStream", "check": check_query_stream, "timeout": QUERY_STREAM_TIMEOUT_PER_REQUEST_SEC},
         {"path": "/analytics", "name": "Analytics", "check": check_analytics, "timeout": 10},
     ]
     results = {e["name"]: False for e in endpoints}
@@ -163,7 +169,18 @@ def verify_api_endpoints(
             except requests.exceptions.ConnectionError as ex:
                 last_error[e["name"]] = str(ex)
             except requests.exceptions.Timeout as ex:
-                last_error[e["name"]] = str(ex)
+                # QueryStream: LLM streaming via Bedrock can exceed short timeouts; log clearly.
+                if e["name"] == "QueryStream":
+                    t = e.get("timeout", 60)
+                    msg = (
+                        f"QueryStream per-request timeout ({t}s). "
+                        "LLM streaming via Bedrock often takes 60–120+ seconds. "
+                        "Increase VERIFY_QUERY_STREAM_TIMEOUT_PER_REQUEST_SEC or retry."
+                    )
+                    logger.warning(f"✗ {msg}")
+                    last_error[e["name"]] = msg
+                else:
+                    last_error[e["name"]] = str(ex)
         return all(results.values())
 
     def heartbeat_msg(elapsed: int) -> str:
@@ -274,9 +291,12 @@ def verify_cloudwatch(env, timeout_mins=None) -> tuple[bool, str]:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--env", default=os.getenv("FRU_ENV", "dev"))
+    ap.add_argument("--region", default=None, help="Region (default: CLOUD_REGION)")
     ap.add_argument("--scope", choices=["kube", "nonkube", "all"], default="nonkube")
     args = ap.parse_args()
-    
+    if args.region:
+        os.environ["CLOUD_REGION"] = args.region
+
     logger.info("Verify script started (fetching tofu outputs next, may take 30-60s)...")
     sys.stdout.flush()
     
@@ -284,7 +304,9 @@ def main():
     get_base_vars(env) # ensure env vars are set for subprocesses
     
     total_rec = get_total_rec_from_csv()
-    logger.step(f"Full Verification Interface (env: {env}, total_rec from CSV: {total_rec})")
+    from tools.aws.scope_shared.core.backend import resolve_region
+    region = resolve_region(args.region)
+    logger.step(f"Full Verification Interface (env: {env}, region: {region}, total_rec from CSV: {total_rec})")
     
     # When scope=all, verify nonkube first then kube (matches deploy order)
     scopes_to_verify = ["nonkube", "kube"] if args.scope == "all" else [args.scope]
