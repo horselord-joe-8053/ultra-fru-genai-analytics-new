@@ -11,6 +11,7 @@ Rules:
 - `all` destroys: nonkube -> kube -> shared-nondurable.
 - Before destroying kube: removes CronJob + Job (scheduler + bootstrap).
 - Before destroying nonkube: removes EventBridge rule, scales ECS service to 0, drains tasks; then destroy.
+- Import before destroy: runs import_preexist for each stack so orphaned resources are adopted into state and destroy can remove them (legacy pattern).
 - Retry logic: configurable via config/retry_config.json (retriable/non-retriable patterns).
 
 EventBridge rule: Defined in Terraform (infra_terraform/modules/aws/ecs). We remove via CLI in pre_destroy
@@ -29,12 +30,14 @@ import sys
 
 from tools.cloud_shared.logging import logger
 from tools.cloud_shared.env import load_dotenv, EnvVarNotFound
-from tools.aws.scope_shared.core.backend import resolve_region
+from tools.aws.scope_shared.core.backend import resolve_region, durable_azs_for_region
 from tools.cloud_shared.stats import TeardownStats, scope_for
 from tools.aws.scope_shared.core.phases import PhaseTracker, teardown_phases
 from tools.aws.scope_shared.core.terra_init import init_stack
 from tools.aws.scope_shared.core.terra_var_handling import get_base_vars
 from tools.aws.scope_shared.deploy.bootstrap_helpers import k8s_remove_bootstrap_and_scheduler
+from tools.aws.scope_shared.import_preexist.nonkube import run_import_nonkube
+from tools.aws.scope_shared.import_preexist.kube import run_import_kube
 from tools.aws.scope_shared.teardown.cloudfront_pre_destroy import pre_destroy_cloudfront
 from tools.aws.kube.teardown_orphan_cleanup import remove_orphaned_eks_security_groups
 from tools.cloud_shared.retry import run_with_retry, run_with_heartbeat
@@ -51,6 +54,8 @@ ORDER = {
     "all": ["infra_terraform/live_deploy/aws/nonkube", "infra_terraform/live_deploy/aws/kube", "infra_terraform/live_deploy/aws/scope_shared/nondurable"],
 }
 DURABLE_STACK = "infra_terraform/live_deploy/aws/scope_shared/durable"
+NONKUBE_STACK = "infra_terraform/live_deploy/aws/nonkube"
+KUBE_STACK = "infra_terraform/live_deploy/aws/kube"
 
 # Stacks that have CloudFront frontend (require pre-destroy before tofu destroy)
 STACKS_WITH_CLOUDFRONT = tuple(ORDER["nonkube"] + ORDER["kube"])
@@ -172,6 +177,8 @@ def pre_destroy_nonkube(env: str, region: str | None = None, stats: TeardownStat
     # Stop any remaining tasks (e.g. EventBridge-triggered Spark tasks)
     def _drain_tasks():
         for attempt in range(12):  # Wait up to 2 min
+            if attempt == 0:
+                logger.info(f"Pre-destroy nonkube: polling `aws ecs list-tasks --cluster {cluster} --region {region}` until drained")
             out = subprocess.run(
                 ["aws", "ecs", "list-tasks", "--cluster", cluster, "--region", region, "--output", "json"],
                 capture_output=True,
@@ -189,12 +196,13 @@ def pre_destroy_nonkube(env: str, region: str | None = None, stats: TeardownStat
                 break
             for arn in tasks[:10]:  # Stop in batches
                 task_id = arn.split("/")[-1]
+                logger.info(f"Pre-destroy nonkube: running `aws ecs stop-task --cluster {cluster} --task {task_id}`")
                 subprocess.run(
                     ["aws", "ecs", "stop-task", "--cluster", cluster, "--task", task_id, "--region", region],
                     check=False,
                     capture_output=True,
                 )
-            logger.info(f"Stopping {len(tasks)} task(s)... (attempt {attempt + 1}/12)")
+            logger.info(f"Pre-destroy nonkube: stopping {len(tasks)} task(s)... (attempt {attempt + 1}/12)")
             time.sleep(10)
     _timed("ECS tasks (drain)", cluster, _drain_tasks)
 
@@ -212,6 +220,23 @@ def destroy_stack(stack_dir: str, env: str, region: str | None = None, stats: Te
             cluster_name = os.getenv("EKS_CLUSTER_NAME")
             if cluster_name:
                 extra += ["-var", f"eks_cluster_name={cluster_name}"]
+
+        # Durable stack requires aurora_master_password; without it tofu prompts and blocks.
+        # Use exact match: "durable" in "nondurable" would incorrectly add these vars to nondurable.
+        if stack_dir == DURABLE_STACK:
+            aurora_pw = os.getenv("PGPASSWORD") or "placeholder"
+            destroy_region = region or resolve_region(None)
+            azs = durable_azs_for_region(destroy_region)
+            azs_json = json.dumps(azs)
+            extra += [
+                "-var", f"azs={azs_json}",
+                "-var", 'public_subnet_cidrs=["10.0.1.0/24","10.0.2.0/24"]',
+                "-var", 'private_subnet_cidrs=["10.0.101.0/24","10.0.102.0/24"]',
+                "-var", "allow_destroy_durable=true",
+                "-var", f"aurora_master_password={aurora_pw}",
+            ]
+            if aurora_pw == "placeholder":
+                logger.warning("PGPASSWORD not set; using placeholder for durable destroy (value not used for delete)")
 
         cmd = [os.getenv("FRU_TF_BIN", "tofu"), "destroy", "-lock=false", "-auto-approve"] + base + extra
         description = f"tofu destroy in {stack_dir}"
@@ -284,9 +309,25 @@ def main():
             pre_destroy_nonkube(args.env, region, stats=stats)
         elif s in ORDER["kube"]:
             logger.step(f"[{phase_idx}/{len(phases)}] Pre-destroy (broad kube cleanup), then destroy...")
+            logger.info("Pre-destroy kube: removing CronJob, Job, namespace, orphan SGs...")
             pre_destroy_kube(args.env, region, stats=stats)
         if s in STACKS_WITH_CLOUDFRONT:
+            stack_name = "kube" if "kube" in s else "nonkube"
+            logger.info(f"Pre-destroy CloudFront for {stack_name} (CloudFront API: disable → wait Deployed → delete → wait 404)...")
             pre_destroy_cloudfront(s, args.env, region, stats=stats)
+        # Import before destroy: reconcile state so destroy can remove orphaned resources (legacy pattern)
+        if s == NONKUBE_STACK:
+            logger.info("Reconciling nonkube state (import before destroy)...")
+            init_stack(s, args.env, region)
+            get_base_vars(args.env, region)
+            run_import_nonkube(s, args.env, region, prefix=os.getenv("FRU_PREFIX", "fru"))
+        elif s == KUBE_STACK:
+            logger.info("Reconciling kube state (import before destroy)...")
+            init_stack(s, args.env, region)
+            get_base_vars(args.env, region)
+            prefix = os.getenv("FRU_PREFIX", "fru")
+            eks_cluster_name = os.getenv("EKS_CLUSTER_NAME") or f"{prefix}-{args.env}-eks"
+            run_import_kube(s, args.env, region, prefix=prefix, eks_cluster_name=eks_cluster_name)
         # Tofu destroy uses stack scope (nonkube, kube, shared-nondurable)
         stats.set_scope(scope_for(s))
         logger.step(f"[{phase_idx}/{len(phases)}] Destroying {s}...")

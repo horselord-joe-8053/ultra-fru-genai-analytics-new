@@ -134,7 +134,7 @@ def wait_for_fru_api_ready(
 
 def wait_for_dns_resolvable(
     hostname: str,
-    timeout_seconds: int = 120,
+    timeout_seconds: int = 300,
     check_interval_sec: int = 5,
     heartbeat_interval_sec: int = 30,
 ) -> bool:
@@ -267,10 +267,20 @@ def k8s_remove_bootstrap_and_scheduler(
             fn()
 
     # Try to configure kubectl; if cluster is gone, warn and skip kubectl steps
-    result = subprocess.run(
-        ["python", "tools/aws/kube/eks_kubeconfig.py", "--env", env],
-        capture_output=True, text=True, check=False,
-    )
+    logger.info("Pre-destroy kube: checking EKS cluster status...")
+    try:
+        result = subprocess.run(
+            ["python", "tools/aws/kube/eks_kubeconfig.py", "--env", env],
+            capture_output=True, text=True, check=False, timeout=30,
+        )
+    except subprocess.TimeoutExpired:
+        cluster_name = os.getenv("EKS_CLUSTER_NAME") or f"{os.getenv('FRU_PREFIX', 'fru')}-{env}-eks"
+        logger.warning(
+            f"Pre-destroy kube: eks_kubeconfig timed out (cluster {cluster_name} unreachable?). "
+            "Skipping kubectl cleanup."
+        )
+        return
+
     if result.returncode != 0:
         err = (result.stderr or "") + (result.stdout or "")
         if "ResourceNotFoundException" in err or "No cluster found" in err.lower():
@@ -281,58 +291,59 @@ def k8s_remove_bootstrap_and_scheduler(
             )
             return
 
+    logger.info("Pre-destroy kube: cluster reachable, removing CronJob, Job, namespace...")
     _quiet = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
+    _kubectl_timeout = 60
+
+    def _run_kubectl(cmd: list[str]):
+        logger.info(f"Pre-destroy kube: running `{' '.join(cmd)}`")
+        try:
+            subprocess.run(cmd, check=False, timeout=_kubectl_timeout, **_quiet)
+        except subprocess.TimeoutExpired:
+            logger.warning(f"Pre-destroy kube: `{' '.join(cmd)}` timed out after {_kubectl_timeout}s")
 
     # 1. Scale deployment to 0 (faster pod termination)
     def _scale():
-        subprocess.run(
-            ["kubectl", "scale", "deployment", "fru-api", "--replicas=0", "-n", K8S_NAMESPACE],
-            check=False, **_quiet
-        )
+        _run_kubectl(["kubectl", "scale", "deployment", "fru-api", "--replicas=0", "-n", K8S_NAMESPACE])
     _timed("Deployment (scale to 0)", f"fru-api (ns={K8S_NAMESPACE})", _scale)
 
     # 2. Delete LoadBalancer service first (releases NLB/ENIs; avoids DependencyViolation)
     def _del_svc():
-        subprocess.run(
-            ["kubectl", "delete", "svc", "fru-api-svc", "--ignore-not-found", "-n", K8S_NAMESPACE],
-            check=False, **_quiet
-        )
+        _run_kubectl(["kubectl", "delete", "svc", "fru-api-svc", "--ignore-not-found", "-n", K8S_NAMESPACE])
     _timed("LoadBalancer service", f"fru-api-svc (ns={K8S_NAMESPACE})", _del_svc)
 
     # 3. Delete CronJob and Job
     def _del_cronjob():
-        subprocess.run(
-            ["kubectl", "delete", "cronjob", CRONJOB_PERIODIC, "--ignore-not-found", "-n", K8S_NAMESPACE],
-            check=False, **_quiet
-        )
+        _run_kubectl(["kubectl", "delete", "cronjob", CRONJOB_PERIODIC, "--ignore-not-found", "-n", K8S_NAMESPACE])
     _timed("CronJob", CRONJOB_PERIODIC, _del_cronjob)
 
     def _del_job():
-        subprocess.run(
-            ["kubectl", "delete", "job", JOB_BOOTSTRAP, "--ignore-not-found", "-n", K8S_NAMESPACE],
-            check=False, **_quiet
-        )
+        _run_kubectl(["kubectl", "delete", "job", JOB_BOOTSTRAP, "--ignore-not-found", "-n", K8S_NAMESPACE])
     _timed("Job", JOB_BOOTSTRAP, _del_job)
 
     # 4. Delete namespace (cascades to any remaining resources)
     def _del_ns():
-        subprocess.run(
-            ["kubectl", "delete", "namespace", K8S_NAMESPACE, "--ignore-not-found"],
-            check=False, **_quiet
-        )
+        _run_kubectl(["kubectl", "delete", "namespace", K8S_NAMESPACE, "--ignore-not-found"])
     _timed("Namespace (delete)", K8S_NAMESPACE, _del_ns)
 
     # 5. Wait for namespace to fully terminate (LoadBalancer release can take 1–2 min)
     def _wait_ns():
+        cmd = f"kubectl get namespace {K8S_NAMESPACE}"
+        logger.info(
+            f"Pre-destroy kube: polling `{cmd}` until Terminating completes "
+            "(AWS releasing NLB/ENIs, up to 2 min)..."
+        )
         for attempt in range(24):  # Up to 2 min
             out = subprocess.run(
                 ["kubectl", "get", "namespace", K8S_NAMESPACE],
-                capture_output=True, text=True, check=False,
+                capture_output=True, text=True, check=False, timeout=30,
             )
             if out.returncode != 0 or "NotFound" in (out.stderr or ""):
                 break
             if attempt > 0 and attempt % 4 == 0:
-                logger.info(f"Waiting for namespace {K8S_NAMESPACE} to terminate... ({attempt * 5}s)")
+                logger.info(
+                    f"Pre-destroy kube: still waiting on `{cmd}` (namespace Terminating) ... ({attempt * 5}s)"
+                )
             time.sleep(5)
     _timed("Namespace (wait terminate)", K8S_NAMESPACE, _wait_ns)
 

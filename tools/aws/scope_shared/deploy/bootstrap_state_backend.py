@@ -48,17 +48,17 @@ def create_ddb(table):
     sh(["aws","dynamodb","wait","table-exists","--table-name",table])
 
 def main():
-    bucket = require("TF_STATE_BUCKET")
-    from tools.aws.scope_shared.core.backend import resolve_region
+    from tools.aws.scope_shared.core.backend import resolve_region, resolve_state_bucket, resolve_state_lock_table
     region = resolve_region(None)
+    bucket = resolve_state_bucket(region)
 
     if not exists_s3(bucket):
-        print("Creating state bucket:", bucket)
+        print("Creating state bucket:", bucket, "in", region)
         create_s3(bucket, region)
     else:
         print("State bucket exists:", bucket)
 
-    table = (os.getenv("TF_STATE_LOCK_TABLE") or os.getenv("TF_LOCK_TABLE") or "").strip()
+    table = resolve_state_lock_table(region)
     if table:
         if not exists_ddb(table):
             print("Creating lock table:", table)

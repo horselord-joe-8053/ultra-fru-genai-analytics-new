@@ -14,6 +14,7 @@ variable "eks_desired_nodes" {
 }
 
 variable "tf_state_bucket" { type = string }
+variable "tf_state_bucket_region" { type = string }
 variable "tf_lock_table" { type = string }
 variable "tf_state_prefix" { type = string }
 

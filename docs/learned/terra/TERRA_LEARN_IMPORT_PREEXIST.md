@@ -2,21 +2,17 @@
 
 ## Why we need these scripts
 
-### What happens when you run "Remove All" and then deploy
+### What happens when state and reality are out of sync
 
-We have a **brutal-removal** flow (`orchestration/aws/cli/resource-removal/remove-all-aws-resources.sh`) that deletes AWS resources by calling the AWS API directly. It does **not** use Terraform/Terragrunt, so Terraform state is never updated. The script removes things like:
+When AWS resources exist but are **not** in Terraform state (e.g. after brutal removal, partial teardown, or state loss), Terraform tries to **create** them on apply. AWS responds that they already exist, and apply fails.
 
-- CloudFront distributions, EKS clusters, ECS clusters, load balancers, NAT gateways, ENIs, subnets, security groups, VPCs, ECR repos, S3 buckets (except the state bucket), etc.
-
-It **does not** delete (by design or AWS behavior):
+**Brutal-removal** (legacy: `orchestration/aws/cli/resource-removal/remove-all-aws-resources.sh`) deletes via AWS API directly, so Terraform state is never updated. It **does not** delete (by design or AWS behavior):
 
 - **IAM roles** (global; often left behind)
 - **Secrets Manager** secrets (preserved on purpose)
 - **KMS** keys and aliases (sometimes left behind)
 - **CloudWatch** log groups
-- **CloudFront Origin Access Control (OAC)** (distributions may be deleted; OAC can remain)
-
-So after a "Remove All" run, some resources still exist in AWS, but Terraform state either (a) still thinks they were destroyed, or (b) was never told they exist. When you then run the normal deploy (`run.sh` → `orchestration/terraform/deploy.sh` → `terragrunt apply`), Terraform tries to **create** those resources again. AWS responds that they already exist, and the apply fails.
+- **CloudFront Origin Access Control (OAC)** (distributions may be deleted; OAC can remain). OAC is now **region-scoped** (`{prefix}-{env}-frontend-{suffix}-{region}-oac`) so each region has its own OAC; avoids `OriginAccessControlInUse` on teardown when another region's distribution still references it.
 
 ### Exceptions you see
 
@@ -100,6 +96,51 @@ All five layers have a dedicated import script. `orchestration/terraform/deploy.
   `./orchestration/terraform/deploy.sh dev eks` or `dev ecs` or `dev all`.
 
 Run scripts from repo root or with correct `REPO_ROOT`.
+
+## New project (fru-genai-analytics-new)
+
+Import is implemented in Python under `tools/aws/scope_shared/import_preexist/`:
+
+- **`_common.py`** — Shared logic: `import_one_resource`, `import_batch`, skip patterns
+- **`nonkube.py`** — Nonkube: IAM roles, S3 frontend bucket, CloudFront OAC, ECS-layer (CloudWatch log groups, ALB, target group, security groups, security group rules: tasks_from_alb, aurora_from_ecs)
+- **`kube.py`** — Kube: EKS IAM roles, S3 frontend bucket, CloudFront OAC
+- **`run_import.py`** — Standalone entry point
+
+**Deploy:** Runs import before each stack's apply (nonkube: `deploy_nonkube.py`, kube: `deploy_kube.py`).
+
+**Teardown:** Runs import before each stack's destroy (nonkube, kube) so orphaned resources are adopted into state and destroy can remove them. See `tools/aws/teardown.py`.
+
+**Standalone:**
+```bash
+PYTHONPATH=. python tools/aws/scope_shared/import_preexist/run_import.py --scope nonkube --env dev
+PYTHONPATH=. python tools/aws/scope_shared/import_preexist/run_import.py --scope all --env dev --region us-east-1
+```
+
+## Ideal vs. current approach (solution selection)
+
+### The "ideal" approach (import only IAM roles)
+
+A more principled strategy is to **import only IAM roles** (which are global and often left behind by brutal removal) and treat other "already exists" errors as **surprises**. When apply fails with `ResourceAlreadyExistsException` for something other than IAM:
+
+1. **Destroy** the orphaned resource in AWS (or via Terraform if state is partially correct).
+2. **Recreate** it via Terraform apply.
+
+This keeps imports minimal and makes unexpected leftovers visible instead of silently adopting them.
+
+### Why we use broader pre-deploy import (current choice)
+
+For **convenience and simplicity**, we use a **broader pre-deploy import** that brings into state all resources that commonly cause `ResourceAlreadyExistsException` after brutal removal or partial teardown:
+
+- IAM roles
+- CloudWatch log groups
+- ALB, target group, security groups
+- S3 bucket, CloudFront OAC
+
+**Benefits:** One deploy command works without manual intervention; no need to destroy/recreate when state and reality drift.
+
+**Risks:** We may adopt resources that were created outside Terraform or by a different config. If config has changed, imported resources might not match desired state; plan will show drift. For production, prefer Terraform-based teardown so state stays in sync and these imports are rarely needed.
+
+See `tools/aws/scope_shared/import_preexist/` for the implementation.
 
 ## See also
 

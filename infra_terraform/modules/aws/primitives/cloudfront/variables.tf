@@ -13,6 +13,11 @@ variable "suffix" {
   description = "Stack suffix (e.g. nonkube, kube) - distinguishes frontends"
 }
 
+variable "aws_region" {
+  type        = string
+  description = "AWS region (from --cloud-region); bucket is created in this region"
+}
+
 variable "alb_dns_name" {
   type        = string
   description = "ALB or NLB DNS name for API origin - optional, for /query, /analytics paths"

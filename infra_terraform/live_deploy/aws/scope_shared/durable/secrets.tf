@@ -7,25 +7,22 @@
 # - db_password_plain (plain string): for ECS task definitions (ECS doesn't support JSON key extraction)
 
 resource "aws_secretsmanager_secret" "openai_api_key" {
-  name                    = "${var.prefix}/${var.env}/openai_api_key"
+  name                    = "${var.prefix}/${var.env}/openai_api_key-${var.aws_region}"
   recovery_window_in_days = 30
   tags                    = module.tags.common_tags
-  lifecycle { prevent_destroy = true }
 }
 
 resource "aws_secretsmanager_secret" "db_password" {
-  name                    = "${var.prefix}/${var.env}/db_password"
+  name                    = "${var.prefix}/${var.env}/db_password-${var.aws_region}"
   recovery_window_in_days = 30
   tags                    = module.tags.common_tags
-  lifecycle { prevent_destroy = true }
 }
 
 # Plain string for ECS (legacy: aurora-db-password-plain)
 resource "aws_secretsmanager_secret" "db_password_plain" {
-  name                    = "${var.prefix}/${var.env}/db_password_plain"
+  name                    = "${var.prefix}/${var.env}/db_password_plain-${var.aws_region}"
   recovery_window_in_days = 30
   tags                    = module.tags.common_tags
-  lifecycle { prevent_destroy = true }
 }
 
 output "openai_api_key_secret_arn"   { value = aws_secretsmanager_secret.openai_api_key.arn }

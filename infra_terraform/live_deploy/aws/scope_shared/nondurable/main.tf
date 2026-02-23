@@ -41,5 +41,6 @@ module "ecr_spark" {
 }
 
 output "delta_bucket" { value = module.delta_bucket.bucket_name }
+output "artifacts_bucket" { value = module.artifacts_bucket.bucket_name }
 output "ecr_app_url" { value = module.ecr_app.repository_url }
 output "ecr_spark_url" { value = module.ecr_spark.repository_url }

@@ -80,11 +80,11 @@ class Heartbeat:
             
             counter += 1
             elapsed = int(time.time() - start_time)
-            if elapsed > self.timeout:
+            if self.timeout > 0 and elapsed > self.timeout:
                 error(f"Heartbeat timeout: '{self.message}' exceeded {self.timeout}s")
                 # We don't raise here as it's in a thread, but the user will see it
                 break
-            
+
             info(f"[HEARTBEAT] {self.message} ... ({elapsed}s elapsed)")
 
     def __enter__(self):

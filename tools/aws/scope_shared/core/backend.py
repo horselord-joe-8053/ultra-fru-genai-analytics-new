@@ -1,6 +1,10 @@
 
+import json
 import os
+import subprocess
 from tools.cloud_shared.env import require, EnvVarNotFound
+
+_bucket_region_cache: dict[str, str] = {}
 
 def stack_id_from_dir(stack_dir: str, cloud: str = "aws") -> str:
     """Extract logical stack name from path. Cloud comes from caller (tools/aws vs tools/gcp), not from path.
@@ -35,9 +39,85 @@ def resolve_region(cli_region: str | None = None) -> str:
         )
     return region
 
+def _region_env_suffix(region: str) -> str:
+    """Convert region to env var suffix: us-east-1 -> us_east_1"""
+    return region.replace("-", "_") if region else ""
+
+
+def durable_azs_for_region(region: str) -> list[str]:
+    """Return first two AZs for a region (e.g. us-east-2 -> [us-east-2a, us-east-2b])."""
+    if not region:
+        return ["us-east-1a", "us-east-1b"]
+    return [f"{region}a", f"{region}b"]
+
+
+def resolve_state_bucket(region: str | None = None) -> str:
+    """
+    Resolve S3 state bucket for the given region.
+    TF_STATE_BUCKET_{region} (e.g. TF_STATE_BUCKET_us_east_2) overrides TF_STATE_BUCKET.
+    """
+    r = region or resolve_region(None)
+    suffix = _region_env_suffix(r)
+    key = f"TF_STATE_BUCKET_{suffix}" if suffix else "TF_STATE_BUCKET"
+    bucket = os.getenv(key, "").strip() or os.getenv("TF_STATE_BUCKET", "").strip()
+    if not bucket:
+        raise EnvVarNotFound(
+            "TF_STATE_BUCKET",
+            hint=f"Set TF_STATE_BUCKET or TF_STATE_BUCKET_{suffix} in .env",
+        )
+    return bucket
+
+
+def resolve_bucket_region(bucket: str) -> str:
+    """
+    Resolve the AWS region where the S3 bucket lives (dynamic, via API).
+    us-east-1 returns empty from get-bucket-location; we treat that as us-east-1.
+    """
+    if bucket in _bucket_region_cache:
+        return _bucket_region_cache[bucket]
+    try:
+        out = subprocess.run(
+            ["aws", "s3api", "get-bucket-location", "--bucket", bucket],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if out.returncode != 0:
+            raise RuntimeError(f"get-bucket-location failed: {out.stderr}")
+        data = json.loads(out.stdout) if out.stdout else {}
+        data = data or {}
+        loc = (data.get("LocationConstraint") or "").strip()
+        # null/empty = us-east-1; "EU" = legacy for eu-west-1
+        region = loc or "us-east-1"
+        if region == "EU":
+            region = "eu-west-1"
+        _bucket_region_cache[bucket] = region
+        return region
+    except Exception as e:
+        raise RuntimeError(f"Could not resolve bucket region for {bucket}: {e}") from e
+
+
+def resolve_state_lock_table(region: str | None = None) -> str:
+    """
+    Resolve DynamoDB lock table for the given region.
+    TF_STATE_LOCK_TABLE_{region} / TF_LOCK_TABLE_{region} override the default.
+    """
+    r = region or resolve_region(None)
+    suffix = _region_env_suffix(r)
+    for base in ("TF_STATE_LOCK_TABLE", "TF_LOCK_TABLE"):
+        key = f"{base}_{suffix}" if suffix else base
+        val = os.getenv(key, "").strip()
+        if val:
+            return val
+    return (os.getenv("TF_STATE_LOCK_TABLE") or os.getenv("TF_LOCK_TABLE") or "").strip()
+
+
 def backend_config(stack_dir: str, env: str, region: str | None = None, cloud: str = "aws") -> list[str]:
-    bucket = require("TF_STATE_BUCKET")
-    backend_region = region or resolve_region(None)
+    deploy_region = region or resolve_region(None)
+    bucket = resolve_state_bucket(deploy_region)
+    # Backend region: resolve dynamically from bucket location (avoids 301 when bucket in different region).
+    # TF_STATE_BUCKET_REGION overrides when set (e.g. offline, or to skip API call).
+    backend_region = os.getenv("TF_STATE_BUCKET_REGION", "").strip() or resolve_bucket_region(bucket)
     prefix = os.getenv("TF_STATE_PREFIX", require("FRU_PREFIX"))
     stack_id = stack_id_from_dir(stack_dir, cloud)
     if region:
@@ -51,7 +131,7 @@ def backend_config(stack_dir: str, env: str, region: str | None = None, cloud: s
         "encrypt=true",
         "use_lockfile=true",
     ]
-    table = os.getenv("TF_STATE_LOCK_TABLE") or os.getenv("TF_LOCK_TABLE") or ""
-    if table.strip():
-        cfg.append(f"dynamodb_table={table.strip()}")
+    table = resolve_state_lock_table(deploy_region)
+    if table:
+        cfg.append(f"dynamodb_table={table}")
     return cfg

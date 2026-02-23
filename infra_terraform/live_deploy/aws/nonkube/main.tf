@@ -12,7 +12,7 @@ data "terraform_remote_state" "shared_durable" {
   config = {
     bucket       = var.tf_state_bucket
     key          = "${var.tf_state_prefix}/${var.env}/${var.aws_region}/aws-shared-durable.tfstate"
-    region       = var.aws_region
+    region       = var.tf_state_bucket_region
     encrypt      = true
     use_lockfile = true
   }
@@ -23,7 +23,7 @@ data "terraform_remote_state" "shared_nondurable" {
   config = {
     bucket       = var.tf_state_bucket
     key          = "${var.tf_state_prefix}/${var.env}/${var.aws_region}/aws-shared-nondurable.tfstate"
-    region       = var.aws_region
+    region       = var.tf_state_bucket_region
     encrypt      = true
     use_lockfile = true
   }
@@ -102,6 +102,8 @@ module "frontend" {
   prefix = var.prefix
   env    = var.env
   suffix = "nonkube"
+
+  aws_region = var.aws_region
 
   alb_dns_name           = module.ecs.alb_dns_name
   api_origin_id          = "ALB-${var.prefix}-${var.env}-nonkube"

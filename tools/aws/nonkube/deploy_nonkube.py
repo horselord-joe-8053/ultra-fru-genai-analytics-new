@@ -6,9 +6,13 @@ Called by deploy.py when scope is nonkube or all (nonkube first when scope=all).
 import os
 
 from tools.cloud_shared.logging import logger
+from tools.aws.scope_shared.core.terra_init import init_stack
+from tools.aws.scope_shared.core.terra_var_handling import get_base_vars
+from tools.aws.scope_shared.import_preexist.nonkube import run_import_nonkube
 from tools.cloud_shared.stats import DeployStats, scope_for
 from tools.aws.scope_shared.deploy.deploy_common import (
     apply_stack_nonkube_with_ecs_import_retry,
+    plan_shows_no_changes,
     tofu_output_json,
     upload_csv_to_delta_bucket,
     clear_delta_table,
@@ -45,8 +49,46 @@ def run_deploy_nonkube(
         else:
             fn()
 
-    # Phase 9: Apply ECS stack
+    # Phase 8.5: Import pre-existing resources (state/reality reconciliation)
+    # DEPLOYMENT_OPTIMIZATION §2.3: Skip import when plan shows no changes (state clean).
+    nonkube_stack = "infra_terraform/live_deploy/aws/nonkube"
+    plan_vars = [
+        "-var", f"app_image={app_image_full}",
+        "-var", f"spark_image={spark_image_full}",
+    ]
+    img_tags = os.getenv("CONTAINER_IMAGE_TAGS", "")
+    if img_tags:
+        plan_vars += ["-var", f"app_image_tags={img_tags}"]
+
+    plan_clean = False  # set after init
+
+    def _import_preexist():
+        nonlocal plan_clean
+        init_stack(nonkube_stack, env, region)
+        get_base_vars(env, region)
+        plan_clean = plan_shows_no_changes(nonkube_stack, env, region, plan_vars)
+        if plan_clean:
+            logger.info("[Import] Skipping nonkube: plan shows no changes (state clean)")
+            return
+        logger.info("[Import] Reconciling state with AWS (broader import for deploy convenience)")
+        failed = run_import_nonkube(
+            nonkube_stack,
+            env,
+            region,
+            prefix=os.getenv("FRU_PREFIX", "fru"),
+        )
+        if failed > 0:
+            raise SystemExit(
+                f"Import failed for {failed} resource(s). Fix state (run import manually) and retry. "
+                "See tools/aws/scope_shared/import_preexist/run_import.py --scope nonkube"
+            )
+    _timed("Import pre-existing", "nonkube", _import_preexist)
+
+    # Phase 9: Apply ECS stack (skip when plan showed no changes — §2.3)
     def _apply_ecs():
+        if plan_clean:
+            logger.info("[Nonkube] Skipping tofu apply: plan showed no changes (state clean)")
+            return
         extra = [
             "-var", f"app_image={app_image_full}",
             "-var", f"spark_image={spark_image_full}",
@@ -55,7 +97,7 @@ def run_deploy_nonkube(
         if img_tags:
             extra += ["-var", f"app_image_tags={img_tags}"]
         apply_stack_nonkube_with_ecs_import_retry(
-            "infra_terraform/live_deploy/aws/nonkube",
+            nonkube_stack,
             env,
             extra,
             region,

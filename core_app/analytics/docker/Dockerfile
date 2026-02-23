@@ -1,5 +1,8 @@
 
 FROM apache/spark:3.5.1
+# Content-based build skip: hash of build context, passed as --build-arg by build_and_push_images.py.
+ARG BUILD_CONTEXT_HASH
+LABEL build_context_hash=${BUILD_CONTEXT_HASH}
 USER root
 RUN pip install --no-cache-dir psycopg2-binary
 # Add delta libraries via spark packages at runtime; keep image minimal here.

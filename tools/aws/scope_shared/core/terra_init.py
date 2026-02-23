@@ -15,6 +15,10 @@ from tools.cloud_shared.retry import run_with_retry
 def init_stack(stack_dir: str, env: str, region: str | None = None) -> None:
     """Init stack with backend config. Idempotent; safe to call before destroy or output."""
     cfg = backend_config(stack_dir, env, region)
+    # Log deploy region; backend-config region= is S3 bucket location (may differ from deploy region)
+    deploy_region = region or os.getenv("CLOUD_REGION", "")
+    if deploy_region:
+        logger.info(f"Init {stack_dir} (deploy region: {deploy_region})")
     args = ["init", "-lock=false", "-upgrade", "-reconfigure"]
     for c in cfg:
         args += ["-backend-config", c]
