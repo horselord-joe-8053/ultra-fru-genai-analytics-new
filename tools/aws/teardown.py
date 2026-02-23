@@ -27,6 +27,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 
 from tools.cloud_shared.logging import logger
 from tools.cloud_shared.env import load_dotenv, EnvVarNotFound
@@ -297,7 +298,8 @@ def main():
     stats = TeardownStats()
     phase_idx = 0
 
-    logger.step(f"Starting teardown: scope={args.scope} env={args.env} region={region}")
+    teardown_start = time.time()
+    logger.operation_start("Teardown", args.scope, args.env, region)
 
     for s in stacks_to_destroy:
         phase_idx += 1
@@ -335,6 +337,7 @@ def main():
         tracker.end_phase(phase_idx)
 
     stats.print_summary()
+    logger.operation_end("Teardown", args.scope, args.env, region, int(time.time() - teardown_start), ok=True)
     logger.success("Done." + (" (Shared durable remains.)" if not (args.incl_dura and args.scope == "all") else ""))
 
 

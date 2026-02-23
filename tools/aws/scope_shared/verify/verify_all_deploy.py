@@ -298,23 +298,28 @@ def main():
     if args.region:
         os.environ["CLOUD_REGION"] = args.region
 
-    logger.info("Verify script started (fetching tofu outputs next, may take 30-60s)...")
-    sys.stdout.flush()
-    
     env = args.env
     get_base_vars(env) # ensure env vars are set for subprocesses
     
     total_rec = get_total_rec_from_csv()
     from tools.aws.scope_shared.core.backend import resolve_region
     region = resolve_region(args.region)
+    
+    verify_start = time.time()
+    logger.operation_start("Verify", args.scope, args.env, region)
     logger.step(f"Full Verification Interface (env: {env}, region: {region}, total_rec from CSV: {total_rec})")
     
     # When scope=all, verify nonkube first then kube (matches deploy order)
     scopes_to_verify = ["nonkube", "kube"] if args.scope == "all" else [args.scope]
+    verify_phases = [f"Endpoints ({s})" for s in scopes_to_verify] + ["CloudWatch logs"]
+    total_phases = len(verify_phases)
     all_rows: list[VerifyRow] = []
+    phase_idx = 0
     
-    # 1. Endpoint Check
     for scope in scopes_to_verify:
+        phase_idx += 1
+        phase_start_time = time.time()
+        logger.phase_start(phase_idx, total_phases, verify_phases[phase_idx - 1])
         if scope == "nonkube":
             logger.info("Fetching nonkube tofu outputs (tofu init + output, ~30-60s)...")
             sys.stdout.flush()
@@ -328,9 +333,11 @@ def main():
                 if not ok:
                     logger.error("[VERIFICATION FAILED] API endpoints are not responding correctly (nonkube)")
                     print_verify_summary(all_rows, env, total_rec)
+                    logger.operation_end("Verify", args.scope, args.env, region, int(time.time() - verify_start), ok=False)
                     sys.exit(1)
             else:
                 logger.error("Could not find CloudFront domain or ALB DNS in terraform outputs (nonkube).")
+                logger.operation_end("Verify", args.scope, args.env, region, int(time.time() - verify_start), ok=False)
                 sys.exit(1)
         elif scope == "kube":
             logger.info("Fetching kube tofu outputs (tofu init + output, ~30-60s)...")
@@ -344,6 +351,7 @@ def main():
                 if not ok:
                     logger.error("[VERIFICATION FAILED] API endpoints are not responding correctly (kube)")
                     print_verify_summary(all_rows, env, total_rec)
+                    logger.operation_end("Verify", args.scope, args.env, region, int(time.time() - verify_start), ok=False)
                     sys.exit(1)
             else:
                 # Fallback: wait for K8s LoadBalancer hostname
@@ -368,18 +376,28 @@ def main():
                         sys.exit(1)
                 else:
                     logger.warning("EKS LoadBalancer hostname not available after timeout. Skipping endpoint check (kube).")
+        phase_secs = int(time.time() - phase_start_time)
+        logger.phase_end(phase_idx, total_phases, verify_phases[phase_idx - 1], phase_secs)
 
-    # 2. CloudWatch Check
+    # CloudWatch Check
+    phase_idx += 1
+    phase_start_time = time.time()
+    logger.phase_start(phase_idx, total_phases, verify_phases[phase_idx - 1])
     cw_ok, cw_note = verify_cloudwatch(env)
+    phase_secs = int(time.time() - phase_start_time)
+    logger.phase_end(phase_idx, total_phases, verify_phases[phase_idx - 1], phase_secs)
     all_rows.append(VerifyRow(scope="shared", endpoint="CloudWatch", ok=cw_ok, notes=cw_note))
     
     # 3. Print summary table (no logger prefix)
     print_verify_summary(all_rows, env, total_rec)
     
+    verify_dur = int(time.time() - verify_start)
     if cw_ok:
+        logger.operation_end("Verify", args.scope, args.env, region, verify_dur, ok=True)
         logger.success("FULL VERIFICATION: SUCCESS")
         sys.exit(0)
     else:
+        logger.operation_end("Verify", args.scope, args.env, region, verify_dur, ok=False)
         logger.error("FULL VERIFICATION: FAILED - CloudWatch logs did not show success pattern")
         sys.exit(1)
 

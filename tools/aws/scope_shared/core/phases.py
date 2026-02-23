@@ -8,13 +8,6 @@ from typing import Sequence
 from tools.cloud_shared.logging import logger
 
 
-def _format_duration(seconds: int) -> str:
-    m, s = divmod(seconds, 60)
-    if m > 0:
-        return f"{m}m{s}s"
-    return f"{s}s"
-
-
 class PhaseTracker:
     """
     Tracks phases for Deploy or Teardown with flexible numbering and timing.
@@ -35,20 +28,15 @@ class PhaseTracker:
 
     def start_phase(self, idx: int) -> None:
         self._phase_start = time.time()
+        phase_name = self.phases[idx - 1] if 1 <= idx <= len(self.phases) else f"Phase {idx}"
+        logger.phase_start(idx, self.total, phase_name)
 
     def end_phase(self, idx: int) -> None:
         if self._phase_start is None:
             return
         phase_secs = int(time.time() - self._phase_start)
-        total_secs = int(time.time() - self.start_time)
         phase_name = self.phases[idx - 1] if 1 <= idx <= len(self.phases) else f"Phase {idx}"
-        phase_dur = _format_duration(phase_secs)
-        total_dur = _format_duration(total_secs)
-        msg = (
-            f"--- Phase {idx} of {self.total} of {self.operation} completed: {phase_name}; "
-            f"Phase: {phase_dur}, Total: {total_dur} ---"
-        )
-        logger.info(msg)
+        logger.phase_end(idx, self.total, phase_name, phase_secs)
 
 
 def deploy_phases(scope: str) -> list[str]:
