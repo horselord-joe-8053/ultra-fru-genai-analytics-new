@@ -1,6 +1,6 @@
 # Terra + Terragrunt: Total Map and Pipeline (Crash Course)
 
-This doc is the **structural map** of how we use Terraform and Terragrunt in this project: where files live, what gets generated, and how that drives the cloud. For **layers**, **deploy order**, **Option B**, and **teardown**, see [TERRA_LEARNED.md](TERRA_LEARNED.md).
+This doc is the **structural map** of how we use Terraform and Terragrunt in this project: where files live, what gets generated, and how that drives the cloud. For **layers**, **deploy order**, **Option B**, and **teardown**, see [TERRA_LEARNED.md](TERRA_LEARNED.md). For **stack ownership** and **shared resources** (durable vs kube, tag drift, `aws_ec2_tag`), see [TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md](TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md).
 
 **Goals:** (1) One place for the full pipeline from repo layout → cache → Terraform → AWS. (2) Terraform-only vs Terragrunt usage. (3) The role of `//`, leaf vs root modules, and generated artifacts. Examples are from this repo.
 
@@ -26,7 +26,7 @@ The **new** project uses OpenTofu (Terraform-compatible) without Terragrunt. It 
 - `infra_terraform/live_deploy/aws/scope_shared/durable` — modules: tags, vpc; outputs only
 - `infra_terraform/live_deploy/aws/scope_shared/nondurable` — modules: tags, s3_bucket, ecr; outputs only
 - `infra_terraform/live_deploy/aws/nonkube` — modules: tags, ecs, cloudfront; remote state data; outputs
-- `infra_terraform/live_deploy/aws/kube` — modules: tags, eks, cloudfront; remote state data; outputs
+- `infra_terraform/live_deploy/aws/kube` — modules: tags, eks, cloudfront; remote state data; `aws_ec2_tag` (subnet tags); outputs
 - `infra_terraform/live_deploy/gcp/scope_shared/durable` — module: vpc; outputs
 - `infra_terraform/live_deploy/gcp/scope_shared/nondurable` — module: gcs_bucket; outputs
 - `infra_terraform/live_deploy/gcp/kube` — module: gke; outputs

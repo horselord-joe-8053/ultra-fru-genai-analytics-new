@@ -3197,6 +3197,8 @@ Add `lifecycle { ignore_changes = [tags] }` to all subnet resources in `infra_te
 
 When two stacks manage the same resource (durable owns subnets; kube adds tags), use `lifecycle { ignore_changes = [tags] }` on the owning resource so the other stack's `aws_ec2_tag` additions are not reverted. See `docs/DEPLOYMENT_OPTIMIZATION_REFACTOR_PLANS.md` §2.1.
 
+**Deep dive:** [docs/learned/terra/TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md](docs/learned/terra/TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md) — stack ownership model, `aws_ec2_tag`, and lifecycle patterns.
+
 ---
 
 ## 59. Kube Apply Ran Twice: Single Apply When NLB Hostname Known

@@ -259,6 +259,20 @@ flowchart LR
 
 ---
 
+## Part 4: Multi-Stack Tag Management (Durable vs Kube)
+
+### 4.1 Two Stacks, One Resource
+
+**Durable** owns VPC and subnets. **Kube** needs public subnets tagged with `kubernetes.io/role/elb=1` and `kubernetes.io/cluster/<name>=shared` so the AWS Load Balancer Controller places internet-facing NLBs there. Kube adds these tags via `aws_ec2_tag`—a separate resource that tags an existing resource by ID. Kube does **not** own the subnets; it only manages the tags.
+
+### 4.2 Tag Drift and lifecycle ignore_changes
+
+Without coordination, Durable's apply would **remove** kube's tags (Terraform sees "extra" tags in AWS and plans to match desired state). Kube's apply would then **re-add** them. Fix: add `lifecycle { ignore_changes = [tags] }` to subnet resources in the VPC module ([War Story 58](../../README_WAR_STORIES.md#58-vpc-subnet-tag-drift-durable-vs-kube-and-lifecycle-ignore_changes)).
+
+**Deep dive:** [TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md](terra/TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md).
+
+---
+
 ## Quick Reference
 
 | Topic | Idea |
@@ -268,7 +282,8 @@ flowchart LR
 | **State** | Terraform's list of what it manages; stored remotely (e.g. S3); must stay in sync with AWS. |
 | **Lock** | Prevents two applies/destroys from writing state at once; stale lock → "Error acquiring the state lock" → `force-unlock <ID>` ([War Story 17](../../README_WAR_STORIES.md#17-preempt-teardown-state-lock-failure-and-teardown-reporting-success-on-failure)). |
 | **Mismatch** | State says "VPC B"; live DB subnet group is in VPC A → apply fails. Fix: align state and reality (full teardown or import) ([War Story 16](../../README_WAR_STORIES.md#16-phase-2-infrastructure-rds-subnet-group-vpc-mismatch)). |
+| **Multi-stack tags** | Durable owns subnets; kube adds `kubernetes.io/*` tags via `aws_ec2_tag`. Use `lifecycle { ignore_changes = [tags] }` on subnets to avoid drift ([War Story 58](../../README_WAR_STORIES.md#58-vpc-subnet-tag-drift-durable-vs-kube-and-lifecycle-ignore_changes)). |
 
 ---
 
-*This doc: `docs/learned/VPC_LEARNED.md`. Layers: [TERRA_LEARNED.md](terra/TERRA_LEARNED.md). War stories: [README_WAR_STORIES.md](../../README_WAR_STORIES.md). Deployment errors: [DEPLOYMENT_ERRORS_AND_FIXES.md](../DEPLOYMENT_ERRORS_AND_FIXES.md).*
+*This doc: `docs/learned/VPC_LEARNED.md`. Layers: [TERRA_LEARNED.md](terra/TERRA_LEARNED.md). Stack ownership: [TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md](terra/TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md). War stories: [README_WAR_STORIES.md](../../README_WAR_STORIES.md). Deployment errors: [DEPLOYMENT_ERRORS_AND_FIXES.md](../DEPLOYMENT_ERRORS_AND_FIXES.md).*

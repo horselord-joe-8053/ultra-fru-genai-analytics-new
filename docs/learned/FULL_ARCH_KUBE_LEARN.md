@@ -2,7 +2,7 @@
 
 A visual crash course on how **VPC, NLB, DNS, CloudFront, EKS, and Aurora** are wired together to create a fully working kube-based infrastructure.
 
-**See also:** [VPC_LEARNED.md](VPC_LEARNED.md), [TERRA_LEARNED.md](terra/TERRA_LEARNED.md), [README_WAR_STORIES.md](../../README_WAR_STORIES.md).
+**See also:** [VPC_LEARNED.md](VPC_LEARNED.md), [TERRA_LEARNED.md](terra/TERRA_LEARNED.md), [TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md](terra/TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md), [README_WAR_STORIES.md](../../README_WAR_STORIES.md).
 
 ---
 
@@ -129,6 +129,14 @@ flowchart TB
 | **Private** | EKS nodes, Aurora | NAT GW (outbound only) |
 
 **NLB placement:** K8s Service `fru-api-svc` has `type: LoadBalancer` + `service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing`. AWS places the NLB in **public subnets** (tagged `kubernetes.io/role/elb=1` by the kube stack).
+
+### 3.1 Shared Resource Ownership: Durable vs Kube (Subnet Tags)
+
+**Who owns what:** Durable **creates** VPC and subnets. Kube **uses** them (EKS in private subnets) and **adds tags** to public subnets via `aws_ec2_tag` so the AWS Load Balancer Controller can place internet-facing NLBs there. Without these tags → NLB in private subnets → CloudFront 502 ([War Story 43](../../README_WAR_STORIES.md#43-cloudfront-502-when-nlb-in-wrong-subnets)).
+
+**Tag drift risk:** Durable's desired state did not include `kubernetes.io/*` tags. On durable apply, Terraform planned to remove them; kube re-added them → endless cycle. **Fix:** `lifecycle { ignore_changes = [tags] }` on subnet resources in the VPC module ([War Story 58](../../README_WAR_STORIES.md#58-vpc-subnet-tag-drift-durable-vs-kube-and-lifecycle-ignore_changes)).
+
+**Deep dive:** [TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md](terra/TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md).
 
 ---
 
