@@ -46,10 +46,14 @@ All endpoints (Health, Version, Frontend, QueryStream, Analytics) should pass.
 
 ## Step 4: Run orphan removal
 
-First, run a fresh scan to get current orphans:
+First, run a fresh scan to get current orphans. Use `--elb` only if you deploy with Classic ELB; otherwise omit it (NLB track):
 
 ```bash
-PYTHONPATH=$(pwd) python tools/aws/standalone/temp_one_off/resources_scan/scan_aws_remaining.py
+# NLB track (default)
+PYTHONPATH=$(pwd) python tools/aws/standalone/temp_one_off/resources_scan/scan_aws_remaining.py --cloud-regions us-east-1 --env dev --prefix fru
+
+# Classic ELB track; different orphan classification
+PYTHONPATH=$(pwd) python tools/aws/standalone/temp_one_off/resources_scan/scan_aws_remaining.py --cloud-regions us-east-1 --env dev --prefix fru --elb
 ```
 
 Then dry-run removal:
