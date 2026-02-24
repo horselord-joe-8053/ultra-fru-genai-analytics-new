@@ -237,6 +237,10 @@ This clarification helped explain why HTTP (not HTTPS) was required for EKS ingr
 
 Don't assume load balancer types based on platform (EKS vs ECS). Verify the actual ingress controller and load balancer type in your infrastructure. Different ingress controllers create different load balancer types, and each has different SSL/TLS certificate requirements.
 
+### 4.6 Correction (2025)
+
+**Actual LB type:** The kube API is exposed via `fru-api-svc` (type LoadBalancer), not NGINX Ingress. Without `service.beta.kubernetes.io/aws-load-balancer-type: external`, the **in-tree** cloud provider reconciles it and creates a **Classic ELB**—not NLB. The protocol guidance (use HTTP for LB endpoints) still applies. See [KUBE_LOAD_BALANCER_CLARIFICATION.md](docs/KUBE_LOAD_BALANCER_CLARIFICATION.md).
+
 ---
 
 ## 5. Protocol Inconsistency: HTTPS Used Where HTTP Required for NLB Endpoints
@@ -286,7 +290,11 @@ This ensured consistency across all scripts and fixed test failures.
 
 ### 5.5 Takeaway
 
-Always search for similar patterns across the entire codebase when fixing protocol/URL construction issues. Test files are often overlooked but contain duplicate logic that needs the same fix. Understand your architecture: if CloudFront is in front, it handles HTTPS for users while internal load balancers use HTTP. Local testing of NLB endpoints must use HTTP because NLBs don't have certificates; CloudFront provides the HTTPS layer for production users.
+Always search for similar patterns across the entire codebase when fixing protocol/URL construction issues. Test files are often overlooked but contain duplicate logic that needs the same fix. Understand your architecture: if CloudFront is in front, it handles HTTPS for users while internal load balancers use HTTP. Local testing of LB endpoints must use HTTP because LBs (Classic or NLB) typically don't have ACM certificates; CloudFront provides the HTTPS layer for production users.
+
+### 5.6 Correction (2025)
+
+**Actual LB type:** The kube API uses `fru-api-svc` LoadBalancer (Classic ELB via in-tree), not NLB. The HTTP/HTTPS guidance still applies. See [KUBE_LOAD_BALANCER_CLARIFICATION.md](docs/KUBE_LOAD_BALANCER_CLARIFICATION.md).
 
 ---
 
@@ -2923,6 +2931,8 @@ When supporting both Terraform and OpenTofu (or multiple providers), use error p
 
 After teardown, some AWS resources survived: Classic ELBs, security groups (`k8s-elb-*`), target groups (`k8s-ingressn-*`), CloudFront OACs (legacy format), and IAM roles (e.g. AWS Load Balancer Controller). These are **orphans**—not in Terraform state, so `tofu destroy` never touches them. War Story 46 describes the problem; here we built a **scan-and-remove** pipeline to detect and delete them systematically.
 
+**Note:** The Classic ELB + `k8s-elb-*` SG pairs are created by `fru-api-svc` (type LoadBalancer) during kube deploy. Without `aws-load-balancer-type: external`, the in-tree cloud provider creates Classic ELBs. These pairs are **in use** while the cluster runs; only run orphan removal after teardown. To switch to NLB and avoid creating new Classic ELBs, add the annotation to `api-service.yaml`. See [KUBE_LOAD_BALANCER_CLARIFICATION.md](docs/KUBE_LOAD_BALANCER_CLARIFICATION.md).
+
 ### 55.2 How We Scan and Detect Orphans
 
 **Step 1: Scan all resources (no prefix filter)**  
@@ -3312,3 +3322,47 @@ Phase 7 when skipping: 11 s total (includes ~8 s `tofu_output_json` for `artifac
 ### 61.6 Takeaway
 
 Use content-based hashing (not Git SHA) for build skip so uncommitted changes trigger rebuild. Store hash in S3; skip when current hash matches. `--force-build` for explicit override. The hash check overhead (~2–3 s) is negligible vs. build time saved (~95 s). See `docs/BUILD_CONTENT_SKIP.md`. Related: War Story 20 (CONTAINER_IMAGE and --skip-build in background process).
+
+---
+
+## 62. Analytics Panel Stale Data: Browser HTTP Cache for /analytics API Response
+
+**creation:** `<260210>`
+**last_updated:** `<260210>`
+
+**keywords:** analytics, /analytics, browser cache, Cache-Control, HTTP cache, DevTools, CloudFront
+**difficulty:** 4
+**significance:** 6
+
+### 62.1 Context
+
+The analytics panel in the UI showed wrong or stale data. The API was healthy (200 OK when hit directly), and CloudFront was serving correctly. The problem went away when "Disable cache" was enabled in Chrome DevTools.
+
+### 62.2 Root Cause
+
+The browser was serving a **cached** response for `GET /analytics` instead of fetching fresh data. The `/analytics` endpoint does not set `Cache-Control` headers, so the browser uses its default caching heuristics. A previously cached response (e.g. from when the API returned an error like "No analytics data available yet", or from before a batch run completed) was reused. With cache disabled, the browser bypassed its local cache and fetched fresh JSON from CloudFront—the panel then showed correct data.
+
+### 62.3 Distinction from War Story 42
+
+War Story 42 covers **CloudFront** (CDN edge) cache for frontend assets (index.html, JS). This war story is about the **browser's** HTTP cache for an API response. Different layer, different fix.
+
+### 62.4 Workaround (Immediate)
+
+Chrome DevTools → Network tab → check "Disable cache". While DevTools is open, the browser bypasses cache. Closing DevTools or using a normal window restores default caching.
+
+### 62.5 Proper Fix: Cache-Control on /analytics
+
+Set `Cache-Control: no-store` or `Cache-Control: max-age=0` on the `/analytics` response so the browser does not cache it. Analytics data changes after each batch run; it should not be cached. Add to the Flask response in `core_app/backend/api/app.py`:
+
+```python
+# In get_analytics(), when returning jsonify(result):
+response = jsonify(result)
+response.headers['Cache-Control'] = 'no-store'
+return response
+```
+
+(And for error responses: same header so a cached error does not persist.)
+
+### 62.6 Takeaway
+
+API endpoints that return frequently changing data (analytics, dashboards) should set `Cache-Control: no-store` or `max-age=0` to prevent the browser from serving stale cached responses. If the UI shows wrong data but the API returns correct data when hit directly, suspect browser cache first.

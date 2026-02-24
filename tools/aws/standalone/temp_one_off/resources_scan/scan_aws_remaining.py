@@ -49,7 +49,7 @@ ORPHAN_DATA_DIR = os.path.join(_SCRIPT_DIR, "orphan_data")
 # Brief hint for S3 only: explains why Terraform state bucket appears in one region.
 # Backend (state storage) lives in one region; deploy targets/destinations are in different regions.
 _REGION_HINTS: dict[str, str] = {
-    "s3": "Backend: all Terraform state for all regions stored in different keys in this one bucket; deploy targets are in other regions",
+    "s3": "Storage for various region-specific data",
 }
 
 

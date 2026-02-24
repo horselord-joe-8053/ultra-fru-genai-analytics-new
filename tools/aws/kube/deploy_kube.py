@@ -34,7 +34,8 @@ from tools.aws.scope_shared.deploy.bootstrap_helpers import (
 
 
 def _try_get_lb_hostname(env: str, region: str) -> str:
-    """Try to get NLB hostname from kubectl (re-deploy: LB usually already exists). Returns empty if not found."""
+    """Try to get LB hostname from kubectl (re-deploy: LB usually already exists). Returns empty if not found.
+    Current: Classic ELB (in-tree). With aws-load-balancer-type annotation: NLB (AWS Load Balancer Controller)."""
     try:
         out = subprocess.check_output(
             [
@@ -45,13 +46,20 @@ def _try_get_lb_hostname(env: str, region: str) -> str:
             env={**os.environ, "CLOUD_REGION": region},
             timeout=10,
         )
-        return (out or "").strip()
+        hostname = (out or "").strip()
+        if not hostname:
+            return ""
+        # Reject hostname from a different region (kubectl context may point at another region's cluster)
+        # LB hostnames (Classic or NLB): xxx.us-east-1.elb.amazonaws.com
+        if f".{region}." not in hostname and f"{region}.elb.amazonaws.com" not in hostname:
+            return ""
+        return hostname
     except Exception:
         return ""
 
 
 def _poll_lb_hostname(env: str, region: str, max_attempts: int = 18, interval_sec: int = 10) -> str:
-    """Poll kubectl for NLB hostname until available or max_attempts. Returns empty if not found."""
+    """Poll kubectl for LB hostname until available or max_attempts. Returns empty if not found."""
     for attempt in range(max_attempts):
         hostname = _try_get_lb_hostname(env, region)
         if hostname:
@@ -90,7 +98,7 @@ def run_deploy_kube(
     kube_stack = "infra_terraform/live_deploy/aws/kube"
     hostname_before_first_apply = _try_get_lb_hostname(env, region)
     if hostname_before_first_apply:
-        logger.info(f"[Kube] NLB hostname known before apply: {hostname_before_first_apply}; single apply (skip second)")
+        logger.info(f"[Kube] LB hostname known before apply: {hostname_before_first_apply}; single apply (skip second)")
     plan_vars = [
         "-var", f"eks_instance_types=[\"{require('EKS_NODE_INSTANCE_TYPES')}\"]",
         "-var", f"eks_desired_nodes={require('EKS_DESIRED_NODES')}",
@@ -201,7 +209,8 @@ def run_deploy_kube(
 
     if hostname_after_poll:
         wait_for_dns_resolvable(hostname_after_poll, timeout_seconds=120, check_interval_sec=5, heartbeat_interval_sec=30)
-        verify_api_db_connected(f"http://{hostname_after_poll}", timeout_seconds=60)
+        # LB target health checks can take 2-5 min; allow more retries
+        verify_api_db_connected(f"http://{hostname_after_poll}", timeout_seconds=60, max_retries=12)
 
     if need_second_apply:
         logger.step("Re-applying kube stack with LoadBalancer hostname for CloudFront API origin...")

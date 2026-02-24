@@ -1,6 +1,8 @@
 # Full Kube Architecture Crash Course
 
-A visual crash course on how **VPC, NLB, DNS, CloudFront, EKS, and Aurora** are wired together to create a fully working kube-based infrastructure.
+A visual crash course on how **VPC, LB, DNS, CloudFront, EKS, and Aurora** are wired together to create a fully working kube-based infrastructure.
+
+> **Load balancer type:** Docs historically said "NLB". **Current reality:** `fru-api-svc` (no `aws-load-balancer-type` annotation) is reconciled by the **in-tree** cloud provider, which creates a **Classic ELB** and `k8s-elb-*` security group—not an NLB. To get an NLB, add `service.beta.kubernetes.io/aws-load-balancer-type: external` to `api-service.yaml`. See [KUBE_LOAD_BALANCER_CLARIFICATION.md](../KUBE_LOAD_BALANCER_CLARIFICATION.md).
 
 **See also:** [VPC_LEARNED.md](VPC_LEARNED.md), [TERRA_LEARNED.md](terra/TERRA_LEARNED.md), [TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md](terra/TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md), [README_WAR_STORIES.md](../../README_WAR_STORIES.md).
 
@@ -125,14 +127,14 @@ flowchart TB
 
 | Subnet Type | Used By | Route to Internet |
 |-------------|---------|-------------------|
-| **Public** | NLB (fru-api-svc), NAT GW | IGW (direct) |
+| **Public** | LB (fru-api-svc; currently Classic ELB), NAT GW | IGW (direct) |
 | **Private** | EKS nodes, Aurora | NAT GW (outbound only) |
 
-**NLB placement:** K8s Service `fru-api-svc` has `type: LoadBalancer` + `service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing`. AWS places the NLB in **public subnets** (tagged `kubernetes.io/role/elb=1` by the kube stack).
+**LB placement:** K8s Service `fru-api-svc` has `type: LoadBalancer` + `service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing`. **Current:** In-tree creates Classic ELB in public subnets. **With `aws-load-balancer-type: external`:** AWS Load Balancer Controller creates NLB. Subnets tagged `kubernetes.io/role/elb=1` by the kube stack.
 
 ### 3.1 Shared Resource Ownership: Durable vs Kube (Subnet Tags)
 
-**Who owns what:** Durable **creates** VPC and subnets. Kube **uses** them (EKS in private subnets) and **adds tags** to public subnets via `aws_ec2_tag` so the AWS Load Balancer Controller can place internet-facing NLBs there. Without these tags → NLB in private subnets → CloudFront 502 ([War Story 43](../../README_WAR_STORIES.md#43-cloudfront-502-when-nlb-in-wrong-subnets)).
+**Who owns what:** Durable **creates** VPC and subnets. Kube **uses** them (EKS in private subnets) and **adds tags** to public subnets via `aws_ec2_tag` so load balancers (Classic or NLB) can be placed in public subnets. Without these tags → LB in private subnets → CloudFront 502 ([War Story 43](../../README_WAR_STORIES.md#43-cloudfront-502-when-nlb-in-wrong-subnets)).
 
 **Tag drift risk:** Durable's desired state did not include `kubernetes.io/*` tags. On durable apply, Terraform planned to remove them; kube re-added them → endless cycle. **Fix:** `lifecycle { ignore_changes = [tags] }` on subnet resources in the VPC module ([War Story 58](../../README_WAR_STORIES.md#58-vpc-subnet-tag-drift-durable-vs-kube-and-lifecycle-ignore_changes)).
 
@@ -216,8 +218,8 @@ flowchart LR
 
 | Phase | What Happens | Typical Time |
 |-------|--------------|--------------|
-| K8s Service created | AWS provisions NLB | ~30s |
-| NLB hostname in K8s | `status.loadBalancer.ingress[0].hostname` populated | Immediate |
+| K8s Service created | AWS provisions LB (Classic or NLB) | ~30s |
+| LB hostname in K8s | `status.loadBalancer.ingress[0].hostname` populated | Immediate |
 | **DNS propagation** | Hostname resolvable from your machine | **1–2 minutes** |
 
 **Deploy flow:** We wait for LB hostname → `wait_for_dns_resolvable(lb_host)` → `verify_api_db_connected()` → re-apply kube stack with `ingress_hostname` for CloudFront.
@@ -289,10 +291,10 @@ fru-genai-analytics-new/
 | Step | Action | Why |
 |------|--------|-----|
 | 1 | Scale fru-api to 0 | Faster pod termination |
-| 2 | Delete fru-api-svc (LoadBalancer) | Releases NLB/ENIs; EKS destroy blocked otherwise |
+| 2 | Delete fru-api-svc (LoadBalancer) | Releases LB/ENIs; EKS destroy blocked otherwise |
 | 3 | Delete CronJob, Job | Workloads block cluster delete |
 | 4 | Delete namespace | Cascades remaining resources |
-| 5 | Wait for namespace gone | NLB release can take 1–2 min |
+| 5 | Wait for namespace gone | LB release can take 1–2 min |
 | 6 | Remove orphan EKS SGs | AWS may leave SGs after cluster delete |
 | 7 | `tofu destroy` kube stack | EKS, CloudFront, frontend S3 |
 
@@ -304,7 +306,7 @@ fru-genai-analytics-new/
 |----|--------|--------|------|---------|
 | Aurora SG | EKS cluster SG | Aurora | 5432 | API pods → DB |
 | EKS cluster SG | — | — | — | Created by EKS; referenced for Aurora ingress |
-| NLB | Internet (0.0.0.0/0) | EKS nodes | 80 | CloudFront → API |
+| LB | Internet (0.0.0.0/0) | EKS nodes | 80 | CloudFront → API |
 
 ---
 
@@ -313,11 +315,11 @@ fru-genai-analytics-new/
 | Concept | Summary |
 |--------|---------|
 | **VPC** | One VPC; public + private subnets; NAT for private outbound |
-| **NLB** | Created by K8s `LoadBalancer` svc; placed in public subnets; DNS 1–2 min |
-| **CloudFront** | S3 + API origin; API origin = NLB hostname; HTTP to origin |
+| **LB** | Created by K8s `LoadBalancer` svc (currently Classic ELB via in-tree; NLB with `aws-load-balancer-type`); placed in public subnets; DNS 1–2 min |
+| **CloudFront** | S3 + API origin; API origin = LB hostname; HTTP to origin |
 | **EKS** | Nodes in private subnets; fru-api pods; connects to Aurora |
 | **Aurora** | Private subnets; ingress from EKS cluster SG only |
-| **ingress_hostname** | Set after NLB hostname known; re-apply kube wires CF → NLB |
+| **ingress_hostname** | Set after LB hostname known; re-apply kube wires CF → LB |
 
 ---
 
@@ -326,7 +328,7 @@ fru-genai-analytics-new/
 | Pitfall | Symptom | Fix |
 |---------|---------|-----|
 | DNS not ready | `nodename nor servname provided` | `wait_for_dns_resolvable` before /health |
-| HTTPS to NLB | HTTP 000 / SSL handshake fail | Use `http://` for NLB (no ACM cert) |
+| HTTPS to LB | HTTP 000 / SSL handshake fail | Use `http://` for LB (no ACM cert) |
 | VPC mismatch | "subnet group not in same VPC" | Preempt with `--container-type all` |
 | EKS destroy blocked | DependencyViolation | Delete LB svc before destroy |
 | DB password mismatch | /health returns disconnected | `ensure_secrets` + rollout restart |

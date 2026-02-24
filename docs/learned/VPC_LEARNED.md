@@ -263,7 +263,7 @@ flowchart LR
 
 ### 4.1 Two Stacks, One Resource
 
-**Durable** owns VPC and subnets. **Kube** needs public subnets tagged with `kubernetes.io/role/elb=1` and `kubernetes.io/cluster/<name>=shared` so the AWS Load Balancer Controller places internet-facing NLBs there. Kube adds these tags via `aws_ec2_tag`—a separate resource that tags an existing resource by ID. Kube does **not** own the subnets; it only manages the tags.
+**Durable** owns VPC and subnets. **Kube** needs public subnets tagged with `kubernetes.io/role/elb=1` and `kubernetes.io/cluster/<name>=shared` so load balancers (Classic or NLB) can be placed in public subnets. Kube adds these tags via `aws_ec2_tag`—a separate resource that tags an existing resource by ID. Kube does **not** own the subnets; it only manages the tags.
 
 ### 4.2 Tag Drift and lifecycle ignore_changes
 

@@ -64,11 +64,13 @@ def run_import_kube(
     logger.step("Importing pre-existing kube resources into state")
 
     cluster_name = eks_cluster_name or f"{prefix}-{env}-eks"
+    deploy_region = region or "us-east-1"
 
     # EKS IAM roles (ID = role name)
+    # Region suffix: per-region names avoid cross-region teardown deleting shared roles
     role_specs = [
-        ("module.eks.aws_iam_role.eks_cluster", f"{cluster_name}-cluster-role"),
-        ("module.eks.aws_iam_role.eks_nodes", f"{cluster_name}-node-role"),
+        ("module.eks.aws_iam_role.eks_cluster", f"{cluster_name}-cluster-role-{deploy_region}"),
+        ("module.eks.aws_iam_role.eks_nodes", f"{cluster_name}-node-role-{deploy_region}"),
     ]
     failed = import_batch(stack_dir, role_specs, region)
 

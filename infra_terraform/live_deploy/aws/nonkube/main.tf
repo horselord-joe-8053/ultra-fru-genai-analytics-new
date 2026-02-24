@@ -44,6 +44,7 @@ module "ecs" {
   source = "../../../modules/aws/ecs"
   name   = var.prefix
   env    = var.env
+  aws_region = var.aws_region
 
   cluster_name = var.ecs_cluster_name
   alb_name     = var.alb_name

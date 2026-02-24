@@ -96,6 +96,7 @@ def is_project_resource(
             name.startswith(pe)
             or f"-{pe}-" in name
             or name.startswith(f"{prefix}-terraform-state")
+            or name.startswith(f"{prefix}-tf-state")
         )
     if resource_type == "ecr":
         return pe in name or name.startswith(pe)
@@ -209,7 +210,7 @@ def classify_project_category(
             return "shared-nondurable"
         if "-artifacts" in name and region in name:
             return "shared-nondurable"
-        if "terraform-state" in name:
+        if "terraform-state" in name or "tf-state" in name:
             return "shared-durable"
         return "other"
 

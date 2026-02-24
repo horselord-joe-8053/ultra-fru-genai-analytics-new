@@ -5,6 +5,28 @@ import subprocess
 from tools.cloud_shared.env import require, EnvVarNotFound
 
 _bucket_region_cache: dict[str, str] = {}
+_account_id_cache: str | None = None
+
+
+def _get_account_id() -> str:
+    """Get current AWS account ID (cached)."""
+    global _account_id_cache
+    if _account_id_cache:
+        return _account_id_cache
+    try:
+        out = subprocess.run(
+            ["aws", "sts", "get-caller-identity"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if out.returncode == 0 and out.stdout:
+            data = json.loads(out.stdout)
+            _account_id_cache = data.get("Account", "")
+            return _account_id_cache
+    except Exception:
+        pass
+    return ""
 
 def stack_id_from_dir(stack_dir: str, cloud: str = "aws") -> str:
     """Extract logical stack name from path. Cloud comes from caller (tools/aws vs tools/gcp), not from path.
@@ -54,16 +76,28 @@ def durable_azs_for_region(region: str) -> list[str]:
 def resolve_state_bucket(region: str | None = None) -> str:
     """
     Resolve S3 state bucket for the given region.
-    TF_STATE_BUCKET_{region} (e.g. TF_STATE_BUCKET_us_east_2) overrides TF_STATE_BUCKET.
+    Uses TF_STATE_BUCKET_PREFIX + env + region + account_id.
+    Fallback: TF_STATE_BUCKET or TF_STATE_BUCKET_{region} (legacy).
     """
     r = region or resolve_region(None)
+    prefix_var = os.getenv("TF_STATE_BUCKET_PREFIX", "").strip()
+    env = os.getenv("FRU_ENV", os.getenv("ENVIRONMENT", "dev"))
+    if prefix_var:
+        account_id = _get_account_id()
+        if not account_id:
+            raise EnvVarNotFound(
+                "AWS account ID",
+                hint="Run 'aws sts get-caller-identity' to verify credentials.",
+            )
+        return f"{prefix_var}-{env}-{r}-{account_id}"
+    # Legacy: TF_STATE_BUCKET or per-region override
     suffix = _region_env_suffix(r)
     key = f"TF_STATE_BUCKET_{suffix}" if suffix else "TF_STATE_BUCKET"
     bucket = os.getenv(key, "").strip() or os.getenv("TF_STATE_BUCKET", "").strip()
     if not bucket:
         raise EnvVarNotFound(
-            "TF_STATE_BUCKET",
-            hint=f"Set TF_STATE_BUCKET or TF_STATE_BUCKET_{suffix} in .env",
+            "TF_STATE_BUCKET or TF_STATE_BUCKET_PREFIX",
+            hint=f"Set TF_STATE_BUCKET_PREFIX (preferred) or TF_STATE_BUCKET in .env",
         )
     return bucket
 
@@ -100,9 +134,13 @@ def resolve_bucket_region(bucket: str) -> str:
 def resolve_state_lock_table(region: str | None = None) -> str:
     """
     Resolve DynamoDB lock table for the given region.
-    TF_STATE_LOCK_TABLE_{region} / TF_LOCK_TABLE_{region} override the default.
+    Uses TF_LOCK_TABLE_PREFIX + region when set.
+    Fallback: TF_STATE_LOCK_TABLE / TF_LOCK_TABLE or per-region overrides (legacy).
     """
     r = region or resolve_region(None)
+    lock_prefix = os.getenv("TF_LOCK_TABLE_PREFIX", "").strip()
+    if lock_prefix:
+        return f"{lock_prefix}-{r}"
     suffix = _region_env_suffix(r)
     for base in ("TF_STATE_LOCK_TABLE", "TF_LOCK_TABLE"):
         key = f"{base}_{suffix}" if suffix else base

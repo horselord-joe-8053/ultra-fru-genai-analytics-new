@@ -32,14 +32,14 @@ Baseline: nonkube import (161.9s) and apply (24.9s) ran; kube was optimized.
 
 ### Why Kube Adds These Tags (Purpose)
 
-The kube stack adds two subnet tags that the **AWS Load Balancer Controller** uses when provisioning load balancers for Kubernetes Services (`type: LoadBalancer`):
+The kube stack adds two subnet tags used when provisioning load balancers for Kubernetes Services (`type: LoadBalancer`):
 
 | Tag | Value | Purpose |
 |-----|-------|---------|
 | `kubernetes.io/role/elb` | `1` | Marks the subnet as **eligible for internet-facing load balancers**. Without it, the controller places the NLB in private subnets by default → internal NLB → CloudFront (on the internet) cannot reach it → 502. |
 | `kubernetes.io/cluster/<cluster_name>` | `shared` | Identifies subnets that belong to this EKS cluster. The controller uses this to know which subnets it can use for the cluster's load balancers. |
 
-Our `fru-api-svc` Service has `service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing`. The controller looks for public subnets tagged with both of the above to place the NLB. See War Story 43 and `docs/learned/FULL_ARCH_KUBE_LEARN.md`.
+Our `fru-api-svc` Service has `service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing`. **Current:** In-tree creates Classic ELB. **With `aws-load-balancer-type: external`:** AWS Load Balancer Controller creates NLB. Subnet tags enable placement in public subnets. See War Story 43 and [KUBE_LOAD_BALANCER_CLARIFICATION.md](KUBE_LOAD_BALANCER_CLARIFICATION.md).
 
 ### What's Actually Happening
 
@@ -116,15 +116,15 @@ So durable "removes" them only in the sense that Terraform enforces durable's de
 ### Why It Runs Twice
 
 1. **First apply:** EKS stack without `ingress_hostname`. CloudFront's API origin is `null` or placeholder.
-2. **In between:** `kube_apply` (bootstrap + schedule) runs; NGINX Ingress Controller creates its LoadBalancer Service; AWS creates the NLB.
+2. **In between:** `kube_apply` (bootstrap + schedule) runs; `fru-api-svc` LoadBalancer is applied; AWS (in-tree or AWS Load Balancer Controller) provisions the LB.
 3. **Poll:** Deploy waits for `kubectl get svc fru-api-svc ... hostname` to be non-empty (up to ~3 min).
-4. **Second apply:** Same kube stack with `ingress_hostname=<lb_host>` so CloudFront's API origin is set to the NLB DNS.
+4. **Second apply:** Same kube stack with `ingress_hostname=<lb_host>` so CloudFront's API origin is set to the LB DNS.
 
-The NLB hostname is not known until Kubernetes creates the Service and AWS provisions the NLB. Terraform (kube stack) needs that hostname for the CloudFront module. Hence: first apply (no hostname) → k8s creates NLB → second apply (with hostname).
+The LB hostname is not known until Kubernetes creates the Service and AWS provisions the LB (currently Classic ELB; NLB with annotation). Terraform (kube stack) needs that hostname for the CloudFront module. Hence: first apply (no hostname) → k8s creates NLB → second apply (with hostname).
 
 ### Refactor Plan: Single Apply When Hostname Is Known
 
-**Idea:** On re-deploys, the NLB hostname is usually stable. If we can get it before the first apply, we can pass it in and skip the second apply.
+**Idea:** On re-deploys, the LB hostname is usually stable. If we can get it before the first apply, we can pass it in and skip the second apply.
 
 **Steps:**
 

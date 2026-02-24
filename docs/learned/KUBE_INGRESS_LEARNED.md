@@ -1,6 +1,8 @@
 # Kubernetes Ingress & Load Balancer Crash Course
 
-A short, project-anchored guide to Ingress, IngressClass, controllers, and how the NLB appears for EKS.
+A short, project-anchored guide to Ingress, IngressClass, controllers, and how the LB appears for EKS.
+
+> **Note:** This doc describes an NGINX Ingress–based flow. Our current kube deploy uses `fru-api-svc` (type LoadBalancer) directly, which the in-tree creates as a **Classic ELB**—not NLB. See [KUBE_LOAD_BALANCER_CLARIFICATION.md](../KUBE_LOAD_BALANCER_CLARIFICATION.md).
 
 ---
 

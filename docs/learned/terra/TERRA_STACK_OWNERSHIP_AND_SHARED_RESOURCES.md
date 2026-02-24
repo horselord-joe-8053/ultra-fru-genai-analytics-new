@@ -116,11 +116,11 @@ resource "aws_ec2_tag" "public_subnet_elb" {
 
 ### 4.2 Why Kube Uses It
 
-The **AWS Load Balancer Controller** (used when K8s Service has `type: LoadBalancer`) decides where to place NLBs based on **subnet tags**:
+Load balancer placement (Classic via in-tree, or NLB via AWS Load Balancer Controller when `aws-load-balancer-type` is set) uses **subnet tags**:
 
 | Tag | Value | Purpose |
 |-----|-------|---------|
-| `kubernetes.io/role/elb` | `1` | Subnet is eligible for **internet-facing** load balancers. Without it, the controller places NLBs in private subnets → internal NLB → CloudFront (on the internet) cannot reach it → **502**. |
+| `kubernetes.io/role/elb` | `1` | Subnet is eligible for **internet-facing** load balancers. Without it, the LB is placed in private subnets → internal LB → CloudFront (on the internet) cannot reach it → **502**. |
 | `kubernetes.io/cluster/<cluster_name>` | `shared` | Subnets belong to this EKS cluster. Controller uses this to know which subnets it can use. |
 
 Durable's VPC module doesn't know about EKS or load balancers. So kube adds these tags after durable creates the subnets.

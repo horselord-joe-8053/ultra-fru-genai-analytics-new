@@ -48,6 +48,12 @@ def get_total_rec_from_csv() -> int:
 # 502/503 = may be transient (ECS/ALB not ready yet) - we poll until timeout; persistent 502/503 will fail.
 VERIFY_RETRIABLE_HTTP_CODES = frozenset({502, 503})
 
+# --- Acceptable-error policy (refactor: strict by default) ---
+# Analytics: no acceptable errors; DB not configured/unreachable = fail (fix credentials).
+# QueryStream: "Agent disabled" acceptable only when USE_AGENT_QUERY=false (env, same as deploy).
+# CloudWatch: ECS (nonkube) creates /fru/{env}/spark; EKS (kube) does not. For nonkube/all, enforce
+#   fail when log group missing (PASS not allowed). For kube only, allow skip (PASS).
+
 def get_tofu_output(stack_dir, env):
     """Retrieve output from Tofu (assumed already applied)."""
     ensure_shared_terra_env()
@@ -84,6 +90,12 @@ def _parse_sse_complete_answer(text: str) -> str | None:
     return last_answer
 
 
+def _is_agent_disabled_by_config() -> bool:
+    """True if USE_AGENT_QUERY is false in env (same source as deploy)."""
+    val = (os.getenv("USE_AGENT_QUERY") or "true").lower()
+    return val in ("false", "0", "no", "off", "")
+
+
 def verify_api_endpoints(
     base_url: str,
     total_rec: int,
@@ -99,11 +111,15 @@ def verify_api_endpoints(
     heartbeat_interval_sec = heartbeat_interval_sec or VERIFY_HEARTBEAT_INTERVAL_SEC
     logger.info(f"Validating API Endpoints at: {base_url} (timeout={timeout_secs}s, total_rec={total_rec})")
 
+    # QueryStream: "Agent disabled" is acceptable only when USE_AGENT_QUERY=false (env var).
+    # Same env drives deploy; verify reads it locally—no need to parse from API response.
+    use_agent_disabled_by_config = _is_agent_disabled_by_config()
+
     def check_query_stream(r):
         if r.status_code != 200:
             return False
         if "Agent-based query processing is disabled" in r.text:
-            return True
+            return use_agent_disabled_by_config
         if "exc_info" in r.text and "unexpected keyword argument" in r.text:
             raise RuntimeError("QueryStream returned AgentLogger exc_info error (non-retriable; needs redeploy)")
         answer = _parse_sse_complete_answer(r.text)
@@ -122,8 +138,7 @@ def verify_api_endpoints(
             data = r.json()
             err = data.get("error") or ""
             if err:
-                if "database" in err.lower() and ("not configured" in err.lower() or "unreachable" in err.lower()):
-                    return True
+                # No "acceptable" errors: DB not configured/unreachable = fail (fix credentials).
                 raise RuntimeError(f"Analytics error (non-retriable): {err}")
             total_records = data.get("total_records") or 0
             if total_records != total_rec:
@@ -145,6 +160,7 @@ def verify_api_endpoints(
     results = {e["name"]: False for e in endpoints}
     last_status = {e["name"]: None for e in endpoints}
     last_error = {e["name"]: None for e in endpoints}
+    last_resp = {}  # for custom notes (e.g. QueryStream when agent disabled by config)
 
     def check_one_round() -> bool:
         for e in endpoints:
@@ -158,6 +174,7 @@ def verify_api_endpoints(
                 last_error[e["name"]] = None
                 if e["check"](resp):
                     results[e["name"]] = True
+                    last_resp[e["name"]] = resp
                 else:
                     if resp.status_code in VERIFY_RETRIABLE_HTTP_CODES:
                         last_error[e["name"]] = f"HTTP {resp.status_code}"
@@ -205,7 +222,17 @@ def verify_api_endpoints(
         if results[e["name"]]:
             notes = url
             if e["name"] == "QueryStream":
-                notes = f"total_rec={total_rec} in answer"
+                resp = last_resp.get(e["name"])
+                passed_via_disabled = (
+                    use_agent_disabled_by_config
+                    and resp
+                    and "Agent-based query processing is disabled" in (resp.text or "")
+                )
+                notes = (
+                    "agent disabled by config (USE_AGENT_QUERY=false)"
+                    if passed_via_disabled
+                    else f"total_rec={total_rec} in answer"
+                )
             elif e["name"] == "Analytics":
                 notes = f"total_records={total_rec}"
         else:
@@ -218,11 +245,18 @@ def verify_api_endpoints(
         logger.error(f"[VERIFICATION TIMEOUT] Endpoints failed within {timeout_secs}s")
     return ok, rows
 
-def verify_cloudwatch(env, timeout_mins=None) -> tuple[bool, str]:
-    """Return (ok, note) for summary table."""
+def verify_cloudwatch(env, timeout_mins=None, scope: str = "nonkube") -> tuple[bool, str]:
+    """
+    Return (ok, note) for summary table.
+    ECS (nonkube) creates /fru/{env}/spark; EKS (kube) does not.
+    - nonkube/all: enforce fail when log group not found or check failed (PASS not allowed).
+    - kube only: allow skip (PASS) when missing—EKS does not create this log group.
+    """
     from tools.aws.scope_shared.core.backend import resolve_region
     region = resolve_region(None)
     log_group = os.getenv("CLOUDWATCH_LOG_GROUP") or f"/fru/{env}/spark"
+    # Only kube may skip; nonkube/all must fail when log group missing (ECS creates it).
+    skip_when_missing = scope == "kube"
 
     timeout_secs = (timeout_mins * 60) if timeout_mins else get_int_env("LOGGING_TASK_DEFAULT_TIMEOUT", VERIFY_TIMEOUT_SEC)
     heartbeat_interval = VERIFY_HEARTBEAT_INTERVAL_SEC
@@ -239,11 +273,19 @@ def verify_cloudwatch(env, timeout_mins=None) -> tuple[bool, str]:
         ], text=True)
         groups = json.loads(out).get("logGroups", [])
         if not any(g["logGroupName"] == log_group for g in groups):
-            logger.warning(f"Log group {log_group} not found. Skipping log verification.")
-            return True, "log group not found (skipped)"
+            if skip_when_missing:
+                logger.warning(f"Log group {log_group} not found. Skipping (kube; EKS does not create it).")
+                return True, "log group not found (skipped; kube)"
+            # nonkube/all: ECS creates this; fail—PASS not allowed.
+            logger.error(f"Log group {log_group} not found.")
+            return False, "log group not found"
     except Exception as e:
-        logger.warning(f"Log group check failed. Skipping log verification. ({e})")
-        return True, "check failed (skipped)"
+        if skip_when_missing:
+            logger.warning(f"Log group check failed. Skipping (kube). ({e})")
+            return True, "check failed (skipped; kube)"
+        # nonkube/all: enforce fail.
+        logger.error(f"Log group check failed: {e}")
+        return False, f"check failed: {e}"
 
     last_heartbeat = 0
     while (time.time() - start_time) < timeout_secs:
@@ -354,17 +396,19 @@ def main():
                     logger.operation_end("Verify", args.scope, args.env, region, int(time.time() - verify_start), ok=False)
                     sys.exit(1)
             else:
-                # Fallback: wait for K8s LoadBalancer hostname
+                # Fallback: wait for K8s LoadBalancer hostname (ensure kubeconfig points at deploy region)
+                from tools.aws.kube.deploy_kube import _try_get_lb_hostname
                 logger.info("Waiting for EKS LoadBalancer hostname...")
+                subprocess.run(
+                    ["python", "tools/aws/kube/eks_kubeconfig.py", "--env", env],
+                    check=False,
+                    env={**os.environ, "CLOUD_REGION": region},
+                )
                 lb_host = ""
                 for _ in range(30):
-                    try:
-                        cmd = ["kubectl", "get", "svc", "fru-api-svc", "-n", K8S_NAMESPACE, "-o", "jsonpath={.status.loadBalancer.ingress[0].hostname}"]
-                        lb_host = subprocess.check_output(cmd, text=True).strip()
-                        if lb_host:
-                            break
-                    except Exception:
-                        pass
+                    lb_host = _try_get_lb_hostname(env, region)
+                    if lb_host:
+                        break
                     time.sleep(10)
 
                 if lb_host:
@@ -379,11 +423,11 @@ def main():
         phase_secs = int(time.time() - phase_start_time)
         logger.phase_end(phase_idx, total_phases, verify_phases[phase_idx - 1], phase_secs)
 
-    # CloudWatch Check
+    # CloudWatch: nonkube/all enforce fail when missing; kube may skip (ECS creates log group, EKS does not)
     phase_idx += 1
     phase_start_time = time.time()
     logger.phase_start(phase_idx, total_phases, verify_phases[phase_idx - 1])
-    cw_ok, cw_note = verify_cloudwatch(env)
+    cw_ok, cw_note = verify_cloudwatch(env, scope=args.scope)
     phase_secs = int(time.time() - phase_start_time)
     logger.phase_end(phase_idx, total_phases, verify_phases[phase_idx - 1], phase_secs)
     all_rows.append(VerifyRow(scope="shared", endpoint="CloudWatch", ok=cw_ok, notes=cw_note))

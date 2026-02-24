@@ -62,18 +62,13 @@ def _print_success_url(env: str, region: str, scope: str) -> None:
                 frontend_url = f"https://{cf_domain}"
                 _log_success(frontend_url)
                 return
-            # Fallback: LB hostname
+            # Fallback: LB hostname (uses region validation to avoid wrong-region LB)
+            from tools.aws.kube.deploy_kube import _try_get_lb_hostname
             lb_host = ""
             for attempt in range(12):
-                try:
-                    lb_host = subprocess.check_output([
-                        "kubectl", "get", "svc", "fru-api-svc", "-n", K8S_NAMESPACE,
-                        "-o", "jsonpath={.status.loadBalancer.ingress[0].hostname}",
-                    ], text=True).strip()
-                    if lb_host:
-                        break
-                except Exception:
-                    pass
+                lb_host = _try_get_lb_hostname(env, region)
+                if lb_host:
+                    break
                 if attempt < 11:
                     time.sleep(10)
             if lb_host:
