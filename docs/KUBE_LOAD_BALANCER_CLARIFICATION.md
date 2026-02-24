@@ -52,7 +52,9 @@ annotations:
 
 Then redeploy kube scope. The AWS Load Balancer Controller (if installed in the cluster) will create an NLB. CloudFront will be wired to the new NLB hostname. Old Classic ELB + `k8s-elb-*` pairs become orphans and can be removed via `remove_for_orphans_data.py`.
 
-**Prerequisite:** AWS Load Balancer Controller must be installed in the EKS cluster (typical for EKS 1.22+).
+**Prerequisite:** AWS Load Balancer Controller is installed automatically during deploy (Phase 9.5) when using the NLB track (no `--elb`). See [REFACTOR_PLAN_NLB_DEPLOY_INTEGRATION.md](REFACTOR_PLAN_NLB_DEPLOY_INTEGRATION.md).
+
+For the full picture (two tracks, `--elb` flag, manifest selection), see [learned/KUBE_INGRESS_LEARNED.md](learned/KUBE_INGRESS_LEARNED.md) Section 0 and War Story 64 in README_WAR_STORIES.md.
 
 ---
 
@@ -66,6 +68,6 @@ Then redeploy kube scope. The AWS Load Balancer Controller (if installed in the 
 - `infra_terraform/live_deploy/aws/kube/main.tf` – comment
 - `infra_terraform/live_deploy/aws/kube/variables.tf` – comment
 - `docs/DEPLOYMENT_OPTIMIZATION_REFACTOR_PLANS.md` – clarification
-- `docs/learned/KUBE_INGRESS_LEARNED.md` – note about fru-api-svc vs NGINX
+- `docs/learned/KUBE_INGRESS_LEARNED.md` – Section 0: Classic ELB vs NLB choice, `--elb` flag, manifest selection
 - `docs/learned/VPC_LEARNED.md`, `docs/learned/terra/TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md` – LB placement
 - `docs/ANALYSIS_US_EAST_1_DEPLOY_ERRORS_AFTER_US_EAST_2_TEARDOWN.md` – clarification

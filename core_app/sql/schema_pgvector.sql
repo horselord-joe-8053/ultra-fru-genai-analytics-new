@@ -27,6 +27,7 @@ ON fru_sales_embeddings(customer_id);
 CREATE INDEX IF NOT EXISTS fru_sales_embeddings_store_address_idx 
 ON fru_sales_embeddings(store_address);
 
+-- Shared by Kube CronJob and Nonkube EventBridge Spark jobs. See docs/ANALYTICS_KUBE_NONKUBE_SHARED_DATA.md.
 CREATE TABLE IF NOT EXISTS batch_analytics (
     id SERIAL PRIMARY KEY,
     created_at TIMESTAMP DEFAULT NOW(),

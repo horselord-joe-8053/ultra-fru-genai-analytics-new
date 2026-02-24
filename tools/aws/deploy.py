@@ -117,6 +117,8 @@ def main():
     ap.add_argument("--skip-build", action="store_true", help="Skip build; use repo:latest from ECR and query tags for display")
     ap.add_argument("--force-build", action="store_true",
         help="Force build even when content hash matches (bypasses content-based skip; use when code changed or you want a fresh image)")
+    ap.add_argument("--elb", action="store_true",
+        help="[Kube only] Use in-tree Classic ELB (api-service-elb.yaml) instead of NLB (api-service.yaml). Reverts to pre-migration behavior.")
     args = ap.parse_args()
 
     env = args.env
@@ -147,9 +149,12 @@ def main():
         stats.set_scope("shared")
         if not args.skip_doctor:
             logger.step(f"[1/{len(phases)}] Running doctor checks...")
+            doctor_args = ["python", "tools/aws/standalone/doctor.py", "--env", env, "--region", region, "--scope", scope]
+            if getattr(args, "elb", False):
+                doctor_args.append("--elb")
             with stats.timed("Doctor", "doctor checks"):
                 subprocess.run(
-                    ["python", "tools/aws/standalone/doctor.py", "--env", env, "--region", region, "--scope", scope],
+                    doctor_args,
                     check=True,
                     env={**os.environ, "CLOUD_REGION": region},
                 )

@@ -6,13 +6,8 @@ metadata:
   # CloudFront must reach the API origin from the internet; default LB is internal in private subnets.
   # 'service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing'
   #   : in-tree creates Classic ELB (no aws-load-balancer-type). 
-  # for NLB, added:
-  #   service.beta.kubernetes.io/aws-load-balancer-type: external
-  #   service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: instance
   annotations:
     service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
-    service.beta.kubernetes.io/aws-load-balancer-type: external
-    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: instance
 spec:
   selector:
     app: fru-api

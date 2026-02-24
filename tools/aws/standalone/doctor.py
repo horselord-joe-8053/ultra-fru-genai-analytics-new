@@ -26,6 +26,7 @@ def main():
     ap.add_argument("--env", default=os.getenv("ENVIRONMENT", os.getenv("FRU_ENV","dev")))
     ap.add_argument("--region", default=None, help="Region (default: CLOUD_REGION)")
     ap.add_argument("--scope", choices=["kube", "nonkube", "all"], default=None, help="Deploy scope (kube requires kubectl)")
+    ap.add_argument("--elb", action="store_true", help="[Kube only] Use Classic ELB; skip eksctl/helm check (NLB track needs them)")
     args = ap.parse_args()
 
     try:
@@ -60,6 +61,13 @@ def main():
                 os.environ["PATH"] = p + os.pathsep + os.environ.get("PATH", "")
         if not (shutil.which("kubectl") or has("kubectl")):
             print("WARN: kubectl not found (kube deploy will fail until installed).")
+
+    # NLB track (kube/all without --elb) requires eksctl and helm for AWS Load Balancer Controller install
+    if args.scope in ("kube", "all") and not args.elb:
+        if not has("eksctl"):
+            raise SystemExit("Missing required executable: eksctl (install via: brew install eksctl). Required for NLB track.")
+        if not has("helm"):
+            raise SystemExit("Missing required executable: helm (install via: brew install helm). Required for NLB track.")
 
     try:
         out = subprocess.check_output(["aws","sts","get-caller-identity"], text=True)
