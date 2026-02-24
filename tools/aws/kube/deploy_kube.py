@@ -5,6 +5,7 @@ Called by deploy.py when scope is kube or all (after nonkube when scope=all).
 """
 import os
 import subprocess
+import sys
 import time
 
 from tools.cloud_shared.env import require
@@ -148,6 +149,21 @@ def run_deploy_kube(
 
     _timed("Tofu apply", "infra_terraform/live_deploy/aws/kube", _apply_eks)
 
+    # Phase 9.5: Install AWS Load Balancer Controller (NLB track only; skip when --elb)
+    if not getattr(args, "elb", False):
+        def _install_nlb():
+            subprocess.run(
+                [
+                    sys.executable,
+                    "tools/aws/kube/install_aws_load_balancer_controller.py",
+                    "--env", env,
+                    "--region", region,
+                ],
+                check=True,
+                env={**os.environ, "CLOUD_REGION": region},
+            )
+        _timed("Install NLB controller", "install_aws_load_balancer_controller", _install_nlb)
+
     # Phase 10: K8s bootstrap + schedule
     delta_bucket = snd["delta_bucket"]["value"]
     csv_uploaded = upload_csv_to_delta_bucket(delta_bucket, region)
@@ -168,6 +184,8 @@ def run_deploy_kube(
         "--aws-region", region,
         "--delta-table-path", delta_table_path,
     ]
+    if getattr(args, "elb", False):
+        kube_apply_args += ["--elb"]
     if db_secret_arn:
         kube_apply_args += ["--db-secret-arn", db_secret_arn]
     if openai_secret_arn:
@@ -203,14 +221,19 @@ def run_deploy_kube(
     logger.success("fru-api pods ready")
 
     # Wire K8s LoadBalancer into CloudFront API origin
-    # DEPLOYMENT_OPTIMIZATION §2.2: Second apply only when we got hostname from poll (didn't have before first apply).
-    hostname_after_poll = hostname_before_first_apply or _poll_lb_hostname(env, region)
-    need_second_apply = not hostname_before_first_apply and hostname_after_poll
+    # DEPLOYMENT_OPTIMIZATION §2.2: Second apply when (a) we got hostname from poll (didn't have before first apply),
+    # or (b) hostname changed after kube_apply (e.g. AWS Load Balancer Controller created NLB, replacing Classic ELB).
+    hostname_after_poll = _poll_lb_hostname(env, region)
+    hostname_to_use = hostname_after_poll or hostname_before_first_apply
+    need_second_apply = hostname_to_use and (
+        not hostname_before_first_apply
+        or (hostname_after_poll and hostname_after_poll != hostname_before_first_apply)
+    )
 
-    if hostname_after_poll:
-        wait_for_dns_resolvable(hostname_after_poll, timeout_seconds=120, check_interval_sec=5, heartbeat_interval_sec=30)
+    if hostname_to_use:
+        wait_for_dns_resolvable(hostname_to_use, timeout_seconds=120, check_interval_sec=5, heartbeat_interval_sec=30)
         # LB target health checks can take 2-5 min; allow more retries
-        verify_api_db_connected(f"http://{hostname_after_poll}", timeout_seconds=60, max_retries=12)
+        verify_api_db_connected(f"http://{hostname_to_use}", timeout_seconds=60, max_retries=12)
 
     if need_second_apply:
         logger.step("Re-applying kube stack with LoadBalancer hostname for CloudFront API origin...")
@@ -222,16 +245,16 @@ def run_deploy_kube(
                 [
                     "-var", f"eks_instance_types=[\"{require('EKS_NODE_INSTANCE_TYPES')}\"]",
                     "-var", f"eks_desired_nodes={require('EKS_DESIRED_NODES')}",
-                    "-var", f"ingress_hostname={hostname_after_poll}",
+                    "-var", f"ingress_hostname={hostname_to_use}",
                 ],
                 region,
             )
 
         _timed("Tofu apply (ingress)", "infra_terraform/live_deploy/aws/kube (ingress_hostname)", _reapply_kube)
         logger.success("CloudFront API origin wired to K8s LoadBalancer")
-    elif hostname_before_first_apply:
-        logger.success("CloudFront API origin already wired (hostname was known before first apply)")
-    elif not hostname_after_poll:
+    elif hostname_to_use and hostname_to_use == hostname_before_first_apply:
+        logger.success("CloudFront API origin already wired (hostname unchanged)")
+    elif not hostname_to_use:
         logger.warning("LoadBalancer hostname not available; CloudFront API routes may not work until re-applied manually")
 
     # Deploy frontend to S3

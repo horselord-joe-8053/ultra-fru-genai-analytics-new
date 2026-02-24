@@ -4,7 +4,7 @@ A visual crash course on how **VPC, LB, DNS, CloudFront, EKS, and Aurora** are w
 
 > **Load balancer type:** Docs historically said "NLB". **Current reality:** `fru-api-svc` (no `aws-load-balancer-type` annotation) is reconciled by the **in-tree** cloud provider, which creates a **Classic ELB** and `k8s-elb-*` security group—not an NLB. To get an NLB, add `service.beta.kubernetes.io/aws-load-balancer-type: external` to `api-service.yaml`. See [KUBE_LOAD_BALANCER_CLARIFICATION.md](../KUBE_LOAD_BALANCER_CLARIFICATION.md).
 
-**See also:** [VPC_LEARNED.md](VPC_LEARNED.md), [TERRA_LEARNED.md](terra/TERRA_LEARNED.md), [TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md](terra/TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md), [README_WAR_STORIES.md](../../README_WAR_STORIES.md).
+**See also:** [VPC_LEARNED.md](VPC_LEARNED.md), [TERRA_LEARNED.md](terra/TERRA_LEARNED.md), [TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md](terra/TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md), [ANALYTICS_KUBE_NONKUBE_SHARED_DATA.md](../ANALYTICS_KUBE_NONKUBE_SHARED_DATA.md), [README_WAR_STORIES.md](../../README_WAR_STORIES.md).
 
 ---
 
@@ -275,7 +275,7 @@ fru-genai-analytics-new/
 | 3 | Ensure secrets (PGPASSWORD, etc.) | `ensure_secrets.py` |
 | 4 | Build & push images | `build_and_push_images.py` |
 | 5 | Apply kube stack (ingress_hostname=null) | `tofu apply` |
-| 6 | Create namespace, secrets, bootstrap Job, schedule CronJob | `kube_apply.py` |
+| 6 | Create namespace, secrets (incl. aws-credentials), bootstrap Job, schedule CronJob | `kube_apply.py` |
 | 7 | Rollout restart API (pick up secrets) | `k8s_rollout_restart_api` |
 | 8 | Wait for fru-api pods ready | `wait_for_fru_api_ready` |
 | 9 | Poll for LB hostname | `kubectl get svc fru-api-svc -o jsonpath=...` |

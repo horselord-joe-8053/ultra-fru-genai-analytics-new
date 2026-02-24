@@ -2,7 +2,7 @@
 
 A visual crash course on how **VPC, ALB, CloudFront, ECS Fargate, and Aurora** are wired together to create a fully working nonkube (ECS-based) infrastructure.
 
-**See also:** [FULL_ARCH_KUBE_LEARN.md](FULL_ARCH_KUBE_LEARN.md), [VPC_LEARNED.md](VPC_LEARNED.md), [README_WAR_STORIES.md](../../README_WAR_STORIES.md).
+**See also:** [FULL_ARCH_KUBE_LEARN.md](FULL_ARCH_KUBE_LEARN.md), [ANALYTICS_KUBE_NONKUBE_SHARED_DATA.md](../ANALYTICS_KUBE_NONKUBE_SHARED_DATA.md), [VPC_LEARNED.md](VPC_LEARNED.md), [README_WAR_STORIES.md](../../README_WAR_STORIES.md).
 
 ---
 

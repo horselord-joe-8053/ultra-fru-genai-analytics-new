@@ -117,6 +117,8 @@ def handle_aws(args):
             deploy_args.append("--skip-build")
         if args.force_build:
             deploy_args.append("--force-build")
+        if args.elb:
+            deploy_args.append("--elb")
             
         with logger.Heartbeat(f"Deployment scope={args.scope} env={args.env}"):
             run_command(["python", script] + deploy_args)
@@ -186,6 +188,7 @@ def main():
     parser.add_argument("--skip-ensure-deps", action="store_true", help="Skip pip install -r requirements.txt (deploy only)")
     parser.add_argument("--skip-build", action="store_true", help="Skip build; use repo:latest from ECR (deploy only)")
     parser.add_argument("--force-build", action="store_true", help="Force build even when content hash matches (deploy only)")
+    parser.add_argument("--elb", action="store_true", help="[Kube only] Use in-tree Classic ELB instead of NLB (deploy only)")
     parser.add_argument("--preempt", action="store_true", help="Run full teardown and verification before deploy")
     parser.add_argument("--incl-dura", action="store_true", help="Include shared durable in teardown (scope=all only)")
 

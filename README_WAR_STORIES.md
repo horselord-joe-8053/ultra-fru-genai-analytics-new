@@ -3366,3 +3366,113 @@ return response
 ### 62.6 Takeaway
 
 API endpoints that return frequently changing data (analytics, dashboards) should set `Cache-Control: no-store` or `max-age=0` to prevent the browser from serving stale cached responses. If the UI shows wrong data but the API returns correct data when hit directly, suspect browser cache first.
+
+---
+
+## 63. Kube CronJob Missing AWS Credentials: Shared Analytics Data and Why We Keep It Centralized
+
+**creation:** `<260210>`
+**last_updated:** `<260210>`
+
+**keywords:** EKS, CronJob, Spark, analytics, EventBridge, batch_analytics, Delta Lake, aws-credentials, S3A, kube vs nonkube
+**difficulty:** 6
+**significance:** 7
+
+### 63.1 Context
+
+The analytics panel in the UI showed "Updated 3 minutes ago" for both Kube and Nonkube scopes, and the data appeared in sync. Investigating the Kube CronJob (`fru-analytics-periodic-kube*`) revealed pods in **Error** with restarts. Logs showed `NoAuthWithAWSException: No AWS Credentials provided` — Spark could not access S3 for the Delta table.
+
+### 63.2 Root Cause: CronJob Missing AWS Credentials
+
+The **bootstrap job** (`bootstrap-job.yaml`) gets `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `CLOUD_REGION` from `kube_apply.py` and runs once during deploy — so it succeeded. The **CronJob** (`spark-cronjob.yaml`) did **not** have these env vars. EKS pods don't use instance metadata (unlike ECS task role); they need static credentials from env. The CronJob only had `db-credentials` for PGPASSWORD; no AWS credentials.
+
+**Fix:** Add `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` from the `aws-credentials` secret (created at bootstrap) via `secretKeyRef`, plus `CLOUD_REGION` from kube_apply subs. See `spark-cronjob.yaml` and `kube_apply.py` schedule phase.
+
+### 63.3 Why Kube and Nonkube Panels Showed the Same Data
+
+Both scopes share the same data:
+
+| Layer | Shared? |
+|-------|---------|
+| **PostgreSQL `batch_analytics`** | Yes — both Spark jobs write to the same table in the shared Aurora DB |
+| **S3 Delta table** | Yes — both read from the same Delta Lake path (e.g. `s3a://.../delta/fru_sales`) |
+
+The `/analytics` API reads from `batch_analytics` and returns the latest row. Kube and Nonkube APIs both connect to the same Aurora instance. So both UIs show the same data. The "Updated X ago" timestamp reflects the most recent successful Spark run from **either** environment — if the CronJob was failing, the timestamp came from Nonkube's EventBridge-triggered ECS Spark task.
+
+### 63.4 Decision: Keep Data Centralized
+
+We considered separating analytics (e.g. `batch_analytics_kube` vs `batch_analytics_nonkube`) so each scope writes to its own table. We decided **not** to do that because:
+
+- **PROD:** In production, we deploy **either** Kube **or** Nonkube, not both. Having both scopes would be meaningless in PROD.
+- **DEV:** In dev, both scopes are useful for learning and as templates for each deployment target. Having both run analytics (CronJob + EventBridge) into the same table is acceptable — they both read from the same Delta source and write to the same `batch_analytics` table. The "last writer wins" behavior is fine for dev; the UI shows the most recent update regardless of which scope produced it.
+
+### 63.5 Takeaway
+
+EKS CronJob pods need AWS credentials for S3 access (unlike ECS, which uses task role). Use the same `aws-credentials` secret from bootstrap for both API and CronJob. Kube and Nonkube share Delta and `batch_analytics`; in PROD only one scope will be deployed. See `docs/ANALYTICS_KUBE_NONKUBE_SHARED_DATA.md`.
+
+---
+
+## 64. Kube Load Balancer Choice: Classic ELB vs NLB and the --elb Flag
+
+**creation:** `<260210>`
+**last_updated:** `<260210>`
+
+**keywords:** EKS, Kubernetes, LoadBalancer Service, Classic ELB, NLB, AWS Load Balancer Controller, in-tree cloud provider, --elb flag, api-service.yaml, api-service-elb.yaml
+**difficulty:** 6
+**significance:** 8
+
+### 64.1 Context
+
+Our kube API is exposed via `fru-api-svc` (type LoadBalancer). Kubernetes does not create the load balancer itself—the **cloud provider** does. On AWS, two different reconcilers can handle a LoadBalancer Service:
+
+1. **In-tree cloud provider** (legacy, built into K8s) → creates **Classic ELB** and `k8s-elb-*` security groups.
+2. **AWS Load Balancer Controller** (out-of-tree, installed via Helm) → creates **NLB** when the Service has `service.beta.kubernetes.io/aws-load-balancer-type: external`.
+
+We needed to support both: NLB as the default (modern, better performance) and Classic ELB as a fallback (no eksctl/helm, pre-migration behavior). The `--elb` flag and dual manifests (`api-service.yaml` vs `api-service-elb.yaml`) implement this choice.
+
+### 64.2 The Two Tracks
+
+| Track | Deploy flag | Manifest | Who reconciles | LB type |
+|-------|-------------|----------|----------------|---------|
+| **NLB** (default) | *no* `--elb` | `api-service.yaml` | AWS Load Balancer Controller | Network Load Balancer |
+| **Classic ELB** | `--elb` | `api-service-elb.yaml` | In-tree cloud provider | Classic ELB |
+
+**What NLB and Classic ELB are:** Classic ELB is AWS's original load balancer (pre-2016)—Layer 4/7, one product for TCP/HTTP/HTTPS. Still supported but legacy. Creates `k8s-elb-{hex}` security groups. NLB (Network Load Balancer, 2017+) is newer—Layer 4 only, lower latency, higher throughput, static IPs. Both use `*.elb.amazonaws.com` DNS. NLB is preferred for API traffic.
+
+**In-tree vs out-of-tree:** When you create a Service with `type: LoadBalancer`, something must call AWS APIs to create the real LB. The **in-tree cloud provider** is code inside the main Kubernetes repo (`kube-controller-manager`); it's built-in and always present on EKS. It creates Classic ELBs. The **AWS Load Balancer Controller** is out-of-tree—a separate controller running as pods, installed via Helm. It creates NLBs/ALBs. "In-tree" = in the Kubernetes tree; "out-of-tree" = separate project that watches K8s resources and talks to AWS.
+
+**How the annotations wire things together:** The annotations decide which reconciler handles the Service and how the LB is configured. `service.beta.kubernetes.io/aws-load-balancer-type: external` is the critical switch—it hands the Service to the AWS Load Balancer Controller. The in-tree *ignores* Services with this annotation. Without it, the in-tree handles the Service and creates a Classic ELB. `aws-load-balancer-scheme: internet-facing` means the LB is reachable from the internet (CloudFront must reach the API origin). `aws-load-balancer-nlb-target-type: instance` (NLB only) routes traffic to node IPs. The manifest difference is that `api-service.yaml` has `aws-load-balancer-type: external`; `api-service-elb.yaml` does not.
+
+**Setup requirements:** Classic ELB track needs no extra setup—the in-tree is built into EKS; apply `api-service-elb.yaml` and the LB appears. NLB track requires the AWS Load Balancer Controller to be installed first (Phase 9.5). Without it, a Service with `aws-load-balancer-type: external` would have no reconciler and would stay in `Pending`.
+
+### 64.3 How the Choice Flows Through Deploy
+
+```
+deploy.py --scope kube [--elb]
+    │
+    ├── doctor.py [--elb]  →  NLB track: requires eksctl, helm (for controller install)
+    │
+    └── deploy_kube.py
+            │
+            ├── Phase 9.5: Install AWS Load Balancer Controller  (skipped when --elb)
+            │
+            └── kube_apply.py [--elb]
+                    │
+                    └── api_svc_manifest = "api-service-elb.yaml" if args.elb else "api-service.yaml"
+```
+
+- **With `--elb`:** No controller install. `kube_apply` uses `api-service-elb.yaml` → in-tree creates Classic ELB.
+- **Without `--elb`:** Phase 9.5 runs `install_aws_load_balancer_controller.py` (eksctl IAM, Helm chart). `kube_apply` uses `api-service.yaml` → controller creates NLB.
+
+### 64.4 Why We Have Both Options
+
+- **NLB (default):** Modern, better performance, recommended. Requires eksctl and helm for controller install; deploy handles this automatically.
+- **Classic ELB (`--elb`):** Fallback when eksctl/helm are unavailable or when reverting to pre-migration behavior. No controller; in-tree only. Useful for quick local or CI runs without extra tooling.
+
+### 64.5 Orphan Cleanup After Migration
+
+When switching from Classic ELB to NLB, the old Classic ELB and its `k8s-elb-*` security group become orphans (no longer in Terraform or K8s state). Run `remove_for_orphans_data.py` after verifying the NLB works. See [KUBE_NLB_MIGRATION_STEPS.md](docs/KUBE_NLB_MIGRATION_STEPS.md).
+
+### 64.6 Takeaway
+
+The `--elb` flag selects the load balancer track: Classic ELB (in-tree) vs NLB (AWS Load Balancer Controller). Two manifests, one annotation difference, one flag. Document this choice clearly—it affects deploy prerequisites (eksctl/helm for NLB), orphan cleanup, and CloudFront origin wiring. See `docs/learned/KUBE_INGRESS_LEARNED.md` Section 0 and `docs/KUBE_LOAD_BALANCER_CLARIFICATION.md`.

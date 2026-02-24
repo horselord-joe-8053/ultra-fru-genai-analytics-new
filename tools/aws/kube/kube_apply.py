@@ -66,6 +66,7 @@ def main():
     ap.add_argument("--bedrock-inference-profile-id", default="", help="AWS_BEDROCK_INFERENCE_PROFILE_ID")
     ap.add_argument("--bedrock-model-id", default="anthropic.claude-3-5-haiku-20241022-v1:0", help="AWS_BEDROCK_MODEL_ID")
     ap.add_argument("--force", action="store_true", help="Force bootstrap even if already succeeded (e.g. after CSV upload)")
+    ap.add_argument("--elb", action="store_true", help="Use api-service-elb.yaml (in-tree Classic ELB) instead of api-service.yaml (NLB)")
     args = ap.parse_args()
 
     region = resolve_region(args.region)
@@ -189,11 +190,13 @@ data:
             }
             txt = render("infra_terraform/modules/cloud_shared/k8s/api-deployment.yaml", api_subs)
             kubectl(["apply","-f","-"], input_text=txt)
-            txt = render("infra_terraform/modules/cloud_shared/k8s/api-service.yaml", {})
+            api_svc_manifest = "api-service-elb.yaml" if args.elb else "api-service.yaml"
+            txt = render(f"infra_terraform/modules/cloud_shared/k8s/{api_svc_manifest}", {})
             kubectl(["apply","-f","-"], input_text=txt)
         except FileNotFoundError:
             print("WARN: API manifests not found, skipping API deployment.")
     else:
+        # Schedule phase: apply CronJob. Requires aws-credentials secret from bootstrap for S3 access.
         delta_table_path = args.delta_table_path or f"s3a://{delta_bucket}/delta/fru_sales"
         subs = {
             "SPARK_IMAGE": spark_image,
@@ -203,6 +206,7 @@ data:
             "PGPORT": args.pg_port,
             "PGDATABASE": args.pg_database,
             "PGUSER": args.pg_user,
+            "CLOUD_REGION": args.aws_region or os.getenv("CLOUD_REGION", "").strip() or require("CLOUD_REGION"),
         }
         txt = render("infra_terraform/modules/cloud_shared/k8s/spark-cronjob.yaml", subs)
         kubectl(["apply","-f","-"], input_text=txt)
