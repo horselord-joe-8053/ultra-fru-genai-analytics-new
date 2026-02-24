@@ -1,14 +1,15 @@
+# NLB track: fru-api-svc with AWS Load Balancer Controller → Network Load Balancer.
+# Used when deploying kube WITHOUT --elb. kube_apply selects this manifest.
+# Mutually exclusive with api-service-elb.yaml: deploy uses exactly one.
+# See docs/learned/KUBE_INGRESS_LEARNED.md Section 0.
 apiVersion: v1
 kind: Service
 metadata:
   name: fru-api-svc
   namespace: fru-kube
-  # CloudFront must reach the API origin from the internet; default LB is internal in private subnets.
-  # 'service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing'
-  #   : in-tree creates Classic ELB (no aws-load-balancer-type). 
-  # for NLB, added:
-  #   service.beta.kubernetes.io/aws-load-balancer-type: external
-  #   service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: instance
+  # internet-facing: CloudFront must reach API from internet; default LB is internal.
+  # aws-load-balancer-type: external → hands Service to AWS Load Balancer Controller → NLB.
+  # Without it, in-tree would create Classic ELB (see api-service-elb.yaml).
   annotations:
     service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
     service.beta.kubernetes.io/aws-load-balancer-type: external

@@ -1,11 +1,15 @@
+# Classic ELB track: fru-api-svc with in-tree cloud provider → Classic ELB (legacy).
+# Used when deploying kube WITH --elb. kube_apply selects this manifest.
+# Mutually exclusive with api-service.yaml: deploy uses exactly one.
+# See docs/learned/KUBE_INGRESS_LEARNED.md Section 0.
 apiVersion: v1
 kind: Service
 metadata:
   name: fru-api-svc
   namespace: fru-kube
-  # CloudFront must reach the API origin from the internet; default LB is internal in private subnets.
-  # 'service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing'
-  #   : in-tree creates Classic ELB (no aws-load-balancer-type). 
+  # internet-facing: CloudFront must reach API from internet.
+  # No aws-load-balancer-type → in-tree cloud provider reconciles → Classic ELB.
+  # For NLB instead, use api-service.yaml (default, when no --elb flag is used).
   annotations:
     service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
 spec:
