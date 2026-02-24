@@ -99,8 +99,12 @@ resource "aws_security_group_rule" "aurora_from_ecs" {
   description              = "Allow ECS tasks to reach Aurora"
 }
 
+locals {
+  role_suffix = var.aws_region
+}
+
 resource "aws_iam_role" "exec" {
-  name = "${var.name}-${var.env}-ecs-exec"
+  name = "${var.name}-${var.env}-ecs-exec-${local.role_suffix}"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -118,7 +122,7 @@ resource "aws_iam_role_policy_attachment" "exec_attach" {
 
 resource "aws_iam_role_policy" "exec_secrets" {
   count       = length(var.secret_arns) > 0 ? 1 : 0
-  name        = "${var.name}-${var.env}-ecs-exec-secrets"
+  name        = "${var.name}-${var.env}-ecs-exec-secrets-${local.role_suffix}"
   role        = aws_iam_role.exec.id
   policy = jsonencode({
     Version   = "2012-10-17"
@@ -131,13 +135,13 @@ resource "aws_iam_role_policy" "exec_secrets" {
 }
 
 resource "aws_iam_role" "task" {
-  name               = "${var.name}-${var.env}-ecs-task"
+  name               = "${var.name}-${var.env}-ecs-task-${local.role_suffix}"
   assume_role_policy = aws_iam_role.exec.assume_role_policy
   tags               = var.tags
 }
 
 resource "aws_iam_role_policy" "task_bedrock" {
-  name = "${var.name}-${var.env}-ecs-task-bedrock"
+  name = "${var.name}-${var.env}-ecs-task-bedrock-${local.role_suffix}"
   role = aws_iam_role.task.id
   policy = jsonencode({
     Version   = "2012-10-17"
@@ -220,7 +224,7 @@ resource "aws_cloudwatch_log_group" "spark" {
 }
 
 resource "aws_iam_role" "spark_task_exec" {
-  name = "${var.name}-${var.env}-spark-task-exec"
+  name = "${var.name}-${var.env}-spark-task-exec-${local.role_suffix}"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -238,7 +242,7 @@ resource "aws_iam_role_policy_attachment" "spark_exec_attach" {
 }
 
 resource "aws_iam_role_policy" "spark_s3" {
-  name = "${var.name}-${var.env}-spark-s3"
+  name = "${var.name}-${var.env}-spark-s3-${local.role_suffix}"
   role = aws_iam_role.spark_task_exec.id
   policy = jsonencode({
     Version = "2012-10-17"
@@ -255,7 +259,7 @@ resource "aws_iam_role_policy" "spark_s3" {
 
 # Task role: used by container for AWS SDK (S3, etc). Execution role is for ECS agent only.
 resource "aws_iam_role" "spark_task" {
-  name = "${var.name}-${var.env}-spark-task"
+  name = "${var.name}-${var.env}-spark-task-${local.role_suffix}"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -268,7 +272,7 @@ resource "aws_iam_role" "spark_task" {
 }
 
 resource "aws_iam_role_policy" "spark_task_s3" {
-  name = "${var.name}-${var.env}-spark-task-s3"
+  name = "${var.name}-${var.env}-spark-task-s3-${local.role_suffix}"
   role = aws_iam_role.spark_task.id
   policy = jsonencode({
     Version = "2012-10-17"
@@ -285,7 +289,7 @@ resource "aws_iam_role_policy" "spark_task_s3" {
 
 resource "aws_iam_role_policy" "spark_secrets" {
   count       = var.db_password_plain_secret_arn != "" ? 1 : 0
-  name        = "${var.name}-${var.env}-spark-secrets"
+  name        = "${var.name}-${var.env}-spark-secrets-${local.role_suffix}"
   role        = aws_iam_role.spark_task_exec.id
   policy = jsonencode({
     Version   = "2012-10-17"
@@ -344,7 +348,7 @@ resource "aws_ecs_task_definition" "spark" {
 }
 
 resource "aws_iam_role" "events_invoke_ecs" {
-  name = "${var.name}-${var.env}-events-invoke-ecs"
+  name = "${var.name}-${var.env}-events-invoke-ecs-${local.role_suffix}"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -357,7 +361,7 @@ resource "aws_iam_role" "events_invoke_ecs" {
 }
 
 resource "aws_iam_role_policy" "events_invoke_ecs" {
-  name = "${var.name}-${var.env}-events-invoke-ecs"
+  name = "${var.name}-${var.env}-events-invoke-ecs-${local.role_suffix}"
   role = aws_iam_role.events_invoke_ecs.id
   policy = jsonencode({
     Version = "2012-10-17"

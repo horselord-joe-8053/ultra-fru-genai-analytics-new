@@ -4,7 +4,7 @@ terraform { required_version = ">= 1.6.0" }
 data "aws_caller_identity" "me" {}
 
 resource "aws_iam_role" "eks_cluster" {
-  name = "${var.name}-cluster-role"
+  name = "${var.name}-cluster-role-${var.aws_region}"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -32,7 +32,7 @@ resource "aws_eks_cluster" "this" {
 }
 
 resource "aws_iam_role" "eks_nodes" {
-  name = "${var.name}-node-role"
+  name = "${var.name}-node-role-${var.aws_region}"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{

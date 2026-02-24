@@ -18,7 +18,7 @@ variable "tf_state_bucket_region" { type = string }
 variable "tf_lock_table" { type = string }
 variable "tf_state_prefix" { type = string }
 
-# Ingress/NLB hostname for CloudFront API origin. Set after Ingress is created.
+# LB hostname for CloudFront API origin. Set after fru-api-svc LoadBalancer is provisioned (currently Classic ELB; NLB with aws-load-balancer-type annotation).
 variable "ingress_hostname" {
   type    = string
   default = null

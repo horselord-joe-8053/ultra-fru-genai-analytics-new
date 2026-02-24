@@ -43,13 +43,14 @@ module "tags" {
 module "eks" {
   source         = "../../../modules/aws/eks"
   name           = var.eks_cluster_name
+  aws_region     = var.aws_region
   subnet_ids     = data.terraform_remote_state.shared_durable.outputs.private_subnet_ids
   instance_types = var.eks_instance_types
   desired_size   = var.eks_desired_nodes
   tags           = module.tags.common_tags
 }
 
-# CloudFront + S3 frontend (alb_dns_name = null until Ingress/NLB is added)
+# CloudFront + S3 frontend (alb_dns_name = null until LB hostname is available)
 module "frontend" {
   source = "../../../modules/aws/primitives/cloudfront"
   prefix = var.prefix
@@ -65,7 +66,7 @@ module "frontend" {
   tags                   = module.tags.common_tags
 }
 
-# Tag public subnets so AWS Load Balancer Controller can place internet-facing NLBs there.
+# Tag public subnets so load balancers (Classic or NLB) can be placed in public subnets.
 # Required for CloudFront to reach the API origin (fru-api-svc) from the internet.
 resource "aws_ec2_tag" "public_subnet_elb" {
   for_each    = toset(data.terraform_remote_state.shared_durable.outputs.public_subnet_ids)

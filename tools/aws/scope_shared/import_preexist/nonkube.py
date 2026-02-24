@@ -164,12 +164,13 @@ def run_import_nonkube(
         logger.warning("  Skip S3 bucket: could not get account ID or find bucket")
 
     # IAM roles (ID = role name)
+    # Region suffix: per-region names avoid cross-region teardown deleting shared roles
     role_specs = [
-        ("module.ecs.aws_iam_role.exec", f"{prefix}-{env}-ecs-exec"),
-        ("module.ecs.aws_iam_role.task", f"{prefix}-{env}-ecs-task"),
-        ("module.ecs.aws_iam_role.spark_task_exec", f"{prefix}-{env}-spark-task-exec"),
-        ("module.ecs.aws_iam_role.spark_task", f"{prefix}-{env}-spark-task"),
-        ("module.ecs.aws_iam_role.events_invoke_ecs", f"{prefix}-{env}-events-invoke-ecs"),
+        ("module.ecs.aws_iam_role.exec", f"{prefix}-{env}-ecs-exec-{deploy_region}"),
+        ("module.ecs.aws_iam_role.task", f"{prefix}-{env}-ecs-task-{deploy_region}"),
+        ("module.ecs.aws_iam_role.spark_task_exec", f"{prefix}-{env}-spark-task-exec-{deploy_region}"),
+        ("module.ecs.aws_iam_role.spark_task", f"{prefix}-{env}-spark-task-{deploy_region}"),
+        ("module.ecs.aws_iam_role.events_invoke_ecs", f"{prefix}-{env}-events-invoke-ecs-{deploy_region}"),
     ]
     failed += import_batch(stack_dir, role_specs, region)
 

@@ -3,7 +3,9 @@ kind: Service
 metadata:
   name: fru-api-svc
   namespace: fru-kube
-  # CloudFront must reach the API origin from the internet; default NLB is internal in private subnets.
+  # CloudFront must reach the API origin from the internet; default LB is internal in private subnets.
+  # Current: in-tree creates Classic ELB (no aws-load-balancer-type). To get NLB, add:
+  #   service.beta.kubernetes.io/aws-load-balancer-type: external
   annotations:
     service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
 spec:

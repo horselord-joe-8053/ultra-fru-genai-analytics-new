@@ -36,7 +36,12 @@ def main():
     os.environ["CLOUD_REGION"] = region
 
     # APP_IMAGE_TAG and SPARK_IMAGE_TAG are optional; deploy auto-generates when commented out in .env
-    for k in ["TF_STATE_BUCKET","FRU_PREFIX","S3_DELTA_BUCKET","S3_ARTIFACT_BUCKET","ECR_REPO_APP","ECR_REPO_SPARK"]:
+    # TF_STATE_BUCKET_PREFIX + TF_LOCK_TABLE_PREFIX (preferred) or legacy TF_STATE_BUCKET
+    if os.getenv("TF_STATE_BUCKET_PREFIX"):
+        require("TF_LOCK_TABLE_PREFIX")
+    else:
+        require("TF_STATE_BUCKET")
+    for k in ["FRU_PREFIX","S3_DELTA_BUCKET","S3_ARTIFACT_BUCKET","ECR_REPO_APP","ECR_REPO_SPARK"]:
         require(k)
 
     tfbin = os.getenv("FRU_TF_BIN","tofu")

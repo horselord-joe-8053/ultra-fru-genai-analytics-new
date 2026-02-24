@@ -1,5 +1,9 @@
 variable "name" { type = string }
 variable "env" { type = string }
+variable "aws_region" {
+  type        = string
+  description = "AWS region (used for global IAM role names to avoid cross-region teardown conflicts)"
+}
 variable "tags" {
   type    = map(string)
   default = {}

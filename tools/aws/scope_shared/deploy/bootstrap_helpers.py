@@ -139,7 +139,7 @@ def wait_for_dns_resolvable(
     heartbeat_interval_sec: int = 30,
 ) -> bool:
     """
-    Wait for a hostname to be DNS-resolvable. Used after kube deploy when the NLB
+    Wait for a hostname to be DNS-resolvable. Used after kube deploy when the LB
     hostname is assigned by K8s immediately, but AWS DNS can take 1-2 minutes to
     propagate. Retries with heartbeat until resolvable or timeout.
     """
@@ -164,7 +164,7 @@ def wait_for_dns_resolvable(
         time.sleep(check_interval_sec)
 
     logger.error(f"[DNS] {hostname} did not become resolvable within {timeout_seconds}s")
-    logger.error("  → AWS NLB DNS typically propagates in 1-2 min. Retry deploy or check network.")
+    logger.error("  → AWS LB DNS typically propagates in 1-2 min. Retry deploy or check network.")
     raise SystemExit(1)
 
 
@@ -173,14 +173,14 @@ def verify_api_db_connected(base_url: str, timeout_seconds: int = 30, max_retrie
     Verify /health returns database=connected. Fail-fast if disconnected.
     Used after kube deploy to catch Aurora vs db_password_plain mismatch (War Story 44).
     Call wait_for_dns_resolvable(lb_host) before this; DNS propagation is handled there.
-    Retries a few times for transient HTTP/connection issues.
+    Retries for transient HTTP/connection issues. LB target health checks can take 2-5 min.
     """
     import time
     from tools.cloud_shared.logging import logger
 
     url = f"{base_url.rstrip('/')}/health"
     last_err = None
-    retry_interval_sec = 20
+    retry_interval_sec = 30
     for attempt in range(max_retries):
         try:
             req = urllib.request.Request(url)
@@ -204,7 +204,7 @@ def verify_api_db_connected(base_url: str, timeout_seconds: int = 30, max_retrie
             err_str = str(e).lower()
             is_dns = "nodename" in err_str or "not known" in err_str or "name or service not known" in err_str
             if attempt < max_retries - 1:
-                hint = " (NLB DNS may still be propagating; AWS typically takes 1-2 min)" if is_dns else ""
+                hint = " (LB DNS may still be propagating; AWS typically takes 1-2 min)" if is_dns else ""
                 logger.info(
                     f"[DB] /health not reachable (attempt {attempt + 1}/{max_retries}){hint}, "
                     f"retrying in {retry_interval_sec}s..."
@@ -212,7 +212,7 @@ def verify_api_db_connected(base_url: str, timeout_seconds: int = 30, max_retrie
                 time.sleep(retry_interval_sec)
     logger.error(f"[DB] Could not verify /health at {url}: {last_err}")
     if last_err and ("nodename" in str(last_err).lower() or "not known" in str(last_err).lower()):
-        logger.error("  → DNS resolution failed. NLB hostname may need 1-2 min to propagate. Re-run deploy or try the URL manually.")
+        logger.error("  → DNS resolution failed. LB hostname may need 1-2 min to propagate. Re-run deploy or try the URL manually.")
     raise SystemExit(1)
 
 
@@ -307,7 +307,7 @@ def k8s_remove_bootstrap_and_scheduler(
         _run_kubectl(["kubectl", "scale", "deployment", "fru-api", "--replicas=0", "-n", K8S_NAMESPACE])
     _timed("Deployment (scale to 0)", f"fru-api (ns={K8S_NAMESPACE})", _scale)
 
-    # 2. Delete LoadBalancer service first (releases NLB/ENIs; avoids DependencyViolation)
+    # 2. Delete LoadBalancer service first (releases LB/ENIs; avoids DependencyViolation)
     def _del_svc():
         _run_kubectl(["kubectl", "delete", "svc", "fru-api-svc", "--ignore-not-found", "-n", K8S_NAMESPACE])
     _timed("LoadBalancer service", f"fru-api-svc (ns={K8S_NAMESPACE})", _del_svc)
@@ -331,7 +331,7 @@ def k8s_remove_bootstrap_and_scheduler(
         cmd = f"kubectl get namespace {K8S_NAMESPACE}"
         logger.info(
             f"Pre-destroy kube: polling `{cmd}` until Terminating completes "
-            "(AWS releasing NLB/ENIs, up to 2 min)..."
+            "(AWS releasing LB/ENIs, up to 2 min)..."
         )
         for attempt in range(24):  # Up to 2 min
             out = subprocess.run(
