@@ -11,8 +11,10 @@ Writes orphans to orphan_data/orphans_<YYMMDD-hhmmss>.json for removal/recovery 
 Usage:
   python tools/aws/standalone/temp_one_off/resources_scan/scan_aws_remaining.py --cloud-regions us-east-1,us-east-2
   python tools/aws/standalone/temp_one_off/resources_scan/scan_aws_remaining.py --cloud-regions us-east-1,us-east-2 --env dev --prefix fru
+  python tools/aws/standalone/temp_one_off/resources_scan/scan_aws_remaining.py --cloud-regions us-east-1 --env dev --prefix fru --elb  # Classic ELB track
 
 Search criteria (prefix, env) are dynamic from --prefix and --env (or FRU_PREFIX, FRU_ENV).
+--elb: Classic ELB track; affects orphan classification for LB/SG/TG (see KUBE_INGRESS_LEARNED.md Section 0).
 """
 import argparse
 import json
@@ -65,6 +67,8 @@ def _orphan_record(
     name: str,
     display: str,
     region: str | None = None,
+    *,
+    orphan_note: str = "",
     **extra: str,
 ) -> dict:
     """Build a structured orphan record for JSON output and removal script."""
@@ -74,6 +78,8 @@ def _orphan_record(
         "region": region,
         "display": display,
     }
+    if orphan_note:
+        rec["orphan_note"] = orphan_note
     if extra:
         rec["extra"] = {k: v for k, v in extra.items() if v}
     return rec
@@ -376,20 +382,24 @@ def _classify_and_add(
     tags: dict[str, str] | None = None,
     lb_type: str = "",
     extra: dict | None = None,
+    use_elb: bool = False,
 ) -> None:
     """Classify a resource and add to the appropriate result bucket."""
     display = fmt or f"{resource_type}:{item}"
-    # Orphan check first (pattern-based, no hardcoding)
     orphan_rt = "load_balancer" if resource_type == "alb" and lb_type else resource_type
-    level = classify_orphan(
-        orphan_rt, item, prefix, env, tags=tags, lb_type=lb_type, region=region
+    level, note = classify_orphan(
+        orphan_rt, item, prefix, env,
+        tags=tags, lb_type=lb_type, region=region, use_elb=use_elb,
     )
+    ex = dict(extra or {})
+    if lb_type:
+        ex["lb_type"] = lb_type
     if level == "definitely":
         rec = _orphan_record(
             orphan_rt, item, display,
             region=region or None,
-            lb_type=lb_type,
-            **(extra or {}),
+            orphan_note=note,
+            **{k: v for k, v in ex.items() if v},
         )
         result.orphan_definitely.append(rec)
         return
@@ -397,8 +407,8 @@ def _classify_and_add(
         rec = _orphan_record(
             orphan_rt, item, display,
             region=region or None,
-            lb_type=lb_type,
-            **(extra or {}),
+            orphan_note=note,
+            **{k: v for k, v in ex.items() if v},
         )
         result.orphan_likely.append(rec)
         return
@@ -412,7 +422,7 @@ def _classify_and_add(
     result.other_projects.append(display)
 
 
-def scan_region(region: str, prefix: str, env: str, account_id: str) -> ScanResult:
+def scan_region(region: str, prefix: str, env: str, account_id: str, *, use_elb: bool = False) -> ScanResult:
     """Scan one region. List ALL resources, classify each."""
     logger.info(f"[{region}] Scanning ECS, EKS, load balancers, target groups, security groups, log groups, secrets, EBS, EventBridge, VPC, RDS, ECR, S3...")
     result = ScanResult()
@@ -433,14 +443,14 @@ def scan_region(region: str, prefix: str, env: str, account_id: str) -> ScanResu
         lb_type = lb.get("type", "")
         arn_suffix = lb.get("arn", "").split(":")[-1] if lb.get("arn") else ""
         display = f"load_balancer:{name} ({lb_type})" + (f" [id={arn_suffix}]" if arn_suffix else "")
-        _classify_and_add(result, name, "alb", prefix, env, region, display, lb_type=lb_type)
+        _classify_and_add(result, name, "alb", prefix, env, region, display, lb_type=lb_type, use_elb=use_elb)
 
     # Target groups
     for tg in _list_all_target_groups(region):
         name = tg["name"]
         arn = tg.get("arn", "")
         display = f"target_group:{name}"
-        _classify_and_add(result, name, "target_group", prefix, env, region, display, extra={"target_group_arn": arn})
+        _classify_and_add(result, name, "target_group", prefix, env, region, display, extra={"target_group_arn": arn}, use_elb=use_elb)
 
     # Security groups (check orphan first, then k8s cluster ownership)
     cluster_tag = f"kubernetes.io/cluster/{pe}-eks"
@@ -449,13 +459,13 @@ def scan_region(region: str, prefix: str, env: str, account_id: str) -> ScanResu
         tags = sg.get("tags", {})
         group_id = sg.get("group_id", "")
         display = f"sg:{name} (k8s cluster {pe}-eks)" if tags.get(cluster_tag) in ("shared", "owned") else f"sg:{name}"
-        level = classify_orphan("security_group", name, prefix, env, tags=tags)
+        level, note = classify_orphan("security_group", name, prefix, env, tags=tags, use_elb=use_elb)
         if level == "definitely":
-            rec = _orphan_record("security_group", name, display, region=region, group_id=group_id)
+            rec = _orphan_record("security_group", name, display, region=region, orphan_note=note, group_id=group_id)
             result.orphan_definitely.append(rec)
             continue
         if level == "likely":
-            rec = _orphan_record("security_group", name, display, region=region, group_id=group_id)
+            rec = _orphan_record("security_group", name, display, region=region, orphan_note=note, group_id=group_id)
             result.orphan_likely.append(rec)
             continue
         if tags.get(cluster_tag) in ("shared", "owned"):
@@ -622,10 +632,13 @@ def format_output(
     cf_result: ScanResult,
     prefix: str,
     env: str,
+    *,
+    use_elb: bool = False,
 ) -> str:
     """Format scan results."""
     lines = []
-    lines.append(f"Scan: regions={', '.join(regions)}, project prefix={prefix}, env={env}")
+    lb_track = "Classic ELB" if use_elb else "NLB"
+    lines.append(f"Scan: regions={', '.join(regions)}, prefix={prefix}, env={env}, kube LB={lb_track}")
     lines.append("")
 
     # Orphans (not in Terraform state; survive teardown)
@@ -645,11 +658,15 @@ def format_output(
     if all_definite:
         lines.append("Definitely orphan (pattern-based rules):")
         for rec in sorted(all_definite, key=lambda x: x["display"]):
-            lines.append(f"  - {rec['display']}")
+            note = rec.get("orphan_note", "")
+            suffix = f"  # {note}" if note else ""
+            lines.append(f"  - {rec['display']}{suffix}")
     if all_likely:
         lines.append("Likely orphan (pattern suggests orphan, not 100%):")
         for rec in sorted(all_likely, key=lambda x: x["display"]):
-            lines.append(f"  - {rec['display']}")
+            note = rec.get("orphan_note", "")
+            suffix = f"  # {note}" if note else ""
+            lines.append(f"  - {rec['display']}{suffix}")
     if not all_definite and not all_likely:
         lines.append("(none)")
     lines.append("")
@@ -747,6 +764,8 @@ def main():
     ap.add_argument("--cloud-regions", required=True, help="Comma-separated regions, e.g. us-east-1,us-east-2")
     ap.add_argument("--env", default=os.getenv("FRU_ENV", "dev"))
     ap.add_argument("--prefix", default=os.getenv("FRU_PREFIX", "fru"))
+    ap.add_argument("--elb", action="store_true",
+        help="Classic ELB track (api-service-elb.yaml). Affects orphan classification for LB/SG/TG.")
     args = ap.parse_args()
 
     regions = [r.strip() for r in args.cloud_regions.split(",") if r.strip()]
@@ -759,10 +778,10 @@ def main():
         logger.error("Could not get AWS account ID (check credentials)")
         sys.exit(1)
 
-    logger.step(f"Scanning regions: {', '.join(regions)} (prefix={args.prefix}, env={args.env})")
+    logger.step(f"Scanning regions: {', '.join(regions)} (prefix={args.prefix}, env={args.env}, kube LB={'Classic ELB' if args.elb else 'NLB'})")
     region_results: dict[str, ScanResult] = {}
     for region in regions:
-        region_results[region] = scan_region(region, args.prefix, args.env, account_id)
+        region_results[region] = scan_region(region, args.prefix, args.env, account_id, use_elb=args.elb)
 
     iam_result = scan_iam(args.prefix, args.env)
     cf_result = scan_cloudfront(args.prefix, args.env)
@@ -774,7 +793,7 @@ def main():
     n_builtin = sum(len(r.aws_builtin) for r in region_results.values()) + len(iam_result.aws_builtin) + len(cf_result.aws_builtin)
     logger.info(f"Classified: {n_def} orphans (definitely), {n_likely} orphans (likely), {n_proj} project, {n_other} other, {n_builtin} built-in")
 
-    out = format_output(regions, region_results, iam_result, cf_result, args.prefix, args.env)
+    out = format_output(regions, region_results, iam_result, cf_result, args.prefix, args.env, use_elb=args.elb)
     print(out)
 
     # Write orphans JSON for removal script and recovery records

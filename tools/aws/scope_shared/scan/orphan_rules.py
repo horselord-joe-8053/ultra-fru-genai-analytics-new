@@ -2,7 +2,10 @@
 Orphan resource classification: resources not in Terraform state that survive teardown.
 
 Uses pattern-based rules (no hardcoded IDs). All patterns use dynamic prefix/env.
-Returns: "definitely" | "likely" | None (not orphan).
+Returns: ("definitely"|"likely", note) or (None, ""). Note is for inline display.
+
+use_elb: True = Classic ELB track (api-service-elb.yaml); False = NLB track (api-service.yaml).
+Different tracks leave different orphans; notes explain context for safe cleanup.
 
 ORPHAN_RECOVERY_HINTS: single source for recovery hints. Placeholders: <name>, <region>,
 <group_id>, <oac_id>, <arn>, etc. Build hints via get_recovery_hints_for_orphans().
@@ -11,6 +14,7 @@ import re
 from typing import Literal
 
 OrphanLevel = Literal["definitely", "likely"] | None
+OrphanResult = tuple[OrphanLevel, str]  # (level, note)
 
 # ELB type: Classic ELB (elb API) vs ALB/NLB (elbv2). We only classify Classic as orphan.
 LB_TYPE_CLASSIC = "classic"
@@ -86,10 +90,12 @@ def classify_orphan(
     tags: dict[str, str] | None = None,
     lb_type: str = "",
     region: str = "",
-) -> OrphanLevel:
+    use_elb: bool = False,
+) -> OrphanResult:
     """
     Classify if a resource is orphan (not in Terraform state).
-    Returns "definitely", "likely", or None.
+    Returns (level, note): ("definitely"|"likely", note) or (None, "").
+    use_elb: True = Classic ELB track; False = NLB track. Affects LB/SG/TG classification.
     """
     tags = tags or {}
     pe = f"{prefix}-{env}"
@@ -97,46 +103,50 @@ def classify_orphan(
 
     # --- CloudFront OAC ---
     if resource_type == "cloudfront_oac":
-        # Our Terraform: *-frontend-{suffix}-{region}-oac. Legacy: *-frontend-oac (no suffix/region).
         if _terraform_oac_pattern(prefix, env).match(name):
-            return None
+            return (None, "")
         if re.match(rf"^{re.escape(prefix)}-{re.escape(env)}-frontend-oac$", name):
-            return "definitely"
-        return None
+            return ("definitely", "legacy OAC; not in Terraform")
+        return (None, "")
 
     # --- IAM role ---
     if resource_type == "iam_role":
         if not name.startswith(pe):
-            return None
-        # External controller roles (never in our Terraform)
+            return (None, "")
         if "-aws-load-balancer-controller" in name or "-load-balancer-controller" in name:
-            return "definitely"
+            return ("definitely", "AWS Load Balancer Controller; not in Terraform")
         if "-csi-driver-role" in name or "-ebs-csi-" in name:
-            return "definitely"
-        # Check against Terraform-created roles
+            return ("definitely", "EKS addon; not in Terraform")
         for pat in _terraform_iam_role_patterns(prefix, env):
             if pat in name or name == pat:
-                return None
-        # Project-named role not in our Terraform list
-        return "likely"
+                return (None, "")
+        return ("likely", "project-named role not in Terraform list")
 
-    # --- Security group: k8s-elb-* with our cluster tag = created by K8s, not Terraform ---
+    # --- Security group: k8s-elb-* = in-tree Classic ELB SG ---
     if resource_type == "security_group":
         if name.startswith("k8s-elb-") and tags.get(cluster_tag) in ("shared", "owned"):
-            return "definitely"
-        return None
+            note = "Classic ELB track: in-tree SG" if use_elb else "NLB track: Classic ELB remnant from migration"
+            return ("definitely", note)
+        return (None, "")
 
-    # --- Load balancer ---
+    # --- Load balancer: Classic ELB only when NLB track (when --elb, we use it) ---
     if resource_type == "load_balancer":
-        # Classic ELB: we never use Classic in Terraform (we use ALB/NLB).
         if lb_type == LB_TYPE_CLASSIC:
-            return "definitely"
-        return None
+            if use_elb:
+                return (None, "")  # In use; not orphan
+            return ("definitely", "NLB track: Classic ELB remnant from migration")
+        return (None, "")
 
-    # --- Target group: k8s-ingressn-* = created by K8s Ingress, not Terraform ---
+    # --- Target group: k8s-frukube-fruapisv-* = our API NLB; k8s-ingressn-* = NGINX ---
     if resource_type == "target_group":
+        if name.startswith("k8s-frukube-fruapisv-"):
+            if use_elb:
+                return ("definitely", "Classic ELB track: TG from previous NLB migration")
+            return (None, "")  # In use by our NLB
+        if name.startswith("k8s-ingressn-"):
+            return ("definitely", "NGINX Ingress; not in Terraform")
         if name.startswith("k8s-"):
-            return "definitely"
-        return None
+            return ("definitely", "K8s-created; not in Terraform")
+        return (None, "")
 
-    return None
+    return (None, "")
