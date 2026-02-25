@@ -2,7 +2,7 @@
 
 **Purpose:** Safely and smoothly accommodate dynamic name changes. This document is the single source of truth for the migration.
 
-**Related:** `docs/FINAL_REFACTOR_RENAMING.md` — full .env renaming plan, naming convention, code impact, `resource_names.py` design.
+**Related:** `docs/STEP_LARGE_REFACTOR_RENAMING.md` — full .env renaming plan, naming convention, code impact, `resource_names.py` design.
 
 ---
 
@@ -54,7 +54,7 @@ Run teardown for **each region** you have deployed to. Use the orchestrator with
 
 **Before editing:** Back up `.env`.
 
-**Refer to `docs/FINAL_REFACTOR_RENAMING.md`** for the full .env spec (Part C.1–C.2), naming convention (Part A, C.3), and frontend/scope handling.
+**Refer to `docs/STEP_LARGE_REFACTOR_RENAMING.md`** for the full .env spec (Part C.1–C.2), naming convention (Part A, C.3), and frontend/scope handling.
 
 **Summary:** Replace `FRU_PREFIX` with `PROJ_PREFIX`; replace full-name vars and combined prefixes with `*_COMPONENT` vars per RENAMING Part C.2. Remove or comment out the old vars.
 
@@ -89,4 +89,4 @@ Run teardown for **each region** you have deployed to. Use the orchestrator with
 
 ## Part B: Other (Reference Only)
 
-All details — .env inventory, `resource_names.py` design, terra_var_handling/backend changes, implementation phases, logging — are in `docs/FINAL_REFACTOR_RENAMING.md`. This plan defers to it to avoid inconsistency.
+All details — .env inventory, `resource_names.py` design, terra_var_handling/backend changes, implementation phases, logging — are in `docs/STEP_LARGE_REFACTOR_RENAMING.md`. This plan defers to it to avoid inconsistency.
