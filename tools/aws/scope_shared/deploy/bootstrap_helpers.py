@@ -2,24 +2,15 @@
 Helpers for idempotent bootstrap: skip if already succeeded.
 
 Used by deploy.py (ECS) and kube_apply.py (K8s) to avoid re-running bootstrap
-when a successful run already completed. Teardown removes scheduler + bootstrap
-before destroying the stack.
-
-K8s pre-destroy: We use kubectl (not Terraform kubernetes provider) because moving
-Namespace/Deployment/Service/CronJob/Job into Terraform would require templating,
-provider config, and secret wiring—cons outweighed pros. See README_WAR_STORIES ##40.
+when a successful run already completed. K8s pre-destroy (kubectl delete) lives
+in tools/aws/kube/kube_pre_destroy.py for symmetry with kube_apply.py.
 """
 import json
 import socket
 import urllib.request
 import os
 import subprocess
-from typing import TYPE_CHECKING
-
 from tools.cloud_shared.env import load_dotenv
-
-if TYPE_CHECKING:
-    from tools.cloud_shared.stats import TeardownStats
 
 load_dotenv()
 
@@ -237,114 +228,3 @@ def k8s_rollout_restart_api(env: str, region: str | None = None) -> None:
     else:
         # Deployment might not exist yet on first deploy; non-fatal
         logger.warning(f"[Kube] Rollout restart skipped or failed: {result.stderr or result.stdout}")
-
-
-def k8s_remove_bootstrap_and_scheduler(
-    env: str,
-    region: str | None = None,
-    stats: "TeardownStats | None" = None,
-) -> None:
-    """
-    Pre-destroy: scale deployment to 0, delete LoadBalancer service, CronJob, Job,
-    namespace; wait for termination.
-
-    Why needed: EKS cluster deletion is blocked by LoadBalancer (holds ENIs), running
-    pods, and workloads. AWS rejects delete until these are gone.
-
-    Why not Terraform: These K8s resources are applied via kubectl (kube_apply.py),
-    not in Terraform. We could use Terraform kubernetes provider, but chose kubectl
-    for simplicity (templating, provider config, secrets add complexity). See WAR ##40.
-    """
-    import time
-
-    from tools.cloud_shared.logging import logger
-
-    def _timed(component: str, identifier: str, fn):
-        if stats:
-            with stats.timed(component, identifier):
-                fn()
-        else:
-            fn()
-
-    # Try to configure kubectl; if cluster is gone, warn and skip kubectl steps
-    logger.info("Pre-destroy kube: checking EKS cluster status...")
-    try:
-        result = subprocess.run(
-            ["python", "tools/aws/kube/eks_kubeconfig.py", "--env", env],
-            capture_output=True, text=True, check=False, timeout=30,
-        )
-    except subprocess.TimeoutExpired:
-        cluster_name = os.getenv("EKS_CLUSTER_NAME") or f"{os.getenv('FRU_PREFIX', 'fru')}-{env}-eks"
-        logger.warning(
-            f"Pre-destroy kube: eks_kubeconfig timed out (cluster {cluster_name} unreachable?). "
-            "Skipping kubectl cleanup."
-        )
-        return
-
-    if result.returncode != 0:
-        err = (result.stderr or "") + (result.stdout or "")
-        if "ResourceNotFoundException" in err or "No cluster found" in err.lower():
-            cluster_name = os.getenv("EKS_CLUSTER_NAME") or f"{os.getenv('FRU_PREFIX', 'fru')}-{env}-eks"
-            logger.warning(
-                f"EKS cluster not found (name={cluster_name}, region={os.getenv('CLOUD_REGION', '').strip() or 'not set'}), "
-                "likely already removed. Skipping pre-destroy kube cleanup."
-            )
-            return
-
-    logger.info("Pre-destroy kube: cluster reachable, removing CronJob, Job, namespace...")
-    _quiet = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
-    _kubectl_timeout = 60
-
-    def _run_kubectl(cmd: list[str]):
-        logger.info(f"Pre-destroy kube: running `{' '.join(cmd)}`")
-        try:
-            subprocess.run(cmd, check=False, timeout=_kubectl_timeout, **_quiet)
-        except subprocess.TimeoutExpired:
-            logger.warning(f"Pre-destroy kube: `{' '.join(cmd)}` timed out after {_kubectl_timeout}s")
-
-    # 1. Scale deployment to 0 (faster pod termination)
-    def _scale():
-        _run_kubectl(["kubectl", "scale", "deployment", "fru-api", "--replicas=0", "-n", K8S_NAMESPACE])
-    _timed("Deployment (scale to 0)", f"fru-api (ns={K8S_NAMESPACE})", _scale)
-
-    # 2. Delete LoadBalancer service first (releases LB/ENIs; avoids DependencyViolation)
-    def _del_svc():
-        _run_kubectl(["kubectl", "delete", "svc", "fru-api-svc", "--ignore-not-found", "-n", K8S_NAMESPACE])
-    _timed("LoadBalancer service", f"fru-api-svc (ns={K8S_NAMESPACE})", _del_svc)
-
-    # 3. Delete CronJob and Job
-    def _del_cronjob():
-        _run_kubectl(["kubectl", "delete", "cronjob", CRONJOB_PERIODIC, "--ignore-not-found", "-n", K8S_NAMESPACE])
-    _timed("CronJob", CRONJOB_PERIODIC, _del_cronjob)
-
-    def _del_job():
-        _run_kubectl(["kubectl", "delete", "job", JOB_BOOTSTRAP, "--ignore-not-found", "-n", K8S_NAMESPACE])
-    _timed("Job", JOB_BOOTSTRAP, _del_job)
-
-    # 4. Delete namespace (cascades to any remaining resources)
-    def _del_ns():
-        _run_kubectl(["kubectl", "delete", "namespace", K8S_NAMESPACE, "--ignore-not-found"])
-    _timed("Namespace (delete)", K8S_NAMESPACE, _del_ns)
-
-    # 5. Wait for namespace to fully terminate (LoadBalancer release can take 1–2 min)
-    def _wait_ns():
-        cmd = f"kubectl get namespace {K8S_NAMESPACE}"
-        logger.info(
-            f"Pre-destroy kube: polling `{cmd}` until Terminating completes "
-            "(AWS releasing LB/ENIs, up to 2 min)..."
-        )
-        for attempt in range(24):  # Up to 2 min
-            out = subprocess.run(
-                ["kubectl", "get", "namespace", K8S_NAMESPACE],
-                capture_output=True, text=True, check=False, timeout=30,
-            )
-            if out.returncode != 0 or "NotFound" in (out.stderr or ""):
-                break
-            if attempt > 0 and attempt % 4 == 0:
-                logger.info(
-                    f"Pre-destroy kube: still waiting on `{cmd}` (namespace Terminating) ... ({attempt * 5}s)"
-                )
-            time.sleep(5)
-    _timed("Namespace (wait terminate)", K8S_NAMESPACE, _wait_ns)
-
-    logger.info("Pre-destroy: removed kube deployments, service, CronJob, Job, and namespace.")

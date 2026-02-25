@@ -353,6 +353,8 @@ After these changes, teardown could progress past subnets and security groups on
 
 Model the VPC dependency graph explicitly and implement teardown in a safe order: Load balancers / NAT → VPC Endpoints → ENIs → Subnets → Route Tables (non-main) → Security Groups (non-default) → Internet Gateway → VPC. Include ENIs and VPC endpoints in both inventory and removal; omitting them is a common cause of DependencyViolation during VPC teardown.
 
+**Related:** For EKS kube teardown with Classic ELB, the `k8s-elb-*` security group blocks VPC deletion until removed. See [KUBE_INGRESS_LEARNED.md](docs/learned/KUBE_INGRESS_LEARNED.md) Section 0.7 (VPC teardown, dependency order).
+
 ---
 
 ## 7. ELB Deletion and ENIs: Eventual Consistency, Not a Bug
@@ -407,6 +409,8 @@ No code change can make AWS release the ENI sooner; the only correct behavior is
 ### 7.5 Takeaway
 
 ELB deletion is asynchronous; ENIs are released last and can linger for 10–30+ minutes. Do not force-delete the ENI, do not delete the subnet while the ENI exists, and do not treat this as a bug—it is eventual consistency. Implement wait-and-retry with a timeout and/or a "pending cleanup" skip so teardown scripts can either succeed after a wait or be re-run later when AWS has finished cleanup.
+
+**Related:** For in-tree Classic ELB, the `k8s-elb-*` SG depends on ENIs from the ELB; we must wait for ENI release before deleting it. See [KUBE_INGRESS_LEARNED.md](docs/learned/KUBE_INGRESS_LEARNED.md) Section 0.7, 0.8.
 
 ---
 
@@ -2073,11 +2077,11 @@ Kube teardown requires pre-destroy: we run `kubectl` to scale deployments, delet
 
 ### 40.3 Decision
 
-We kept the pre-destroy approach. The cons outweighed the pros: templating, provider config, and secret handling add significant complexity; kubectl + pre-destroy is simpler and works. See `tools/aws/bootstrap_helpers.py` and `tools/aws/teardown.py` for the implementation.
+We kept the pre-destroy approach. The cons outweighed the pros: templating, provider config, and secret handling add significant complexity; kubectl + pre-destroy is simpler and works. **Caveat:** When using in-tree Classic ELB, we must also remove `k8s-elb-*` SGs post kube destroy, before durable—otherwise VPC deletion fails. See `tools/aws/kube/kube_pre_destroy.py`, `tools/aws/kube/teardown_orphan_cleanup.py`, and `tools/aws/teardown.py`.
 
 ### 40.4 Takeaway
 
-Moving K8s resources into Terraform is possible but not always worth it. When templating, provider config, and secret wiring add substantial complexity, keeping kubectl + pre-destroy is a pragmatic choice. Document the decision so future maintainers understand why pre-destroy exists and when a Terraform migration might be reconsidered.
+Moving K8s resources into Terraform is possible but not always worth it. When templating, provider config, and secret wiring add substantial complexity, keeping kubectl + pre-destroy is a pragmatic choice. **Details:** Full Terraform vs kubectl comparison, including the in-tree ELB `k8s-elb-*` SG caveat, is in [KUBE_INGRESS_LEARNED.md](docs/learned/KUBE_INGRESS_LEARNED.md) Section 0.8.
 
 ---
 
@@ -2109,6 +2113,8 @@ The common approach is **post-destroy cleanup**: run a script after `terraform d
 ### 41.4 Takeaway
 
 EKS cluster and node SGs are AWS-created side effects, not Terraform resources. Terraform cannot manage their lifecycle. Post-destroy CLI cleanup is the common industry practice. Document this so future maintainers understand why `remove_orphaned_eks_security_groups` exists and that it is not a workaround for missing Terraform—the SGs were never in Terraform.
+
+**Related:** The `k8s-elb-*` SG (in-tree Classic ELB) is a different orphan: created with the ELB, not auto-deleted when the ELB is gone. It blocks VPC deletion. See [KUBE_INGRESS_LEARNED.md](docs/learned/KUBE_INGRESS_LEARNED.md) Section 0.7, 0.8.
 
 ---
 

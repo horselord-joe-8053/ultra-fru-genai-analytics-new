@@ -17,9 +17,10 @@ from tools.cloud_shared.env import load_dotenv, get_int_env
 
 load_dotenv()
 
-def run_command(cmd, cwd=None):
+def run_command(cmd, cwd=None, force_no_timeout: bool = False):
     """Run a subprocess command and exit with its return code.
     Respects LOGGING_TASK_DEFAULT_TIMEOUT: when set > 0, kills the child after that many seconds.
+    Use force_no_timeout=True for teardown (can take 60+ min for EKS/Aurora/VPC).
     """
     try:
         # Pass through the current environment with the virtualenv active
@@ -41,7 +42,7 @@ def run_command(cmd, cwd=None):
         if cmd[0] == "python":
             cmd[0] = sys.executable
 
-        timeout = get_int_env("LOGGING_TASK_DEFAULT_TIMEOUT", 0)  # 0 = no timeout
+        timeout = 0 if force_no_timeout else get_int_env("LOGGING_TASK_DEFAULT_TIMEOUT", 0)  # 0 = no timeout
         if timeout > 0:
             logger.info(f"--> Running: {' '.join(cmd)} (timeout: {timeout}s)")
         else:
@@ -101,8 +102,8 @@ def handle_aws(args):
             teardown_args = cmd_args + ["--non-interactive", "--scope", args.scope]
             if args.incl_dura:
                 teardown_args.append("--incl-dura")
-            with logger.Heartbeat(f"Preempt Teardown scope={args.scope} env={args.env}"):
-                run_command(["python", teardown_script] + teardown_args)
+            with logger.Heartbeat(f"Preempt Teardown scope={args.scope} env={args.env}", timeout=-1):
+                run_command(["python", teardown_script] + teardown_args, force_no_timeout=True)
                 
             # 2. Verify Teardown
             verify_teardown_script = f"{base_path}/scope_shared/verify/verify_all_teardown.py"
@@ -144,8 +145,8 @@ def handle_aws(args):
         hb_msg = f"Teardown scope={args.scope} env={args.env}"
         if args.cloud_region:
             hb_msg += f" region={args.cloud_region}"
-        with logger.Heartbeat(hb_msg):
-            run_command(["python", script] + cmd_args)
+        with logger.Heartbeat(hb_msg, timeout=-1):  # Teardown can take 60+ min; -1 = no timeout
+            run_command(["python", script] + cmd_args, force_no_timeout=True)
         
     elif args.command == "verify":
         if not args.scope:
