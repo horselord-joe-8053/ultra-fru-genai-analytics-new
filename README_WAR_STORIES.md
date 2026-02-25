@@ -239,7 +239,7 @@ Don't assume load balancer types based on platform (EKS vs ECS). Verify the actu
 
 ### 4.6 Correction (2025)
 
-**Actual LB type:** The kube API is exposed via `fru-api-svc` (type LoadBalancer), not NGINX Ingress. Without `service.beta.kubernetes.io/aws-load-balancer-type: external`, the **in-tree** cloud provider reconciles it and creates a **Classic ELB**—not NLB. The protocol guidance (use HTTP for LB endpoints) still applies. See [KUBE_LOAD_BALANCER_CLARIFICATION.md](docs/KUBE_LOAD_BALANCER_CLARIFICATION.md).
+**Actual LB type:** The kube API is exposed via `fru-api-svc` (type LoadBalancer), not NGINX Ingress. Without `service.beta.kubernetes.io/aws-load-balancer-type: external`, the **in-tree** cloud provider reconciles it and creates a **Classic ELB**—not NLB. The protocol guidance (use HTTP for LB endpoints) still applies. See [KUBE_INGRESS_LEARNED.md](docs/learned/KUBE_INGRESS_LEARNED.md) Section 0.
 
 ---
 
@@ -294,7 +294,7 @@ Always search for similar patterns across the entire codebase when fixing protoc
 
 ### 5.6 Correction (2025)
 
-**Actual LB type:** The kube API uses `fru-api-svc` LoadBalancer (Classic ELB via in-tree), not NLB. The HTTP/HTTPS guidance still applies. See [KUBE_LOAD_BALANCER_CLARIFICATION.md](docs/KUBE_LOAD_BALANCER_CLARIFICATION.md).
+**Actual LB type:** The kube API uses `fru-api-svc` LoadBalancer (Classic ELB via in-tree), not NLB. The HTTP/HTTPS guidance still applies. See [KUBE_INGRESS_LEARNED.md](docs/learned/KUBE_INGRESS_LEARNED.md) Section 0.
 
 ---
 
@@ -754,7 +754,7 @@ So the error is a **state/reality** issue: Terraform believes it owns a VPC and 
 - **Import existing infra:** Run `./orchestration/terraform/import_preexist/import-existing-infrastructure.sh dev fru` so Terraform state matches existing resources; only helps if the current config (VPC/subnets) matches what you want to keep.
 - **Manual cleanup:** Delete the Aurora cluster and then the DB subnet group (and optionally the old VPC) in AWS; re-run deploy so Terraform creates a fresh subnet group and Aurora.
 
-A dedicated doc **docs/DEPLOYMENT_ERRORS_AND_FIXES.md** summarizes this and other deployment errors (S3 bucket empty, frontend invalid bucket, Docker not running, Terraform plugin checksum) with causes and fixes.
+See War Stories 12, 17, 23, and related entries for deployment errors (S3 bucket empty, frontend invalid bucket, Docker not running, Terraform plugin checksum) with causes and fixes.
 
 ### 16.5 Takeaway
 
@@ -793,7 +793,7 @@ Two separate issues:
 ### 17.4 Resolution
 
 - **Fail-fast:** In `teardown.sh`, EKS and ECS (and frontend-eks / frontend-ecs) destroy now check the exit code of `terragrunt destroy`. On failure, the script logs an error (including a force-unlock hint), exits with status 1, and does **not** run `log_success`. Teardown stops immediately and the orchestrator reports failure.
-- **State lock recovery:** Documented in **docs/DEPLOYMENT_ERRORS_AND_FIXES.md**: run `terragrunt force-unlock <LOCK_ID>` in the layer directory (EKS, ECS, or infrastructure). For non-interactive use: `echo yes | terragrunt force-unlock <LOCK_ID>`.
+- **State lock recovery:** Run `terragrunt force-unlock <LOCK_ID>` in the layer directory (EKS, ECS, or infrastructure). For non-interactive use: `echo yes | terragrunt force-unlock <LOCK_ID>`. See War Story 17.
 - **Preempt and shared infra:** Separately, preempt was fixed to use `--container-type all` so shared infrastructure (VPC, Aurora, DB subnet group) is torn down too, avoiding the "subnet group not in same VPC" error after preempt (see war story 16).
 - **Import before shared destroy:** If infrastructure Terraform state was empty (e.g. after state loss), `terragrunt destroy` for the shared layer had nothing to destroy; orphaned resources (DB subnet group, etc.) remained in AWS. Deploy then re-imported them and hit the same VPC mismatch. **orchestration/aws/teardown-resources-all.sh** now runs `import-existing-infrastructure.sh` for the shared layer *before* calling shared Terraform destroy when `--container-type all`, so state is populated and destroy can remove those resources.
 
@@ -1272,7 +1272,7 @@ ECS uses Terraform-owned infrastructure; EKS uses the cloud-provider agnostic NL
 
 - It waits for the Ingress NLB hostname, then updates that CloudFront distribution's API origin to the NLB. CloudFront can reach the EKS API → 502 goes away.
 
-See `docs/CLOUDFRONT_ORIGIN_WALKTHROUGH.md` and `docs/README_CLOUDFRONT_SCRIPTS.md` for details.
+See War Stories 26, 38, 43 for CloudFront origin and script details.
 
 ### 26.5 Two-Phase CloudFront Origin Flow (Kube Deploy)
 
@@ -1359,7 +1359,7 @@ Two separate issues:
 
 ### 28.5 Takeaway
 
-If teardown should clean ECR, it must call ECR deletion explicitly—Terraform won't do it if the repo isn't in state. For teardown-by-container-type, tag at push time (e.g. `eks`, `ecs`) so you can filter at delete time. See `docs/learned/REFACTOR_PLAN_ECR_TAGS_AND_TEARDOWN.md` and `docs/learned/REFACTOR_PLAN_ECR_TEARDOWN.md`.
+If teardown should clean ECR, it must call ECR deletion explicitly—Terraform won't do it if the repo isn't in state. For teardown-by-container-type, tag at push time (e.g. `eks`, `ecs`) so you can filter at delete time. Tag at push time (e.g. `eks`, `ecs`) so you can filter at delete time.
 
 ---
 
@@ -2931,7 +2931,7 @@ When supporting both Terraform and OpenTofu (or multiple providers), use error p
 
 After teardown, some AWS resources survived: Classic ELBs, security groups (`k8s-elb-*`), target groups (`k8s-ingressn-*`), CloudFront OACs (legacy format), and IAM roles (e.g. AWS Load Balancer Controller). These are **orphans**—not in Terraform state, so `tofu destroy` never touches them. War Story 46 describes the problem; here we built a **scan-and-remove** pipeline to detect and delete them systematically.
 
-**Note:** The Classic ELB + `k8s-elb-*` SG pairs are created by `fru-api-svc` (type LoadBalancer) during kube deploy. Without `aws-load-balancer-type: external`, the in-tree cloud provider creates Classic ELBs. These pairs are **in use** while the cluster runs; only run orphan removal after teardown. To switch to NLB and avoid creating new Classic ELBs, add the annotation to `api-service.yaml`. See [KUBE_LOAD_BALANCER_CLARIFICATION.md](docs/KUBE_LOAD_BALANCER_CLARIFICATION.md).
+**Note:** The Classic ELB + `k8s-elb-*` SG pairs are created by `fru-api-svc` (type LoadBalancer) during kube deploy. Without `aws-load-balancer-type: external`, the in-tree cloud provider creates Classic ELBs. These pairs are **in use** while the cluster runs; only run orphan removal after teardown. To switch to NLB and avoid creating new Classic ELBs, add the annotation to `api-service.yaml`. See [KUBE_INGRESS_LEARNED.md](docs/learned/KUBE_INGRESS_LEARNED.md) Section 0.
 
 ### 55.2 How We Scan and Detect Orphans
 
@@ -3113,7 +3113,7 @@ Use `FRU_AWS_USE_PROFILE=true` when `.env` keys may be stale but your profile is
 
 ### 57.1 Context
 
-While documenting a refactor plan for "Kube Apply Ran Twice" (see `docs/DEPLOYMENT_OPTIMIZATION_REFACTOR_PLANS.md` §2.2), AI-generated pseudocode was proposed for a two-phase deploy flow: first Terraform apply (possibly without NLB hostname), then kube_apply + poll for hostname, then a second Terraform apply to set CloudFront's API origin to the NLB DNS. The pseudocode looked plausible but contained a major logic bug.
+While documenting a refactor plan for "Kube Apply Ran Twice" (see `docs/learned/DEPLOYMENT_OPTIMIZATION_LEARNED.md` §2.2), AI-generated pseudocode was proposed for a two-phase deploy flow: first Terraform apply (possibly without NLB hostname), then kube_apply + poll for hostname, then a second Terraform apply to set CloudFront's API origin to the NLB DNS. The pseudocode looked plausible but contained a major logic bug.
 
 ### 57.2 The Buggy Pseudocode
 
@@ -3205,7 +3205,7 @@ Add `lifecycle { ignore_changes = [tags] }` to all subnet resources in `infra_te
 
 ### 58.5 Takeaway
 
-When two stacks manage the same resource (durable owns subnets; kube adds tags), use `lifecycle { ignore_changes = [tags] }` on the owning resource so the other stack's `aws_ec2_tag` additions are not reverted. See `docs/DEPLOYMENT_OPTIMIZATION_REFACTOR_PLANS.md` §2.1.
+When two stacks manage the same resource (durable owns subnets; kube adds tags), use `lifecycle { ignore_changes = [tags] }` on the owning resource so the other stack's `aws_ec2_tag` additions are not reverted. See `docs/learned/DEPLOYMENT_OPTIMIZATION_LEARNED.md` §2.1.
 
 **Deep dive:** [docs/learned/terra/TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md](docs/learned/terra/TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md) — stack ownership model, `aws_ec2_tag`, and lifecycle patterns.
 
@@ -3275,7 +3275,7 @@ Before import for a stack, run `tofu plan -detailed-exitcode` with the same vars
 
 ### 60.5 Takeaway
 
-When import is "just in case" (reconcile state before apply), run `plan -detailed-exitcode` first. If no changes, skip import and apply. Saves time on re-deploys when infrastructure is already in sync. See `docs/DEPLOYMENT_OPTIMIZATION_REFACTOR_PLANS.md` §2.3.
+When import is "just in case" (reconcile state before apply), run `plan -detailed-exitcode` first. If no changes, skip import and apply. Saves time on re-deploys when infrastructure is already in sync. See `docs/learned/DEPLOYMENT_OPTIMIZATION_LEARNED.md` §2.3.
 
 ---
 
@@ -3298,7 +3298,7 @@ No content-aware skip. Options were: always build (slow) or `--skip-build` (use 
 
 ### 61.3 Resolution
 
-Compute a hash of the build context (files in `core_app/` + Dockerfile path). Store it in S3 after each successful build. Before build, compare current hash to stored hash. If both app and spark match, skip build and use `repo:latest`. `--force-build` bypasses. Uncommitted changes change the hash. See `docs/BUILD_CONTENT_SKIP.md` and `tools/aws/scope_shared/deploy/build_context_hash.py`.
+Compute a hash of the build context (files in `core_app/` + Dockerfile path). Store it in S3 after each successful build. Before build, compare current hash to stored hash. If both app and spark match, skip build and use `repo:latest`. `--force-build` bypasses. Uncommitted changes change the hash. See `docs/learned/BUILD_CONTENT_SKIP.md` and `tools/aws/scope_shared/deploy/build_context_hash.py`.
 
 ### 61.4 Overhead: Hash Check Cost Is Negligible
 
@@ -3321,7 +3321,7 @@ Phase 7 when skipping: 11 s total (includes ~8 s `tofu_output_json` for `artifac
 
 ### 61.6 Takeaway
 
-Use content-based hashing (not Git SHA) for build skip so uncommitted changes trigger rebuild. Store hash in S3; skip when current hash matches. `--force-build` for explicit override. The hash check overhead (~2–3 s) is negligible vs. build time saved (~95 s). See `docs/BUILD_CONTENT_SKIP.md`. Related: War Story 20 (CONTAINER_IMAGE and --skip-build in background process).
+Use content-based hashing (not Git SHA) for build skip so uncommitted changes trigger rebuild. Store hash in S3; skip when current hash matches. `--force-build` for explicit override. The hash check overhead (~2–3 s) is negligible vs. build time saved (~95 s). See `docs/learned/BUILD_CONTENT_SKIP.md`. Related: War Story 20 (CONTAINER_IMAGE and --skip-build in background process).
 
 ---
 
@@ -3408,7 +3408,7 @@ We considered separating analytics (e.g. `batch_analytics_kube` vs `batch_analyt
 
 ### 63.5 Takeaway
 
-EKS CronJob pods need AWS credentials for S3 access (unlike ECS, which uses task role). Use the same `aws-credentials` secret from bootstrap for both API and CronJob. Kube and Nonkube share Delta and `batch_analytics`; in PROD only one scope will be deployed. See `docs/ANALYTICS_KUBE_NONKUBE_SHARED_DATA.md`.
+EKS CronJob pods need AWS credentials for S3 access (unlike ECS, which uses task role). Use the same `aws-credentials` secret from bootstrap for both API and CronJob. Kube and Nonkube share Delta and `batch_analytics`; in PROD only one scope will be deployed. See `docs/learned/ANALYTICS_KUBE_NONKUBE_SHARED_DATA.md`.
 
 ---
 
@@ -3471,8 +3471,8 @@ deploy.py --scope kube [--elb]
 
 ### 64.5 Orphan Cleanup After Migration
 
-When switching from Classic ELB to NLB, the old Classic ELB and its `k8s-elb-*` security group become orphans (no longer in Terraform or K8s state). Run `remove_for_orphans_data.py` after verifying the NLB works. See [KUBE_NLB_MIGRATION_STEPS.md](docs/KUBE_NLB_MIGRATION_STEPS.md).
+When switching from Classic ELB to NLB, the old Classic ELB and its `k8s-elb-*` security group become orphans (no longer in Terraform or K8s state). Run `remove_for_orphans_data.py` after verifying the NLB works. See [KUBE_INGRESS_LEARNED.md](docs/learned/KUBE_INGRESS_LEARNED.md) Section 0.6.
 
 ### 64.6 Takeaway
 
-The `--elb` flag selects the load balancer track: Classic ELB (in-tree) vs NLB (AWS Load Balancer Controller). Two manifests, one annotation difference, one flag. Document this choice clearly—it affects deploy prerequisites (eksctl/helm for NLB), orphan cleanup, and CloudFront origin wiring. See `docs/learned/KUBE_INGRESS_LEARNED.md` Section 0 and `docs/KUBE_LOAD_BALANCER_CLARIFICATION.md`.
+The `--elb` flag selects the load balancer track: Classic ELB (in-tree) vs NLB (AWS Load Balancer Controller). Two manifests, one annotation difference, one flag. Document this choice clearly—it affects deploy prerequisites (eksctl/helm for NLB), orphan cleanup, and CloudFront origin wiring. See `docs/learned/KUBE_INGRESS_LEARNED.md` Section 0.

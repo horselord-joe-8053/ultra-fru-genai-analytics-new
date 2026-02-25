@@ -4,7 +4,7 @@ A short, visual crash course that bridges two gaps: **cloud (AWS VPC)** and **Te
 
 **Context:** Useful for AWS Certified ML Engineer – Associate and Google Professional ML Engineer (concepts transfer to GCP VPC + Terraform).
 
-**See also:** [TERRA_LEARNED.md](terra/TERRA_LEARNED.md) (Terraform layers), [DEPLOYMENT_ERRORS_AND_FIXES.md](../DEPLOYMENT_ERRORS_AND_FIXES.md), [README_WAR_STORIES.md](../../README_WAR_STORIES.md).
+**See also:** [TERRA_LEARNED.md](terra/TERRA_LEARNED.md) (Terraform layers), [README_WAR_STORIES.md](../../README_WAR_STORIES.md).
 
 ---
 
@@ -286,4 +286,4 @@ Without coordination, Durable's apply would **remove** kube's tags (Terraform se
 
 ---
 
-*This doc: `docs/learned/VPC_LEARNED.md`. Layers: [TERRA_LEARNED.md](terra/TERRA_LEARNED.md). Stack ownership: [TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md](terra/TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md). War stories: [README_WAR_STORIES.md](../../README_WAR_STORIES.md). Deployment errors: [DEPLOYMENT_ERRORS_AND_FIXES.md](../DEPLOYMENT_ERRORS_AND_FIXES.md).*
+*This doc: `docs/learned/VPC_LEARNED.md`. Layers: [TERRA_LEARNED.md](terra/TERRA_LEARNED.md). Stack ownership: [TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md](terra/TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md). War stories: [README_WAR_STORIES.md](../../README_WAR_STORIES.md).*

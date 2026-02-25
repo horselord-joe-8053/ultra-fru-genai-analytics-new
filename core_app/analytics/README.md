@@ -6,4 +6,4 @@ Canonical analytics pipeline semantics:
 3. Same job code for kube/nonkube
 
 Jobs are containerized Spark. Both scopes share Delta source and `batch_analytics` table.
-See `docs/ANALYTICS_KUBE_NONKUBE_SHARED_DATA.md`.
+See `docs/learned/ANALYTICS_KUBE_NONKUBE_SHARED_DATA.md`.

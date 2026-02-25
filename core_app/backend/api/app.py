@@ -318,7 +318,7 @@ def ensure_agent():
 def get_analytics():
     """Get latest batch analytics results from PostgreSQL.
     batch_analytics is shared by Kube CronJob and Nonkube EventBridge; both write to same table.
-    See docs/ANALYTICS_KUBE_NONKUBE_SHARED_DATA.md."""
+    See docs/learned/ANALYTICS_KUBE_NONKUBE_SHARED_DATA.md."""
     import uuid
     
     request_id = str(uuid.uuid4())[:8]

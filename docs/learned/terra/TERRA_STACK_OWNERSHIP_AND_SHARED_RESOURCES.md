@@ -159,7 +159,7 @@ resource "aws_subnet" "example" {
 
 ### 5.3 Our Usage
 
-All four subnet resources in `infra_terraform/modules/aws/primitives/vpc/main.tf` have `lifecycle { ignore_changes = [tags] }` because kube adds `kubernetes.io/*` tags to public subnets. See [DEPLOYMENT_OPTIMIZATION_REFACTOR_PLANS.md](../../DEPLOYMENT_OPTIMIZATION_REFACTOR_PLANS.md) §2.1.
+All four subnet resources in `infra_terraform/modules/aws/primitives/vpc/main.tf` have `lifecycle { ignore_changes = [tags] }` because kube adds `kubernetes.io/*` tags to public subnets. See [DEPLOYMENT_OPTIMIZATION_LEARNED.md](../DEPLOYMENT_OPTIMIZATION_LEARNED.md) §2.1.
 
 ---
 
