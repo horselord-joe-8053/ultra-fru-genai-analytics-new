@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 One-off migration: Split Terraform state into region-specific buckets per
-docs/REFACTOR_REGION_SPECIFIC_STATE_BUCKETS.md.
+docs/learned/terra/TERRA_LEARNED_TOTAL.md (region-specific state).
 
 Phases:
   1. Preparation: Get account ID, list old bucket layout

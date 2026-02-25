@@ -144,5 +144,5 @@ See `tools/aws/scope_shared/import_preexist/` for the implementation.
 
 ## See also
 
-- **docs/DEPLOYMENT_ERRORS_AND_FIXES.md** — Phase 2 Terraform "subnet group / VPC mismatch", S3 bucket empty, frontend invalid bucket, Docker not running, Terraform plugin checksum: causes and fixes.
+- **Deployment errors** — Phase 2 Terraform "subnet group / VPC mismatch", S3 bucket empty, frontend invalid bucket, Docker not running, Terraform plugin checksum: see War Stories 12, 16, 17, 23.
 

@@ -9,7 +9,7 @@ Usage:
   python tools/aws/deploy.py --scope all --env dev --force-build  # Force build (bypass content-based skip)
 
 Build skip: When build-context hash matches stored hash in S3, deploy skips build and uses repo:latest.
-Use --force-build when code changed. See docs/BUILD_CONTENT_SKIP.md.
+Use --force-build when code changed. See docs/learned/BUILD_CONTENT_SKIP.md.
 
 Key behaviors aligned with the legacy repo:
 - Uses `.env` env-map (names follow legacy)

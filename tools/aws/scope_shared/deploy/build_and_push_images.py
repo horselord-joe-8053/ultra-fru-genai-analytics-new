@@ -13,7 +13,7 @@ This tool:
 - Content-based skip: deploy.py checks build-context hash before calling this; when hash
   matches stored value in S3, deploy skips entirely. When this script runs, it always
   builds. After push, it stores the hash to S3 for future skip checks. See
-  docs/BUILD_CONTENT_SKIP.md for details.
+  docs/learned/BUILD_CONTENT_SKIP.md for details.
 
 Replace the build contexts to match your legacy project.
 """

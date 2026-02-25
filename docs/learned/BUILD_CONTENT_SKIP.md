@@ -32,21 +32,6 @@ Git SHA only reflects **committed** state. Uncommitted changes (e.g. testing loc
 | `--skip-build` | Always skip build; use `repo:latest`. No hash check. |
 | `--force-build` | Bypass content-based skip; always build. Use when you changed code or want a fresh image. |
 
-## Example Logs
-
-**When skip:**
-```
-[7/9] Skipping build (content hash matches); will use repo:latest from ECR
-[BUILD] App hash abc12345..., spark def67890... match stored. Use --force-build to rebuild.
-```
-
-**When skip fails (e.g. no stored hash, first deploy):**
-```
-[7/9] Building and pushing images...
-...
-[BUILD] Stored build-context hashes for content-based skip (app=abc12345..., spark=def67890...)
-```
-
 ## Implementation
 
 - **`tools/aws/scope_shared/deploy/build_context_hash.py`** — `compute_build_context_hash()`, `get_stored_build_hash()`, `store_build_hash()`

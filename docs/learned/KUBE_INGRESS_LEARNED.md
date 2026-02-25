@@ -2,7 +2,7 @@
 
 A short, project-anchored guide to Ingress, IngressClass, controllers, and how the LB appears for EKS.
 
-> **Note:** This doc describes both (1) our **current** kube deploy using `fru-api-svc` (type LoadBalancer) directly, and (2) an NGINX Ingress–based flow for reference. See [KUBE_LOAD_BALANCER_CLARIFICATION.md](../KUBE_LOAD_BALANCER_CLARIFICATION.md).
+> **Note:** This doc describes both (1) our **current** kube deploy using `fru-api-svc` (type LoadBalancer) directly, and (2) an NGINX Ingress–based flow for reference.
 
 ---
 
@@ -108,7 +108,15 @@ annotations:
 | `tools/aws/kube/deploy_kube.py` | Phase 9.5: installs AWS Load Balancer Controller when not `--elb` |
 | `tools/aws/kube/install_aws_load_balancer_controller.py` | Python script that installs the controller (eksctl IAM, helm chart) |
 
-See also: [KUBE_NLB_MIGRATION_STEPS.md](../KUBE_NLB_MIGRATION_STEPS.md), [REFACTOR_PLAN_NLB_DEPLOY_INTEGRATION.md](../REFACTOR_PLAN_NLB_DEPLOY_INTEGRATION.md).
+**NLB controller install:** Runs automatically during deploy (Phase 9.5) when not using `--elb`. Implemented 2026-02.
+
+### 0.6 NLB Migration Steps (Classic ELB → NLB)
+
+1. **Deploy kube (NLB track):** `python tools/aws/deploy.py --scope kube --env dev` — controller installs automatically.
+2. **Verify:** `python tools/aws/scope_shared/verify/verify_all_deploy.py --scope kube --env dev`
+3. **Orphan scan:** `PYTHONPATH=$(pwd) python tools/aws/standalone/temp_one_off/resources_scan/scan_aws_remaining.py --cloud-regions us-east-1 --env dev --prefix fru` (omit `--elb` for NLB track)
+4. **Orphan removal:** Dry-run then `remove_for_orphans_data.py` for Classic ELBs and `k8s-elb-*` SGs
+5. **Re-verify:** Same verify command
 
 ---
 

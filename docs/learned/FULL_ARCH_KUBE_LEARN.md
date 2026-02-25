@@ -2,9 +2,9 @@
 
 A visual crash course on how **VPC, LB, DNS, CloudFront, EKS, and Aurora** are wired together to create a fully working kube-based infrastructure.
 
-> **Load balancer type:** Docs historically said "NLB". **Current reality:** `fru-api-svc` (no `aws-load-balancer-type` annotation) is reconciled by the **in-tree** cloud provider, which creates a **Classic ELB** and `k8s-elb-*` security group—not an NLB. To get an NLB, add `service.beta.kubernetes.io/aws-load-balancer-type: external` to `api-service.yaml`. See [KUBE_LOAD_BALANCER_CLARIFICATION.md](../KUBE_LOAD_BALANCER_CLARIFICATION.md).
+> **Load balancer type:** See [KUBE_INGRESS_LEARNED.md](KUBE_INGRESS_LEARNED.md) Section 0 for Classic ELB vs NLB, `--elb` flag, and manifest selection.
 
-**See also:** [VPC_LEARNED.md](VPC_LEARNED.md), [TERRA_LEARNED.md](terra/TERRA_LEARNED.md), [TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md](terra/TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md), [ANALYTICS_KUBE_NONKUBE_SHARED_DATA.md](../ANALYTICS_KUBE_NONKUBE_SHARED_DATA.md), [README_WAR_STORIES.md](../../README_WAR_STORIES.md).
+**See also:** [VPC_LEARNED.md](VPC_LEARNED.md), [TERRA_LEARNED.md](terra/TERRA_LEARNED.md), [TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md](terra/TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md), [ANALYTICS_KUBE_NONKUBE_SHARED_DATA.md](ANALYTICS_KUBE_NONKUBE_SHARED_DATA.md), [README_WAR_STORIES.md](../../README_WAR_STORIES.md).
 
 ---
 
