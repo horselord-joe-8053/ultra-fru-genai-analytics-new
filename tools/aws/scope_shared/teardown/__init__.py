@@ -1,1 +1,1 @@
-"""Teardown helpers (pre-destroy steps, etc.)."""
+"""Teardown helpers: pre-destroy (CloudFront, kube) and post-destroy (durable orphans)."""

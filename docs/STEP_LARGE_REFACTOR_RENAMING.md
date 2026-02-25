@@ -167,6 +167,7 @@ Secrets (durable) use path-style; naming is in Terraform vars, not .env.
 | `doctor.py` | Require `PROJ_PREFIX` and `*_COMPONENT` vars; remove full-name checks |
 | `scan/config.py`, `orphan_rules.py` | Update patterns for new naming (prefix-component-env-region) |
 | Terraform modules (ECS, etc.) | Update log group names to path-style; receive `prefix` (project) and component from vars |
+| **`tools/aws/scope_shared/teardown/durable_post_destroy.py`** | **Review and refactor:** RDS log group, ECS log group, state bucket, lock table names are built from `FRU_PREFIX`, `env`, and backend resolvers. Update to use `PROJ_PREFIX` and `*_COMPONENT` vars (or `resource_names.py`) where suitable. |
 
 ---
 
