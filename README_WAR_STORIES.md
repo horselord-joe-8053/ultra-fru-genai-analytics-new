@@ -3476,3 +3476,108 @@ When switching from Classic ELB to NLB, the old Classic ELB and its `k8s-elb-*` 
 ### 64.6 Takeaway
 
 The `--elb` flag selects the load balancer track: Classic ELB (in-tree) vs NLB (AWS Load Balancer Controller). Two manifests, one annotation difference, one flag. Document this choice clearly—it affects deploy prerequisites (eksctl/helm for NLB), orphan cleanup, and CloudFront origin wiring. See `docs/learned/KUBE_INGRESS_LEARNED.md` Section 0.
+
+---
+
+## 65. Path-Style Naming Convention: When to Use Slashes vs Hyphens for AWS Resource Names
+
+**creation:** `<260210>`
+**last_updated:** `<260210>`
+
+**keywords:** AWS naming convention, path-style names, Secrets Manager, CloudWatch Log Groups, hierarchical naming, hyphen vs slash, resource naming best practices
+**difficulty:** 5
+**significance:** 7
+
+### 65.1 Context
+
+During the dynamic naming refactor (see `docs/FINAL_REFACTOR_PLAN_DYNAMIC_NAMING.md`), we considered whether to use **path-style** names (forward slashes, e.g. `/fru/spark/dev/us-east-1`) or **hyphen-style** names (e.g. `fru-spark-dev-us-east-1`) for AWS resources. We needed to understand: (1) which components support path format, (2) what industry best practice recommends, (3) whether parsing optional segments would be a problem, and (4) how small we could keep the set of path-style components.
+
+### 65.2 Path vs Hyphen: Not a File Path
+
+Path-style names are **naming conventions**, not actual file paths. Secrets Manager and CloudWatch Log Groups store data in their own services—not as files on S3. The slash is just a character in the resource name string, used for organizational hierarchy. AWS does not interpret slashes as directory structure; it is purely for human and IAM pattern matching.
+
+### 65.3 AWS Documentation and Industry Best Practice
+
+**Secrets Manager — Hierarchical naming explicitly recommended:**
+
+- **AWS Prescriptive Guidance:** [Using a hierarchical naming convention for secrets](https://docs.aws.amazon.com/prescriptive-guidance/latest/secure-sensitive-data-secrets-manager-terraform/naming-convention.html)
+- AWS recommends: `org-name/dev-env/project-name` (or similar)
+- **Rationale:** Separate access to different secrets; fine-grained IAM based on secret names; manage secrets at scale in centralized accounts
+- **Note:** Secrets Manager does not have functional hierarchy (unlike SSM Parameter Store). The hierarchy is organizational for access control and management, not for retrieval mechanics.
+
+**CloudWatch Log Groups — Path format is standard:**
+
+- **CreateLogGroup API:** [CreateLogGroup - Amazon CloudWatch Logs](https://docs.aws.amazon.com/AmazonCloudWatchLogs/latest/APIReference/API_CreateLogGroup.html) — allowed characters include forward slash (`/`)
+- **Restriction:** Log group names cannot start with `aws/` (reserved for AWS-managed log groups)
+- **AWS convention:** AWS uses path format for its own log groups: `/aws/lambda/<function-name>`, `/aws/ecs/containerinsights/...`, `/aws/rds/cluster/...`, `/aws/eks/...`
+- **Rationale:** Prefix-based filtering (`describe-log-groups --log-group-name-prefix /fru/dev`); console grouping; IAM policies by prefix
+
+**SSM Parameter Store:**
+
+- [Working with parameter hierarchies in Parameter Store](https://docs.aws.amazon.com/systems-manager/latest/userguide/sysman-paramstore-hierarchies.html) — uses path format by design. We do not use Parameter Store in this project; we use Secrets Manager.
+
+**S3 bucket names — Slashes NOT allowed:**
+
+- [General purpose bucket naming rules](https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucketnamingrules.html)
+- **Bucket names:** lowercase letters, numbers, periods, hyphens only. No slashes, no underscores.
+
+**ECR repository names:**
+
+- Supports slashes for hierarchical namespacing (e.g. `team-a/web-app`). Less strongly documented as "best practice" than Secrets or Log Groups.
+
+### 65.4 Which Components Suit Path-Style Names? (Keep the Group Small)
+
+| Component | Path format supported? | Industry best practice? | Our decision |
+|-----------|------------------------|-------------------------|---------------|
+| **Secrets Manager** | Yes | Yes — AWS recommends | **Use path** |
+| **CloudWatch Log Groups** | Yes | Yes — AWS uses it | **Use path** |
+| **SSM Parameter Store** | Yes | Yes — designed for it | N/A (not used) |
+| **ECR** | Yes | Weaker | No — keep hyphen |
+| **S3 buckets** | No | N/A | Hyphen only |
+
+**Conclusion:** Limit path-style names to **Secrets Manager** and **CloudWatch Log Groups**. That keeps the set small and aligned with AWS guidance. Use hyphen-style for all other components (S3, ECR, EKS, ECS, VPC, Aurora, etc.).
+
+### 65.5 Our Enhanced Convention with Path Format
+
+For path-style components, we use the enhanced convention with slashes:
+
+`<prefix>/<component>/<other component info>/<env>/<region>/<scope>/<random ID>`
+
+Optional segments (region if shared, scope if shared) are omitted when not applicable.
+
+**Examples (the two canonical path-style names we use):**
+
+| Component | Example |
+|-----------|---------|
+| **Log group** | `/fru/spark/dev/us-east-1` |
+| **Secret** | `/fru/secret/openai_api_key/dev/us-east-1` |
+
+Current (legacy) format for comparison:
+- Log group: `/fru/dev/spark` (prefix/env/component)
+- Secret: `fru/dev/openai_api_key-us-east-1` (prefix/env/component-region)
+
+### 65.6 Optional Segments and Parsing: Do We Need to Worry?
+
+We initially considered whether **optional segments** (e.g. omitting region when shared, omitting scope when shared) would cause parsing ambiguity when the segment count varies.
+
+**Finding:** In our project, we **never parse** resource names to extract segments. We always:
+- **Construct** names from known prefix, env, region, scope.
+- **Match** names against patterns we build (e.g. `startswith(pe)`, `pe in name`).
+- **Pass** full names to AWS APIs (secret-id, log-group-name, etc.).
+
+We do not reverse-engineer "what env is this resource from?" by parsing its name. The optional-segment concern is theoretical for our project. We only need to update **pattern matching** in scan config (`is_project_resource`, `classify_orphan`) when names change—not parsing logic.
+
+### 65.7 Path Format vs Hyphen — When Would We Use Slashes Elsewhere?
+
+If we hypothetically replaced all hyphens with slashes in our convention:
+
+`<prefix>/<component>/<other component info>/<env>/<region>/<scope>/<random ID>`
+
+**Problems:**
+1. **S3 buckets:** Cannot use slashes. Delta, artifacts, frontend, TF state buckets must stay hyphen-style.
+2. **Most other resources:** VPC, Aurora, ALB, EKS, ECS, etc. typically do not support slashes in names. Hyphen-style is standard.
+3. **Optional segments:** Would cause variable segment count; parsing by position would break if we ever needed it. But we don't need it—so this is a non-issue for our use case.
+
+### 65.8 Takeaway
+
+Limit path-style names to **Secrets Manager** and **CloudWatch Log Groups**—the two components where AWS explicitly recommends or uses hierarchical path format. Use hyphen-style for everything else. Path format is a naming convention; it is not a file path. We construct and match names; we do not parse them. Reference: `docs/FINAL_REFACTOR_PLAN_DYNAMIC_NAMING.md` for the full naming convention and migration plan.
