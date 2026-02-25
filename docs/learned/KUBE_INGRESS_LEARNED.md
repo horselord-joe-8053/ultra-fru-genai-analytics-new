@@ -104,7 +104,8 @@ annotations:
 |------|---------|
 | `infra_terraform/modules/cloud_shared/k8s/api-service.yaml` | NLB manifest (default) |
 | `infra_terraform/modules/cloud_shared/k8s/api-service-elb.yaml` | Classic ELB manifest (used with `--elb`) |
-| `tools/aws/kube/kube_apply.py` | Selects manifest: `api-service-elb.yaml` if `args.elb` else `api-service.yaml` |
+| `tools/aws/kube/kube_apply.py` | Apply: selects manifest, applies via kubectl |
+| `tools/aws/kube/kube_pre_destroy.py` | Teardown: kubectl delete (mirrors kube_apply) |
 | `tools/aws/kube/deploy_kube.py` | Phase 9.5: installs AWS Load Balancer Controller when not `--elb` |
 | `tools/aws/kube/install_aws_load_balancer_controller.py` | Python script that installs the controller (eksctl IAM, helm chart) |
 
@@ -117,6 +118,121 @@ annotations:
 3. **Orphan scan:** `PYTHONPATH=$(pwd) python tools/aws/standalone/temp_one_off/resources_scan/scan_aws_remaining.py --cloud-regions us-east-1 --env dev --prefix fru` (omit `--elb` for NLB track)
 4. **Orphan removal:** Dry-run then `remove_for_orphans_data.py` for Classic ELBs and `k8s-elb-*` SGs
 5. **Re-verify:** Same verify command
+
+### 0.7 VPC Teardown: k8s-elb-* SG and Dependency Order (Classic ELB Track)
+
+When using Classic ELB (`api-service-elb.yaml`), teardown must remove the `k8s-elb-*` security group **after** kube destroy and **before** durable (VPC) destroy. Otherwise the VPC stays stuck in "Still destroying."
+
+| Resource | Who creates | When deleted | Blocks |
+|---------|------------|--------------|--------|
+| Classic ELB | In-tree (when Service applied) | `kubectl delete svc fru-api-svc` | — |
+| `k8s-elb-{hex}` SG | In-tree (with ELB) | **Not** auto-deleted when ELB gone | VPC delete |
+| ENIs (from ELB) | AWS | Async release 10–30 min after ELB delete | SG delete until released |
+
+```mermaid
+%%{init: {'theme':'base', 'themeVariables': {'fontSize':'10px'}}}%%
+flowchart TB
+  subgraph pre["Pre kube destroy"]
+    K1["kubectl delete svc"]
+    K1 --> ELB["ELB deleted"]
+    ELB --> ENI["ENIs released async"]
+  end
+  subgraph post["Post kube destroy"]
+    K2["tofu destroy kube"]
+    K2 --> SG["remove k8s-elb-* SG"]
+    SG --> VPC["tofu destroy durable"]
+  end
+  ENI -.->|"10–30 min"| SG
+  style SG fill:#fff3e0
+  style VPC fill:#e3f2fd
+```
+
+**Teardown order (built-in):**
+
+1. **Pre kube:** `k8s_pre_destroy_cleanup` → kubectl delete svc, cronjob, job, namespace
+2. **Destroy kube:** `tofu destroy` kube stack (EKS cluster gone)
+3. **Post kube, pre durable:** `remove_orphaned_k8s_elb_security_groups` → delete `k8s-elb-*` SGs (retries on DependencyViolation until ENIs released)
+4. **Destroy durable:** `tofu destroy` durable (VPC, Aurora, etc.)
+
+**Key insight:** The `k8s-elb-*` SG is orphaned when the ELB is deleted—in-tree does not remove it. **It has to be gone before we can destroy the VPC (durable stack).**
+
+#### VPC Dependency Order (Why Order Matters)
+
+VPC and its resources form a strict dependency graph. Deleting in the wrong order leaves downstream resources referencing upstream ones; AWS refuses to delete. The `k8s-elb-*` SG lives in the VPC and blocks VPC deletion until removed.
+
+```mermaid
+%%{init: {'theme':'base', 'themeVariables': {'fontSize':'9px'}}}%%
+flowchart LR
+  LB["ELB deleted"] --> ENI["ENIs released\n(async 10–30 min)"]
+  ENI --> SG["k8s-elb-* SG\ndeletable"]
+  SG --> VPC["VPC deletable"]
+  style SG fill:#fff3e0
+  style VPC fill:#e3f2fd
+```
+
+**Safe order:** LB delete → ENIs released (async 10–30 min) → SG delete → VPC delete. The `k8s-elb-*` SG cannot be deleted until ENIs from the ELB are released. See War Stories 6 (VPC dependency order), 7 (ELB ENI eventual consistency).
+
+| File | Purpose |
+|------|---------|
+| `tools/aws/kube/kube_pre_destroy.py` | Pre-destroy: kubectl delete (mirrors kube_apply.py) |
+| `tools/aws/kube/teardown_orphan_cleanup.py` | `remove_orphaned_k8s_elb_security_groups` (post kube) |
+| `tools/aws/teardown.py` | Orchestrates order: pre → destroy → post kube → destroy durable |
+
+### 0.8 Lifecycle Management: Terraform vs kubectl
+
+We could let Terraform manage the K8s resources (Namespace, Deployment, Service, CronJob, Job) via the `kubernetes` provider—or we can keep kubectl for apply/delete. This section documents the trade-off and why we chose kubectl.
+
+#### What Terraform Would Involve
+
+| Aspect | Terraform kubernetes provider | Complexity |
+|--------|-------------------------------|------------|
+| **Templating** | `kube_apply.py` injects ECR URLs, secret ARNs, PGHOST, etc. Terraform would need `templatefile()` and data sources; more wiring. | High |
+| **Provider config** | `kubernetes` provider needs cluster endpoint, CA cert, token from EKS. Brittle during first apply (cluster bootstrap). | Medium |
+| **Secret handling** | Bootstrap needs DB/OpenAI secrets from AWS Secrets Manager. Terraform would need `kubernetes_secret` + `aws_secretsmanager_get_secret_value`. | Medium |
+| **Migration** | Existing clusters have resources created by kubectl; would need `terraform import` or clean redeploy. | High |
+| **Iteration** | Changing a Deployment means `tofu apply` instead of `kubectl apply -f`; heavier for K8s-only tweaks. | Low |
+
+**Pros of Terraform:** Single source of truth, no pre-destroy, declarative, proper dependency ordering, idempotent teardown.
+
+**Cons:** The above complexity, plus Terraform would drive kubectl-equivalent API calls with more plan/apply cycles and state bloat. It duplicates what the platform already does—apply a Service and the cloud controller creates the LB.
+
+#### What kubectl Involves (Our Choice)
+
+| Aspect | kubectl apply / pre-destroy | Caveat |
+|--------|-----------------------------|--------|
+| **Apply** | `kube_apply.py` runs `kubectl apply` with templated manifests. Simple, fast. | — |
+| **Teardown** | `kube_pre_destroy.py` runs `kubectl delete` before tofu destroy. | Must run before cluster destroy; cluster must be reachable. |
+| **In-tree Classic ELB** | `kubectl delete svc` removes the LB. | **`k8s-elb-*` SG is orphaned**—in-tree does not delete it. Must remove post kube, pre durable. See 0.7. |
+| **NLB track** | No extra SG; AWS Load Balancer Controller cleans up. | — |
+
+```mermaid
+%%{init: {'theme':'base', 'themeVariables': {'fontSize':'10px'}}}%%
+flowchart LR
+  subgraph TF["Terraform-managed K8s"]
+    T1["templatefile + data"]
+    T2["kubernetes provider"]
+    T3["secret wiring"]
+    T1 --> T2 --> T3
+    T3 --> T4["tofu apply/destroy"]
+  end
+  subgraph K8["kubectl (our choice)"]
+    K1["kube_apply.py"]
+    K2["kube_pre_destroy.py"]
+    K3["remove k8s-elb-*"]
+    K1 --> K2 --> K3
+  end
+  style TF fill:#ffebee
+  style K8 fill:#e8f5e9
+```
+
+#### Summary
+
+| Approach | Pros | Cons |
+|----------|------|------|
+| **Terraform kubernetes provider** | Single source of truth, no pre-destroy, declarative | Templating, provider config, secret wiring, migration, slower iteration |
+| **kubectl + pre/post-destroy** | Simpler, faster iteration, platform-native | Pre-destroy required; **in-tree ELB: must remove k8s-elb-* SG** post kube, pre durable |
+
+We kept kubectl. The cons of Terraform outweighed the pros. The one caveat: when using in-tree Classic ELB, we must explicitly remove `k8s-elb-*` SGs after kube destroy and before durable—otherwise the VPC stays stuck. See [Section 0.7](#07-vpc-teardown-k8s-elb-sg-and-dependency-order-classic-elb-track) and War Stories 6, 7, 40, 41.
 
 ---
 

@@ -18,9 +18,10 @@ EventBridge rule: Defined in Terraform (infra_terraform/modules/aws/ecs). We rem
 because: (1) timing - must stop rule from firing before draining ECS; (2) orphan safety - if state
 is empty, destroy is no-op and rule stays; CLI delete handles both in-state and orphaned rules.
 
-EKS security groups: Created by AWS (not Terraform) as side effects of aws_eks_cluster/
-aws_eks_node_group. AWS does not always delete them on cluster destroy. Post-destroy CLI
-cleanup is the common industry practice. See README_WAR_STORIES ##41.
+EKS security groups: cluster-sg/nodes-sg created by AWS as side effects; k8s-elb-* created
+by in-tree when Classic ELB Service exists. AWS does not always delete them. We remove
+cluster-sg/nodes-sg in pre_destroy (if cluster gone); k8s-elb-* in post kube destroy,
+before durable (blocks VPC delete). See README_WAR_STORIES ##41, ##7.
 """
 import argparse
 import json
@@ -36,11 +37,14 @@ from tools.cloud_shared.stats import TeardownStats, scope_for
 from tools.aws.scope_shared.core.phases import PhaseTracker, teardown_phases
 from tools.aws.scope_shared.core.terra_init import init_stack
 from tools.aws.scope_shared.core.terra_var_handling import get_base_vars
-from tools.aws.scope_shared.deploy.bootstrap_helpers import k8s_remove_bootstrap_and_scheduler
+from tools.aws.kube.kube_pre_destroy import k8s_pre_destroy_cleanup
 from tools.aws.scope_shared.import_preexist.nonkube import run_import_nonkube
 from tools.aws.scope_shared.import_preexist.kube import run_import_kube
 from tools.aws.scope_shared.teardown.cloudfront_pre_destroy import pre_destroy_cloudfront
-from tools.aws.kube.teardown_orphan_cleanup import remove_orphaned_eks_security_groups
+from tools.aws.kube.teardown_orphan_cleanup import (
+    remove_orphaned_eks_security_groups,
+    remove_orphaned_k8s_elb_security_groups,
+)
 from tools.cloud_shared.retry import run_with_retry, run_with_heartbeat
 from tools.aws.scope_shared.core.terra_runner import get_terra_env
 
@@ -66,17 +70,14 @@ def pre_destroy_kube(env: str, region: str | None = None, stats: TeardownStats |
     """
     Remove CronJob, Job, namespace, and orphaned EKS SGs before kube destroy.
 
-    Why needed: EKS cluster deletion is blocked by LoadBalancer services (hold ENIs),
-    running pods, and CronJobs/Jobs. Terraform cannot destroy the cluster until these are gone.
-
-    Why not Terraform: K8s resources (Namespace, Deployment, Service, CronJob, Job) are
-    applied via kubectl (kube_apply.py), not in Terraform state. We could move them into
-    Terraform (kubernetes provider), but templating, provider config, and secret wiring
-    add complexity—we choose kubectl pre-destroy. Orphan SGs: when state is empty,
-    destroy is no-op; we remove them via CLI. See README_WAR_STORIES ##40.
+    EKS cluster deletion is blocked by LoadBalancer services (hold ENIs), running pods,
+    and CronJobs/Jobs. Terraform cannot destroy the cluster until these are gone. K8s
+    resources are applied via kubectl (kube_apply.py), not Terraform—we use kubectl
+    pre-destroy. Orphan cluster-sg/nodes-sg: removed here if cluster already gone.
+    k8s-elb-* SGs (Classic ELB track) are removed post kube destroy, before durable.
     """
     try:
-        k8s_remove_bootstrap_and_scheduler(env, region, stats=stats)
+        k8s_pre_destroy_cleanup(env, region, stats=stats)
         remove_orphaned_eks_security_groups(env, region, stats=stats)
         logger.info("Pre-destroy: removed kube CronJob, Job, and orphaned EKS SGs.")
     except Exception as e:
@@ -334,6 +335,10 @@ def main():
         stats.set_scope(scope_for(s))
         logger.step(f"[{phase_idx}/{len(phases)}] Destroying {s}...")
         destroy_stack(s, args.env, region, stats=stats)
+        # Post kube destroy: remove k8s-elb-* SGs before durable (they block VPC delete)
+        if s == KUBE_STACK:
+            logger.info("Post kube destroy: removing orphaned k8s-elb-* security groups...")
+            remove_orphaned_k8s_elb_security_groups(args.env, region, stats=stats)
         tracker.end_phase(phase_idx)
 
     stats.print_summary()
