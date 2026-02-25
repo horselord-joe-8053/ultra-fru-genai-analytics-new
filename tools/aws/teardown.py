@@ -22,6 +22,10 @@ EKS security groups: cluster-sg/nodes-sg created by AWS as side effects; k8s-elb
 by in-tree when Classic ELB Service exists. AWS does not always delete them. We remove
 cluster-sg/nodes-sg in pre_destroy (if cluster gone); k8s-elb-* in post kube destroy,
 before durable (blocks VPC delete). See README_WAR_STORIES ##41, ##7.
+
+Post-destroy (--incl-dura): After all stacks destroyed, removes durable orphans:
+RDS log group, ECS Container Insights log group, state bucket, lock table. Next
+deploy recreates bucket/table via bootstrap_state_backend.
 """
 import argparse
 import json
@@ -41,6 +45,7 @@ from tools.aws.kube.kube_pre_destroy import k8s_pre_destroy_cleanup
 from tools.aws.scope_shared.import_preexist.nonkube import run_import_nonkube
 from tools.aws.scope_shared.import_preexist.kube import run_import_kube
 from tools.aws.scope_shared.teardown.cloudfront_pre_destroy import pre_destroy_cloudfront
+from tools.aws.scope_shared.teardown.durable_post_destroy import post_destroy_durable_orphans
 from tools.aws.kube.teardown_orphan_cleanup import (
     remove_orphaned_eks_security_groups,
     remove_orphaned_k8s_elb_security_groups,
@@ -270,6 +275,11 @@ def main():
     ap.add_argument("--region", default=None, help="Region (default: CLOUD_REGION)")
     ap.add_argument("--incl-dura", action="store_true", help="Include shared durable stack in destroy (scope=all only)")
     ap.add_argument("--non-interactive", action="store_true", help="Skip confirmation prompts")
+    ap.add_argument(
+        "--post-destroy-only",
+        action="store_true",
+        help="Skip stack destroy; only run post-destroy durable orphans (for testing full cleanup on already-torn-down region)",
+    )
     args = ap.parse_args()
 
     try:
@@ -286,6 +296,17 @@ def main():
         resp = input(f"Type '{token}' to confirm: ").strip()
         if resp != token:
             raise SystemExit("Confirmation failed. Exiting.")
+
+    # --post-destroy-only: skip destroy loop, run only durable orphans cleanup
+    if args.post_destroy_only:
+        if not (args.incl_dura and args.scope == "all"):
+            logger.error("--post-destroy-only requires --incl-dura and --scope all")
+            sys.exit(1)
+        logger.operation_start("Teardown (post-destroy only)", args.scope, args.env, region)
+        post_destroy_durable_orphans(args.env, region, stats=TeardownStats())
+        logger.operation_end("Teardown (post-destroy only)", args.scope, args.env, region, 0, ok=True)
+        logger.success("Done.")
+        return
 
     stacks_to_destroy = list(ORDER[args.scope])
     if args.incl_dura and args.scope == "all":
@@ -340,6 +361,14 @@ def main():
             logger.info("Post kube destroy: removing orphaned k8s-elb-* security groups...")
             remove_orphaned_k8s_elb_security_groups(args.env, region, stats=stats)
         tracker.end_phase(phase_idx)
+
+    # Post-destroy: when --incl-dura, remove durable orphans (log groups, state bucket, lock table)
+    if args.incl_dura and args.scope == "all":
+        logger.step("Post-destroy: removing durable orphans (full cleanup)...")
+        try:
+            post_destroy_durable_orphans(args.env, region, stats=stats)
+        except Exception as e:
+            logger.warning(f"Post-destroy durable orphans: {e}")
 
     stats.print_summary()
     logger.operation_end("Teardown", args.scope, args.env, region, int(time.time() - teardown_start), ok=True)
