@@ -74,3 +74,21 @@ So the "curse" is the side effect: same-name recreation is blocked for up to 30 
    - Update deploy/kube/nonkube to read from both stacks.
 4. Update `teardown.py`: `--incl-dura` destroys durable only; `--incl-dura-all` destroys durable then durable_with_cooloff.
 5. Update `deploy.py`: ensure durable_with_cooloff is applied before durable (or durable reads its outputs).
+
+---
+
+## Migration (Existing Deployments)
+
+If you have an **existing** deployment where secrets are in the `durable` state:
+
+1. **Import** existing secrets into durable_with_cooloff (deploy does this automatically).
+2. **Remove secrets from durable state** (keeps secrets in AWS):
+   ```bash
+   cd infra_terraform/live_deploy/aws/scope_shared/durable
+   tofu state rm aws_secretsmanager_secret.openai_api_key
+   tofu state rm aws_secretsmanager_secret.db_password
+   tofu state rm aws_secretsmanager_secret.db_password_plain
+   ```
+3. **Apply durable** — it will read secret ARNs from durable_with_cooloff via remote state.
+
+For **fresh** deployments, no migration needed.

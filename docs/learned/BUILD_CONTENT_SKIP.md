@@ -46,19 +46,15 @@ Git SHA only reflects **committed** state. Uncommitted changes (e.g. testing loc
 
 ---
 
-## Future: Multi-Region Push Without Rebuild
+## Multi-Region Push Without Rebuild (Implemented)
 
-**Problem:** We delete local images after push. When deploying to a second region with content-skip, we have no local image to push—us-east-2 ECR stays empty, deploy fails with `ImageNotFoundException`.
+**Problem:** When deploying to a second region with content-skip (or `--skip-build`), target ECR may be empty—deploy fails with `ImageNotFoundException`.
 
-**Solution:** Stop deleting local images until a rebuild is triggered. When content-skip, if target region ECR lacks the image, push from local (same image; content hash matches).
+**Solution:** Images are regionless; build uses canonical tags (`repo_name:latest`). Old local images are removed only after new images are successfully built and pushed. When content-skip or `--skip-build`, if target ECR lacks images, run `--push-only` to tag local canonical images and push to target.
 
-**Assumption:** Each region uses the same image (same build context hash). Safe when content-skip applies.
+### Implementation
 
-### Refactor Plan
-
-1. **`build_and_push_images.py`:** Do not call `_cleanup_local_images_after_push` by default. Add `--cleanup-local` (opt-in) for users who want to free disk. Deploy does not pass it.
-2. **`deploy.py`:** When content-skip, add a "push-if-needed" step:
-   - Check if target region ECR has app and spark images (e.g. `describe-images` for `latest`).
-   - If either is missing and we have local image with matching `BUILD_CONTEXT_HASH`, run push-only: tag local image for target ECR, push. Reuse `build_and_push_images.py` with `--push-only --region <target>`.
-3. **`build_and_push_images.py`:** Add `--push-only` mode: skip build; for target region, if ECR empty, tag local `{source_repo}:latest` as `{target_repo}:latest` and push. Requires ECR login for target region.
-4. **Edge case:** Content-skip but no local image (e.g. fresh clone, different machine). Fall back to full build.
+1. **`build_and_push_images.py`:** Removes old local images after successful build and push (dangling images from previous build). `--cleanup-local` (opt-in) also removes current images after push.
+2. **`build_and_push_images.py`:** Build adds canonical tags `{repo_name}:latest` (same across regions). `--push-only` tags `{repo_name}:latest` → `{target_ecr}:latest` and push. Skips if target already has both images.
+3. **`deploy.py`:** When content-skip or `--skip-build`, calls `_maybe_push_only_for_region()`: if target ECR empty, runs push-only.
+4. **Edge case:** No local image (fresh clone, different machine). Push-only fails; deploy may fail at ECR pull. Use `--force-build` to build.

@@ -44,7 +44,8 @@ def deploy_phases(scope: str) -> list[str]:
     shared = [
         "Doctor checks",
         "State backend bootstrap",
-        "Shared durable (VPC + Aurora + Secrets)",
+        "Durable-with-cooloff (Secrets)",
+        "Shared durable (VPC + Aurora)",
         "Shared nondurable (ECR + S3)",
         "Secrets in Secrets Manager",
         "Database setup (pgvector, schema, data)",

@@ -1,3 +1,6 @@
+# Durable stack: VPC, Aurora (no Secrets Manager—those live in durable_with_cooloff).
+# Secret ARNs re-exported from durable_with_cooloff so kube/nonkube read from this stack.
+# Apply order: durable_with_cooloff first, then durable.
 
 terraform {
   backend "s3" {}
@@ -6,6 +9,18 @@ terraform {
   }
 }
 provider "aws" { region = var.aws_region }
+
+data "terraform_remote_state" "durable_with_cooloff" {
+  backend = "s3"
+  config = {
+    bucket         = var.tf_state_bucket
+    key            = "${var.tf_state_prefix}/${var.env}/${var.aws_region}/aws-shared-durable_with_cooloff.tfstate"
+    region         = var.tf_state_bucket_region
+    dynamodb_table = var.tf_lock_table
+    encrypt        = true
+    use_lockfile   = true
+  }
+}
 
 module "tags" {
   source = "../../../../modules/cloud_shared/primitives/tags"
@@ -56,3 +71,9 @@ output "aurora_port"                { value = module.aurora.cluster_port }
 output "aurora_database_name"       { value = module.aurora.database_name }
 output "aurora_security_group_id"   { value = module.aurora.security_group_id }
 output "aurora_cluster_arn"         { value = module.aurora.cluster_arn }
+
+# Re-export secret ARNs from durable_with_cooloff so kube/nonkube read from this stack.
+output "openai_api_key_secret_arn"   { value = data.terraform_remote_state.durable_with_cooloff.outputs.openai_api_key_secret_arn }
+output "db_password_secret_arn"      { value = data.terraform_remote_state.durable_with_cooloff.outputs.db_password_secret_arn }
+output "db_password_plain_secret_arn" { value = data.terraform_remote_state.durable_with_cooloff.outputs.db_password_plain_secret_arn }
+output "db_secret_arn" { value = data.terraform_remote_state.durable_with_cooloff.outputs.db_secret_arn }
