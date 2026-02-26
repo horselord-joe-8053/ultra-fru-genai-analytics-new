@@ -4,6 +4,7 @@ Environment-agnostic, works in local, AWS (ECS/EKS), Azure (ACI/AKS), GCP (Cloud
 
 Applicable environment: [local] [aws {ecs | eks}] [azure {aci | aks}] [gcp {cloud-run | gke}]
 """
+# build trigger: touch to force rebuild
 import os
 import json
 import logging
