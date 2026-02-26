@@ -12,6 +12,18 @@ variable "tags" {
 variable "cluster_name" { type = string }
 variable "alb_name" { type = string }
 
+# CloudWatch log groups (path-style). When set, use; else fallback to legacy /{prefix}/{env}/...
+variable "cloudwatch_log_group_ecs_api" {
+  type        = string
+  default     = ""
+  description = "Full path for ECS API log group (e.g. /fru/ecs-api/dev/us-east-1)"
+}
+variable "cloudwatch_log_group_spark" {
+  type        = string
+  default     = ""
+  description = "Full path for Spark log group (e.g. /fru/cloud-log-group-spark/dev/us-east-1)"
+}
+
 variable "vpc_id" { type = string }
 variable "public_subnet_ids" { type = list(string) }
 variable "private_subnet_ids" { type = list(string) }

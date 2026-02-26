@@ -1,7 +1,7 @@
 """
 Orphan resource classification: resources not in Terraform state that survive teardown.
 
-Uses pattern-based rules (no hardcoded IDs). All patterns use dynamic prefix/env.
+Uses pattern-based rules (no hardcoded IDs). Patterns from resource_names (PROJ_PREFIX + *_COMPONENT).
 Returns: ("definitely"|"likely", note) or (None, ""). Note is for inline display.
 
 use_elb: True = Classic ELB track (api-service-elb.yaml); False = NLB track (api-service.yaml).
@@ -12,6 +12,8 @@ ORPHAN_RECOVERY_HINTS: single source for recovery hints. Placeholders: <name>, <
 """
 import re
 from typing import Literal
+
+from tools.aws.scope_shared.core import resource_names
 
 OrphanLevel = Literal["definitely", "likely"] | None
 OrphanResult = tuple[OrphanLevel, str]  # (level, note)
@@ -54,30 +56,7 @@ def get_recovery_hints_for_orphans(orphans: list[dict]) -> dict[str, str]:
 
 
 # -----------------------------------------------------------------------------
-# Terraform-created resource patterns (we know these are in state)
-# Used to exclude from orphan classification.
-# -----------------------------------------------------------------------------
-def _terraform_iam_role_patterns(prefix: str, env: str) -> list[str]:
-    """IAM roles created by our Terraform. Pattern substrings."""
-    pe = f"{prefix}-{env}"
-    return [
-        f"{pe}-ecs-exec",
-        f"{pe}-ecs-task",
-        f"{pe}-spark-task-exec",
-        f"{pe}-spark-task",
-        f"{pe}-events-invoke-ecs",
-        f"{pe}-eks-cluster-role",
-        f"{pe}-eks-node-role",
-    ]
-
-
-def _terraform_oac_pattern(prefix: str, env: str) -> re.Pattern:
-    """OAC names we create: {prefix}-{env}-frontend-{suffix}-{region}-oac."""
-    return re.compile(rf"^{re.escape(prefix)}-{re.escape(env)}-frontend-(?:kube|nonkube)-[a-z0-9-]+-oac$")
-
-
-# -----------------------------------------------------------------------------
-# Orphan rules: pattern-based, use prefix/env (no hardcoded values)
+# Orphan rules: pattern-based, use resource_names (prefix/env from .env)
 # -----------------------------------------------------------------------------
 
 
@@ -99,11 +78,16 @@ def classify_orphan(
     """
     tags = tags or {}
     pe = f"{prefix}-{env}"
-    cluster_tag = f"kubernetes.io/cluster/{pe}-eks"
+    cluster_tag_old, cluster_tag_new = resource_names.get_eks_cluster_tags(prefix, env, region)
+
+    def _is_our_eks(t: dict) -> bool:
+        return t.get(cluster_tag_old) in ("shared", "owned") or (
+            cluster_tag_new and t.get(cluster_tag_new) in ("shared", "owned")
+        )
 
     # --- CloudFront OAC ---
     if resource_type == "cloudfront_oac":
-        if _terraform_oac_pattern(prefix, env).match(name):
+        if resource_names.get_frontend_oac_pattern(prefix, env).match(name):
             return (None, "")
         if re.match(rf"^{re.escape(prefix)}-{re.escape(env)}-frontend-oac$", name):
             return ("definitely", "legacy OAC; not in Terraform")
@@ -117,14 +101,13 @@ def classify_orphan(
             return ("definitely", "AWS Load Balancer Controller; not in Terraform")
         if "-csi-driver-role" in name or "-ebs-csi-" in name:
             return ("definitely", "EKS addon; not in Terraform")
-        for pat in _terraform_iam_role_patterns(prefix, env):
-            if pat in name or name == pat:
-                return (None, "")
+        if resource_names.is_terraform_iam_role(name, prefix, env, region):
+            return (None, "")
         return ("likely", "project-named role not in Terraform list")
 
     # --- Security group: k8s-elb-* = in-tree Classic ELB SG ---
     if resource_type == "security_group":
-        if name.startswith("k8s-elb-") and tags.get(cluster_tag) in ("shared", "owned"):
+        if name.startswith("k8s-elb-") and _is_our_eks(tags):
             note = "Classic ELB track: in-tree SG" if use_elb else "NLB track: Classic ELB remnant from migration"
             return ("definitely", note)
         return (None, "")

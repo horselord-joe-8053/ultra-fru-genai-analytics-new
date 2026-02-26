@@ -17,7 +17,7 @@ set -e
 
 ENV="${ENV:-dev}"
 REGION="${REGION:-us-east-1}"
-PREFIX="${FRU_PREFIX:-fru}"
+PREFIX="${PROJ_PREFIX:-${FRU_PREFIX:-fru}}"
 PROFILE="${AWS_PROFILE:-}"
 
 while [[ $# -gt 0 ]]; do
@@ -29,7 +29,9 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-CLUSTER_NAME="${PREFIX}-${ENV}-eks"
+# New format: {prefix}-{component}-{env}-{region}; matches resource_names.eks_cluster()
+EKS_COMPONENT="${EKS_CLUSTER_COMPONENT:-eks}"
+CLUSTER_NAME="${PREFIX}-${EKS_COMPONENT}-${ENV}-${REGION}"
 [[ -n "$PROFILE" ]] && export AWS_PROFILE="$PROFILE"
 
 echo "Installing AWS Load Balancer Controller for cluster=${CLUSTER_NAME} region=${REGION}${PROFILE:+ profile=${PROFILE}}"

@@ -17,6 +17,7 @@ import tempfile
 import urllib.request
 
 from tools.cloud_shared.env import load_dotenv
+from tools.aws.scope_shared.core import resource_names
 from tools.aws.scope_shared.core.backend import resolve_region
 
 load_dotenv()
@@ -45,8 +46,7 @@ def main():
     if args.profile:
         env["AWS_PROFILE"] = args.profile
 
-    prefix = os.getenv("FRU_PREFIX", "fru")
-    cluster_name = f"{prefix}-{args.env}-eks"
+    cluster_name = resource_names.eks_cluster(args.env, region)
 
     print(f"Installing AWS Load Balancer Controller for cluster={cluster_name} region={region}")
 

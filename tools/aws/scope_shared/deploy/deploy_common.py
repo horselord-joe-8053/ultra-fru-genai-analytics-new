@@ -103,9 +103,11 @@ def apply_stack_nonkube_with_ecs_import_retry(
     logger.step(f"Applying stack: {stack_dir}")
     init_stack(stack_dir, env, region)
     get_base_vars(env, region)
-    prefix = os.getenv("FRU_PREFIX", "fru")
-    cluster_name = f"{prefix}-{env}-ecs"
-    service_name = f"{prefix}-{env}-api-svc"
+    from tools.aws.scope_shared.core import resource_names
+    from tools.aws.scope_shared.core.backend import resolve_region
+    deploy_region = region or resolve_region(None)
+    cluster_name = resource_names.ecs_cluster(env, deploy_region)
+    service_name = f"{resource_names.get_proj_prefix()}-{env}-api-svc"
     import_id = f"{cluster_name}/{service_name}"
 
     def _do_apply() -> subprocess.CompletedProcess:
@@ -181,7 +183,7 @@ def run_ecs_bootstrap(env: str, region: str | None = None, force: bool = False) 
 
     logger.step("Executing ECS analytics bootstrap (Spark run_analytics)")
     out = tofu_output_json("infra_terraform/live_deploy/aws/nonkube", env, region)
-    cluster = out.get("ecs_cluster_name", {}).get("value") or f"{require('FRU_PREFIX')}-{env}-ecs"
+    cluster = out.get("ecs_cluster_name", {}).get("value") or resource_names.ecs_cluster(env, region)
     spark_task_def = out.get("spark_task_definition_arn", {}).get("value")
     if not spark_task_def:
         raise SystemExit("spark_task_definition_arn not in nonkube outputs")

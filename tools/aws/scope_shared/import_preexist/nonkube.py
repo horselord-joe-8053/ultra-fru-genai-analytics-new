@@ -13,6 +13,7 @@ import json
 import subprocess
 
 from tools.cloud_shared.logging import logger
+from tools.aws.scope_shared.core import resource_names
 from tools.aws.scope_shared.core.terra_runner import get_terra_env
 from tools.aws.scope_shared.import_preexist._common import (
     import_batch,
@@ -175,11 +176,11 @@ def run_import_nonkube(
     failed += import_batch(stack_dir, role_specs, region)
 
     # ECS-layer resources (CloudWatch, ALB, target group, security groups)
-    # Naming matches infra_terraform/modules/aws/ecs/main.tf
-    alb_name = f"{prefix}-{env}-alb"
+    # Naming matches infra_terraform/modules/aws/ecs/main.tf (resource_names)
+    alb_name = resource_names.alb_name(env, deploy_region)
     log_specs = [
-        ("module.ecs.aws_cloudwatch_log_group.ecs", f"/fru/{env}/ecs-api"),
-        ("module.ecs.aws_cloudwatch_log_group.spark", f"/fru/{env}/spark"),
+        ("module.ecs.aws_cloudwatch_log_group.ecs", resource_names.log_group_ecs_api(env, deploy_region)),
+        ("module.ecs.aws_cloudwatch_log_group.spark", resource_names.log_group_spark(env, deploy_region)),
     ]
     failed += import_batch(stack_dir, log_specs, region)
 

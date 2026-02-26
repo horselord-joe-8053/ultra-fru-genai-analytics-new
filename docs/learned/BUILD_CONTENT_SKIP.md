@@ -43,3 +43,22 @@ Git SHA only reflects **committed** state. Uncommitted changes (e.g. testing loc
 
 - `artifacts_bucket` output from nondurable stack (S3 bucket for build metadata)
 - AWS credentials with S3 read/write on `artifacts_bucket`
+
+---
+
+## Future: Multi-Region Push Without Rebuild
+
+**Problem:** We delete local images after push. When deploying to a second region with content-skip, we have no local image to push—us-east-2 ECR stays empty, deploy fails with `ImageNotFoundException`.
+
+**Solution:** Stop deleting local images until a rebuild is triggered. When content-skip, if target region ECR lacks the image, push from local (same image; content hash matches).
+
+**Assumption:** Each region uses the same image (same build context hash). Safe when content-skip applies.
+
+### Refactor Plan
+
+1. **`build_and_push_images.py`:** Do not call `_cleanup_local_images_after_push` by default. Add `--cleanup-local` (opt-in) for users who want to free disk. Deploy does not pass it.
+2. **`deploy.py`:** When content-skip, add a "push-if-needed" step:
+   - Check if target region ECR has app and spark images (e.g. `describe-images` for `latest`).
+   - If either is missing and we have local image with matching `BUILD_CONTEXT_HASH`, run push-only: tag local image for target ECR, push. Reuse `build_and_push_images.py` with `--push-only --region <target>`.
+3. **`build_and_push_images.py`:** Add `--push-only` mode: skip build; for target region, if ECR empty, tag local `{source_repo}:latest` as `{target_repo}:latest` and push. Requires ECR login for target region.
+4. **Edge case:** Content-skip but no local image (e.g. fresh clone, different machine). Fall back to full build.

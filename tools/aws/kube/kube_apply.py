@@ -53,7 +53,7 @@ def main():
     ap.add_argument("--phase", choices=["bootstrap","schedule"], required=True)
     ap.add_argument("--spark-image", help="Full Spark image URI")
     ap.add_argument("--app-image", help="Full App image URI")
-    ap.add_argument("--delta-bucket", help="S3 delta bucket (overrides S3_DELTA_BUCKET)")
+    ap.add_argument("--delta-bucket", help="S3 delta bucket (overrides S3_DELTA_COMPONENT / resource_names.s3_delta_bucket)")
     ap.add_argument("--pg-host", default="", help="PGHOST from durable")
     ap.add_argument("--pg-port", default="5432", help="PGPORT")
     ap.add_argument("--pg-database", default="fru_db", help="PGDATABASE")
@@ -72,18 +72,22 @@ def main():
     region = resolve_region(args.region)
     os.environ["CLOUD_REGION"] = region
 
+    from tools.aws.scope_shared.core import resource_names
+
     # ensure kubeconfig
     subprocess.run(["python","tools/aws/kube/eks_kubeconfig.py","--env",args.env], check=False, env={**os.environ, "CLOUD_REGION": region})
 
     spark_image = args.spark_image
     if not spark_image:
-        spark_image = f"{require('ECR_REPO_SPARK')}:{require('SPARK_IMAGE_TAG')}"
+        tag = os.getenv("SPARK_IMAGE_TAG", "latest")
+        spark_image = resource_names.ecr_image_uri("spark", args.env, region, tag)
 
     app_image = args.app_image
     if not app_image:
-        app_image = f"{require('ECR_REPO_APP')}:{require('APP_IMAGE_TAG')}"
+        tag = os.getenv("APP_IMAGE_TAG", "latest")
+        app_image = resource_names.ecr_image_uri("app", args.env, region, tag)
 
-    delta_bucket = args.delta_bucket or os.getenv("S3_DELTA_BUCKET") or f"{os.getenv('FRU_PREFIX','fru')}-{args.env}-delta"
+    delta_bucket = args.delta_bucket or resource_names.s3_delta_bucket(args.env, region)
     delta_root = f"s3a://{delta_bucket}/delta"
 
     # namespace

@@ -11,7 +11,7 @@
 # tofu plan locally) without going through the full deploy.
 #
 # **How to run:** From repo root only. Requires .env (or .env.fru) with at least
-# TF_STATE_BUCKET, CLOUD_REGION; optional TF_STATE_PREFIX/FRU_PREFIX, FRU_ENV,
+# TF_STATE_BUCKET, CLOUD_REGION; optional TF_STATE_PREFIX/PROJ_PREFIX/FRU_PREFIX, FRU_ENV,
 # TF_LOCK_TABLE/TF_STATE_LOCK_TABLE.
 #
 #   ./tools/aws/scope_shared/utils/init_terra_upgrade_reconfigure.sh <stack_dir> [env]
@@ -56,7 +56,7 @@ fi
 
 : "${TF_STATE_BUCKET:?Set TF_STATE_BUCKET in .env}"
 : "${CLOUD_REGION:=us-east-1}"
-PREFIX="${TF_STATE_PREFIX:-${FRU_PREFIX:-fru}}"
+PREFIX="${TF_STATE_PREFIX:-${PROJ_PREFIX:-${FRU_PREFIX:-fru}}}"
 
 # Match backend.py: stack_id_from_dir (cloud=aws from script location; strip first path component)
 # e.g. infra_terraform/live_deploy/aws/scope_shared/durable -> aws-shared-durable

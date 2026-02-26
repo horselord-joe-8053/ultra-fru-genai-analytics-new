@@ -220,7 +220,7 @@ def phase4_copy_state(
 def main():
     ap = argparse.ArgumentParser(description="Split Terraform state into region-specific buckets")
     ap.add_argument("--env", default=os.getenv("FRU_ENV", "dev"))
-    ap.add_argument("--prefix", default=os.getenv("FRU_PREFIX", "fru"))
+    ap.add_argument("--prefix", default=os.getenv("PROJ_PREFIX", "").strip() or os.getenv("FRU_PREFIX", "fru"))
     ap.add_argument("--regions", default=",".join(REGIONS), help="Comma-separated regions")
     ap.add_argument("--skip-phase1", action="store_true", help="Skip Phase 1 (list old bucket)")
     ap.add_argument("--skip-phase3", action="store_true", help="Skip Phase 3 (create resources)")
@@ -228,8 +228,11 @@ def main():
     args = ap.parse_args()
 
     regions = [r.strip() for r in args.regions.split(",") if r.strip()]
-    bucket_prefix = os.getenv("TF_STATE_BUCKET_PREFIX", "fru-tf-state")
-    lock_prefix = os.getenv("TF_LOCK_TABLE_PREFIX", "fru-tf-locks-tbl")
+    proj = os.getenv("PROJ_PREFIX", "").strip() or os.getenv("FRU_PREFIX", "fru")
+    comp = os.getenv("TF_STATE_BUCKET_COMPONENT", "tf-state")
+    bucket_prefix = os.getenv("TF_STATE_BUCKET_PREFIX") or f"{proj}-{comp}"
+    lock_comp = os.getenv("TF_LOCK_TABLE_COMPONENT", "tf-locks-tbl")
+    lock_prefix = os.getenv("TF_LOCK_TABLE_PREFIX") or f"{proj}-{lock_comp}"
 
     logger.step(f"Split buckets for regions: {regions} (env={args.env}, prefix={args.prefix})")
     start = time.time()

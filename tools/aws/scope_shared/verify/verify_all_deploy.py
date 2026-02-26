@@ -51,8 +51,8 @@ VERIFY_RETRIABLE_HTTP_CODES = frozenset({502, 503})
 # --- Acceptable-error policy (refactor: strict by default) ---
 # Analytics: no acceptable errors; DB not configured/unreachable = fail (fix credentials).
 # QueryStream: "Agent disabled" acceptable only when USE_AGENT_QUERY=false (env, same as deploy).
-# CloudWatch: ECS (nonkube) creates /fru/{env}/spark; EKS (kube) does not. For nonkube/all, enforce
-#   fail when log group missing (PASS not allowed). For kube only, allow skip (PASS).
+# CloudWatch: ECS (nonkube) creates path-style Spark log group (e.g. /fru/cloud-log-group-spark/dev/us-east-1);
+#   EKS (kube) does not. For nonkube/all, enforce fail when log group missing (PASS not allowed). For kube only, allow skip (PASS).
 
 def get_tofu_output(stack_dir, env):
     """Retrieve output from Tofu (assumed already applied)."""
@@ -248,13 +248,14 @@ def verify_api_endpoints(
 def verify_cloudwatch(env, timeout_mins=None, scope: str = "nonkube") -> tuple[bool, str]:
     """
     Return (ok, note) for summary table.
-    ECS (nonkube) creates /fru/{env}/spark; EKS (kube) does not.
+    ECS (nonkube) creates Spark log group; EKS (kube) does not.
     - nonkube/all: enforce fail when log group not found or check failed (PASS not allowed).
     - kube only: allow skip (PASS) when missing—EKS does not create this log group.
     """
     from tools.aws.scope_shared.core.backend import resolve_region
+    from tools.aws.scope_shared.core import resource_names
     region = resolve_region(None)
-    log_group = os.getenv("CLOUDWATCH_LOG_GROUP") or f"/fru/{env}/spark"
+    log_group = resource_names.log_group_spark(env, region)
     # Only kube may skip; nonkube/all must fail when log group missing (ECS creates it).
     skip_when_missing = scope == "kube"
 

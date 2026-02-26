@@ -22,7 +22,7 @@ Run teardown for **each region** you have deployed to. Use the orchestrator with
 .venv/bin/python orchestrator.py teardown --scope all --env dev --cloud-region us-east-2 --incl-dura --non-interactive
 ```
 
-**Notes:** Use `--cloud-region` per region (default from `CLOUD_REGION`). `--incl-dura` destroys shared durable (VPC, Aurora, Secrets). Ensure `.env` has **current** full-name vars (e.g. `S3_DELTA_BUCKET=fru-dev-delta-internal`, `EKS_CLUSTER_NAME=fru-dev-eks`).
+**Notes:** Use `--cloud-region` per region (default from `CLOUD_REGION`). `--incl-dura` destroys shared durable (VPC, Aurora, Secrets). Ensure `.env` has **PROJ_PREFIX** and **`*_COMPONENT`** vars (see Step 4).
 
 ---
 

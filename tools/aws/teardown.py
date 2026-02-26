@@ -107,11 +107,12 @@ def pre_destroy_nonkube(env: str, region: str | None = None, stats: TeardownStat
     """
     import time
 
+    from tools.aws.scope_shared.core import resource_names
     region = region or resolve_region(None)
-    prefix = os.getenv("FRU_PREFIX", "fru")
-    cluster = os.getenv("ECS_CLUSTER_NAME") or f"{prefix}-{env}-ecs"
-    service = f"{prefix}-{env}-api-svc"
-    rule_name = f"{prefix}-{env}-spark-schedule"
+    proj = resource_names.get_proj_prefix()
+    cluster = resource_names.ecs_cluster(env, region)
+    service = f"{proj}-{env}-api-svc"
+    rule_name = f"{proj}-{env}-spark-schedule"
 
     def _timed(component: str, identifier: str, fn):
         if stats:
@@ -224,9 +225,9 @@ def destroy_stack(stack_dir: str, env: str, region: str | None = None, stats: Te
 
         extra = []
         if "kube" in stack_dir and "nonkube" not in stack_dir:
-            cluster_name = os.getenv("EKS_CLUSTER_NAME")
-            if cluster_name:
-                extra += ["-var", f"eks_cluster_name={cluster_name}"]
+            from tools.aws.scope_shared.core import resource_names
+            cluster_name = resource_names.eks_cluster(env, region or resolve_region(None))
+            extra += ["-var", f"eks_cluster_name={cluster_name}"]
 
         # Durable stack requires aurora_master_password; without it tofu prompts and blocks.
         # Use exact match: "durable" in "nondurable" would incorrectly add these vars to nondurable.
@@ -344,14 +345,14 @@ def main():
             logger.info("Reconciling nonkube state (import before destroy)...")
             init_stack(s, args.env, region)
             get_base_vars(args.env, region)
-            run_import_nonkube(s, args.env, region, prefix=os.getenv("FRU_PREFIX", "fru"))
+            from tools.aws.scope_shared.core import resource_names
+            run_import_nonkube(s, args.env, region, prefix=resource_names.get_proj_prefix())
         elif s == KUBE_STACK:
             logger.info("Reconciling kube state (import before destroy)...")
             init_stack(s, args.env, region)
             get_base_vars(args.env, region)
-            prefix = os.getenv("FRU_PREFIX", "fru")
-            eks_cluster_name = os.getenv("EKS_CLUSTER_NAME") or f"{prefix}-{args.env}-eks"
-            run_import_kube(s, args.env, region, prefix=prefix, eks_cluster_name=eks_cluster_name)
+            from tools.aws.scope_shared.core import resource_names
+            run_import_kube(s, args.env, region, prefix=resource_names.get_proj_prefix(), eks_cluster_name=resource_names.eks_cluster(args.env, region))
         # Tofu destroy uses stack scope (nonkube, kube, shared-nondurable)
         stats.set_scope(scope_for(s))
         logger.step(f"[{phase_idx}/{len(phases)}] Destroying {s}...")

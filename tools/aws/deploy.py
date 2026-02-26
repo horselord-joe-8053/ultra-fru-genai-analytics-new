@@ -174,11 +174,23 @@ def main():
         # Phase 3: Shared durable
         tracker.start_phase(3)
         logger.step(f"[3/{len(phases)}] Applying shared durable stack (VPC + Aurora + Secrets)...")
-        from tools.aws.scope_shared.deploy.deploy_common import apply_stack
+        from tools.aws.scope_shared.deploy.deploy_common import apply_stack, init_stack
+        from tools.aws.scope_shared.core.terra_var_handling import get_base_vars
+        from tools.aws.scope_shared.import_preexist.durable import run_import_durable
 
+        durable_dir = "infra_terraform/live_deploy/aws/scope_shared/durable"
+        init_stack(durable_dir, env, region)
+        get_base_vars(env, region)
         aurora_pw = os.getenv("PGPASSWORD") or ""
+        os.environ["TF_VAR_aurora_master_password"] = aurora_pw or "postgres"
+        # Set durable vars before import so tofu can load config (required vars: azs, subnet_cidrs)
         azs = durable_azs_for_region(region)
         azs_json = json.dumps(azs)
+        os.environ["TF_VAR_azs"] = azs_json
+        os.environ["TF_VAR_public_subnet_cidrs"] = '["10.0.1.0/24","10.0.2.0/24"]'
+        os.environ["TF_VAR_private_subnet_cidrs"] = '["10.0.101.0/24","10.0.102.0/24"]'
+        os.environ["TF_VAR_allow_destroy_durable"] = "false"
+        run_import_durable(durable_dir, env, region)
         durable_vars = [
             "-var", f"azs={azs_json}",
             "-var", 'public_subnet_cidrs=["10.0.1.0/24","10.0.2.0/24"]',
@@ -189,6 +201,7 @@ def main():
             durable_vars += ["-var", f"aurora_master_password={aurora_pw}"]
         else:
             logger.warning("PGPASSWORD not set; Aurora creation may fail. Set in .env before deploy.")
+            durable_vars += ["-var", "aurora_master_password=postgres"]
         with stats.timed("Tofu apply", "infra_terraform/live_deploy/aws/scope_shared/durable"):
             apply_stack("infra_terraform/live_deploy/aws/scope_shared/durable", env, durable_vars, region)
         logger.success("Shared durable applied")

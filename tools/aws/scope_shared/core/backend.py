@@ -8,7 +8,7 @@ _bucket_region_cache: dict[str, str] = {}
 _account_id_cache: str | None = None
 
 
-def _get_account_id() -> str:
+def get_account_id() -> str:
     """Get current AWS account ID (cached)."""
     global _account_id_cache
     if _account_id_cache:
@@ -76,14 +76,26 @@ def durable_azs_for_region(region: str) -> list[str]:
 def resolve_state_bucket(region: str | None = None) -> str:
     """
     Resolve S3 state bucket for the given region.
-    Uses TF_STATE_BUCKET_PREFIX + env + region + account_id.
-    Fallback: TF_STATE_BUCKET or TF_STATE_BUCKET_{region} (legacy).
+    Uses PROJ_PREFIX + TF_STATE_BUCKET_COMPONENT + env + region + account_id.
+    Fallback: TF_STATE_BUCKET_PREFIX (legacy) or TF_STATE_BUCKET / TF_STATE_BUCKET_{region}.
     """
     r = region or resolve_region(None)
-    prefix_var = os.getenv("TF_STATE_BUCKET_PREFIX", "").strip()
     env = os.getenv("FRU_ENV", os.getenv("ENVIRONMENT", "dev"))
+    # Preferred: PROJ_PREFIX + TF_STATE_BUCKET_COMPONENT
+    proj = os.getenv("PROJ_PREFIX", "").strip() or os.getenv("FRU_PREFIX", "fru")
+    comp = os.getenv("TF_STATE_BUCKET_COMPONENT", "").strip()
+    if comp:
+        account_id = get_account_id()
+        if not account_id:
+            raise EnvVarNotFound(
+                "AWS account ID",
+                hint="Run 'aws sts get-caller-identity' to verify credentials.",
+            )
+        return f"{proj}-{comp}-{env}-{r}-{account_id}"
+    # Legacy: TF_STATE_BUCKET_PREFIX
+    prefix_var = os.getenv("TF_STATE_BUCKET_PREFIX", "").strip()
     if prefix_var:
-        account_id = _get_account_id()
+        account_id = get_account_id()
         if not account_id:
             raise EnvVarNotFound(
                 "AWS account ID",
@@ -134,10 +146,16 @@ def resolve_bucket_region(bucket: str) -> str:
 def resolve_state_lock_table(region: str | None = None) -> str:
     """
     Resolve DynamoDB lock table for the given region.
-    Uses TF_LOCK_TABLE_PREFIX + region when set.
-    Fallback: TF_STATE_LOCK_TABLE / TF_LOCK_TABLE or per-region overrides (legacy).
+    Uses PROJ_PREFIX + TF_LOCK_TABLE_COMPONENT + region when set.
+    Fallback: TF_LOCK_TABLE_PREFIX (legacy) or TF_STATE_LOCK_TABLE / TF_LOCK_TABLE.
     """
     r = region or resolve_region(None)
+    # Preferred: PROJ_PREFIX + TF_LOCK_TABLE_COMPONENT
+    proj = os.getenv("PROJ_PREFIX", "").strip() or os.getenv("FRU_PREFIX", "fru")
+    comp = os.getenv("TF_LOCK_TABLE_COMPONENT", "").strip()
+    if comp:
+        return f"{proj}-{comp}-{r}"
+    # Legacy: TF_LOCK_TABLE_PREFIX
     lock_prefix = os.getenv("TF_LOCK_TABLE_PREFIX", "").strip()
     if lock_prefix:
         return f"{lock_prefix}-{r}"
@@ -156,7 +174,7 @@ def backend_config(stack_dir: str, env: str, region: str | None = None, cloud: s
     # Backend region: resolve dynamically from bucket location (avoids 301 when bucket in different region).
     # TF_STATE_BUCKET_REGION overrides when set (e.g. offline, or to skip API call).
     backend_region = os.getenv("TF_STATE_BUCKET_REGION", "").strip() or resolve_bucket_region(bucket)
-    prefix = os.getenv("TF_STATE_PREFIX", require("FRU_PREFIX"))
+    prefix = os.getenv("TF_STATE_PREFIX") or os.getenv("PROJ_PREFIX", "").strip() or require("FRU_PREFIX")
     stack_id = stack_id_from_dir(stack_dir, cloud)
     if region:
         key = f"{prefix}/{env}/{region}/{stack_id}.tfstate"

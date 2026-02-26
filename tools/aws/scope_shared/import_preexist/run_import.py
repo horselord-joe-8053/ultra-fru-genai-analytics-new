@@ -40,7 +40,8 @@ def main():
     if args.region:
         os.environ["CLOUD_REGION"] = args.region
     region = resolve_region(args.region)
-    prefix = os.getenv("FRU_PREFIX", "fru")
+    from tools.aws.scope_shared.core import resource_names
+    prefix = resource_names.get_proj_prefix()
 
     logger.info(f"Import pre-existing resources: scope={args.scope} env={args.env} region={region}")
 
@@ -53,7 +54,7 @@ def main():
 
     if args.scope in ("kube", "all"):
         init_stack(KUBE_STACK, args.env, region)
-        eks_cluster_name = os.getenv("EKS_CLUSTER_NAME") or f"{prefix}-{args.env}-eks"
+        eks_cluster_name = resource_names.eks_cluster(args.env, region)
         total_failed += run_import_kube(
             KUBE_STACK, args.env, region, prefix, eks_cluster_name=eks_cluster_name
         )

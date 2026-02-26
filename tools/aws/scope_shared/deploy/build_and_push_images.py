@@ -245,6 +245,7 @@ def _cleanup_local_images_after_push(
 
 
 def ecr_login(registry: str, region: str):
+    """Log in to ECR via aws ecr get-login-password | docker login. Uses ~/.docker/config.json."""
     logger.info(f"[ECR LOGIN] Logging in to {registry}")
     timeout = _docker_basic_timeout()
     try:
@@ -275,7 +276,8 @@ def main():
     ap.add_argument("--env", default=os.getenv("FRU_ENV","dev"))
     ap.add_argument("--region", default=None, help="Region (default: CLOUD_REGION)")
     ap.add_argument("--no-cache", action="store_true", help="Build Spark image without cache (ensures fresh run_analytics.py)")
-    ap.add_argument("--skip-cleanup", action="store_true", help="Skip local image removal after push")
+    ap.add_argument("--skip-cleanup", action="store_true", help="Skip local image removal after push (default: skip, keep for multi-region)")
+    ap.add_argument("--cleanup-local", action="store_true", help="Remove local images after push (opt-in; default is keep for multi-region push)")
     ap.add_argument("--force-build", action="store_true", help="Force build (passed by deploy when user requests; no-op here)")
     args = ap.parse_args()
 
@@ -370,7 +372,7 @@ def main():
     print("  ", f"{app_repo_url}:{app_tag}")
     print("  ", f"{spark_repo_url}:{spark_tag}")
 
-    if not args.skip_cleanup:
+    if args.cleanup_local and not args.skip_cleanup:
         _cleanup_local_images_after_push(
             app_repo_url, spark_repo_url, app_tag, spark_tag, region
         )
