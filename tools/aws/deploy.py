@@ -102,6 +102,52 @@ def _log_success(frontend_url: str, alb_dns: str | None = None) -> None:
     logger.success(f"{'='*70}\n")
 
 
+def _ecr_has_images(app_repo_name: str, spark_repo_name: str, region: str) -> bool:
+    """Check if target ECR has both app and spark images (tag=latest)."""
+    try:
+        subprocess.check_output(
+            ["aws", "ecr", "describe-images", "--repository-name", app_repo_name,
+             "--image-ids", "imageTag=latest", "--region", region],
+            stderr=subprocess.DEVNULL, timeout=15,
+        )
+        subprocess.check_output(
+            ["aws", "ecr", "describe-images", "--repository-name", spark_repo_name,
+             "--image-ids", "imageTag=latest", "--region", region],
+            stderr=subprocess.DEVNULL, timeout=15,
+        )
+        return True
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        return False
+
+
+def _maybe_push_only_for_region(env: str, target_region: str, snd: dict, artifacts_bucket: str) -> None:
+    """
+    When content-skip or --skip-build: if target ECR is empty, push from local image
+    (from prior deploy to another region). Avoids ImageNotFoundException when deploying
+    to a new region. See docs/learned/BUILD_CONTENT_SKIP.md.
+    """
+    app_repo_url = snd.get("ecr_app_url", {}).get("value", "")
+    spark_repo_url = snd.get("ecr_spark_url", {}).get("value", "")
+    if not app_repo_url or not spark_repo_url:
+        return
+    app_repo_name = app_repo_url.split("/")[-1]
+    spark_repo_name = spark_repo_url.split("/")[-1]
+    if _ecr_has_images(app_repo_name, spark_repo_name, target_region):
+        return
+    logger.info("[PUSH-ONLY] Target ECR empty; pushing from local canonical images")
+    try:
+        proc = subprocess.run(
+            ["python", "tools/aws/scope_shared/deploy/build_and_push_images.py",
+             "--env", env, "--region", target_region, "--push-only"],
+            cwd=os.getcwd(),
+            env={**os.environ, "CLOUD_REGION": target_region},
+        )
+        if proc.returncode != 0:
+            logger.warning("[PUSH-ONLY] Push failed (no local image?); deploy may fail at ECR pull")
+    except Exception as e:
+        logger.warning(f"[PUSH-ONLY] Push failed: {e}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument(
@@ -171,26 +217,36 @@ def main():
         logger.success("Backend bootstrapped")
         tracker.end_phase(2)
 
-        # Phase 3: Shared durable
+        # Phase 3a: Durable-with-cooloff (Secrets Manager only). Applied first so durable
+        # can read secret ARNs via terraform_remote_state. See docs/learned/DURABLE_COOLOFF_EVALUATION.md.
         tracker.start_phase(3)
-        logger.step(f"[3/{len(phases)}] Applying shared durable stack (VPC + Aurora + Secrets)...")
+        logger.step(f"[3/{len(phases)}] Applying durable_with_cooloff (Secrets)...")
         from tools.aws.scope_shared.deploy.deploy_common import apply_stack, init_stack
         from tools.aws.scope_shared.core.terra_var_handling import get_base_vars
-        from tools.aws.scope_shared.import_preexist.durable import run_import_durable
+        from tools.aws.scope_shared.import_preexist.durable_cooloff import run_import_durable_cooloff
 
+        get_base_vars(env, region)
+        durable_cooloff_dir = "infra_terraform/live_deploy/aws/scope_shared/durable_with_cooloff"
+        init_stack(durable_cooloff_dir, env, region)
+        run_import_durable_cooloff(durable_cooloff_dir, env, region)
+        with stats.timed("Tofu apply", "durable_with_cooloff"):
+            apply_stack(durable_cooloff_dir, env, [], region)
+        logger.success("Durable-with-cooloff applied")
+        tracker.end_phase(3)
+
+        # Phase 3b: Durable (VPC + Aurora). Reads secret ARNs from durable_with_cooloff.
+        tracker.start_phase(4)
+        logger.step(f"[4/{len(phases)}] Applying shared durable stack (VPC + Aurora)...")
         durable_dir = "infra_terraform/live_deploy/aws/scope_shared/durable"
         init_stack(durable_dir, env, region)
-        get_base_vars(env, region)
         aurora_pw = os.getenv("PGPASSWORD") or ""
         os.environ["TF_VAR_aurora_master_password"] = aurora_pw or "postgres"
-        # Set durable vars before import so tofu can load config (required vars: azs, subnet_cidrs)
         azs = durable_azs_for_region(region)
         azs_json = json.dumps(azs)
         os.environ["TF_VAR_azs"] = azs_json
         os.environ["TF_VAR_public_subnet_cidrs"] = '["10.0.1.0/24","10.0.2.0/24"]'
         os.environ["TF_VAR_private_subnet_cidrs"] = '["10.0.101.0/24","10.0.102.0/24"]'
         os.environ["TF_VAR_allow_destroy_durable"] = "false"
-        run_import_durable(durable_dir, env, region)
         durable_vars = [
             "-var", f"azs={azs_json}",
             "-var", 'public_subnet_cidrs=["10.0.1.0/24","10.0.2.0/24"]',
@@ -203,21 +259,21 @@ def main():
             logger.warning("PGPASSWORD not set; Aurora creation may fail. Set in .env before deploy.")
             durable_vars += ["-var", "aurora_master_password=postgres"]
         with stats.timed("Tofu apply", "infra_terraform/live_deploy/aws/scope_shared/durable"):
-            apply_stack("infra_terraform/live_deploy/aws/scope_shared/durable", env, durable_vars, region)
+            apply_stack(durable_dir, env, durable_vars, region)
         logger.success("Shared durable applied")
-        tracker.end_phase(3)
+        tracker.end_phase(4)
 
-        # Phase 4: Shared nondurable
-        tracker.start_phase(4)
-        logger.step(f"[4/{len(phases)}] Applying shared nondurable stack (ECR + S3)...")
+        # Phase 5: Shared nondurable
+        tracker.start_phase(5)
+        logger.step(f"[5/{len(phases)}] Applying shared nondurable stack (ECR + S3)...")
         with stats.timed("Tofu apply", "infra_terraform/live_deploy/aws/scope_shared/nondurable"):
             apply_stack("infra_terraform/live_deploy/aws/scope_shared/nondurable", env, [], region)
         logger.success("Shared nondurable applied")
-        tracker.end_phase(4)
+        tracker.end_phase(5)
 
-        # Phase 5: Secrets
-        tracker.start_phase(5)
-        logger.step(f"[5/{len(phases)}] Ensuring secrets in Secrets Manager...")
+        # Phase 6: Secrets
+        tracker.start_phase(6)
+        logger.step(f"[6/{len(phases)}] Ensuring secrets in Secrets Manager...")
         with stats.timed("Secrets", "ensure_secrets"):
             subprocess.run(
                 ["python", "tools/aws/scope_shared/deploy/ensure_secrets.py", "--env", env, "--region", region],
@@ -225,11 +281,11 @@ def main():
                 env={**os.environ, "CLOUD_REGION": region},
             )
         logger.success("Secrets ensured")
-        tracker.end_phase(5)
+        tracker.end_phase(6)
 
-        # Phase 6: Database setup
-        tracker.start_phase(6)
-        logger.step(f"[6/{len(phases)}] Setting up database (pgvector, schema, data)...")
+        # Phase 7: Database setup
+        tracker.start_phase(7)
+        logger.step(f"[7/{len(phases)}] Setting up database (pgvector, schema, data)...")
         try:
             with stats.timed("Database", "setup_database"):
                 subprocess.run(
@@ -240,10 +296,10 @@ def main():
             logger.success("Database setup complete")
         except subprocess.CalledProcessError as e:
             logger.warning(f"Database setup had issues (may already be initialized): {e}")
-        tracker.end_phase(6)
+        tracker.end_phase(7)
 
-        # Phase 7: Build & push (skip if --skip-build or content-based skip)
-        tracker.start_phase(7)
+        # Phase 8: Build & push (skip if --skip-build or content-based skip)
+        tracker.start_phase(8)
         content_skip = False
         # Content-based skip: hash build context (source + Dockerfile); if it matches
         # the hash stored in S3 from the last successful build, skip. Captures both
@@ -264,26 +320,29 @@ def main():
                 stored_spark = get_stored_build_hash(artifacts_bucket, spark_key, region)
                 if stored_app == app_hash and stored_spark == spark_hash:
                     content_skip = True
-                    logger.step(f"[7/{len(phases)}] Skipping build (content hash matches); will use repo:latest from ECR")
+                    logger.step(f"[8/{len(phases)}] Skipping build (content hash matches); will use repo:latest from ECR")
                     logger.info(f"[BUILD] App hash {app_hash[:8]}..., spark {spark_hash[:8]}... match stored. Use --force-build to rebuild.")
                     if not os.getenv("APP_IMAGE_TAG"):
                         os.environ["APP_IMAGE_TAG"] = "latest"
                     if not os.getenv("SPARK_IMAGE_TAG"):
                         os.environ["SPARK_IMAGE_TAG"] = "latest"
-                    tracker.end_phase(7)
+                    # Push-if-needed: if target ECR is empty, push from local (e.g. from another region)
+                    _maybe_push_only_for_region(env, region, snd, artifacts_bucket)
+                    tracker.end_phase(8)
 
         if args.skip_build:
-            logger.step(f"[7/{len(phases)}] Skipping build (--skip-build); will use repo:latest from ECR")
-            # Set defaults for phase 8; actual image/tags resolved from ECR there
+            logger.step(f"[8/{len(phases)}] Skipping build (--skip-build); will use repo:latest from ECR")
             if not os.getenv("APP_IMAGE_TAG"):
                 os.environ["APP_IMAGE_TAG"] = "latest"
             if not os.getenv("SPARK_IMAGE_TAG"):
                 os.environ["SPARK_IMAGE_TAG"] = "latest"
-            tracker.end_phase(7)
+            snd = tofu_output_json("infra_terraform/live_deploy/aws/scope_shared/nondurable", env, region)
+            _maybe_push_only_for_region(env, region, snd, snd.get("artifacts_bucket", {}).get("value", ""))
+            tracker.end_phase(8)
         elif content_skip:
-            pass  # Already ended phase 7 above
+            pass  # Already ended phase 8 above
         else:
-            logger.step(f"[7/{len(phases)}] Building and pushing images...")
+            logger.step(f"[8/{len(phases)}] Building and pushing images...")
             # Default SPARK_IMAGE_TAG when not in .env (e.g. commented out)
             if not os.getenv("SPARK_IMAGE_TAG"):
                 os.environ["SPARK_IMAGE_TAG"] = "latest"
@@ -309,11 +368,11 @@ def main():
             if proc.returncode != 0:
                 raise subprocess.CalledProcessError(proc.returncode, proc.args)
             logger.success("Images built and pushed")
-            tracker.end_phase(7)
+            tracker.end_phase(8)
 
-        # Phase 8: ECR URLs (and for --skip-build / content-skip: query ECR for latest image tags)
-        tracker.start_phase(8)
-        logger.step(f"[8/{len(phases)}] Getting ECR image URLs...")
+        # Phase 9: ECR URLs (and for --skip-build / content-skip: query ECR for latest image tags)
+        tracker.start_phase(9)
+        logger.step(f"[9/{len(phases)}] Getting ECR image URLs...")
         snd = tofu_output_json("infra_terraform/live_deploy/aws/scope_shared/nondurable", env, region)
         app_repo_url = snd["ecr_app_url"]["value"]
         spark_repo_url = snd["ecr_spark_url"]["value"]
@@ -353,7 +412,7 @@ def main():
         logger.info(f"App image: {app_image_full}")
         logger.info(f"Spark image: {spark_image_full}")
         logger.success("ECR URLs obtained")
-        tracker.end_phase(8)
+        tracker.end_phase(9)
 
         # Scope-specific deploy: nonkube first when scope=all, then kube
         if scope == "all":

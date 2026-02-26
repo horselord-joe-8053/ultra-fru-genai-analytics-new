@@ -100,7 +100,9 @@ def handle_aws(args):
             teardown_script = f"{base_path}/teardown.py"
             # Ensure non-interactive for preempt
             teardown_args = cmd_args + ["--non-interactive", "--scope", args.scope]
-            if args.incl_dura:
+            if args.incl_dura_all:
+                teardown_args.append("--incl-dura-all")
+            elif args.incl_dura:
                 teardown_args.append("--incl-dura")
             with logger.Heartbeat(f"Preempt Teardown scope={args.scope} env={args.env}", timeout=-1):
                 run_command(["python", teardown_script] + teardown_args, force_no_timeout=True)
@@ -136,7 +138,9 @@ def handle_aws(args):
             sys.exit(1)
         script = f"{base_path}/teardown.py"
         cmd_args.extend(["--scope", args.scope])
-        if args.incl_dura:
+        if args.incl_dura_all:
+            cmd_args.append("--incl-dura-all")
+        elif args.incl_dura:
             cmd_args.append("--incl-dura")
         # Translate --force to --non-interactive for compatibility if user habitually uses force
         if args.non_interactive or args.force:
@@ -191,7 +195,8 @@ def main():
     parser.add_argument("--force-build", action="store_true", help="Force build even when content hash matches (deploy only)")
     parser.add_argument("--elb", action="store_true", help="[Kube only] Use in-tree Classic ELB instead of NLB (deploy only)")
     parser.add_argument("--preempt", action="store_true", help="Run full teardown and verification before deploy")
-    parser.add_argument("--incl-dura", action="store_true", help="Include shared durable in teardown (scope=all only)")
+    parser.add_argument("--incl-dura", action="store_true", help="Include durable (VPC+Aurora) in teardown; secrets remain (scope=all only)")
+    parser.add_argument("--incl-dura-all", action="store_true", help="Include durable and durable_with_cooloff (secrets); full teardown (scope=all only)")
 
     # Parse args
     args = parser.parse_args()

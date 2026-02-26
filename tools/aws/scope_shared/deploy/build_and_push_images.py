@@ -1,21 +1,35 @@
-
 """
 Build and push ECR images for app and spark.
 
-One-liners:
+Images are regionless: one truth applied to all regions. Local images use canonical tags
+(repo_name:latest) so --push-only needs no source region.
+
+Usage:
   python tools/aws/scope_shared/deploy/build_and_push_images.py --env dev
+  python tools/aws/scope_shared/deploy/build_and_push_images.py --env dev --region us-west-2
+  python tools/aws/scope_shared/deploy/build_and_push_images.py --env dev --region us-west-2 --push-only  # Push local image to target region (no build)
+
+Flags:
+  --env              Environment (default: FRU_ENV or dev)
+  --region           Target region (default: CLOUD_REGION from .env)
+  --no-cache         Build Spark image without Docker cache (ensures fresh run_analytics.py)
+  --push-only        Skip build; tag canonical local images for target ECR and push
+  --cleanup-local    Also remove current local images after push (optional; old images removed after successful build)
+  --skip-cleanup     Skip post-push cleanup (default)
+  --force-build      Passthrough from deploy; no-op here
+
+Typical flows:
+  Full build:  build_and_push_images.py --env dev
+  Multi-region push:  build_and_push_images.py --env dev --region us-west-2 --push-only
 
 This tool:
 - Reads ECR repository URLs from `infra_terraform/live_deploy/aws/scope_shared/nondurable` state
 - Logs into ECR properly
-- Builds and pushes images
-- Removes local images after successful push (use --skip-cleanup to keep them)
+- Builds and pushes images (or --push-only: tag local image for target ECR and push)
+- Removes old local images after successful build and push; use --cleanup-local to also remove current images
 - Content-based skip: deploy.py checks build-context hash before calling this; when hash
-  matches stored value in S3, deploy skips entirely. When this script runs, it always
-  builds. After push, it stores the hash to S3 for future skip checks. See
-  docs/learned/BUILD_CONTENT_SKIP.md for details.
-
-Replace the build contexts to match your legacy project.
+  matches stored value in S3, deploy may skip build and call --push-only for regions missing the image.
+  See docs/learned/BUILD_CONTENT_SKIP.md for details.
 """
 import argparse, os, json, subprocess, sys, re, threading, time
 from tools.cloud_shared.env import load_dotenv, require, get_int_env
@@ -171,7 +185,7 @@ def _docker_hung_suggestion() -> str:
 
 
 def _ecr_image_exists(repo_name: str, tag: str, region: str) -> bool:
-    """Verify image exists in ECR before removing local copy (safety check)."""
+    """Check if image exists in ECR. Used for safety checks and push-only skip."""
     try:
         subprocess.check_output(
             [
@@ -186,6 +200,80 @@ def _ecr_image_exists(repo_name: str, tag: str, region: str) -> bool:
         return True
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return False
+
+
+def _run_push_only(
+    target_app_url: str,
+    target_spark_url: str,
+    target_region: str,
+    env: str,
+    artifacts_bucket: str,
+) -> None:
+    """
+    Push-only mode: tag canonical local images (repo_name:latest) for target ECR and push.
+    Skips if target ECR already has both images. Images are regionless; repo name is same
+    across regions. See docs/learned/BUILD_CONTENT_SKIP.md.
+    """
+    app_repo_name = target_app_url.split("/")[-1]
+    spark_repo_name = target_spark_url.split("/")[-1]
+
+    # Skip if target already has both images
+    if _ecr_image_exists(app_repo_name, "latest", target_region) and _ecr_image_exists(spark_repo_name, "latest", target_region):
+        logger.info("[PUSH-ONLY] Target ECR already has app and spark images; skipping push")
+        return
+
+    registry = target_app_url.split("/")[0]
+    # Safety: ECR URL format is {account}.dkr.ecr.{region}.amazonaws.com
+    if f".dkr.ecr.{target_region}." not in target_app_url:
+        logger.error(f"[PUSH-ONLY] Registry mismatch: target_region={target_region} but URL={target_app_url}")
+        raise SystemExit(1)
+    logger.info(f"[PUSH-ONLY] Pushing to registry {registry} (target region: {target_region})")
+    ecr_login(registry, target_region)
+
+    # Tag canonical (regionless) local images -> target ECR and push
+    need_app = not _ecr_image_exists(app_repo_name, "latest", target_region)
+    need_spark = not _ecr_image_exists(spark_repo_name, "latest", target_region)
+
+    if need_app:
+        sh(["docker", "tag", f"{app_repo_name}:latest", f"{target_app_url}:latest"])
+        sh(["docker", "push", f"{target_app_url}:latest"])
+        logger.success(f"[PUSH-ONLY] Pushed app image to {target_region}")
+    if need_spark:
+        sh(["docker", "tag", f"{spark_repo_name}:latest", f"{target_spark_url}:latest"])
+        sh(["docker", "push", f"{target_spark_url}:latest"])
+        logger.success(f"[PUSH-ONLY] Pushed spark image to {target_region}")
+
+    # Store build hash for target region so future content-skip works
+    if artifacts_bucket:
+        app_hash = compute_build_context_hash("core_app", "Dockerfile")
+        spark_hash = compute_build_context_hash("core_app", "analytics/docker/Dockerfile")
+        app_key = f"build-metadata/{env}/app-build-hash.json"
+        spark_key = f"build-metadata/{env}/spark-build-hash.json"
+        try:
+            store_build_hash(artifacts_bucket, app_key, target_region, app_hash, "latest")
+            store_build_hash(artifacts_bucket, spark_key, target_region, spark_hash, "latest")
+            logger.info("[PUSH-ONLY] Stored build hashes for target region")
+        except subprocess.CalledProcessError as e:
+            logger.warning(f"[PUSH-ONLY] Could not store hashes: {e}")
+
+
+def _remove_old_local_images_after_successful_build() -> None:
+    """
+    Remove old local images after new images are successfully built and pushed.
+    Intended design: old images are removed only when we have a new build in place.
+    Build overwrites our tags; previous images become dangling. Prune removes them.
+    Non-fatal if nothing to remove.
+    """
+    logger.info("[BUILD] Removing old local images (dangling from previous build)...")
+    try:
+        subprocess.run(
+            ["docker", "image", "prune", "-f"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except (subprocess.TimeoutExpired, Exception):
+        pass  # Non-fatal
 
 
 def _cleanup_local_images_after_push(
@@ -208,6 +296,10 @@ def _cleanup_local_images_after_push(
     ]
     if app_tag != "latest":
         images_to_remove.append(f"{app_repo_url}:latest")
+    if spark_tag != "latest":
+        images_to_remove.append(f"{spark_repo_url}:latest")
+    # Canonical regionless tags (same image, multiple refs)
+    images_to_remove.extend([f"{app_repo_name}:latest", f"{spark_repo_name}:latest"])
 
     logger.info("[CLEANUP] Verifying images in ECR before local removal...")
     if not _ecr_image_exists(app_repo_name, app_tag, region):
@@ -279,28 +371,35 @@ def main():
     ap.add_argument("--skip-cleanup", action="store_true", help="Skip local image removal after push (default: skip, keep for multi-region)")
     ap.add_argument("--cleanup-local", action="store_true", help="Remove local images after push (opt-in; default is keep for multi-region push)")
     ap.add_argument("--force-build", action="store_true", help="Force build (passed by deploy when user requests; no-op here)")
+    ap.add_argument("--push-only", action="store_true", help="Skip build; tag canonical local images (repo_name:latest) for target ECR and push.")
     args = ap.parse_args()
 
     region = resolve_region(args.region)
     os.environ["CLOUD_REGION"] = region
 
-    logger.step("Building and pushing Docker images")
+    logger.step("Building and pushing Docker images" if not args.push_only else "Push-only (no build)")
     logger.info(f"[BUILD] Region: {region}")
-    
+
     logger.info("[BUILD] Getting ECR URLs from terraform state...")
     out = tofu_output_json("infra_terraform/live_deploy/aws/scope_shared/nondurable", args.env, region)
 
     app_repo_url   = out["ecr_app_url"]["value"]
     spark_repo_url = out["ecr_spark_url"]["value"]
     artifacts_bucket = out.get("artifacts_bucket", {}).get("value", "")
-    
+
     logger.info(f"[BUILD] App repo: {app_repo_url}")
     logger.info(f"[BUILD] Spark repo: {spark_repo_url}")
+
+    if args.push_only:
+        # Push-only: tag canonical local images (repo_name:latest) for target ECR and push.
+        # Used when content-skip but target region ECR is empty (e.g. deploy us-west-2 after us-east-1).
+        _run_push_only(app_repo_url, spark_repo_url, region, args.env, artifacts_bucket)
+        sys.exit(0)
 
     app_tag = require("APP_IMAGE_TAG")
     spark_tag = require("SPARK_IMAGE_TAG")
     platform = os.getenv("DOCKER_RUN_REMOTE_PLATFORM", "linux/amd64")
-    
+
     logger.info(f"[BUILD] Platform: {platform}")
     logger.info(f"[BUILD] App tag: {app_tag}")
     logger.info(f"[BUILD] Spark tag: {spark_tag}")
@@ -356,6 +455,16 @@ def main():
         "Pushing spark image", total_steps, total_steps,
     )
 
+    # Tag spark as latest locally (for push-only to other regions)
+    if spark_tag != "latest":
+        sh(["docker", "tag", f"{spark_repo_url}:{spark_tag}", f"{spark_repo_url}:latest"])
+
+    # Canonical regionless tags (repo name same across regions). Enables --push-only without --source-region.
+    app_repo_name = app_repo_url.split("/")[-1]
+    spark_repo_name = spark_repo_url.split("/")[-1]
+    sh(["docker", "tag", f"{app_repo_url}:latest", f"{app_repo_name}:latest"])
+    sh(["docker", "tag", f"{spark_repo_url}:latest", f"{spark_repo_name}:latest"])
+
     # Store build-context hashes to S3 so deploy can skip build on future runs
     # when compute_build_context_hash() matches. Path: build-metadata/{env}/*.json
     if artifacts_bucket:
@@ -371,6 +480,9 @@ def main():
     logger.success("All images pushed:")
     print("  ", f"{app_repo_url}:{app_tag}")
     print("  ", f"{spark_repo_url}:{spark_tag}")
+
+    # Remove old local images only after new images are successfully built and pushed
+    _remove_old_local_images_after_successful_build()
 
     if args.cleanup_local and not args.skip_cleanup:
         _cleanup_local_images_after_push(

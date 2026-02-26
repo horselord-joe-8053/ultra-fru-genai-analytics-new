@@ -12,6 +12,7 @@ variable "allow_destroy_durable" {
   default = false
 }
 variable "tf_state_bucket" { type = string }
+variable "tf_state_bucket_region" { type = string }
 variable "tf_lock_table" { type = string }
 variable "tf_state_prefix" { type = string }
 

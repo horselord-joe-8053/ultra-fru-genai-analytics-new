@@ -7,8 +7,9 @@ Usage:
   python tools/aws/teardown.py --scope all --env dev --non-interactive
 
 Rules:
-- Never destroys infra_terraform/live_deploy/aws/scope_shared/durable.
 - `all` destroys: nonkube -> kube -> shared-nondurable.
+- `--incl-dura`: also destroy durable (VPC+Aurora); secrets remain. No 30-day block on re-deploy.
+- `--incl-dura-all`: also destroy durable and durable_with_cooloff (secrets); full teardown.
 - Before destroying kube: removes CronJob + Job (scheduler + bootstrap).
 - Before destroying nonkube: removes EventBridge rule, scales ECS service to 0, drains tasks; then destroy.
 - Import before destroy: runs import_preexist for each stack so orphaned resources are adopted into state and destroy can remove them (legacy pattern).
@@ -64,6 +65,7 @@ ORDER = {
     "all": ["infra_terraform/live_deploy/aws/nonkube", "infra_terraform/live_deploy/aws/kube", "infra_terraform/live_deploy/aws/scope_shared/nondurable"],
 }
 DURABLE_STACK = "infra_terraform/live_deploy/aws/scope_shared/durable"
+DURABLE_COOLOFF_STACK = "infra_terraform/live_deploy/aws/scope_shared/durable_with_cooloff"
 NONKUBE_STACK = "infra_terraform/live_deploy/aws/nonkube"
 KUBE_STACK = "infra_terraform/live_deploy/aws/kube"
 
@@ -274,7 +276,8 @@ def main():
     )
     ap.add_argument("--env", default=os.getenv("FRU_ENV", "dev"))
     ap.add_argument("--region", default=None, help="Region (default: CLOUD_REGION)")
-    ap.add_argument("--incl-dura", action="store_true", help="Include shared durable stack in destroy (scope=all only)")
+    ap.add_argument("--incl-dura", action="store_true", help="Include durable (VPC+Aurora) in destroy; secrets remain (scope=all only)")
+    ap.add_argument("--incl-dura-all", action="store_true", help="Include durable AND durable_with_cooloff (secrets) in destroy; full teardown (scope=all only)")
     ap.add_argument("--non-interactive", action="store_true", help="Skip confirmation prompts")
     ap.add_argument(
         "--post-destroy-only",
@@ -300,8 +303,8 @@ def main():
 
     # --post-destroy-only: skip destroy loop, run only durable orphans cleanup
     if args.post_destroy_only:
-        if not (args.incl_dura and args.scope == "all"):
-            logger.error("--post-destroy-only requires --incl-dura and --scope all")
+        if not ((args.incl_dura or args.incl_dura_all) and args.scope == "all"):
+            logger.error("--post-destroy-only requires --incl-dura or --incl-dura-all and --scope all")
             sys.exit(1)
         logger.operation_start("Teardown (post-destroy only)", args.scope, args.env, region)
         post_destroy_durable_orphans(args.env, region, stats=TeardownStats())
@@ -310,13 +313,22 @@ def main():
         return
 
     stacks_to_destroy = list(ORDER[args.scope])
-    if args.incl_dura and args.scope == "all":
-        stacks_to_destroy.append(DURABLE_STACK)
-        logger.info(f"Including durable stack (--incl-dura): will destroy after shared-nondurable")
+    if args.scope == "all":
+        if args.incl_dura_all:
+            # Full teardown: durable (VPC+Aurora) then durable_with_cooloff (secrets)
+            stacks_to_destroy.append(DURABLE_STACK)
+            stacks_to_destroy.append(DURABLE_COOLOFF_STACK)
+            logger.info("Including durable + durable_with_cooloff (--incl-dura-all): full teardown")
+        elif args.incl_dura:
+            # Partial: durable only; secrets remain (no 30-day block on re-deploy)
+            stacks_to_destroy.append(DURABLE_STACK)
+            logger.info("Including durable only (--incl-dura): VPC+Aurora destroyed; secrets remain")
 
     phases = teardown_phases(args.scope)
     if args.incl_dura and args.scope == "all":
         phases = phases + ["Destroy shared-durable"]
+    if args.incl_dura_all and args.scope == "all":
+        phases = phases + ["Destroy durable_with_cooloff"]
     tracker = PhaseTracker("Teardown", phases)
     stats = TeardownStats()
     phase_idx = 0
@@ -363,8 +375,8 @@ def main():
             remove_orphaned_k8s_elb_security_groups(args.env, region, stats=stats)
         tracker.end_phase(phase_idx)
 
-    # Post-destroy: when --incl-dura, remove durable orphans (log groups, state bucket, lock table)
-    if args.incl_dura and args.scope == "all":
+    # Post-destroy: when durable was destroyed, remove orphans (log groups, state bucket, lock table)
+    if (args.incl_dura or args.incl_dura_all) and args.scope == "all":
         logger.step("Post-destroy: removing durable orphans (full cleanup)...")
         try:
             post_destroy_durable_orphans(args.env, region, stats=stats)
@@ -373,7 +385,7 @@ def main():
 
     stats.print_summary()
     logger.operation_end("Teardown", args.scope, args.env, region, int(time.time() - teardown_start), ok=True)
-    logger.success("Done." + (" (Shared durable remains.)" if not (args.incl_dura and args.scope == "all") else ""))
+    logger.success("Done." + (" (Shared durable remains.)" if not ((args.incl_dura or args.incl_dura_all) and args.scope == "all") else ""))
 
 
 if __name__ == "__main__":
