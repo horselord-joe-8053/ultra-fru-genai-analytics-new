@@ -14,12 +14,15 @@ from tools.aws.scope_shared.core import resource_names
 
 # -----------------------------------------------------------------------------
 # FRU project categories (scope-based)
+# shared-durable: VPC, Aurora, state bucket (durable stack)
+# shared-durable-with-cooloff: Secrets Manager only (durable_with_cooloff stack)
 # -----------------------------------------------------------------------------
 FRU_CATEGORIES = [
     "kube",
     "nonkube",
     "shared-nondurable",
     "shared-durable",
+    "shared-durable-with-cooloff",
     "other",
 ]
 
@@ -34,7 +37,7 @@ _RESOURCE_TYPE_TO_CATEGORY: dict[str, str] = {
     "eventbridge_rule": "nonkube",
     "vpc": "shared-durable",
     "rds_cluster": "shared-durable",
-    "secret": "shared-durable",
+    "secret": "shared-durable-with-cooloff",
     "ecr": "shared-nondurable",
     "cloudfront_dist": "other",  # overridden by comment
     "cloudfront_oac": "other",  # overridden by name
@@ -46,6 +49,7 @@ _RESOURCE_TYPE_TO_CATEGORY: dict[str, str] = {
 # -----------------------------------------------------------------------------
 AWS_BUILTIN_PATTERNS = [
     r"^default$",  # default VPC
+    r"^AutoScalingManagedRule$",  # AWS Auto Scaling managed EventBridge rule
     r"^aws-",  # aws-elasticache-*, aws-rds-*, etc.
     r"^AWS",  # AWSReserved*, etc.
     r"^amazon-",

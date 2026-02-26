@@ -70,7 +70,7 @@ def k8s_pre_destroy_cleanup(
         err = (result.stderr or "") + (result.stdout or "")
         if "ResourceNotFoundException" in err or "No cluster found" in err.lower():
             from tools.aws.scope_shared.core import resource_names
-        cluster_name = resource_names.eks_cluster(env, region)
+            cluster_name = resource_names.eks_cluster(env, region)
             logger.warning(
                 f"EKS cluster not found (name={cluster_name}, region={os.getenv('CLOUD_REGION', '').strip() or 'not set'}), "
                 "likely already removed. Skipping pre-destroy kube cleanup."
