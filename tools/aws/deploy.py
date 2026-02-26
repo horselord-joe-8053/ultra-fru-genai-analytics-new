@@ -239,6 +239,20 @@ def main():
         logger.step(f"[4/{len(phases)}] Applying shared durable stack (VPC + Aurora)...")
         durable_dir = "infra_terraform/live_deploy/aws/scope_shared/durable"
         init_stack(durable_dir, env, region)
+        # Migration: remove secrets from durable state (moved to durable_with_cooloff).
+        # Prevents durable apply from destroying them. Safe if not in state.
+        from tools.aws.scope_shared.core.terra_runner import get_terra_env
+        for res in ["aws_secretsmanager_secret.openai_api_key", "aws_secretsmanager_secret.db_password", "aws_secretsmanager_secret.db_password_plain"]:
+            try:
+                subprocess.run(
+                    [os.getenv("FRU_TF_BIN", "tofu"), "state", "rm", res],
+                    cwd=durable_dir,
+                    env=get_terra_env(region),
+                    capture_output=True,
+                    timeout=30,
+                )
+            except Exception:
+                pass
         aurora_pw = os.getenv("PGPASSWORD") or ""
         os.environ["TF_VAR_aurora_master_password"] = aurora_pw or "postgres"
         azs = durable_azs_for_region(region)

@@ -12,7 +12,7 @@ terraform {
 provider "aws" { region = var.aws_region }
 
 module "tags" {
-  source = "../../../../../modules/cloud_shared/primitives/tags"
+  source = "../../../../modules/cloud_shared/primitives/tags"
   extra_tags = {
     environment = var.env
     scope       = "shared"

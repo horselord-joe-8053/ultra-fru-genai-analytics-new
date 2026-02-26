@@ -18,11 +18,13 @@ When creating or editing Mermaid diagrams in Markdown, use this init block as th
 %%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '10px', 'fontFamily': 'sans-serif' }, 'flowchart': { 'padding': 8, 'nodeSpacing': 25, 'rankSpacing': 30 }}}%%
 ```
 
+**Edge labels:** Edges should carry informative labels (e.g. `A -->|"Reads"| B`, `A -->|"Writes"| C`) to make the diagram easier to understand. Avoid unlabeled edges when the relationship is not obvious from context.
+
 **Example:**
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '11px', 'fontFamily': 'sans-serif' }, 'flowchart': { 'padding': 8, 'nodeSpacing': 25, 'rankSpacing': 30 }}}%%
 flowchart TB
-    A[Start] --> B[Process]
-    B --> C[End]
+    A[Start] -->|"Triggers"| B[Process]
+    B -->|"Completes"| C[End]
 ```
