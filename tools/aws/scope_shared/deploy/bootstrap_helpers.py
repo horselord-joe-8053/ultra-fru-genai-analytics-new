@@ -27,11 +27,12 @@ def check_ecs_bootstrap_succeeded(env: str, log_group: str | None = None) -> boo
     """
     Check CloudWatch logs for ECS bootstrap success. Used to skip re-running.
     Returns True if 'fru bootstrap success' found in log_group streams.
-    Log group: /fru/{env}/spark (Spark task logs).
+    Log group: path-style /{proj}/{component}/{env}/{region} (e.g. /fru/cloud-log-group-spark/dev/us-east-1).
     """
     from tools.aws.scope_shared.core.backend import resolve_region
+    from tools.aws.scope_shared.core import resource_names
     region = resolve_region(None)
-    lg = log_group or os.getenv("CLOUDWATCH_LOG_GROUP") or f"/fru/{env}/spark"
+    lg = log_group or os.getenv("CLOUDWATCH_LOG_GROUP") or resource_names.log_group_spark(env, region)
     try:
         out = subprocess.check_output([
             "aws", "logs", "describe-log-streams",

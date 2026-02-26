@@ -66,7 +66,7 @@ def main():
             elif "No analytics data" in err:
                 logger.info("⚠ /analytics: DB connected but batch_analytics empty")
                 logger.info("  → Run bootstrap: Spark task must run run_analytics.py and populate batch_analytics")
-                logger.info("  → Check CloudWatch /fru/{env}/spark for 'fru bootstrap success'")
+                logger.info("  → Check CloudWatch Spark log group (e.g. /fru/cloud-log-group-spark/dev/us-east-1) for 'fru bootstrap success'")
             else:
                 logger.error(f"✗ /analytics: {err}")
         else:

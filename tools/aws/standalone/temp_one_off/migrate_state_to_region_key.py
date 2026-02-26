@@ -83,7 +83,7 @@ def main():
 
     from tools.aws.scope_shared.core.backend import resolve_state_bucket
     bucket = resolve_state_bucket(region)
-    prefix = os.getenv("TF_STATE_PREFIX", require("FRU_PREFIX"))
+    prefix = os.getenv("TF_STATE_PREFIX") or os.getenv("PROJ_PREFIX", "").strip() or require("FRU_PREFIX")
 
     logger.step(f"State migration: env={args.env}, region={region}, bucket={bucket}")
 

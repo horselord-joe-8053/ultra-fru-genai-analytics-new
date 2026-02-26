@@ -118,13 +118,13 @@ def run_deploy_kube(
             logger.info("[Import] Skipping kube: plan shows no changes (state clean)")
             return
         logger.info("[Import] Reconciling state with AWS (broader import for deploy convenience)")
-        prefix = os.getenv("FRU_PREFIX", "fru")
-        eks_cluster_name = os.getenv("EKS_CLUSTER_NAME") or f"{prefix}-{env}-eks"
+        from tools.aws.scope_shared.core import resource_names
+        eks_cluster_name = resource_names.eks_cluster(env, region)
         failed = run_import_kube(
             kube_stack,
             env,
             region,
-            prefix=prefix,
+            prefix=resource_names.get_proj_prefix(),
             eks_cluster_name=eks_cluster_name,
         )
         if failed > 0:

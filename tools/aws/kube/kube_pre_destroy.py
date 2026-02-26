@@ -58,7 +58,8 @@ def k8s_pre_destroy_cleanup(
             capture_output=True, text=True, check=False, timeout=30,
         )
     except subprocess.TimeoutExpired:
-        cluster_name = os.getenv("EKS_CLUSTER_NAME") or f"{os.getenv('FRU_PREFIX', 'fru')}-{env}-eks"
+        from tools.aws.scope_shared.core import resource_names
+        cluster_name = resource_names.eks_cluster(env, region)
         logger.warning(
             f"Pre-destroy kube: eks_kubeconfig timed out (cluster {cluster_name} unreachable?). "
             "Skipping kubectl cleanup."
@@ -68,7 +69,8 @@ def k8s_pre_destroy_cleanup(
     if result.returncode != 0:
         err = (result.stderr or "") + (result.stdout or "")
         if "ResourceNotFoundException" in err or "No cluster found" in err.lower():
-            cluster_name = os.getenv("EKS_CLUSTER_NAME") or f"{os.getenv('FRU_PREFIX', 'fru')}-{env}-eks"
+            from tools.aws.scope_shared.core import resource_names
+        cluster_name = resource_names.eks_cluster(env, region)
             logger.warning(
                 f"EKS cluster not found (name={cluster_name}, region={os.getenv('CLOUD_REGION', '').strip() or 'not set'}), "
                 "likely already removed. Skipping pre-destroy kube cleanup."

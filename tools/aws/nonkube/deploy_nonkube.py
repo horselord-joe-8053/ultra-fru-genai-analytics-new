@@ -75,7 +75,7 @@ def run_deploy_nonkube(
             nonkube_stack,
             env,
             region,
-            prefix=os.getenv("FRU_PREFIX", "fru"),
+            prefix=(os.getenv("PROJ_PREFIX", "").strip() or os.getenv("FRU_PREFIX", "fru")),
         )
         if failed > 0:
             raise SystemExit(

@@ -3587,3 +3587,178 @@ If we hypothetically replaced all hyphens with slashes in our convention:
 ### 65.8 Takeaway
 
 Limit path-style names to **Secrets Manager** and **CloudWatch Log Groups**—the two components where AWS explicitly recommends or uses hierarchical path format. Use hyphen-style for everything else. Path format is a naming convention; it is not a file path. We construct and match names; we do not parse them. Reference: `docs/FINAL_REFACTOR_PLAN_DYNAMIC_NAMING.md` for the full naming convention and migration plan.
+
+---
+
+## 66. Docker ECR Login: macOS Keychain Error (100028)
+
+**keywords:** Docker, ECR, macOS, Keychain, credsStore, docker login, credential helper, desktop, osxkeychain
+**difficulty:** 4
+**significance:** 6
+
+### 66.1 Context
+
+During deploy, `docker login` to ECR failed with:
+```
+error saving credentials: error storing credentials - err: exit status 1, out: `Keychain Error. (100028)`
+```
+
+`aws ecr get-login-password` succeeded; the failure occurred when Docker tried to store the token, not when fetching it.
+
+### 66.2 Root Cause
+
+Docker uses a **credential helper** (configured via `credsStore` in `~/.docker/config.json`) to store and retrieve registry credentials. On macOS, common helpers include:
+
+| credsStore value | Behavior |
+|------------------|----------|
+| `osxkeychain` | Stores credentials in macOS Keychain. Can fail with Keychain Error (100028) when Keychain is locked, inaccessible, or after Docker restart. |
+| `desktop` | Docker Desktop's built-in credential store. Stores credentials in Docker's own storage (not Keychain directly). Often more reliable. |
+| `""` (empty) | No helper. Docker stores credentials directly in `config.json` under `auths`. |
+
+The Keychain error occurs when the credential helper (often `osxkeychain`) fails to write to Keychain—e.g. after Docker restart, when Keychain is locked, or in non-interactive contexts.
+
+### 66.3 Why We Didn't Encounter It Before
+
+Several possible reasons:
+
+1. **Different failure points earlier** — The deploy failed first because Docker wasn't running, then BuildKit I/O errors. We only reached ECR login after restarting Docker.
+2. **Docker restart** — Restarting Docker Desktop can clear cached credentials or change how it interacts with the credential helper, surfacing Keychain issues.
+3. **Environment** — Previous deploys may have run from another machine, CI, or with a different Docker/Keychain setup.
+4. **Keychain state** — Keychain may have been unlocked or in a different state before; lock/sleep or credential changes can trigger errors.
+5. **Different credential helper** — Config may have used `credsStore: "desktop"` (Docker Desktop's helper) instead of `osxkeychain`; the desktop helper can avoid Keychain.
+
+### 66.4 Is This Common?
+
+Yes. Docker + macOS Keychain issues are well-documented. CI and automation often avoid Keychain by using `credsStore: ""` or a different credential helper. The error is common when Keychain is locked, after sleep/wake, or in headless environments.
+
+### 66.5 Resolution Options
+
+**Option A: `credsStore: ""` (bypass credential helper)**
+
+Configure `~/.docker/config.json`:
+```json
+{
+  "credsStore": ""
+}
+```
+
+How it works:
+- With `credsStore` empty, Docker does not call any credential helper.
+- On successful `docker login`, Docker writes credentials directly to `config.json` under `auths`:
+```json
+{
+  "credsStore": "",
+  "auths": {
+    "744139897900.dkr.ecr.us-east-1.amazonaws.com": {
+      "auth": "QVdTOmJhc2U2NGVuY29kZWRwYXNzd29yZA=="
+    }
+  }
+}
+```
+- `auth` is base64 of `username:password` (e.g. `AWS:ecr-token`). Not encrypted.
+- Later `docker pull`/`push` reads from `config.json`.
+
+**Option B: `docker-credential-ecr-login` (AWS credential helper)**
+
+Official AWS solution. Fetches ECR tokens on-demand using AWS credentials (profile or default); no storage in Keychain or config.json.
+
+```bash
+brew install docker-credential-helper-ecr
+```
+
+```json
+{
+  "credsStore": "ecr-login"
+}
+```
+
+**Option C: Use existing `credsStore: "desktop"`**
+
+Docker Desktop's built-in helper often works without Keychain. If your config already has:
+```json
+{
+  "auths": {
+    "744139897900.dkr.ecr.us-east-1.amazonaws.com": {}
+  },
+  "credsStore": "desktop",
+  "currentContext": "desktop-linux"
+}
+```
+
+The empty `{}` in `auths` means credentials are stored by the credential helper, not in the file. The `desktop` helper stores them in Docker Desktop's own storage. No change needed if this works.
+
+### 66.6 Why It Worked With `credsStore: "desktop"` and Empty auths
+
+Two different setups:
+
+| Config | auths format | Where credentials live |
+|--------|--------------|-------------------------|
+| `credsStore: ""` | `"auth": "base64..."` in each registry entry | Plain text in `config.json` |
+| `credsStore: "desktop"` | `{}` (empty object) per registry | Docker Desktop's internal credential store |
+
+With `credsStore: "desktop"`, Docker delegates to Docker Desktop's credential helper, which uses its own storage (not Keychain). The Keychain error we saw earlier was likely transient—e.g. right after Docker restart when the helper was initializing, or when Docker was using `osxkeychain` in a different state.
+
+### 66.7 Cross-Cloud Applicability
+
+The `credsStore` setting is a Docker client setting; it applies to **all registries**, not just AWS:
+
+| Provider | Registry | Works with `credsStore: ""`? |
+|----------|----------|------------------------------|
+| AWS ECR | `*.dkr.ecr.*.amazonaws.com` | Yes |
+| GCP Artifact Registry | `*.pkg.dev`, `gcr.io` | Yes |
+| Azure ACR | `*.azurecr.io` | Yes |
+| Docker Hub | `docker.io` | Yes |
+| GitHub CR | `ghcr.io` | Yes |
+
+### 66.8 AWS Profile vs credsStore
+
+**AWS profile** is used by `aws ecr get-login-password` (AWS API calls). That part works.
+
+**Keychain/credsStore** is used by **Docker** when storing the ECR token after login. The error happens there.
+
+Using an AWS profile does not fix the Keychain error—they are separate systems.
+
+### 66.9 Gitignore for .docker
+
+- **Default:** Docker uses `~/.docker/config.json` in the home directory. That path is outside any project; no gitignore needed.
+- **Project-local:** If you set `DOCKER_CONFIG=.docker` in the project, then `.docker/` would contain `config.json` with credentials. In that case, add `.docker/` to `.gitignore`.
+
+### 66.10 Implementation: Temp Config vs Rely on ~/.docker
+
+We initially added a **temp config workaround** in `build_and_push_images.py`: create a temporary directory with `config.json` containing `credsStore: ""`, set `DOCKER_CONFIG` to that dir, run `docker login`, then discard. This avoided Keychain without requiring the user to change their global config.
+
+We later **refactored** to remove the temp solution and rely on the user's existing `~/.docker/config.json`. The script now runs plain `docker login`; the user must have a working config (e.g. `credsStore: ""` or `credsStore: "desktop"`).
+
+### 66.11 Takeaway
+
+ECR login has two steps: (1) `aws ecr get-login-password` uses AWS credentials; (2) `docker login` stores the token via Docker's credential helper. The Keychain error is from step 2. Options: set `credsStore: ""` to store in config.json (plain text); use `docker-credential-ecr-login` for on-demand ECR tokens; or rely on `credsStore: "desktop"` if it works. The fix is cloud-agnostic and applies to any registry.
+
+---
+
+## 67. ECR Per-Region vs Centralized: Why We Keep Regional Repos
+
+**creation:** `<260210>`
+**last_updated:** `<260210>`
+
+**keywords:** ECR, per-region, centralized, multi-region deploy, data transfer cost, image locality
+**difficulty:** 5
+**significance:** 6
+
+### 67.1 Context
+
+ECR repositories are regional—each region has its own registry. When deploying to multiple regions (e.g. us-east-1 and us-east-2), we must either: (A) build and push to each region's ECR, or (B) centralize in one region and have other regions pull from there.
+
+### 67.2 Options Compared
+
+| Approach | Pros | Cons |
+|----------|------|------|
+| **Per-region (current)** | Images local to compute; no cross-region pull latency; simpler IAM (no cross-region); no data transfer cost | Build/push per region; more ECR repos |
+| **Centralized (one region)** | Single build/push; simpler CI | Cross-region pull latency; ECR data transfer cost (~$0.02/GB); IAM must allow cross-region access |
+
+### 67.3 Decision
+
+We keep per-region ECR. The application core is the same; this is deployment topology. Centralizing would add cross-region data transfer cost and latency for every container start. Per-region keeps compute and storage colocated. The trade-off is build time when deploying to a new region—we accept that for lower runtime cost and simpler IAM.
+
+### 67.4 Takeaway
+
+ECR is regional by design. For multi-region, prefer per-region repos unless you have a strong reason to centralize (e.g. very large images, infrequent deploys). Colocation reduces cost and latency.

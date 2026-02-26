@@ -186,7 +186,8 @@ def pre_destroy_cloudfront(
 
     from tools.aws.scope_shared.core.backend import resolve_region
     region = region or resolve_region(None)
-    prefix = os.getenv("FRU_PREFIX", "fru")
+    from tools.aws.scope_shared.core import resource_names
+    prefix = resource_names.get_proj_prefix()
     suffix = _suffix_from_stack_dir(stack_dir)
     if not suffix:
         return

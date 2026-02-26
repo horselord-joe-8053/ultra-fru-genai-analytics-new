@@ -31,7 +31,8 @@ def _verify_kube(env: str, region: str) -> bool:
 
 def _verify_nonkube(env: str, region: str) -> bool:
     """Verify nonkube teardown: ECS cluster is gone or inactive. Returns True if ok."""
-    cluster_name = os.getenv("ECS_CLUSTER_NAME") or f"{os.getenv('FRU_PREFIX', 'fru')}-{env}-ecs"
+    from tools.aws.scope_shared.core import resource_names
+    cluster_name = resource_names.ecs_cluster(env, region)
     logger.info(f"Verifying ECS cluster '{cluster_name}' is inactive/gone...")
     try:
         out = subprocess.check_output(

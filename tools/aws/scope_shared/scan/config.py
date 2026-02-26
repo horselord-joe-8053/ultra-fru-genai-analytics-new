@@ -3,10 +3,14 @@ Centralized AWS scan configuration: categories, patterns, classification.
 
 Used by resources_scan/scan_aws_remaining.py to:
 - Define FRU project resource categories (kube, nonkube, shared-nondurable, shared-durable, other)
-- Identify project resources (dynamic prefix/env)
+- Identify project resources (dynamic from .env via resource_names)
 - Identify AWS built-in vs other projects (cost concern)
+
+Search criteria: PROJ_PREFIX + *_COMPONENT from .env per docs/STEP_LARGE_REFACTOR_RENAMING.md.
 """
 import re
+
+from tools.aws.scope_shared.core import resource_names
 
 # -----------------------------------------------------------------------------
 # FRU project categories (scope-based)
@@ -85,53 +89,11 @@ def is_project_resource(
     region: str = "",
 ) -> bool:
     """
-    Return True if the resource belongs to this project (prefix/env).
-    Uses dynamic prefix and env from args.
+    Return True if the resource belongs to this project.
+    Uses resource_names (PROJ_PREFIX + *_COMPONENT from .env). No hardcoding.
+    prefix param is passed through for scan CLI override; resource_names uses .env internally.
     """
-    pe = f"{prefix}-{env}"
-    pe_slash = f"{prefix}/{env}"
-
-    if resource_type == "s3":
-        return (
-            name.startswith(pe)
-            or f"-{pe}-" in name
-            or name.startswith(f"{prefix}-terraform-state")
-            or name.startswith(f"{prefix}-tf-state")
-        )
-    if resource_type == "ecr":
-        return pe in name or name.startswith(pe)
-    if resource_type == "ecs_cluster":
-        return name.startswith(pe)
-    if resource_type == "eks_cluster":
-        return name.startswith(pe)
-    if resource_type == "alb" or resource_type == "target_group":
-        return name.startswith(pe) or f"{pe}-" in name
-    if resource_type == "security_group":
-        return name.startswith(prefix)  # fru-dev-*, fru-ecs-*
-    if resource_type == "log_group":
-        return (
-            f"/{prefix}/{env}" in name
-            or f"/aws/eks/{pe}-eks" in name
-            or f"/aws/rds/cluster/{pe}-aurora-cluster" in name
-            or f"/aws/ecs/containerinsights/{pe}-" in name
-        )
-    if resource_type == "secret":
-        return name.startswith(pe_slash)
-    if resource_type == "ebs_volume":
-        return f"{pe}-eks" in name or pe in name
-    if resource_type == "eventbridge_rule":
-        return name.startswith(pe)
-    if resource_type == "vpc":
-        return name.startswith(pe)
-    if resource_type == "rds_cluster":
-        return name.startswith(pe)
-    if resource_type == "iam_role":
-        return name.startswith(pe)
-    if resource_type == "cloudfront_dist":
-        return f"{prefix}-{env}-frontend" in name
-    if resource_type == "cloudfront_oac":
-        return f"{prefix}-{env}-frontend" in name
-    return False
+    return resource_names.is_project_resource_name(name, resource_type, env, region, prefix=prefix)
 
 
 def classify_project_category(
@@ -143,75 +105,6 @@ def classify_project_category(
 ) -> str:
     """
     Classify a project resource into FRU_CATEGORIES.
-    Returns category string.
+    Uses resource_names (component-aware from .env). No hardcoding.
     """
-    if resource_type == "ecs_cluster":
-        return "nonkube"
-    if resource_type == "eks_cluster":
-        return "kube"
-    if resource_type == "alb" or resource_type == "target_group":
-        return "nonkube"
-    if resource_type == "security_group":
-        if "alb" in name or "ecs-tasks" in name:
-            return "nonkube"
-        if "eks" in name or "eksctl" in name:
-            return "kube"
-        if "aurora" in name:
-            return "shared-durable"
-        return "other"
-    if resource_type == "log_group":
-        if f"/aws/eks/{prefix}-{env}-eks" in name:
-            return "kube"
-        if f"/aws/rds/cluster/{prefix}-{env}-aurora-cluster" in name:
-            return "shared-durable"
-        if f"/aws/ecs/containerinsights/{prefix}-{env}-" in name:
-            return "kube"
-        if f"/{prefix}/{env}" in name:
-            return "nonkube"
-        return "other"
-    if resource_type == "eventbridge_rule":
-        return "nonkube"
-    if resource_type == "vpc":
-        return "shared-durable"
-    if resource_type == "rds_cluster":
-        return "shared-durable"
-    if resource_type == "secret":
-        return "shared-durable"
-    if resource_type == "ecr":
-        if "-api-" in name or "-spark-" in name:
-            return "shared-nondurable"
-        return "other"
-    if resource_type == "ebs_volume":
-        return "kube"
-    if resource_type == "cloudfront_dist":
-        if "kube" in name:
-            return "kube"
-        if "nonkube" in name:
-            return "nonkube"
-        return "other"
-    if resource_type == "cloudfront_oac":
-        if "kube" in name:
-            return "kube"
-        if "nonkube" in name:
-            return "nonkube"
-        return "other"
-    if resource_type == "iam_role":
-        if "ecs" in name or "events-invoke" in name or "spark" in name:
-            return "nonkube"
-        if "eks" in name:
-            return "kube"
-        return "other"
-    if resource_type == "s3":
-        if "-frontend-kube-" in name and region in name:
-            return "kube"
-        if "-frontend-nonkube-" in name and region in name:
-            return "nonkube"
-        if "-delta" in name and region in name:
-            return "shared-nondurable"
-        if "-artifacts" in name and region in name:
-            return "shared-nondurable"
-        if "terraform-state" in name or "tf-state" in name:
-            return "shared-durable"
-        return "other"
-
-    return _RESOURCE_TYPE_TO_CATEGORY.get(resource_type, "other")
+    return resource_names.classify_project_category_from_name(name, resource_type, env, region, prefix=prefix)

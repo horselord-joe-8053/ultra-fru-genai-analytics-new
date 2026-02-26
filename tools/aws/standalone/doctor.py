@@ -14,9 +14,19 @@ from tools.aws.scope_shared.core.backend import resolve_region
 
 load_dotenv()
 
+# Ensure common paths in PATH so brew-installed tools (eksctl, helm, kubectl) are found
+for p in ("/usr/local/bin", "/opt/homebrew/bin"):
+    if os.path.isdir(p) and p not in os.environ.get("PATH", "").split(os.pathsep):
+        os.environ["PATH"] = p + os.pathsep + os.environ.get("PATH", "")
+
 def has(exe):
+    """Return True if executable exists and runs. Handles tools that use 'version' not '--version'."""
+    if not shutil.which(exe):
+        return False
     try:
-        subprocess.check_output([exe, "--version"], stderr=subprocess.STDOUT, text=True)
+        # eksctl, helm use 'version' not '--version'
+        flag = "version" if exe in ("eksctl", "helm") else "--version"
+        subprocess.check_output([exe, flag], stderr=subprocess.STDOUT, text=True)
         return True
     except Exception:
         return False
@@ -37,13 +47,26 @@ def main():
     os.environ["CLOUD_REGION"] = region
 
     # APP_IMAGE_TAG and SPARK_IMAGE_TAG are optional; deploy auto-generates when commented out in .env
-    # TF_STATE_BUCKET_PREFIX + TF_LOCK_TABLE_PREFIX (preferred) or legacy TF_STATE_BUCKET
-    if os.getenv("TF_STATE_BUCKET_PREFIX"):
+    # TF_STATE_BUCKET_COMPONENT + TF_LOCK_TABLE_COMPONENT (preferred) or TF_STATE_BUCKET_PREFIX / TF_STATE_BUCKET
+    if os.getenv("TF_STATE_BUCKET_COMPONENT"):
+        if not os.getenv("TF_LOCK_TABLE_COMPONENT"):
+            require("TF_LOCK_TABLE_COMPONENT")
+    elif os.getenv("TF_STATE_BUCKET_PREFIX"):
         require("TF_LOCK_TABLE_PREFIX")
     else:
         require("TF_STATE_BUCKET")
-    for k in ["FRU_PREFIX","S3_DELTA_BUCKET","S3_ARTIFACT_BUCKET","ECR_REPO_APP","ECR_REPO_SPARK"]:
-        require(k)
+    # PROJ_PREFIX (or FRU_PREFIX during transition); *_COMPONENT vars for resource naming
+    if not (os.getenv("PROJ_PREFIX") or os.getenv("FRU_PREFIX")):
+        require("PROJ_PREFIX")
+    # Component vars (or legacy full-name vars)
+    if not (os.getenv("S3_DELTA_COMPONENT") or os.getenv("S3_DELTA_BUCKET")):
+        require("S3_DELTA_COMPONENT")
+    if not (os.getenv("S3_ARTIFACT_COMPONENT") or os.getenv("S3_ARTIFACT_BUCKET")):
+        require("S3_ARTIFACT_COMPONENT")
+    if not (os.getenv("ECR_APP_COMPONENT") or os.getenv("ECR_REPO_APP")):
+        require("ECR_APP_COMPONENT")
+    if not (os.getenv("ECR_SPARK_COMPONENT") or os.getenv("ECR_REPO_SPARK")):
+        require("ECR_SPARK_COMPONENT")
 
     tfbin = os.getenv("FRU_TF_BIN","tofu")
     if not has("aws"):
@@ -55,10 +78,6 @@ def main():
 
     # Only warn about kubectl when scope needs it (kube or all); skip for nonkube
     if args.scope != "nonkube":
-        # Ensure common paths in PATH so kubectl is found when run from IDE/minimal env
-        for p in ("/usr/local/bin", "/opt/homebrew/bin"):
-            if os.path.isdir(p) and p not in os.environ.get("PATH", "").split(os.pathsep):
-                os.environ["PATH"] = p + os.pathsep + os.environ.get("PATH", "")
         if not (shutil.which("kubectl") or has("kubectl")):
             print("WARN: kubectl not found (kube deploy will fail until installed).")
 

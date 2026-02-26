@@ -5,6 +5,14 @@ variable "aws_region" { type = string }
 
 variable "ecs_cluster_name" { type = string }
 variable "alb_name" { type = string }
+variable "cloudwatch_log_group_ecs_api" {
+  type    = string
+  default = ""
+}
+variable "cloudwatch_log_group_spark" {
+  type    = string
+  default = ""
+}
 
 variable "app_image" { type = string }
 variable "app_image_tags" {

@@ -48,6 +48,8 @@ module "ecs" {
 
   cluster_name = var.ecs_cluster_name
   alb_name     = var.alb_name
+  cloudwatch_log_group_ecs_api = var.cloudwatch_log_group_ecs_api
+  cloudwatch_log_group_spark   = var.cloudwatch_log_group_spark
 
   vpc_id             = data.terraform_remote_state.shared_durable.outputs.vpc_id
   public_subnet_ids  = data.terraform_remote_state.shared_durable.outputs.public_subnet_ids

@@ -3,7 +3,7 @@
 
 # ---- ECS ALB (cluster, ALB, API service) ----
 resource "aws_cloudwatch_log_group" "ecs" {
-  name              = "/fru/${var.env}/ecs-api"
+  name              = var.cloudwatch_log_group_ecs_api != "" ? var.cloudwatch_log_group_ecs_api : "/${var.name}/${var.env}/ecs-api"
   retention_in_days  = 14
   tags              = var.tags
 }
@@ -218,7 +218,7 @@ resource "aws_ecs_service" "api" {
 
 # ---- Spark schedule (EventBridge -> ECS RunTask) ----
 resource "aws_cloudwatch_log_group" "spark" {
-  name              = "/fru/${var.env}/spark"
+  name              = var.cloudwatch_log_group_spark != "" ? var.cloudwatch_log_group_spark : "/${var.name}/${var.env}/spark"
   retention_in_days  = 14
   tags              = var.tags
 }

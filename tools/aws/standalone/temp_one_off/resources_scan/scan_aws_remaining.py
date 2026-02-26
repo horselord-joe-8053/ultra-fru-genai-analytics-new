@@ -13,7 +13,7 @@ Usage:
   python tools/aws/standalone/temp_one_off/resources_scan/scan_aws_remaining.py --cloud-regions us-east-1,us-east-2 --env dev --prefix fru
   python tools/aws/standalone/temp_one_off/resources_scan/scan_aws_remaining.py --cloud-regions us-east-1 --env dev --prefix fru --elb  # Classic ELB track
 
-Search criteria (prefix, env) are dynamic from --prefix and --env (or FRU_PREFIX, FRU_ENV).
+Search criteria (prefix, env) are dynamic from --prefix and --env (or PROJ_PREFIX/FRU_PREFIX, FRU_ENV).
 --elb: Classic ELB track; affects orphan classification for LB/SG/TG (see docs/learned/KUBE_INGRESS_LEARNED.md Section 0).
 """
 import argparse
@@ -453,13 +453,17 @@ def scan_region(region: str, prefix: str, env: str, account_id: str, *, use_elb:
         _classify_and_add(result, name, "target_group", prefix, env, region, display, extra={"target_group_arn": arn}, use_elb=use_elb)
 
     # Security groups (check orphan first, then k8s cluster ownership)
-    cluster_tag = f"kubernetes.io/cluster/{pe}-eks"
+    from tools.aws.scope_shared.core import resource_names as rn
+    cluster_tag_old, cluster_tag_new = rn.get_eks_cluster_tags(prefix, env, region)
+    def _is_our_eks(t):
+        return t.get(cluster_tag_old) in ("shared", "owned") or (cluster_tag_new and t.get(cluster_tag_new) in ("shared", "owned"))
     for sg in _list_all_security_groups(region):
         name = sg["name"]
         tags = sg.get("tags", {})
         group_id = sg.get("group_id", "")
-        display = f"sg:{name} (k8s cluster {pe}-eks)" if tags.get(cluster_tag) in ("shared", "owned") else f"sg:{name}"
-        level, note = classify_orphan("security_group", name, prefix, env, tags=tags, use_elb=use_elb)
+        eks_cluster = rn.eks_cluster(env, region) if _is_our_eks(tags) else None
+        display = f"sg:{name} (k8s cluster {eks_cluster})" if eks_cluster else f"sg:{name}"
+        level, note = classify_orphan("security_group", name, prefix, env, tags=tags, region=region, use_elb=use_elb)
         if level == "definitely":
             rec = _orphan_record("security_group", name, display, region=region, orphan_note=note, group_id=group_id)
             result.orphan_definitely.append(rec)
@@ -468,7 +472,7 @@ def scan_region(region: str, prefix: str, env: str, account_id: str, *, use_elb:
             rec = _orphan_record("security_group", name, display, region=region, orphan_note=note, group_id=group_id)
             result.orphan_likely.append(rec)
             continue
-        if tags.get(cluster_tag) in ("shared", "owned"):
+        if _is_our_eks(tags):
             result.project["kube"].append(display)
             continue
         _classify_and_add(result, name, "security_group", prefix, env, region)
@@ -490,9 +494,8 @@ def scan_region(region: str, prefix: str, env: str, account_id: str, *, use_elb:
     # EBS volumes
     for v in _list_all_ebs_volumes(region):
         tags = v.get("tags", {})
-        cluster_tag = f"kubernetes.io/cluster/{pe}-eks"
         name_for_match = tags.get("Name", "") or v["id"]
-        is_project = tags.get(cluster_tag) in ("shared", "owned") or pe in name_for_match
+        is_project = _is_our_eks(tags) or pe in name_for_match
         display = f"ebs_volume:{v['id']} ({v['name'] or 'no-name'}) [{v['state']}]"
         if is_project:
             result.project["kube"].append(display)
@@ -763,7 +766,7 @@ def main():
     )
     ap.add_argument("--cloud-regions", required=True, help="Comma-separated regions, e.g. us-east-1,us-east-2")
     ap.add_argument("--env", default=os.getenv("FRU_ENV", "dev"))
-    ap.add_argument("--prefix", default=os.getenv("FRU_PREFIX", "fru"))
+    ap.add_argument("--prefix", default=os.getenv("PROJ_PREFIX", "").strip() or os.getenv("FRU_PREFIX", "fru"))
     ap.add_argument("--elb", action="store_true",
         help="Classic ELB track (api-service-elb.yaml). Affects orphan classification for LB/SG/TG.")
     args = ap.parse_args()
