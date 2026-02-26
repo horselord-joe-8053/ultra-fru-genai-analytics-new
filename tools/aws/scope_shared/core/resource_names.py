@@ -262,10 +262,26 @@ def is_project_resource_name(
 
     if resource_type == "alb" or resource_type == "target_group":
         expected_alb = alb_name(env, region)
-        return name == expected_alb or name.startswith(f"{expected_alb}-") or name.startswith(pe) or f"{pe}-" in name or (name.startswith(proj) and env in name)
+        eks_name = eks_cluster(env, region)
+        eks_no_hyphen = eks_name.replace("-", "")
+        return (
+            name == expected_alb
+            or name.startswith(f"{expected_alb}-")
+            or name.startswith(pe)
+            or f"{pe}-" in name
+            or (name.startswith(proj) and env in name)
+            or name.startswith("k8s-frukube-fruapisv-")  # k8s NLB/TG for fru-api-svc in fru-kube ns
+            or name.startswith(f"k8s-traffic-{eks_no_hyphen}")  # k8s traffic SG for our EKS
+        )
 
     if resource_type == "security_group":
-        return name.startswith(proj)
+        eks_name = eks_cluster(env, region)
+        eks_no_hyphen = eks_name.replace("-", "")
+        return (
+            name.startswith(proj)
+            or name.startswith("k8s-frukube-fruapisv-")  # k8s SG for fru-api-svc in fru-kube ns
+            or name.startswith(f"k8s-traffic-{eks_no_hyphen}")  # k8s traffic SG for our EKS
+        )
 
     if resource_type == "log_group":
         lg_spark = log_group_spark(env, region)
@@ -301,7 +317,15 @@ def is_project_resource_name(
         return name.startswith(f"{pe}-aurora-cluster") or name.startswith(pe)
 
     if resource_type == "iam_role":
-        return name.startswith(pe)
+        eks_comp = _component("EKS_CLUSTER_COMPONENT", os.getenv("EKS_CLUSTER_NAME"), _EKS_CLUSTER_COMPONENT)
+        eks_prefix = f"{proj}-{eks_comp}-{env}"
+        return (
+            name.startswith(pe)
+            or name.startswith(f"{proj}-eks-")  # EKS cluster/node roles: fru-eks-dev-us-east-2-*
+            or name.startswith(eks_prefix)
+            or (name.startswith("eksctl-") and f"{proj}-{eks_comp}-{env}" in name)  # eksctl-fru-eks-dev-us-east-*-addon-*
+            or name == "eks-ebs-csi-driver-role"  # EKS addon role (standard name, created by our EKS)
+        )
 
     if resource_type == "cloudfront_dist" or resource_type == "cloudfront_oac":
         return f"{proj}-{env}-frontend" in name
@@ -338,6 +362,8 @@ def classify_project_category_from_name(
             return "nonkube"
         if "eks" in name or "eksctl" in name:
             return "kube"
+        if name.startswith("k8s-frukube-fruapisv-") or name.startswith(f"k8s-traffic-{eks_name.replace('-', '')}"):
+            return "kube"
         if "aurora" in name:
             return "shared-durable"
         return "other"
@@ -360,7 +386,8 @@ def classify_project_category_from_name(
     if resource_type == "rds_cluster":
         return "shared-durable"
     if resource_type == "secret":
-        return "shared-durable"
+        # Secrets Manager secrets from durable_with_cooloff stack
+        return "shared-durable-with-cooloff"
     if resource_type == "ecr":
         if f"-{app_comp}-" in name or f"-{spark_comp}-" in name:
             return "shared-nondurable"
