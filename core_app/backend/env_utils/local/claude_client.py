@@ -4,7 +4,7 @@ Implements LLMClient interface for local Claude API usage.
 
 Applicable environment: [local]
 """
-from backend.llm.base_client import LLMClient
+from backend.env_utils.cloud_shared.interfaces.llm_client import LLMClient
 from anthropic import Anthropic
 import os
 import logging

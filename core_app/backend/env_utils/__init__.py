@@ -1,7 +1,11 @@
 """
 Environment-specific utilities.
-Contains implementations for different cloud providers and local development.
+Contains cloud-agnostic interfaces (cloud_shared) and provider implementations:
+- cloud_shared: Interfaces (LLMClient, StorageBackend), provider detection, credentials
+- aws: Bedrock, S3, RDS Data API
+- local: Claude API, local filesystem
+- gcp: Placeholder for GCP (Gemini, GCS, Cloud SQL)
 
-Applicable environment: [local] [aws {ecs | eks}] [azure {aci | aks}] [gcp {cloud-run | gke}]
+Applicable environment: [local] [aws {ecs | eks}] [gcp {cloud-run | gke}]
 """
 

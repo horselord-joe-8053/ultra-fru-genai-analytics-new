@@ -1,7 +1,7 @@
 # Durable-with-cooloff stack: Secrets Manager secrets only.
 # Isolated from durable (VPC, Aurora) so that --incl-dura destroys VPC+Aurora
 # but keeps secrets; --incl-dura-all destroys both. Avoids 30-day same-name
-# block when re-deploying after teardown. See docs/learned/DURABLE_COOLOFF_EVALUATION.md.
+# block (cooloff period) when re-deploying after teardown. See docs/learned/DURABLE_COOLOFF_EVALUATION.md.
 
 terraform {
   backend "s3" {}

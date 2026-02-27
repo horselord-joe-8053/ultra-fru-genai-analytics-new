@@ -21,7 +21,7 @@ from psycopg2.extras import RealDictCursor
 from openai import OpenAI
 from openai import APIError as OpenAIError
 
-from backend.llm.client_factory import claude_complete, get_bedrock_client
+from backend.llm.client_factory import claude_complete, create_llm_client
 # Analytics scheduler moved to spark_jobs/scheduler.py
 # Scheduler runs as separate process (see spark_jobs/run_scheduler.py)
 from backend.utils.env_helpers import get_required_env, get_optional_env, get_optional_bool_env, get_optional_int_env, get_required_int_env
@@ -49,7 +49,7 @@ def init_agent():
             
             query_agent = QueryAgent(
                 db_pool=_connection_pool,
-                bedrock_client=get_bedrock_client(),
+                llm_client=create_llm_client(),
                 openai_client=openai_client
             )
             app.logger.info("Agent-based query processing enabled")
@@ -451,9 +451,11 @@ def health():
         status["database"] = "disconnected"
         status["database_error"] = str(e)
         app.logger.warning(f"Database health check failed: {e}")
+        # Include credentials status even when DB is down
+        status.update(_check_credentials_status())
         # Return 200 even if DB is down for skeleton health check
         return jsonify(status), 200
-    
+
     # Check OpenAI API key
     try:
         get_required_env("OPENAI_API_KEY")
@@ -461,15 +463,17 @@ def health():
     except ValueError:
         status["openai"] = "not_configured"
     
-    # Check AWS credentials
-    try:
-        import boto3
-        boto3.Session().get_credentials()
-        status["aws"] = "configured"
-    except Exception:
-        status["aws"] = "not_configured"
-    
+    # Check cloud credentials (provider-agnostic: AWS, GCP, or local)
+    creds_status = _check_credentials_status()
+    status.update(creds_status)
+
     return jsonify(status)
+
+
+def _check_credentials_status() -> dict:
+    """Delegate to env_utils; keeps boto3 and cloud SDK imports out of app.py."""
+    from backend.env_utils.cloud_shared.credentials import check_credentials_status
+    return check_credentials_status()
 
 
 @app.route("/version", methods=["GET"])

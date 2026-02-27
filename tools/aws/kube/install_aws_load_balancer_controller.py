@@ -14,6 +14,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.request
 
 from tools.cloud_shared.env import load_dotenv
@@ -42,11 +43,11 @@ def main():
 
     region = resolve_region(args.region)
     os.environ["CLOUD_REGION"] = region
-    env = {**os.environ, "CLOUD_REGION": region}
+    cluster_name = resource_names.eks_cluster(args.env, region)
+    # Override EKS_CLUSTER_NAME so eks_kubeconfig and eksctl use correct cluster (not legacy from .env)
+    env = {**os.environ, "CLOUD_REGION": region, "EKS_CLUSTER_NAME": cluster_name}
     if args.profile:
         env["AWS_PROFILE"] = args.profile
-
-    cluster_name = resource_names.eks_cluster(args.env, region)
 
     print(f"Installing AWS Load Balancer Controller for cluster={cluster_name} region={region}")
 
@@ -84,6 +85,29 @@ def main():
     print(f"Using policy: {policy_arn}")
 
     # 3. Create IAM role + ServiceAccount
+    # eksctl bug: if SA was deleted from k8s but CF stack exists, "create" returns "no tasks".
+    # Workaround: delete iamserviceaccount first if SA missing in k8s, then create.
+    sa_check = run(
+        ["kubectl", "get", "serviceaccount", "aws-load-balancer-controller", "-n", "kube-system"],
+        env=env,
+        check=False,
+        capture=True,
+    )
+    if sa_check.returncode != 0:
+        print("ServiceAccount not found in k8s; deleting stale eksctl state (if any) before create...")
+        run(
+            [
+                "eksctl", "delete", "iamserviceaccount",
+                "--cluster", cluster_name,
+                "--namespace", "kube-system",
+                "--name", "aws-load-balancer-controller",
+                "--region", region,
+            ],
+            env=env,
+            check=False,
+        )
+        print("Waiting 15s for CloudFormation stack deletion to complete...")
+        time.sleep(15)
     run(
         [
             "eksctl", "create", "iamserviceaccount",
@@ -127,13 +151,15 @@ def main():
 
     run(helm_args, env=env)
 
-    # 5. Wait for controller pods
-    print("Waiting for controller pods...")
-    run(
-        ["kubectl", "wait", "--for=condition=available", "--timeout=120s", "deployment/aws-load-balancer-controller", "-n", "kube-system"],
+    # 5. Wait for controller pods (webhook needs them before fru-api-svc apply)
+    print("Waiting for controller pods (up to 5 min)...")
+    result = run(
+        ["kubectl", "wait", "--for=condition=available", "--timeout=300s", "deployment/aws-load-balancer-controller", "-n", "kube-system"],
         env=env,
         check=False,
     )
+    if result.returncode != 0:
+        print("WARNING: Controller not ready within 5 min. kube_apply will retry api-service when webhook is up.")
 
     run(["kubectl", "get", "deployment", "-n", "kube-system", "aws-load-balancer-controller"], env=env)
     print("Done. The controller will reconcile fru-api-svc and create an NLB.")

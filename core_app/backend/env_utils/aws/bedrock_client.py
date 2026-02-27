@@ -5,7 +5,7 @@ Works in both ECS and EKS containers (uses IAM role or AWS credentials).
 
 Applicable environment: [aws {ecs | eks}]
 """
-from backend.llm.base_client import LLMClient
+from backend.env_utils.cloud_shared.interfaces.llm_client import LLMClient
 from backend.utils.env_helpers import get_required_env
 import boto3
 import os

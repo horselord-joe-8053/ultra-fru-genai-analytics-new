@@ -65,8 +65,9 @@ _TF_STATE_BUCKET_COMPONENT = "tf-state"
 _TF_LOCK_TABLE_COMPONENT = "tf-locks-tbl"
 _S3_DELTA_COMPONENT = "delta-internal"
 _S3_ARTIFACT_COMPONENT = "artifacts-internal"
-_ECR_APP_COMPONENT = "api"
-_ECR_SPARK_COMPONENT = "spark"
+# Regionless: same repo name in all regions. Enables push-only across regions.
+_ECR_APP_COMPONENT = "api-img"
+_ECR_SPARK_COMPONENT = "spark-img"
 _EKS_CLUSTER_COMPONENT = "eks"
 _ECS_CLUSTER_COMPONENT = "ecs"
 _ALB_COMPONENT = "alb"
@@ -102,22 +103,22 @@ def s3_artifacts_bucket(env: str, region: str) -> str:
     return _hyphen(proj, comp, env, region)
 
 
-def ecr_repo_app(env: str, region: str, *, container_type: str = "") -> str:
-    """ECR app repo: {proj}-{component}-{env}-{region} or {proj}-{container}-{component}-{env}-{region}."""
+def ecr_repo_app(env: str, region: str = "", *, container_type: str = "") -> str:
+    """ECR app repo: {proj}-{component}-{env}. Regionless so push-only works across regions."""
     proj = _proj_prefix()
     comp = _component("ECR_APP_COMPONENT", os.getenv("ECR_REPO_APP"), _ECR_APP_COMPONENT)
     if container_type:
-        return f"{proj}-{container_type}-{comp}-{env}-{region}"
-    return _hyphen(proj, comp, env, region)
+        return f"{proj}-{container_type}-{comp}-{env}"
+    return f"{proj}-{comp}-{env}"
 
 
-def ecr_repo_spark(env: str, region: str, *, container_type: str = "") -> str:
-    """ECR spark repo: {proj}-{component}-{env}-{region} or {proj}-{container}-{component}-{env}-{region}."""
+def ecr_repo_spark(env: str, region: str = "", *, container_type: str = "") -> str:
+    """ECR spark repo: {proj}-{component}-{env}. Regionless so push-only works across regions."""
     proj = _proj_prefix()
     comp = _component("ECR_SPARK_COMPONENT", os.getenv("ECR_REPO_SPARK"), _ECR_SPARK_COMPONENT)
     if container_type:
-        return f"{proj}-{container_type}-{comp}-{env}-{region}"
-    return _hyphen(proj, comp, env, region)
+        return f"{proj}-{container_type}-{comp}-{env}"
+    return f"{proj}-{comp}-{env}"
 
 
 def eks_cluster(env: str, region: str) -> str:

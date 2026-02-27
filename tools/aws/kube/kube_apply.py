@@ -12,7 +12,7 @@ This tool:
 - substitutes SPARK_IMAGE, DELTA_ROOT, PG*
 - applies Job/CronJob manifests
 """
-import argparse, base64, json, os, subprocess
+import argparse, base64, json, os, subprocess, time
 from tools.cloud_shared.env import load_dotenv, require
 from tools.aws.scope_shared.core.backend import resolve_region
 from tools.aws.scope_shared.deploy.bootstrap_helpers import check_k8s_bootstrap_job_succeeded, JOB_BOOTSTRAP, K8S_NAMESPACE
@@ -29,6 +29,37 @@ def kubectl(args, input_text=None):
     cmd = ["kubectl"] + args
     print("+", " ".join(cmd))
     subprocess.run(cmd, input=input_text, text=True, check=False)
+
+
+_WEBHOOK_NO_ENDPOINTS = "no endpoints available for service \"aws-load-balancer-webhook-service\""
+
+
+def _kubectl_apply_with_webhook_retry(input_text: str, max_attempts: int = 6, interval_sec: int = 30) -> bool:
+    """Apply manifest with retry when AWS LB Controller webhook has no endpoints yet.
+    Returns True if applied successfully, False if all retries failed."""
+    for attempt in range(max_attempts):
+        result = subprocess.run(
+            ["kubectl", "apply", "-f", "-"],
+            input=input_text,
+            text=True,
+            capture_output=True,
+        )
+        stdout, stderr = result.stdout or "", result.stderr or ""
+        combined = stdout + stderr
+        if result.returncode == 0:
+            return True
+        if _WEBHOOK_NO_ENDPOINTS in combined:
+            if attempt < max_attempts - 1:
+                print(f"  [retry {attempt + 1}/{max_attempts}] Webhook not ready; waiting {interval_sec}s...")
+                time.sleep(interval_sec)
+            else:
+                print(f"  [FAIL] Webhook still not ready after {max_attempts} attempts.")
+                print(stderr)
+                return False
+        else:
+            print(stderr)
+            return False
+    return False
 
 def fetch_secret_value(secret_arn: str) -> str:
     """Fetch secret value from AWS Secrets Manager. Handles plain string or JSON."""
@@ -196,7 +227,13 @@ data:
             kubectl(["apply","-f","-"], input_text=txt)
             api_svc_manifest = "api-service-elb.yaml" if args.elb else "api-service.yaml"
             txt = render(f"infra_terraform/modules/cloud_shared/k8s/{api_svc_manifest}", {})
-            kubectl(["apply","-f","-"], input_text=txt)
+            if args.elb:
+                kubectl(["apply","-f","-"], input_text=txt)
+            else:
+                # NLB requires AWS LB Controller webhook; retry when webhook pods not ready yet
+                print("+ kubectl apply -f - (api-service, with webhook retry)")
+                if not _kubectl_apply_with_webhook_retry(txt):
+                    raise SystemExit(1)
         except FileNotFoundError:
             print("WARN: API manifests not found, skipping API deployment.")
     else:

@@ -5,7 +5,7 @@ Works in any environment - detects and creates appropriate client.
 
 Applicable environment: [local] [aws {ecs | eks}] [azure {aci | aks}] [gcp {cloud-run | gke}]
 """
-from backend.llm.base_client import LLMClient
+from backend.env_utils.cloud_shared.interfaces.llm_client import LLMClient
 from typing import Optional, Dict, Any
 import os
 import logging
@@ -91,11 +91,14 @@ def claude_complete(
     return client.complete(system_prompt, user_message, model_id, max_tokens)
 
 
-# Convenience function for getting bedrock client (for agent initialization)
+# Convenience function for getting bedrock client (for backward compatibility)
 def get_bedrock_client():
     """
-    Get AWS Bedrock client (for backward compatibility with agent code).
-    
+    Get AWS Bedrock client (for backward compatibility).
+
+    Deprecated for agent path: Use create_llm_client() instead. Agent now uses
+    llm_client (cloud-agnostic). This remains for any code that needs raw boto3 client.
+
     Returns:
         boto3.client: Bedrock runtime client
     """

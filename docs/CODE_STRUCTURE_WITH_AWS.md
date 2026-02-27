@@ -62,8 +62,10 @@ infra_terraform/modules/
 
 ```
 core_app/backend/env_utils/
-├── aws/                          # cloud: aws
-└── local/                        # cloud: local (dev)
+├── cloud_shared/                 # Interfaces (LLMClient, StorageBackend), provider, credentials
+├── aws/                          # cloud: aws (Bedrock, S3, RDS Data API)
+├── local/                        # cloud: local (dev)
+└── gcp/                          # cloud: gcp (placeholder)
 ```
 
 ---
@@ -75,7 +77,7 @@ core_app/backend/env_utils/
 | `tools/` | `aws/`, `gcp/`, `cloud_shared/` | Under `aws/`: `kube/`, `nonkube/`, `scope_shared/` |
 | `infra_terraform/live_deploy/` | `aws/`, `gcp/` | `kube/`, `nonkube/`, `scope_shared/` under each cloud |
 | `infra_terraform/modules/` | `aws/`, `gcp/`, `cloud_shared/` | — |
-| `core_app/backend/env_utils/` | `aws/`, `local/` | — |
+| `core_app/backend/env_utils/` | `cloud_shared/`, `aws/`, `local/`, `gcp/` | — |
 
 ---
 

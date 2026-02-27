@@ -13,7 +13,7 @@ A unified view of how the **API image**, **Spark image**, **Aurora PostgreSQL**,
 | **API** | `core_app/Dockerfile` | `{proj}-api-{env}-{region}` | FastAPI app: `/health`, `/query`, `/analytics`, agent |
 | **Spark** | `core_app/analytics/docker/Dockerfile` | `{proj}-spark-{env}-{region}` | Batch analytics: Spark job → `batch_analytics` table |
 
-Both images are built from the same context root (`core_app/`) but use different Dockerfiles. ECR repos are **per region** (e.g. `fru-api-dev-us-east-1`, `fru-api-dev-us-east-2`).
+Both images are built from the same context root (`core_app/`) but use different Dockerfiles. ECR repos use **regionless names** (e.g. `fru-api-img-dev`, `fru-spark-img-dev`) so push-only works across regions.
 
 ---
 
