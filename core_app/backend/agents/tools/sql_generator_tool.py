@@ -17,12 +17,12 @@ logger = logging.getLogger(__name__)
 class SQLGeneratorTool(BaseTool):
     """Tool for generating SQL queries from natural language using LLM."""
     
-    def __init__(self, bedrock_client, schema_info: Dict[str, Any]):
+    def __init__(self, llm_client, schema_info: Dict[str, Any]):
         super().__init__(
             name="generate_sql",
             description="Generate SQL SELECT queries from natural language questions. Returns a dict with 'sql' field containing the PostgreSQL SQL query. IMPORTANT: After generating SQL, you MUST call execute_sql with the 'sql' value from this tool's output."
         )
-        self.bedrock_client = bedrock_client
+        self.llm_client = llm_client  # Cloud-agnostic; stored for future use; currently uses claude_complete()
         self.schema_info = schema_info
     
     def _build_system_prompt(self) -> str:

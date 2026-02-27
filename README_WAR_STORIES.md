@@ -3762,3 +3762,137 @@ We keep per-region ECR. The application core is the same; this is deployment top
 ### 67.4 Takeaway
 
 ECR is regional by design. For multi-region, prefer per-region repos unless you have a strong reason to centralize (e.g. very large images, infrequent deploys). Colocation reduces cost and latency.
+
+---
+
+## 68. Smart Cross-Region Image Build Strategy: One Build, Many Regions
+
+**creation:** `<260227>`
+**last_updated:** `<260227>`
+
+**keywords:** Docker, ECR, multi-region, content-based build skip, push-only, canonical compound tag, local cleanup
+**difficulty:** 6
+**significance:** 8
+
+### 68.1 Context
+
+When deploying to multiple regions (us-east-1, us-east-2, us-west-2, etc.), we need Docker images in each region's ECR. CI/CD best practice says "remove local artifacts after push" to free disk—but that implies each region would need a full build, or we'd have to pull from ECR and re-push. With many regions, that's wasteful: builds take ~2 minutes each; repeating them per region multiplies deploy time.
+
+### 68.2 Industry Practice vs. Our Approach
+
+| Approach | What We Remove Locally | Effect on Multi-Region |
+|:---------|:-----------------------|:------------------------|
+| **Industry practice** | Images themselves (full cleanup) | Each region needs a build, or pull-then-push. Wasteful. |
+| **Our approach** | Only ECR registry compound tags (e.g. `744139897900.dkr.ecr.us-east-2.amazonaws.com/fru-api-img-dev:latest`) | Canonical compound tags (`fru-api-img-dev:latest`) stay. One build → push to region 1 → push-only to regions 2, 3, 4… without rebuild. |
+
+We do **not** remove images. We remove only ephemeral compound tags that include the registry URL. Those exist only for `docker push`; once pushed, they clutter Docker Desktop and serve no purpose. Canonical compound tags (regionless, no registry URL) stay so push-only works across regions.
+
+### 68.3 Content-Based Build Skip + Deploy Scenarios
+
+Deploy computes a hash of the build context (source + Dockerfile). If it matches the hash stored in S3 from the last successful build, we skip the build. Combined with our local cleanup strategy:
+
+| Scenario | Build? | Push? | Notes |
+|:---------|:-------|:------|:------|
+| First deploy to region | Yes | Yes | No stored hash or ECR empty |
+| Same region, no code change | No | No | Content-skip; ECR already has images; Phase 8 skipped entirely |
+| Different region, no code change | No | Push-only | Content-skip; target ECR empty; tag local canonical → target ECR, push |
+| Code changed | Yes | Yes | Hash mismatch; full build + push |
+
+Same-region redeploy (e.g. us-east-2 twice) does nothing for build/push—Phase 8 is skipped. Different-region deploy (e.g. us-east-1 after us-east-2) uses push-only: we reuse local `fru-api-img-dev:latest`, tag it for the target registry, and push. No rebuild.
+
+### 68.4 Regionless Repo Names
+
+ECR allows the same repo name in different regions. We use regionless names (`fru-api-img-dev`, `fru-spark-img-dev`) so one canonical compound tag works for all regions. At push time we create the full form: `docker tag fru-api-img-dev:latest {ecr_url}/fru-api-img-dev:latest`, then push. After push, we remove the ECR compound tag locally; canonical stays.
+
+### 68.5 Key Insight
+
+> Don't blindly follow "remove local artifacts after push." Removing *images* forces a rebuild per region. Remove only *ephemeral registry compound tags*; keep canonical compound tags so one build can push-only to many regions. Combine with content-based build skip for maximum efficiency.
+
+### 68.6 Takeaway
+
+For multi-region Docker deploys: (1) Use regionless repo names so one local reference works everywhere. (2) Remove only ECR registry compound tags after push, not images. (3) Use content-based build skip so unchanged code skips build. (4) Push-only fills empty ECR in new regions without rebuild. Result: build once, deploy to N regions with one build and N-1 push-only steps. See `docs/learned/DOCKER_LEARNED.md`.
+
+---
+
+## 69. Multi-Cloud env_utils Placement: Cohesion Over Top-Level Extraction
+
+**creation:** `<260227>`
+**last_updated:** `<260227>`
+
+**keywords:** structure refactor, multi-cloud, env_utils, Docker build context, core_app, cohesion, modularity
+**difficulty:** 6
+**significance:** 7
+
+### 69.1 Context
+
+In a multi-cloud project (AWS, GCP, local), we have provider-specific modules: `env_utils/aws/`, `env_utils/local/`, `env_utils/gcp/`. An initial refactor plan proposed moving `core_app/backend/env_utils/` to project root as `app_env_utils/`—the rationale: avoid a directory containing multiple cloud-provider subdirs buried deep in the tree (`core_app/backend/env_utils/aws`, `.../local`, `.../gcp`). Flattening cloud concerns at a higher level has obvious merit for discoverability and GCP readiness.
+
+### 69.2 The Tension
+
+Moving `app_env_utils/` to project root would require:
+
+- **Docker build context** change from `core_app` to project root
+- **Dockerfile** at `core_app/Dockerfile` but `COPY app_env_utils`, `COPY core_app/backend`, etc.—paths relative to project root
+- Semantically: the Dockerfile builds the *core app*, yet the build context is the whole repo and we copy from multiple top-level dirs
+
+The Dockerfile would live inside `core_app/` but would no longer be "contained" there—it would reference sibling dirs at project root. That's misleading: the image is the core app; the Dockerfile should reflect that.
+
+### 69.3 Decision: In-Place Refactor
+
+We kept `env_utils/` under `core_app/backend/` and added `cloud_shared/` and `gcp/` in-place. Reasons:
+
+| Reason | Detail |
+|:-------|:-------|
+| **Logical cohesion** | env_utils is the core app's cloud-abstraction layer. It belongs with the app it serves. |
+| **Modularity** | core_app is a self-contained unit: backend, analytics, frontend, env_utils. Moving env_utils out would split that unit. |
+| **Docker semantics** | Build context stays `core_app`. `COPY backend /app/backend` includes env_utils. The Dockerfile builds the core app from core_app—no project-root context, no sibling-dir COPY. |
+| **Avoiding misleading layout** | A Dockerfile at `core_app/Dockerfile` that builds from project root and copies `app_env_utils` + `core_app/backend` suggests the image is "project root stuff"—but it's just the core app. Keeping env_utils inside core_app keeps the Dockerfile honest. |
+
+### 69.4 Key Insight
+
+> Avoiding cloud-provider subdirs at deep nesting has merit—but don't force such dirs all the way to the top. Consider cohesion: does the module belong with the component it serves? Consider Docker: does the build context match what the image actually is? In our case, env_utils serves core_app; the image is core_app. Keeping env_utils under core_app preserves both logical cohesion and Docker semantics.
+
+### 69.5 Takeaway
+
+For multi-cloud structure refactors: (1) Flattening cloud-provider dirs out of deep nesting is good. (2) Pushing them to project root is not always right—weigh cohesion and Docker semantics. (3) If a module is the app's cloud-abstraction layer, keeping it under the app keeps the Dockerfile contained and the image meaning clear. (4) In-place refactor (add `cloud_shared/`, `gcp/` under existing `env_utils/`) achieved GCP readiness without build-context or Dockerfile changes.
+
+---
+
+## 70. Unified Google Gen AI SDK: One Interface, Two Auth Paths
+
+**creation:** `<260227>`
+**last_updated:** `<260227>`
+
+**keywords:** Google Gen AI, python-genai, AI Studio, Vertex AI, authentication, unified SDK, Gemini
+**difficulty:** 6
+**significance:** 8
+
+### 70.1 Context
+
+In late 2024, Google launched the `google-genai` library ([github.com/googleapis/python-genai](https://github.com/googleapis/python-genai)), merging two previously separate Python APIs into one unified interface. Previously, developers used `google-generativeai` for AI Studio (Gemini Developer API) and `google-cloud-aiplatform` for Vertex AI—two different SDKs, two different call patterns. The new SDK handles both: once the client is initialized, `client.models.generate_content()` and `generate_content_stream()` are identical regardless of backend.
+
+### 70.2 The Authentication Hurdle
+
+**The critical gotcha:** AI Studio and Vertex AI use **different authentication mechanisms**, and the unified SDK does not hide this. Each backend has its own official way to authenticate and connect.
+
+| Backend | Auth | Env vars (optional) | Code |
+|---------|------|---------------------|------|
+| **AI Studio** | API key string | `GEMINI_API_KEY` or `GOOGLE_API_KEY` (latter takes precedence) | `genai.Client(api_key='...')` or `genai.Client()` |
+| **Vertex AI** | Service account / ADC | `GOOGLE_GENAI_USE_VERTEXAI=true`, `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` | `genai.Client(vertexai=True, project='...', location='...')` |
+| **Vertex AI (org-restricted)** | Explicit credentials | `GOOGLE_APPLICATION_CREDENTIALS` + JSON key | Load with `google.oauth2.service_account.Credentials.from_service_account_file()`; pass `credentials=creds` |
+
+**Enterprise restriction:** Many GCP organizations disable Standard API Keys via org policy. In that case, you cannot use AI Studio's API key path; you must use Vertex AI with a service account.
+
+### 70.3 Key Insight
+
+> One SDK, two auth paths. The unified interface is a win—same `generate_content()` and `generate_content_stream()` calls—but you must explicitly choose and configure the auth path. Design your `client_factory` to branch on env vars (`GCP_LLM_USE_VERTEX_AI`, `GOOGLE_AI_API_KEY`) so switching is configuration-only.
+
+### 70.4 Resolution
+
+1. **AI Studio path:** `client = genai.Client(api_key='...')` or set `GEMINI_API_KEY` / `GOOGLE_API_KEY`.
+2. **Vertex AI path (ADC):** `client = genai.Client(vertexai=True, project='...', location='...')`—SDK uses `GOOGLE_APPLICATION_CREDENTIALS` or GKE/VM metadata.
+3. **Vertex AI path (org-restricted):** Load credentials with `google.oauth2.service_account.Credentials.from_service_account_file(path, scopes=['https://www.googleapis.com/auth/cloud-platform'])` and pass `credentials=creds`.
+
+### 70.5 Takeaway
+
+For GCP LLM readiness: (1) Use `google-genai` for both AI Studio and Vertex AI. (2) Start with AI Studio (API key) for simplicity; upgrade to Vertex AI when compliance or Workload Identity is required. (3) Never hardcode which backend to use—branch on env vars. (4) In VMs/containers on GCP, Vertex AI with Workload Identity or ADC auto-authenticates and auto-refreshes tokens; no JSON key needed. See `docs/REFACTOR_PLAN_GCP_READINESS.md` for the full plan.

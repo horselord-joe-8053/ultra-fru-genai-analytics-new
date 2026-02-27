@@ -63,6 +63,12 @@ def _print_success_url(env: str, region: str, scope: str) -> None:
                 _log_success(frontend_url)
                 return
             # Fallback: LB hostname (uses region validation to avoid wrong-region LB)
+            # Ensure kubectl context points at target region (avoids "fru-api-svc not found" when querying wrong cluster)
+            subprocess.run(
+                [sys.executable, "tools/aws/kube/eks_kubeconfig.py", "--env", env, "--region", region],
+                check=False,
+                env={**os.environ, "CLOUD_REGION": region},
+            )
             from tools.aws.kube.deploy_kube import _try_get_lb_hostname
             lb_host = ""
             for attempt in range(12):

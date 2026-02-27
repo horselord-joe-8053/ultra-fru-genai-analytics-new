@@ -33,18 +33,18 @@ class QueryAgent:
     
     MAX_ITERATIONS = 5
     
-    def __init__(self, db_pool, bedrock_client, openai_client, schema_info: Optional[Dict[str, Any]] = None):
+    def __init__(self, db_pool, llm_client, openai_client, schema_info: Optional[Dict[str, Any]] = None):
         """
         Initialize agent.
-        
+
         Args:
             db_pool: Database connection pool
-            bedrock_client: AWS Bedrock client
-            openai_client: OpenAI client
+            llm_client: LLM client (Cloud-agnostic: AWS Bedrock, GCP Gemini, or local Claude API)
+            openai_client: OpenAI client for embeddings
             schema_info: Database schema information
         """
         self.db_pool = db_pool
-        self.bedrock_client = bedrock_client
+        self.llm_client = llm_client
         self.openai_client = openai_client
         
         # Default schema info
@@ -73,7 +73,7 @@ class QueryAgent:
         self.tools = {
             "execute_sql": SQLTool(db_pool),
             "semantic_search": SemanticSearchTool(db_pool, openai_client, schema_info),
-            "generate_sql": SQLGeneratorTool(bedrock_client, schema_info)
+            "generate_sql": SQLGeneratorTool(llm_client, schema_info)
         }
         
         # Build system prompt with tool info
