@@ -9,7 +9,7 @@ import re
 from typing import Dict, Any, Optional, Tuple
 
 from .base_tool import BaseTool
-from backend.llm.client_factory import claude_complete
+from backend.env_utils.cloud_shared.client_factory import claude_complete
 
 logger = logging.getLogger(__name__)
 

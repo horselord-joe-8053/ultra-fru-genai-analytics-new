@@ -1,0 +1,55 @@
+"""
+GCP Teardown Orchestrator (reference: tools/aws/teardown.py).
+
+Usage:
+  python tools/gcp/teardown.py --scope kube --env dev
+  python tools/gcp/teardown.py --scope all --env dev
+"""
+import argparse
+import os
+import sys
+
+from tools.cloud_shared.env import load_dotenv
+from tools.gcp.scope_shared.core.backend import resolve_region
+from tools.cloud_shared.logging import logger
+
+load_dotenv()
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--scope", choices=["kube", "nonkube", "all"], required=True)
+    ap.add_argument("--env", default=os.getenv("FRU_ENV", "dev"))
+    ap.add_argument("--region", default=None)
+    ap.add_argument("--non-interactive", action="store_true")
+    ap.add_argument("--incl-dura", action="store_true", help="Include durable (VPC) in teardown (scope=all)")
+    ap.add_argument("--incl-dura-all", action="store_true", help="Include durable and durable_with_cooloff (secrets)")
+    args = ap.parse_args()
+
+    region = resolve_region(args.region)
+    os.environ["CLOUD_REGION"] = region
+    os.environ["GCP_REGION"] = region
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
+    # Reverse order: kube/nonkube -> nondurable -> durable -> durable_with_cooloff
+    stacks = [
+        "infra_terraform/live_deploy/gcp/scope_shared/nondurable",
+        "infra_terraform/live_deploy/gcp/scope_shared/durable",
+        "infra_terraform/live_deploy/gcp/scope_shared/durable_with_cooloff",
+    ]
+    for stack in stacks:
+        stack_path = os.path.join(repo_root, stack)
+        if not os.path.isdir(stack_path):
+            continue
+        logger.step(f"Destroy {stack}...")
+        from tools.gcp.scope_shared.core.terra_init import init_stack
+        from tools.gcp.scope_shared.core.terra_runner import terra
+        init_stack(stack_path, args.env, region)
+        destroy_cmd = ["destroy", "-auto-approve"] if args.non_interactive else ["destroy"]
+        terra(destroy_cmd, cwd=stack_path, check=False)
+
+    logger.success("Teardown complete.")
+
+
+if __name__ == "__main__":
+    main()

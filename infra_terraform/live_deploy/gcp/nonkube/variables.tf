@@ -1,0 +1,62 @@
+variable "prefix" { type = string }
+variable "env" { type = string }
+variable "gcp_project_id" { type = string }
+variable "gcp_region" { type = string }
+variable "cloud_run_service_name" { type = string }
+variable "spark_job_name" { type = string }
+variable "app_image" { type = string }
+variable "spark_image" { type = string }
+
+variable "tf_state_bucket" { type = string }
+variable "tf_state_prefix" { type = string }
+variable "delta_bucket_fallback" { type = string }
+
+variable "log_level" {
+  type    = string
+  default = "INFO"
+}
+variable "allowed_origins" {
+  type    = string
+  default = "*"
+}
+variable "use_agent_query" {
+  type    = string
+  default = "true"
+}
+variable "openai_embed_model" {
+  type    = string
+  default = "text-embedding-3-small"
+}
+variable "enable_analytics_scheduler" {
+  type    = string
+  default = "true"
+}
+variable "analytics_scheduler_interval_seconds" {
+  type    = number
+  default = 180
+}
+variable "delta_lake_package" {
+  type    = string
+  default = "io.delta:delta-spark_2.13:4.0.0"
+}
+variable "spark_home" {
+  type    = string
+  default = "/opt/spark"
+}
+variable "app_image_tags" {
+  type    = string
+  default = ""
+}
+
+variable "min_instance_count" {
+  type    = number
+  default = 0
+}
+variable "max_instance_count" {
+  type    = number
+  default = 10
+}
+variable "spark_schedule_expression" {
+  type    = string
+  default = "0 * * * *"
+}

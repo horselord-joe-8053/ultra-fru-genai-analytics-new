@@ -1,5 +1,5 @@
-# GCP VPC Module
-# Reference: https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_network
+# GCP VPC Module (reference: infra_terraform/modules/aws/primitives/vpc/main.tf)
+# https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_network
 
 resource "google_compute_network" "this" {
   name                    = var.name

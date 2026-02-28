@@ -75,7 +75,6 @@ def get_base_vars(env: str, region: str | None = None):
     set_tf("ecs_cluster_name", resource_names.ecs_cluster(env, deploy_region))
     eks_name = resource_names.eks_cluster(env, deploy_region)
     set_tf("eks_cluster_name", eks_name)
-    os.environ["EKS_CLUSTER_NAME"] = eks_name  # eks_kubeconfig needs this
     set_tf("alb_name", resource_names.alb_name(env, deploy_region))
     set_tf("delta_bucket", resource_names.s3_delta_bucket(env, deploy_region))
     set_tf("artifacts_bucket", resource_names.s3_artifacts_bucket(env, deploy_region))

@@ -39,7 +39,8 @@ import sys
 import time
 
 from tools.cloud_shared.env import load_dotenv, require, EnvVarNotFound
-from tools.aws.scope_shared.core.backend import resolve_region, durable_azs_for_region
+from tools.aws.scope_shared.core.backend import resolve_region
+from tools.aws.provider_config_handler import get_azs, get_subnet_cidrs
 from tools.cloud_shared.logging import logger
 from tools.aws.scope_shared.core.phases import PhaseTracker, deploy_phases
 from tools.cloud_shared.stats import DeployStats, scope_for
@@ -261,16 +262,19 @@ def main():
                 pass
         aurora_pw = os.getenv("PGPASSWORD") or ""
         os.environ["TF_VAR_aurora_master_password"] = aurora_pw or "postgres"
-        azs = durable_azs_for_region(region)
+        azs = get_azs(region)
+        public_cidrs, private_cidrs = get_subnet_cidrs(region)
         azs_json = json.dumps(azs)
+        public_json = json.dumps(public_cidrs)
+        private_json = json.dumps(private_cidrs)
         os.environ["TF_VAR_azs"] = azs_json
-        os.environ["TF_VAR_public_subnet_cidrs"] = '["10.0.1.0/24","10.0.2.0/24"]'
-        os.environ["TF_VAR_private_subnet_cidrs"] = '["10.0.101.0/24","10.0.102.0/24"]'
+        os.environ["TF_VAR_public_subnet_cidrs"] = public_json
+        os.environ["TF_VAR_private_subnet_cidrs"] = private_json
         os.environ["TF_VAR_allow_destroy_durable"] = "false"
         durable_vars = [
             "-var", f"azs={azs_json}",
-            "-var", 'public_subnet_cidrs=["10.0.1.0/24","10.0.2.0/24"]',
-            "-var", 'private_subnet_cidrs=["10.0.101.0/24","10.0.102.0/24"]',
+            "-var", f"public_subnet_cidrs={public_json}",
+            "-var", f"private_subnet_cidrs={private_json}",
             "-var", "allow_destroy_durable=false",
         ]
         if aurora_pw:

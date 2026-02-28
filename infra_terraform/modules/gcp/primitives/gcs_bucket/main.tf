@@ -1,5 +1,5 @@
-# GCP Cloud Storage Bucket Module
-# Reference: https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/storage_bucket
+# GCP Cloud Storage Bucket Module (reference: infra_terraform/modules/aws/primitives/s3_bucket/main.tf)
+# https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/storage_bucket
 
 resource "google_storage_bucket" "this" {
   name          = var.name

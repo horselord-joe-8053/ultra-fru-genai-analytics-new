@@ -66,13 +66,6 @@ def _region_env_suffix(region: str) -> str:
     return region.replace("-", "_") if region else ""
 
 
-def durable_azs_for_region(region: str) -> list[str]:
-    """Return first two AZs for a region (e.g. us-east-2 -> [us-east-2a, us-east-2b])."""
-    if not region:
-        return ["us-east-1a", "us-east-1b"]
-    return [f"{region}a", f"{region}b"]
-
-
 def resolve_state_bucket(region: str | None = None) -> str:
     """
     Resolve S3 state bucket for the given region.

@@ -18,7 +18,7 @@ def main():
     from tools.aws.scope_shared.core.backend import resolve_region
     from tools.aws.scope_shared.core import resource_names
     region = resolve_region(args.region)
-    cluster = os.getenv("EKS_CLUSTER_NAME") or os.getenv("TF_VAR_eks_cluster_name") or resource_names.eks_cluster(args.env, region)
+    cluster = resource_names.eks_cluster(args.env, region)
     print("+ aws eks update-kubeconfig")
     subprocess.run(
         ["aws", "eks", "update-kubeconfig", "--region", region, "--name", cluster],

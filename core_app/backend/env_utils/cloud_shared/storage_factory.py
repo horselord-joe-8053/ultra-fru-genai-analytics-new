@@ -56,10 +56,8 @@ def get_storage_backend(path: Optional[str] = None, storage_type: Optional[str] 
         from backend.env_utils.local.storage_backend import LocalStorageBackend
         return LocalStorageBackend()
     if storage_type == "gcs":
-        raise NotImplementedError(
-            "GCS storage backend not yet implemented. "
-            "See REFACTOR_PLAN_GCP_READINESS.md Phase 1 for gcs_helpers.py."
-        )
+        from backend.env_utils.gcp.storage_backend import GCSStorageBackend
+        return GCSStorageBackend()
     # Default to local
     from backend.env_utils.local.storage_backend import LocalStorageBackend
     return LocalStorageBackend()

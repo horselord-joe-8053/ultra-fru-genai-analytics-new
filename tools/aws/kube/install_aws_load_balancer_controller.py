@@ -44,8 +44,7 @@ def main():
     region = resolve_region(args.region)
     os.environ["CLOUD_REGION"] = region
     cluster_name = resource_names.eks_cluster(args.env, region)
-    # Override EKS_CLUSTER_NAME so eks_kubeconfig and eksctl use correct cluster (not legacy from .env)
-    env = {**os.environ, "CLOUD_REGION": region, "EKS_CLUSTER_NAME": cluster_name}
+    env = {**os.environ, "CLOUD_REGION": region}
     if args.profile:
         env["AWS_PROFILE"] = args.profile
 
