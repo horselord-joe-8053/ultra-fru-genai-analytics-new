@@ -37,7 +37,8 @@ import time
 
 from tools.cloud_shared.logging import logger
 from tools.cloud_shared.env import load_dotenv, EnvVarNotFound
-from tools.aws.scope_shared.core.backend import resolve_region, durable_azs_for_region
+from tools.aws.scope_shared.core.backend import resolve_region
+from tools.aws.provider_config_handler import get_azs, get_subnet_cidrs
 from tools.cloud_shared.stats import TeardownStats, scope_for
 from tools.aws.scope_shared.core.phases import PhaseTracker, teardown_phases
 from tools.aws.scope_shared.core.terra_init import init_stack
@@ -58,6 +59,32 @@ load_dotenv()
 
 # Heartbeat interval for long-running tofu init/destroy. Default 10s so feedback appears sooner than deploy's 30s.
 TEARDOWN_HEARTBEAT_INTERVAL_SEC = int(os.getenv("TEARDOWN_HEARTBEAT_INTERVAL_SEC", "10"))
+
+
+def _durable_has_outputs(env: str, region: str | None) -> bool:
+    """
+    Return True if durable stack has outputs (vpc_id). False when durable was already
+    destroyed (e.g. from a previous partial teardown). Used to skip nonkube/kube
+    when they cannot run (they reference durable outputs).
+    """
+    try:
+        init_stack(DURABLE_STACK, env, region)
+        result = subprocess.run(
+            [os.getenv("FRU_TF_BIN", "tofu"), "output", "-json"],
+            cwd=DURABLE_STACK,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            env=get_terra_env(region),
+        )
+        if result.returncode != 0:
+            return False
+        data = json.loads(result.stdout or "{}")
+        vpc = data.get("vpc_id", {})
+        val = vpc.get("value", "") if isinstance(vpc, dict) else ""
+        return bool(val)
+    except Exception:
+        return False
 
 ORDER = {
     "kube": ["infra_terraform/live_deploy/aws/kube"],
@@ -236,12 +263,15 @@ def destroy_stack(stack_dir: str, env: str, region: str | None = None, stats: Te
         if stack_dir == DURABLE_STACK:
             aurora_pw = os.getenv("PGPASSWORD") or "placeholder"
             destroy_region = region or resolve_region(None)
-            azs = durable_azs_for_region(destroy_region)
+            azs = get_azs(destroy_region)
+            public_cidrs, private_cidrs = get_subnet_cidrs(destroy_region)
             azs_json = json.dumps(azs)
+            public_json = json.dumps(public_cidrs)
+            private_json = json.dumps(private_cidrs)
             extra += [
                 "-var", f"azs={azs_json}",
-                "-var", 'public_subnet_cidrs=["10.0.1.0/24","10.0.2.0/24"]',
-                "-var", 'private_subnet_cidrs=["10.0.101.0/24","10.0.102.0/24"]',
+                "-var", f"public_subnet_cidrs={public_json}",
+                "-var", f"private_subnet_cidrs={private_json}",
                 "-var", "allow_destroy_durable=true",
                 "-var", f"aurora_master_password={aurora_pw}",
             ]
@@ -339,6 +369,21 @@ def main():
     for s in stacks_to_destroy:
         phase_idx += 1
         tracker.start_phase(phase_idx)
+        # When durable was already destroyed (e.g. previous partial teardown), nonkube/kube
+        # cannot run: they reference data.terraform_remote_state.shared_durable.outputs
+        # which is empty. Skip them; resources are gone anyway.
+        if s in (NONKUBE_STACK, KUBE_STACK) and (args.incl_dura or args.incl_dura_all):
+            if not _durable_has_outputs(args.env, region):
+                B = "\033[1m"
+                R = "\033[0m"
+                stack_name = "nonkube" if s == NONKUBE_STACK else "kube"
+                logger.info(
+                    f"{B}SKIP {stack_name}:{R} Durable has no outputs (destroyed, never deployed, or state unavailable). "
+                    f"{B}Why:{R} {stack_name} references durable outputs (vpc_id, subnets, secrets); "
+                    f"without them, tofu cannot evaluate config. {B}Action:{R} Skipping—nothing to tear down or resources are already gone."
+                )
+                tracker.end_phase(phase_idx)
+                continue
         # Pre-destroy steps use scope "pre-destroy"
         stats.set_scope("pre-destroy")
         if s in ORDER["nonkube"]:

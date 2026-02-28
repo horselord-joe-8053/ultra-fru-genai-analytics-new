@@ -59,6 +59,7 @@ module "ecs" {
   desired_count = var.desired_count
 
   env_vars = merge({
+    CLOUD_PROVIDER                       = "aws"
     CLOUD_REGION                         = var.aws_region
     LOG_LEVEL                            = var.log_level
     ALLOWED_ORIGINS                      = var.allowed_origins

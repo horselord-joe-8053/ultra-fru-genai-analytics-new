@@ -1,5 +1,7 @@
 # GCP Readiness: Credentials & Refactor Plan
 
+**See also:** [docs/GCP_AWS_REFERENCE.md](GCP_AWS_REFERENCE.md) — comprehensive GCP ↔ AWS mapping for all four areas (env_utils, modules, live_deploy, tools).
+
 ## 1. GCP Credentials for `.env` (Max Access)
 
 ### AWS vs GCP analogy
@@ -594,6 +596,148 @@ tools/gcp/
 | 5.2 | Pass `--env`, `--scope`, `--region` to GCP scripts | Low |
 
 **Deliverable:** `orchestrator.py deploy --provider gcp --scope kube --env dev` works.
+
+---
+
+## 2.2 GCP Kube vs Nonkube Architecture (Critical)
+
+### 2.2.1 Kube: GKE ↔ EKS
+
+| AWS (kube) | GCP (kube) |
+|------------|-------------|
+| **EKS** | **GKE** |
+| EKS cluster + kubeconfig | GKE cluster + `gcloud container clusters get-credentials` |
+| ALB/NLB for ingress | GKE Load Balancer (or Ingress) |
+| CloudFront + S3 frontend | Load Balancer + Cloud CDN + GCS frontend (or Cloud Run for frontend) |
+| K8s manifests (cloud_shared) | Same K8s manifests (Kubernetes is cloud-agnostic) |
+
+**Kubernetes is cloud-agnostic** — the same `kubectl apply` manifests work on EKS and GKE. The main differences are: kubeconfig source (`eks_kubeconfig.py` vs `gke_kubeconfig.py`), Load Balancer URL resolution, and frontend (CloudFront vs Cloud CDN + GCS).
+
+### 2.2.2 Nonkube: Cloud Run + Cloud CDN ↔ ECS + CloudFront
+
+| AWS (nonkube) | GCP (nonkube) |
+|---------------|---------------|
+| **ECS** (API container + Spark tasks) | **Cloud Run** (API service) + **Cloud Run Jobs** (Spark) |
+| **ALB** (load balancer) | **Cloud Run** (built-in HTTPS URL) or **Load Balancer** |
+| **CloudFront** (CDN + HTTPS) | **Cloud CDN** (backend: Load Balancer or Cloud Run) |
+| **S3** (frontend static) | **Cloud Storage** (frontend bucket) |
+| **EventBridge** (Spark schedule) | **Cloud Scheduler** (Cloud Run Jobs trigger) |
+
+**GCP nonkube architecture (cloud-native, no Kubernetes):**
+
+1. **Cloud Run** (API service) — serverless containers, auto-scaling, HTTPS URL. Equivalent to ECS Fargate for the API.
+2. **Cloud Run Jobs** (Spark) — one-off and scheduled jobs. Equivalent to ECS RunTask for Spark.
+3. **Cloud Scheduler** — cron triggers for Cloud Run Jobs. Equivalent to EventBridge.
+4. **Cloud Storage + Load Balancer + Cloud CDN** — frontend (static HTML/JS). Equivalent to S3 + CloudFront.
+5. **Secret Manager** — secrets. Equivalent to Secrets Manager.
+
+**Implementation order for nonkube:**
+- Phase 1: Cloud Run API service (single URL, no frontend)
+- Phase 2: Cloud Storage + Load Balancer + Cloud CDN for frontend
+- Phase 3: Cloud Run Jobs + Cloud Scheduler for Spark
+
+### 2.2.3 Implementation Priority
+
+| Priority | Scope | Task | Rationale |
+|----------|-------|------|-----------|
+| **4.1** | kube | Deploy + verify | GKE + K8s is cloud-agnostic; follow AWS EKS flow |
+| **4.2** | kube | Teardown + verify | Same as 4.1; kubectl/namespace checks are provider-agnostic |
+| **4.3** | nonkube | Deploy + verify | Cloud Run + Cloud CDN; more GCP-specific |
+| **4.4** | nonkube | Teardown + verify | Cloud Run service/job deletion |
+
+**Rationale:** Kubernetes is standardized; GKE deploy/teardown mirrors EKS with minimal changes. Nonkube is more cloud-specific (ECS vs Cloud Run); do kube first for faster wins.
+
+### 2.2.4 Kube Implementation Checklist (Priority 4.1, 4.2)
+
+| Task | Reference | Status |
+|------|-----------|--------|
+| `tools/gcp/kube/gke_kubeconfig.py` | `tools/aws/kube/eks_kubeconfig.py` | ✓ Created |
+| GCP kube stack: add remote state (shared_nondurable for delta bucket) | AWS kube main.tf | Pending |
+| GCP deploy: apply (not just plan) for shared stacks | AWS deploy apply_stack | Pending |
+| GCP deploy: apply kube stack when scope=kube/all | AWS run_deploy_kube | Pending |
+| GCP deploy: kube_apply (K8s manifests) after GKE | AWS kube_apply | Pending |
+| GCP teardown: destroy kube before shared | AWS teardown order | Pending |
+| GCP teardown: kube_pre_destroy (delete CronJob, Job, namespace) | AWS kube_pre_destroy | Pending |
+
+---
+
+## 2.1 Comprehensive Provider-Specific Code Inventory
+
+This section maps **all** places that need cloud-provider-specific code: `tools/`, `infra_terraform/live_deploy/`, `infra_terraform/modules/`, and `core_app/backend/env_utils/`. Use this to fill gaps and achieve GCP parity.
+
+### 2.1.1 tools/
+
+| Area | AWS exists | GCP exists | GCP gaps |
+|------|------------|------------|----------|
+| **Entry points** | `deploy.py`, `teardown.py` | — | Entire `tools/gcp/` tree |
+| **kube/** | `deploy_kube.py`, `kube_apply.py`, `eks_kubeconfig.py`, `kube_pre_destroy.py` | — | `deploy_kube.py`, `kube_apply.py`, `gke_kubeconfig.py`, `kube_pre_destroy.py` |
+| **nonkube/** | `deploy_nonkube.py`, `ecs_spark_schedule.py` | — | `deploy_nonkube.py` (Cloud Run Jobs + Cloud Scheduler) |
+| **scope_shared/core/** | `backend.py` (S3/DynamoDB state), `terra_runner.py`, `terra_init.py`, `terra_var_handling.py` | — | `backend.py` (GCS state), `terra_runner.py`, etc. |
+| **scope_shared/deploy/** | `build_and_push_images.py` (ECR), `setup_database.py` (Aurora), `ensure_secrets.py` (Secrets Manager), `bootstrap_state_backend.py` (S3) | — | Artifact Registry, Cloud SQL, Secret Manager, GCS state backend |
+| **scope_shared/verify/** | `verify_all_deploy.py` | — | Same |
+| **standalone/** | `doctor.py` | — | `doctor.py` (gcloud, GCP_PROJECT_ID, creds) |
+
+**Suggested `tools/gcp/` layout:** See Phase 4.1 directory structure.
+
+### 2.1.2 infra_terraform/live_deploy/
+
+| Stack | AWS | GCP | GCP gaps |
+|-------|-----|-----|----------|
+| **kube/** | EKS, CloudFront, S3 frontend, Aurora ingress, S3 backend | GKE only, no backend block | GCS backend, frontend (Cloud CDN + GCS or Firebase), DB wiring |
+| **nonkube/** | ECS, CloudFront, S3, S3 backend | README only | Full Terraform: Cloud Run Jobs, Cloud Scheduler, frontend |
+| **scope_shared/durable/** | VPC, Aurora, S3 backend | VPC only, no backend | GCS backend, Cloud SQL |
+| **scope_shared/durable_with_cooloff/** | Secrets Manager, S3 backend | — | Secret Manager, GCS backend |
+| **scope_shared/nondurable/** | S3 buckets (delta, artifacts), ECR, S3 backend | GCS delta bucket only | GCS backend, Artifact Registry, artifacts bucket |
+
+**Tasks:**
+- Add `backend "gcs"` block to all GCP live_deploy stacks (bucket, prefix from vars).
+- Add `live_deploy/gcp/scope_shared/durable_with_cooloff/` (Secret Manager).
+- Extend `live_deploy/gcp/scope_shared/nondurable/` (Artifact Registry, artifacts bucket).
+- Extend `live_deploy/gcp/scope_shared/durable/` (Cloud SQL).
+- Add `live_deploy/gcp/nonkube/main.tf` (Cloud Run Jobs, Cloud Scheduler).
+- Extend `live_deploy/gcp/kube/` (frontend, DB wiring).
+
+### 2.1.3 infra_terraform/modules/
+
+| Module | AWS | GCP | GCP gaps |
+|--------|-----|-----|----------|
+| **Compute** | `eks/`, `ecs/` | `gke/` | — (GKE exists) |
+| **Networking** | `primitives/vpc/` | `primitives/vpc/` | — |
+| **Storage** | `primitives/s3_bucket/` | `primitives/gcs_bucket/` | — |
+| **Container registry** | `primitives/ecr/` | — | `primitives/artifact_registry/` |
+| **Database** | `primitives/aurora/` | — | `primitives/cloud_sql/` |
+| **Secrets** | (Secrets Manager in live_deploy) | — | `primitives/secret_manager/` |
+| **Frontend/CDN** | `primitives/cloudfront/` | — | `primitives/cloud_cdn/` or Firebase Hosting |
+| **Serverless jobs** | (ECS in ecs/) | — | `cloud_run_jobs/`, `cloud_scheduler/` |
+
+**Tasks:**
+- Create `modules/gcp/primitives/artifact_registry/`.
+- Create `modules/gcp/primitives/cloud_sql/`.
+- Create `modules/gcp/primitives/secret_manager/`.
+- Create `modules/gcp/primitives/cloud_cdn/` (or Firebase Hosting).
+- Create `modules/gcp/cloud_run_jobs/`, `modules/gcp/cloud_scheduler/`.
+- Review `modules/cloud_shared/k8s/`: `api-service*.yaml` use AWS LB annotations; add GKE equivalents if needed.
+
+### 2.1.4 core_app/backend/env_utils/
+
+| Area | AWS | GCP | GCP gaps |
+|------|-----|-----|----------|
+| **LLM** | `bedrock_client.py`, `get_llm_client()` | `gemini_api_client.py`, `get_llm_client()` | — (done) |
+| **Object storage** | `s3_helpers.py`, `storage_backend.py` | `gcs_helpers.py`, `storage_backend.py` | — (done) |
+| **Database** | `rds_data_api.py` | — | Cloud SQL client (psycopg2; no Data API equivalent) |
+
+**Tasks:**
+- LLM: done.
+- Storage: done (gcs_helpers, GCSStorageBackend).
+- DB: Add `gcp/cloud_sql_client.py` or use psycopg2 directly when Cloud SQL is deployed (Phase 4).
+
+### 2.1.5 Suggested implementation order
+
+1. **env_utils** — LLM ✓, GCS storage ✓. DB client when Cloud SQL exists.
+2. **modules** — Add GCP primitives (artifact_registry, cloud_sql, secret_manager) so live_deploy can reference them.
+3. **live_deploy** — Add GCS backend, durable_with_cooloff, extend nondurable/durable/kube/nonkube.
+4. **tools/gcp** — Deploy/teardown/verify scripts mirroring `tools/aws/`.
+5. **orchestrator** — `handle_gcp()` routes to `tools/gcp/`.
 
 ---
 

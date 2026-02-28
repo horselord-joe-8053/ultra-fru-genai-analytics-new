@@ -304,6 +304,7 @@ resource "aws_iam_role_policy" "spark_secrets" {
 locals {
   spark_env = concat(
     [
+      { name = "CLOUD_PROVIDER", value = "aws" },
       { name = "SPARK_EXTRA_CONF", value = "spark.fru.delta_root=s3a://${var.delta_bucket}/delta" },
       { name = "DELTA_TABLE_PATH", value = "s3a://${var.delta_bucket}/delta/fru_sales" }
     ],

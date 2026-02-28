@@ -168,8 +168,70 @@ def handle_aws(args):
 
 def handle_gcp(args):
     """Route commands to GCP tools."""
-    print("GCP provider implementation is pending.")
-    sys.exit(1)
+    base_path = "tools/gcp"
+    cmd_args = []
+    if args.env:
+        cmd_args.extend(["--env", args.env])
+    if args.cloud_region:
+        cmd_args.extend(["--region", args.cloud_region])
+
+    if args.command == "doctor":
+        script = f"{base_path}/standalone/doctor.py"
+        with logger.Heartbeat("Preflight checks"):
+            run_command(["python", script] + cmd_args)
+    elif args.command == "deploy":
+        if not args.scope:
+            logger.error("Error: --scope required for deploy")
+            sys.exit(1)
+        if not args.skip_ensure_deps:
+            ensure_deps()
+        # Preempt: Teardown -> Verify Teardown -> Deploy -> Verify (reference: AWS handle_aws)
+        if args.preempt:
+            logger.step("Executing Preempt Sequence: Teardown -> Verify Teardown -> Deploy -> Verify Deploy")
+            teardown_script = f"{base_path}/teardown.py"
+            teardown_args = cmd_args + ["--non-interactive", "--scope", args.scope]
+            if args.incl_dura_all:
+                teardown_args.append("--incl-dura-all")
+            elif args.incl_dura:
+                teardown_args.append("--incl-dura")
+            with logger.Heartbeat(f"Preempt Teardown scope={args.scope} env={args.env}", timeout=-1):
+                run_command(["python", teardown_script] + teardown_args, force_no_timeout=True)
+            verify_teardown_script = f"{base_path}/scope_shared/verify/verify_all_teardown.py"
+            run_command(["python", verify_teardown_script] + cmd_args + ["--scope", args.scope])
+        script = f"{base_path}/deploy.py"
+        deploy_args = ["python", script, "--scope", args.scope, "--apply"] + cmd_args
+        if args.skip_doctor:
+            deploy_args.append("--skip-doctor")
+        if args.skip_build:
+            deploy_args.append("--skip-build")
+        if getattr(args, "gke_disable_deletion_protection", False):
+            deploy_args.append("--gke-disable-deletion-protection")
+        with logger.Heartbeat(f"Deployment scope={args.scope} env={args.env}"):
+            run_command(deploy_args)
+        if args.preempt:
+            logger.step("Initiating automatic verification...")
+            run_command(["python", f"{base_path}/scope_shared/verify/verify_all_deploy.py"] + cmd_args + ["--scope", args.scope])
+    elif args.command == "teardown":
+        if not args.scope:
+            logger.error("Error: --scope required for teardown")
+            sys.exit(1)
+        script = f"{base_path}/teardown.py"
+        cmd_args.extend(["--scope", args.scope])
+        if args.non_interactive or args.force:
+            cmd_args.append("--non-interactive")
+        with logger.Heartbeat(f"Teardown scope={args.scope} env={args.env}", timeout=-1):
+            run_command(["python", script] + cmd_args, force_no_timeout=True)
+    elif args.command == "verify":
+        if not args.scope:
+            logger.error("Error: --scope required for verify")
+            sys.exit(1)
+        script = f"{base_path}/scope_shared/verify/verify_all_deploy.py"
+        cmd_args.extend(["--scope", args.scope])
+        with logger.Heartbeat(f"Verification scope={args.scope} env={args.env}"):
+            run_command(["python", script] + cmd_args)
+    else:
+        logger.error(f"Unknown command for GCP: {args.command}")
+        sys.exit(1)
 
 def handle_local(args):
     """Route commands to Local tools."""
@@ -197,9 +259,14 @@ def main():
     parser.add_argument("--preempt", action="store_true", help="Run full teardown and verification before deploy")
     parser.add_argument("--incl-dura", action="store_true", help="Include durable (VPC+Aurora) in teardown; secrets remain (scope=all only)")
     parser.add_argument("--incl-dura-all", action="store_true", help="Include durable and durable_with_cooloff (secrets); full teardown (scope=all only)")
+    parser.add_argument("--gke-disable-deletion-protection", action="store_true",
+                        help="[GCP] Before kube apply: disable deletion_protection on existing regional cluster (for migration to zonal)")
 
     # Parse args
     args = parser.parse_args()
+
+    # Set CLOUD_PROVIDER so core_app and child scripts use the chosen provider
+    os.environ["CLOUD_PROVIDER"] = args.provider
 
     # Routing
     if args.provider == "aws":

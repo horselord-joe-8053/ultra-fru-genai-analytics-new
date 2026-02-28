@@ -1,12 +1,12 @@
 """
 AWS Bedrock client (LEGACY - DEPRECATED).
 This file is kept for backward compatibility during migration.
-New code should use backend.llm.client_factory or backend.env_utils.aws.bedrock_client.
+New code should use backend.env_utils.cloud_shared.client_factory or backend.env_utils.aws.bedrock_client.
 
 This file will be removed in a future version after migration is complete.
 For new code, use:
-- backend.llm.client_factory.create_llm_client() (Factory Pattern)
-- backend.llm.client_factory.claude_complete() (backward compatibility wrapper)
+- backend.env_utils.cloud_shared.client_factory.create_llm_client() (Factory Pattern)
+- backend.env_utils.cloud_shared.client_factory.claude_complete() (backward compatibility wrapper)
 - backend.env_utils.aws.bedrock_client.AWSBedrockClient (direct access)
 
 Applicable environment: [aws {ecs | eks}]
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 # Deprecation warning for imports
 warnings.warn(
     "backend.llm.bedrock_client is deprecated. "
-    "Use backend.llm.client_factory or backend.env_utils.aws.bedrock_client instead.",
+    "Use backend.env_utils.cloud_shared.client_factory or backend.env_utils.aws.bedrock_client instead.",
     DeprecationWarning,
     stacklevel=2
 )

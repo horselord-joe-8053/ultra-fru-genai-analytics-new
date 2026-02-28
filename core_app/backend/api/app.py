@@ -21,7 +21,7 @@ from psycopg2.extras import RealDictCursor
 from openai import OpenAI
 from openai import APIError as OpenAIError
 
-from backend.llm.client_factory import claude_complete, create_llm_client
+from backend.env_utils.cloud_shared.client_factory import claude_complete, create_llm_client
 # Analytics scheduler moved to spark_jobs/scheduler.py
 # Scheduler runs as separate process (see spark_jobs/run_scheduler.py)
 from backend.utils.env_helpers import get_required_env, get_optional_env, get_optional_bool_env, get_optional_int_env, get_required_int_env
@@ -843,43 +843,10 @@ def query_stream():
     )
 
 
-if __name__ == "__main__":
-    import sys
+def _run_slow_init():
+    """Run DB and agent init in background (can block up to ~10s for DB timeout)."""
     import traceback
-    import os
-    
-    # Startup banner and environment info
-    app.logger.info("=" * 60)
-    app.logger.info("Flask Application Startup")
-    app.logger.info("=" * 60)
-    app.logger.info(f"Python version: {sys.version}")
-    app.logger.info(f"Python executable: {sys.executable}")
-    app.logger.info(f"Python path (first 3): {':'.join(sys.path[:3])}")
-    app.logger.info(f"Working directory: {os.getcwd()}")
-    app.logger.info(f"PYTHONPATH: {os.environ.get('PYTHONPATH', 'not set')}")
-    
-    # Validate critical environment variables
-    app.logger.info("=" * 60)
-    app.logger.info("Validating environment variables...")
-    required_vars = ['PGHOST', 'PGUSER', 'PGPASSWORD', 'PGDATABASE', 'ALLOWED_ORIGINS']
-    missing_vars = [v for v in required_vars if not os.environ.get(v)]
-    if missing_vars:
-        app.logger.error(f"Missing required environment variables: {missing_vars}")
-        app.logger.error("Application may fail to start properly")
-    else:
-        app.logger.info("Environment variables: OK")
-        # Log non-sensitive env vars
-        app.logger.info(f"  PGHOST: {os.environ.get('PGHOST', 'not set')}")
-        app.logger.info(f"  PGUSER: {os.environ.get('PGUSER', 'not set')}")
-        app.logger.info(f"  PGDATABASE: {os.environ.get('PGDATABASE', 'not set')}")
-        app.logger.info(f"  ALLOWED_ORIGINS: {os.environ.get('ALLOWED_ORIGINS', 'not set')}")
-    
-    # Step-by-step initialization with comprehensive error handling
-    app.logger.info("=" * 60)
-    app.logger.info("Starting initialization sequence...")
-    
     try:
-        # Step 1: Initialize database connection pool
         app.logger.info("[STARTUP] Step 1: Initializing database connection pool...")
         try:
             init_db_pool()
@@ -887,25 +854,15 @@ if __name__ == "__main__":
                 app.logger.warning("[STARTUP] Step 1: Database pool is None (connection may have failed)")
             else:
                 app.logger.info("[STARTUP] Step 1: Database pool initialization complete")
-                
-                # Test database connection
-                app.logger.info("[STARTUP] Step 1a: Testing database connection...")
                 try:
                     test_conn = get_db_conn()
                     if test_conn:
                         test_conn.close()
                         app.logger.info("[STARTUP] Step 1a: Database connection test: SUCCESS")
-                    else:
-                        app.logger.error("[STARTUP] Step 1a: Database connection test: FAILED (None returned)")
                 except Exception as e:
                     app.logger.error(f"[STARTUP] Step 1a: Database connection test: FAILED - {e}", exc_info=True)
-                    # Continue anyway - Flask might still start
         except Exception as e:
             app.logger.error(f"[STARTUP] Step 1: Database pool initialization FAILED: {e}", exc_info=True)
-            traceback.print_exc()
-            # Don't exit - let Flask try to start and fail gracefully on first request
-        
-        # Step 2: Initialize agent
         app.logger.info("[STARTUP] Step 2: Initializing agent...")
         try:
             init_agent()
@@ -915,28 +872,43 @@ if __name__ == "__main__":
                 app.logger.info("[STARTUP] Step 2: Agent initialization complete")
         except Exception as e:
             app.logger.error(f"[STARTUP] Step 2: Agent initialization FAILED: {e}", exc_info=True)
-            traceback.print_exc()
-            # Don't exit - agent is optional
-        
-        # Step 3: Start Flask server
-        app.logger.info("=" * 60)
-        app.logger.info("[STARTUP] Step 3: Starting Flask server...")
-        app.logger.info("Starting FRU API server...")
-        app.logger.info("Note: Analytics scheduler runs separately (see spark_jobs/run_scheduler.py)")
-        app.logger.info(f"Server will listen on: 0.0.0.0:5000")
-        app.logger.info("=" * 60)
-        
-        app.run(host="0.0.0.0", port=5000)
-        
+    except Exception as e:
+        app.logger.error(f"[STARTUP] Background init failed: {e}", exc_info=True)
+
+
+if __name__ == "__main__":
+    import sys
+    import traceback
+    import os
+    import threading
+
+    # Startup banner
+    app.logger.info("=" * 60)
+    app.logger.info("Flask Application Startup")
+    app.logger.info("=" * 60)
+    app.logger.info(f"Python version: {sys.version}")
+    app.logger.info(f"Working directory: {os.getcwd()}")
+
+    # Validate env vars (quick check)
+    required_vars = ['PGHOST', 'PGUSER', 'PGPASSWORD', 'PGDATABASE', 'ALLOWED_ORIGINS']
+    missing_vars = [v for v in required_vars if not os.environ.get(v)]
+    if missing_vars:
+        app.logger.warning(f"Missing env vars: {missing_vars}")
+    else:
+        app.logger.info("Environment variables: OK")
+
+    # Run slow init (DB, agent) in background so Flask can bind immediately.
+    # Cloud Run startup probe passes when Nginx listens; traffic may arrive before init completes.
+    init_thread = threading.Thread(target=_run_slow_init, daemon=True)
+    init_thread.start()
+
+    port = get_optional_int_env("PORT", 5000)
+    app.logger.info(f"[STARTUP] Starting Flask on 0.0.0.0:{port} (init running in background)")
+    try:
+        app.run(host="0.0.0.0", port=port)
     except KeyboardInterrupt:
-        app.logger.info("[STARTUP] Received KeyboardInterrupt - shutting down gracefully")
+        app.logger.info("[STARTUP] Received KeyboardInterrupt - shutting down")
         sys.exit(0)
     except Exception as e:
-        app.logger.critical("=" * 60)
-        app.logger.critical("CRITICAL: Flask startup failed")
-        app.logger.critical("=" * 60)
-        app.logger.critical(f"Error: {e}", exc_info=True)
-        app.logger.critical("Full traceback:")
-        traceback.print_exc()
-        app.logger.critical("=" * 60)
+        app.logger.critical(f"Flask startup failed: {e}", exc_info=True)
         sys.exit(1)

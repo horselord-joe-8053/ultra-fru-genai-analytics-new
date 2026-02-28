@@ -34,7 +34,7 @@ This tool:
   matches stored value in S3, deploy may skip build and call --push-only for regions missing the image.
   See docs/learned/BUILD_CONTENT_SKIP.md for details.
 """
-import argparse, os, json, subprocess, sys, re, threading, time
+import argparse, os, json, subprocess, sys
 from tools.cloud_shared.env import load_dotenv, require, get_int_env
 from tools.aws.scope_shared.core.terra_runner import get_terra_env
 from tools.aws.scope_shared.core.backend import backend_config, resolve_region
@@ -43,114 +43,17 @@ from tools.aws.scope_shared.deploy.build_context_hash import (
     compute_build_context_hash,
     store_build_hash,
 )
+from tools.cloud_shared.docker.build_common import (
+    run_docker_with_progress,
+    sh,
+    remove_old_local_images_after_build,
+    untag_registry_refs_after_push,
+    docker_basic_timeout,
+    docker_hung_suggestion,
+)
 
 load_dotenv()
 
-BUILD_STEP_INTERVAL_SEC = int(os.getenv("BUILD_HEARTBEAT_INTERVAL_SEC", "30"))
-# Per-step timeout (seconds). 0 = no timeout. Default 20 min; builds rarely exceed 15 min per image.
-BUILD_STEP_TIMEOUT_SEC = int(os.getenv("BUILD_STEP_TIMEOUT_SEC", "1200"))
-# Emit Docker layer progress: "Step 3/8: RUN npm install" when we see new steps. Set to 0 to disable.
-BUILD_EMIT_LAYER_PROGRESS = os.getenv("BUILD_EMIT_LAYER_PROGRESS", "1") != "0"
-
-def sh(cmd, input_text=None):
-    logger.info(f"[RUN] {' '.join(cmd)}")
-    try:
-        return subprocess.run(cmd, input=input_text, text=True, check=True)
-    except subprocess.CalledProcessError as e:
-        logger.error(f"[FAILED] {' '.join(cmd)}: {e}")
-        raise
-
-
-# Docker --progress=plain emits lines like "#3 [2/8] RUN npm install" or "#1 [internal] load build definition"
-_LAYER_STEP_RE = re.compile(r"^#(\d+)\s+\[(\d+)/(\d+)\]\s+(.+)$")
-_LAYER_INTERNAL_RE = re.compile(r"^#(\d+)\s+\[(internal|external)\]\s+(.+)$")
-
-
-def _run_docker_streaming(
-    cmd: list,
-    step_name: str,
-    step_num: int,
-    total_steps: int,
-    is_build: bool,
-) -> subprocess.CompletedProcess:
-    """
-    Run docker with streaming output. For builds: parse layer lines and emit
-    "Step X/Y: ..." progress. Heartbeat runs in parallel. Timeout enforced.
-    """
-    desc = f"{step_name} ({step_num}/{total_steps})"
-    logger.step(f"{desc}...")
-    timeout = BUILD_STEP_TIMEOUT_SEC if BUILD_STEP_TIMEOUT_SEC > 0 else None
-    env = {**os.environ, "PYTHONUNBUFFERED": "1"}
-
-    proc = subprocess.Popen(
-        cmd,
-        cwd=os.getcwd(),
-        env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1,
-    )
-    elapsed_ref = [0]
-    stop = threading.Event()
-
-    def heartbeat():
-        while not stop.is_set():
-            if stop.wait(1):
-                return
-            elapsed_ref[0] += 1
-            if elapsed_ref[0] % BUILD_STEP_INTERVAL_SEC == 0 and elapsed_ref[0] > 0:
-                msg = f"[heartbeat] {desc} (elapsed: {elapsed_ref[0]}s)"
-                if timeout:
-                    msg += f" [timeout: {timeout}s]"
-                logger.info(msg)
-
-    def read_stream():
-        last_step = (0, 0)
-        for line in proc.stdout:
-            line = line.rstrip("\n")
-            if not line:
-                continue
-            print(line, flush=True)
-            if is_build and BUILD_EMIT_LAYER_PROGRESS:
-                m = _LAYER_STEP_RE.match(line)
-                if m:
-                    layer, cur, total, step_desc = m.group(1), m.group(2), m.group(3), m.group(4).strip()
-                    if (int(cur), int(total)) != last_step:
-                        last_step = (int(cur), int(total))
-                        logger.info(f"[build] Step {cur}/{total}: {step_desc}")
-                else:
-                    m2 = _LAYER_INTERNAL_RE.match(line)
-                    if m2:
-                        layer, kind, step_desc = m2.group(1), m2.group(2), m2.group(3).strip()
-                        logger.info(f"[build] Layer {layer}: {kind} {step_desc}")
-
-    t_heartbeat = threading.Thread(target=heartbeat, daemon=True)
-    t_reader = threading.Thread(target=read_stream, daemon=True)
-    t_heartbeat.start()
-    t_reader.start()
-
-    try:
-        proc.wait(timeout=timeout)
-    except subprocess.TimeoutExpired:
-        proc.kill()
-        proc.wait()
-        raise
-    finally:
-        stop.set()
-        t_heartbeat.join(timeout=2)
-        t_reader.join(timeout=2)
-
-    return subprocess.CompletedProcess(cmd, proc.returncode)
-
-
-def run_docker_with_progress(cmd: list, step_name: str, step_num: int, total_steps: int):
-    """Run docker command with streaming output, layer progress, heartbeat, and optional timeout."""
-    is_build = "build" in cmd
-    proc = _run_docker_streaming(cmd, step_name, step_num, total_steps, is_build)
-    if proc.returncode != 0:
-        raise subprocess.CalledProcessError(proc.returncode, cmd)
-    logger.success(f"{step_name} done")
 
 def tofu_output_json(stack_dir: str, env: str, region: str | None = None):
     logger.info(f"[TOFU OUTPUT] Getting outputs from {stack_dir}")
@@ -170,22 +73,6 @@ def tofu_output_json(stack_dir: str, env: str, region: str | None = None):
     except Exception as e:
         logger.error(f"[TOFU OUTPUT ERROR] {stack_dir}: {e}")
         raise
-
-def _docker_basic_timeout() -> int | None:
-    """Timeout for quick docker commands (login, info). 0 = no timeout."""
-    sec = get_int_env("DOCKER_BASIC_CMD_TIMEOUT", 180)
-    return sec if sec > 0 else None
-
-
-def _docker_hung_suggestion() -> str:
-    return (
-        "\n"
-        "Docker daemon may be hung or unresponsive. To recover:\n"
-        "  ./tools/cloud_shared/docker/docker-unstick-desktop-start.sh\n"
-        "\n"
-        "Run from the project root. Requires sudo for vmnetd. Then retry your command."
-    )
-
 
 def _ecr_image_exists(repo_name: str, tag: str, region: str) -> bool:
     """Check if image exists in ECR. Used for safety checks and push-only skip."""
@@ -250,8 +137,8 @@ def _run_push_only(
 
     # Remove ECR registry tags locally so only canonical names remain (see _untag_ecr_refs_after_push)
     if (need_app or need_spark) and not skip_untag_ecr:
-        _untag_ecr_refs_after_push(
-            target_app_url, target_spark_url, "latest", "latest", target_region
+        untag_registry_refs_after_push(
+            target_app_url, target_spark_url, "latest", "latest"
         )
 
     # Store build hash for target region so future content-skip works
@@ -266,85 +153,6 @@ def _run_push_only(
             logger.info("[PUSH-ONLY] Stored build hashes for target region")
         except subprocess.CalledProcessError as e:
             logger.warning(f"[PUSH-ONLY] Could not store hashes: {e}")
-
-
-def _remove_old_local_images_after_successful_build() -> None:
-    """
-    Remove old local images after new images are successfully built and pushed.
-    Intended design: old images are removed only when we have a new build in place.
-    Build overwrites our tags; previous images become dangling. Prune removes them.
-    Non-fatal if nothing to remove.
-    """
-    logger.info("[BUILD] Removing old local images (dangling from previous build)...")
-    try:
-        subprocess.run(
-            ["docker", "image", "prune", "-f"],
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
-    except (subprocess.TimeoutExpired, Exception):
-        pass  # Non-fatal
-
-
-def _untag_ecr_refs_after_push(
-    app_repo_url: str,
-    spark_repo_url: str,
-    app_tag: str,
-    spark_tag: str,
-    region: str,
-) -> None:
-    """
-    Remove ECR registry tags from local Docker after successful push.
-
-    What: docker rmi on refs like 744139897900.dkr.ecr.us-east-2.amazonaws.com/fru-api-img-dev:latest.
-    Why: docker push requires the full registry path; we tag locally for push, then the ECR refs
-         clutter Docker Desktop and serve no purpose. Keeping only canonical names (fru-api-img-dev,
-         fru-spark-img-dev) keeps local state clean and enables push-only to any region.
-    Effect: Local state differs from ECR—we have fru-api-img-dev:latest locally; ECR has the same
-            image under the full registry path. This is intentional. See docs/learned/DOCKER_LEARNED.md.
-
-    Note: We do NOT remove the images themselves (that would force a rebuild per region). We only
-    remove the ephemeral ECR tags. Canonical refs stay so push-only works across regions without
-    rebuild—one build, push to many regions.
-    """
-    ecr_refs: list[str] = []
-    if app_tag == "latest":
-        ecr_refs.append(f"{app_repo_url}:latest")
-    else:
-        ecr_refs.extend([f"{app_repo_url}:{app_tag}", f"{app_repo_url}:latest"])
-    if spark_tag == "latest":
-        ecr_refs.append(f"{spark_repo_url}:latest")
-    else:
-        ecr_refs.extend([f"{spark_repo_url}:{spark_tag}", f"{spark_repo_url}:latest"])
-    ecr_refs = list(dict.fromkeys(ecr_refs))  # dedupe
-
-    app_repo_name = app_repo_url.split("/")[-1]
-    spark_repo_name = spark_repo_url.split("/")[-1]
-
-    logger.info(
-        f"[UNTAG-ECR] Removing ECR registry tags locally (pushed to {region}); "
-        f"keeping {app_repo_name}:latest, {spark_repo_name}:latest"
-    )
-    removed = 0
-    for ref in ecr_refs:
-        try:
-            result = subprocess.run(
-                ["docker", "rmi", ref],
-                capture_output=True,
-                text=True,
-                timeout=15,
-            )
-            if result.returncode == 0:
-                removed += 1
-            # Non-fatal: ref may not exist (e.g. push-only skipped one image)
-        except (subprocess.TimeoutExpired, Exception):
-            pass
-    if removed > 0:
-        logger.success(
-            f"[UNTAG-ECR] Removed {removed} ECR tag(s) locally. "
-            f"Images remain in ECR {region}; local refs: {app_repo_name}:latest, {spark_repo_name}:latest"
-        )
 
 
 def _cleanup_local_images_after_push(
@@ -408,7 +216,7 @@ def _cleanup_local_images_after_push(
 def ecr_login(registry: str, region: str):
     """Log in to ECR via aws ecr get-login-password | docker login. Uses ~/.docker/config.json."""
     logger.info(f"[ECR LOGIN] Logging in to {registry}")
-    timeout = _docker_basic_timeout()
+    timeout = docker_basic_timeout()
     try:
         pw = subprocess.check_output(["aws","ecr","get-login-password","--region",region], text=True, timeout=10)
         logger.info(f"[RUN] docker login --username AWS --password-stdin {registry}")
@@ -423,7 +231,7 @@ def ecr_login(registry: str, region: str):
     except subprocess.TimeoutExpired as e:
         logger.error(f"[ECR LOGIN TIMEOUT] docker login did not complete within {e.timeout}s")
         logger.error("This usually means the Docker daemon is hung or unresponsive.")
-        logger.error(_docker_hung_suggestion())
+        logger.error(docker_hung_suggestion())
         raise SystemExit(1)
     except subprocess.CalledProcessError as e:
         logger.error(f"[ECR LOGIN FAILED] {e}")
@@ -571,11 +379,11 @@ def main():
     # Remove ECR registry tags locally so only canonical names remain (fru-api-img-dev, fru-spark-img-dev).
     # Local state intentionally differs from ECR—see _untag_ecr_refs_after_push docstring.
     if not args.skip_untag_ecr:
-        _untag_ecr_refs_after_push(app_repo_url, spark_repo_url, app_tag, spark_tag, region)
+        untag_registry_refs_after_push(app_repo_url, spark_repo_url, app_tag, spark_tag)
         logger.info(f"[BUILD] Local refs kept: {app_repo_name}:latest, {spark_repo_name}:latest")
 
     # Remove old local images only after new images are successfully built and pushed
-    _remove_old_local_images_after_successful_build()
+    remove_old_local_images_after_build()
 
     if args.cleanup_local and not args.skip_cleanup:
         _cleanup_local_images_after_push(
