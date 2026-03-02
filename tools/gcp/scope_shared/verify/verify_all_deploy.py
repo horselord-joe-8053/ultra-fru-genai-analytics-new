@@ -22,7 +22,7 @@ from tools.gcp.scope_shared.core.backend import resolve_region
 from tools.gcp.scope_shared.deploy.bootstrap_state_backend import load_gcp_env
 from tools.gcp.scope_shared.core.terra_runner import get_terra_env
 from tools.cloud_shared.retry import poll_until, update_heartbeat
-from tools.aws.scope_shared.verify.verify_summary import VerifyRow, print_verify_summary
+from tools.cloud_shared.verify.verify_summary import VerifyRow, print_verify_summary
 
 load_dotenv()
 load_gcp_env()  # Fix multi-line GOOGLE_APPLICATION_CREDENTIALS_JSON for tofu subprocess
@@ -88,6 +88,48 @@ def _parse_sse_complete_answer(text: str) -> str | None:
     return last_answer
 
 
+def _parse_sse_error_message(text: str) -> str | None:
+    """Parse SSE stream, return message from last event: error data."""
+    last_msg = None
+    for block in text.split("\n\n"):
+        event_type = None
+        data_json = None
+        for line in block.split("\n"):
+            if line.startswith("event:"):
+                event_type = line[6:].strip()
+            elif line.startswith("data:"):
+                try:
+                    data_json = json.loads(line[5:].strip())
+                except json.JSONDecodeError:
+                    pass
+        if event_type == "error" and data_json and "message" in data_json:
+            last_msg = data_json.get("message", "")
+    return last_msg
+
+
+def _is_non_retriable_query_error(error_msg: str) -> bool:
+    """
+    True if the error indicates a non-retriable failure (e.g. model not found, bad config).
+    These should fail verify immediately instead of retrying.
+    """
+    if not error_msg:
+        return False
+    msg_lower = error_msg.lower()
+    # Retriable: overloaded (529), rate limits, throttling, 500 api_error - keep polling
+    if any(x in msg_lower for x in ("overloaded_error", "rate_limit", "throttl", "api_error", "internal server error")):
+        return False
+    # Model not found (404) - e.g. claude-3-5-sonnet-20241022 deprecated or wrong ID
+    if "not_found_error" in msg_lower or "model:" in msg_lower and "404" in error_msg:
+        return True
+    # API/auth errors that won't resolve by retrying
+    if "invalid_api_key" in msg_lower or "authentication" in msg_lower and "failed" in msg_lower:
+        return True
+    # Explicit error type in embedded JSON (but not retriable types above)
+    if "'type': 'error'" in error_msg or '"type":"error"' in error_msg.replace(" ", ""):
+        return True
+    return False
+
+
 def _is_agent_disabled_by_config() -> bool:
     """True if USE_AGENT_QUERY is false in env."""
     val = (os.getenv("USE_AGENT_QUERY") or "true").lower()
@@ -118,8 +160,15 @@ def verify_api_endpoints(
             return use_agent_disabled_by_config
         if "exc_info" in r.text and "unexpected keyword argument" in r.text:
             raise RuntimeError("QueryStream returned AgentLogger exc_info error (non-retriable; needs redeploy)")
+        # Check for error event first: 200 + error event = fail (don't retry non-retriable errors)
+        err_msg = _parse_sse_error_message(r.text)
+        if err_msg and _is_non_retriable_query_error(err_msg):
+            raise RuntimeError(f"QueryStream error (non-retriable): {err_msg[:200]}...")
         answer = _parse_sse_complete_answer(r.text)
         if answer is None:
+            return False
+        # Agent error (generic message): retriable; API may emit "error" event only after fix
+        if "An error has occurred while processing your query" in answer:
             return False
         if str(total_rec) not in answer:
             raise RuntimeError(f"QueryStream answer does not contain total_rec={total_rec}: {answer[:100]}...")
@@ -132,6 +181,9 @@ def verify_api_endpoints(
             data = r.json()
             err = data.get("error") or ""
             if err:
+                # "No analytics data available yet" is retriable (batch may still be running)
+                if "No analytics data available yet" in err:
+                    return False
                 raise RuntimeError(f"Analytics error (non-retriable): {err}")
             total_records = data.get("total_records") or 0
             if total_records != total_rec:
@@ -170,6 +222,18 @@ def verify_api_endpoints(
                 else:
                     if resp.status_code in VERIFY_RETRIABLE_HTTP_CODES:
                         last_error[e["name"]] = f"HTTP {resp.status_code}"
+                    elif e["name"] == "QueryStream" and resp.status_code == 200:
+                        # Agent error (no complete event): parse error event for notes
+                        err_msg = _parse_sse_error_message(resp.text)
+                        last_error[e["name"]] = err_msg or "no complete/error event"
+                    elif e["name"] == "Analytics" and resp.status_code == 200:
+                        try:
+                            data = resp.json()
+                            err = data.get("error") or ""
+                            if err:
+                                last_error[e["name"]] = err
+                        except Exception:
+                            pass
                     elif resp.status_code >= 500:
                         logger.error(f"✗ {e['name']} returned {resp.status_code} (Server Error)")
                         raise RuntimeError(f"Non-retriable: {e['name']} HTTP {resp.status_code}")
@@ -289,7 +353,6 @@ def main():
         sys.exit(1)
 
     os.environ["CLOUD_REGION"] = region
-    os.environ["GCP_REGION"] = region
     os.environ["CLOUD_PROVIDER"] = "gcp"
 
     total_rec = get_total_rec_from_csv()

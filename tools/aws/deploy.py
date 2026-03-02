@@ -170,6 +170,8 @@ def main():
     ap.add_argument("--skip-build", action="store_true", help="Skip build; use repo:latest from ECR and query tags for display")
     ap.add_argument("--force-build", action="store_true",
         help="Force build even when content hash matches (bypasses content-based skip; use when code changed or you want a fresh image)")
+    ap.add_argument("--force-refresh-data", action="store_true",
+        help="Force reload DB schema and embeddings (drops and repopulates fru_sales_embeddings)")
     ap.add_argument("--elb", action="store_true",
         help="[Kube only] Use in-tree Classic ELB (api-service-elb.yaml) instead of NLB (api-service.yaml). Reverts to pre-migration behavior.")
     args = ap.parse_args()
@@ -311,9 +313,12 @@ def main():
         tracker.start_phase(7)
         logger.step(f"[7/{len(phases)}] Setting up database (pgvector, schema, data)...")
         try:
+            setup_db_cmd = ["python", "tools/aws/scope_shared/deploy/setup_database.py", "--env", env, "--region", region]
+            if args.force_refresh_data:
+                setup_db_cmd.append("--force-refresh-data")
             with stats.timed("Database", "setup_database"):
                 subprocess.run(
-                    ["python", "tools/aws/scope_shared/deploy/setup_database.py", "--env", env, "--region", region],
+                    setup_db_cmd,
                     check=True,
                     env={**os.environ, "CLOUD_REGION": region},
                 )

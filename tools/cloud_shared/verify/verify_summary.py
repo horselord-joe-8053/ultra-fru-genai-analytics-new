@@ -1,7 +1,7 @@
 """
 Verify summary: tabular output for verify_all_deploy results.
 
-Uses print() (no logger prefix) for clean table display with colors.
+Cloud-agnostic. Uses print() (no logger prefix) for clean table display with colors.
 """
 from dataclasses import dataclass
 from typing import Sequence

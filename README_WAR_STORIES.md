@@ -3896,3 +3896,63 @@ In late 2024, Google launched the `google-genai` library ([github.com/googleapis
 ### 70.5 Takeaway
 
 For GCP LLM readiness: (1) Use `google-genai` for both AI Studio and Vertex AI. (2) Start with AI Studio (API key) for simplicity; upgrade to Vertex AI when compliance or Workload Identity is required. (3) Never hardcode which backend to use—branch on env vars. (4) In VMs/containers on GCP, Vertex AI with Workload Identity or ADC auto-authenticates and auto-refreshes tokens; no JSON key needed. See `docs/REFACTOR_PLAN_GCP_READINESS.md` for the full plan.
+
+---
+
+## 71. Anthropic Claude 529 Overloaded: Intermittent Failures, Alternative Models, and Retriable vs Non-Retriable Errors
+
+**creation:** `<260227>`
+**last_updated:** `<260227>`
+
+**keywords:** Anthropic, Claude API, 529 overloaded_error, intermittent failures, model fallback, retriable errors, verify polling
+**difficulty:** 6
+**significance:** 7
+
+### 71.1 Context
+
+During GCP deploy verification, the QueryStream endpoint repeatedly failed with:
+
+```json
+{"message": "Agent processing failed: Error code: 529 - {'type': 'error', 'error': {'type': 'overloaded_error', 'message': 'Overloaded'}, 'request_id': '...'}"}
+```
+
+Deploy succeeded; verify failed. A single-call model test (`test_available_model.py`) sometimes passed, giving a false sense that the setup was fine. At other times, 10 consecutive calls with 2s intervals produced 8× 529 and 2× 500 errors—zero successes. The problem was intermittent and model-specific: `claude-haiku-4-5` (the default) was heavily overloaded.
+
+### 71.2 Root Cause
+
+Anthropic's API returns **529 (Overloaded)** and **500 (Internal server error)** when capacity is saturated. These are **transient**—retrying later often succeeds. The popular `claude-haiku-4-5` model sees the most traffic and overloads first. Older or higher-tier models (Sonnet, Opus) share different capacity pools and can remain available when Haiku 4.5 is overloaded.
+
+Our verify script initially treated any error event in the SSE stream as non-retriable and failed fast. That was correct for 404 (model not found) and auth errors, but wrong for 529/500—those should keep polling.
+
+### 71.3 Alternative Models and Comparison
+
+We tested four Claude models for availability and overload resistance:
+
+| Model | Input ($/MTok) | Output ($/MTok) | Latency (1 call) | Relative speed |
+|-------|----------------|-----------------|------------------|----------------|
+| **claude-haiku-4-5** | $1.00 | $5.00 | ~0.68s | Fastest (~49 tok/s) |
+| **claude-3-haiku-20240307** | $0.25 | $1.25 | ~0.78s | Fast |
+| **claude-sonnet-4-5** | $3.00 | $15.00 | ~1.75s | Medium (~20 tok/s) |
+| **claude-opus-4-5** | $5.00 | $25.00 | ~1.86s | Slower (~19 tok/s) |
+
+**Cost (1M in + 1M out):** Haiku 4.5 $6, Haiku 3 $1.50, Sonnet 4.5 $18, Opus 4.5 $30. `claude-3-haiku-20240307` is 4× cheaper than Haiku 4.5 but deprecated (retires April 2026).
+
+**Best choices by criterion:**
+- **Fastest:** claude-haiku-4-5
+- **Cheapest:** claude-3-haiku-20240307
+- **Most capable:** claude-opus-4-5
+- **Fallback when Haiku overloads:** claude-3-haiku-20240307 or claude-sonnet-4-5
+
+### 71.4 Resolution
+
+1. **Verify script:** Updated `_is_non_retriable_query_error()` to treat `overloaded_error`, `api_error`, `rate_limit`, and `internal server error` as **retriable**. Verify now keeps polling instead of failing fast on 529/500.
+
+2. **Reproducibility test:** Added `tools/gcp/standalone/temp_one_off/test_overload_529.py`—10 consecutive calls with 2s interval—to reproduce intermittent overload. Single-call tests are insufficient.
+
+3. **Multi-model tests:** Extended `test_available_model.py` and `test_overload_529.py` to run against all four models with well-formatted logging and a final summary table.
+
+4. **Fallback strategy:** Documented alternative models. When `claude-haiku-4-5` is overloaded, switch `CLAUDE_MODEL` in `.env` to `claude-3-haiku-20240307` (cheapest) or `claude-sonnet-4-5` (more capable) and redeploy.
+
+### 71.5 Takeaway
+
+(1) Anthropic 529/500 are transient—treat them as retriable in verify and retry logic. (2) Single-call model tests can pass during brief windows; use consecutive-call tests to catch intermittent overload. (3) Keep a list of fallback models (older Haiku, Sonnet, Opus) and switch via env when the default is overloaded. (4) Distinguish non-retriable errors (404, auth) from retriable ones (529, 500, rate limit) so you fail fast on config bugs but keep polling on capacity issues.

@@ -40,15 +40,12 @@ def stack_id_from_dir(stack_dir: str, cloud: str = "gcp") -> str:
 
 
 def resolve_region(cli_region: str | None = None) -> str:
-    """Region: --region (CLI), GCP_REGION, CLOUD_REGION."""
+    """Region: --region (CLI), CLOUD_REGION (env), default us-central1 for GCP."""
     if cli_region and str(cli_region).strip():
         return str(cli_region).strip()
-    region = os.getenv("GCP_REGION", "").strip() or os.getenv("CLOUD_REGION", "").strip()
+    region = os.getenv("CLOUD_REGION", "").strip()
     if not region:
-        raise EnvVarNotFound(
-            "GCP_REGION or CLOUD_REGION",
-            hint="Set in .env or pass --cloud-region (orchestrator) / --region (deploy/teardown).",
-        )
+        region = os.getenv("GCP_REGION", "us-central1").strip() or "us-central1"
     return region
 
 

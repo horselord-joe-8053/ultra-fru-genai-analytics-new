@@ -21,6 +21,10 @@ provider "google" {
   region  = var.gcp_region
 }
 
+data "google_project" "project" {
+  project_id = var.gcp_project_id
+}
+
 data "terraform_remote_state" "durable_with_cooloff" {
   backend = "gcs"
   config = {
@@ -73,6 +77,7 @@ output "openai_api_key_secret_id"    { value = try(data.terraform_remote_state.d
 output "db_password_secret_id"       { value = try(data.terraform_remote_state.durable_with_cooloff.outputs.db_password_secret_id, "") }
 output "db_password_plain_secret_id" { value = try(data.terraform_remote_state.durable_with_cooloff.outputs.db_password_plain_secret_id, "") }
 output "google_ai_api_key_secret_id"  { value = try(data.terraform_remote_state.durable_with_cooloff.outputs.google_ai_api_key_secret_id, "") }
+output "claude_api_key_secret_id"    { value = try(data.terraform_remote_state.durable_with_cooloff.outputs.claude_api_key_secret_id, "") }
 
 # Cloud SQL outputs
 output "cloud_sql_connection_name" { value = module.cloud_sql.connection_name }
@@ -89,3 +94,56 @@ resource "google_vpc_access_connector" "cloud_run" {
 }
 
 output "vpc_connector_id" { value = google_vpc_access_connector.cloud_run.id }
+
+# Db-setup Cloud Run Job: runs schema (and optionally load_data) for private-IP Cloud SQL.
+# Created by Terraform for clean teardown; image updated by setup_database.py (gcloud deploy).
+# No scheduler; executed on demand during deploy.
+resource "google_cloud_run_v2_job" "db_setup" {
+  name     = "${var.prefix}-${var.env}-db-setup"
+  location = var.gcp_region
+
+  template {
+    template {
+      vpc_access {
+        connector = google_vpc_access_connector.cloud_run.id
+        egress    = "PRIVATE_RANGES_ONLY"
+      }
+      containers {
+        image = var.db_setup_job_image
+
+        env {
+          name  = "PGHOST"
+          value = module.cloud_sql.private_ip
+        }
+        env {
+          name  = "PGPORT"
+          value = "5432"
+        }
+        env {
+          name  = "PGUSER"
+          value = "postgres"
+        }
+        env {
+          name  = "PGDATABASE"
+          value = module.cloud_sql.database_name
+        }
+        dynamic "env" {
+          for_each = try(data.terraform_remote_state.durable_with_cooloff.outputs.db_password_plain_secret_id, "") != "" ? [1] : []
+          content {
+            name = "PGPASSWORD"
+            value_source {
+              secret_key_ref {
+                secret  = "projects/${data.google_project.project.number}/secrets/${data.terraform_remote_state.durable_with_cooloff.outputs.db_password_plain_secret_id}"
+                version = "latest"
+              }
+            }
+          }
+        }
+
+        command = ["python", "/app/run_schema_and_load.py"]
+      }
+      max_retries = 0
+      timeout     = "300s"
+    }
+  }
+}

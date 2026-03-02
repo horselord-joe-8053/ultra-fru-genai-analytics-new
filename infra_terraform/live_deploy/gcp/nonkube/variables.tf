@@ -23,6 +23,16 @@ variable "use_agent_query" {
   type    = string
   default = "true"
 }
+variable "llm_provider" {
+  type        = string
+  default     = "gemini"
+  description = "LLM provider for agent: gemini (default) or claude. Use claude to avoid Gemini API quota."
+}
+variable "claude_model" {
+  type        = string
+  default     = "claude-3-5-haiku-20241022"
+  description = "Claude model ID when GCP_LLM_PROVIDER=claude (e.g. claude-3-5-haiku-20241022, claude-3-5-sonnet-20241022)."
+}
 variable "openai_embed_model" {
   type    = string
   default = "text-embedding-3-small"

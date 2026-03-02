@@ -782,9 +782,12 @@ def query_stream():
                     progress_callback=progress_callback
                 )
                 
-                # Final completion event is already sent by agent's progress_callback
-                # But we ensure it's sent here too as a fallback
-                if not agent_complete.is_set():
+                # Emit complete only when agent succeeded (no error). Agent emits "error" via
+                # progress_callback when it fails; do not emit "complete" with generic error text.
+                if result.get("error"):
+                    # Agent already emitted "error" via progress_callback; nothing more to send
+                    pass
+                elif not agent_complete.is_set():
                     event_queue.put(("complete", {
                         "iterations": result.get("iterations", 0),
                         "execution_time_ms": result.get("execution_time_ms", 0),

@@ -1,9 +1,30 @@
 """
 Unified Orchestrator for deploy, teardown, doctor, verify.
 
+Supports multiple cloud providers (AWS, GCP) and multiple regions per provider.
+Routes commands to provider-specific tools under tools/{aws,gcp}/.
+
 Usage (from project root, with venv):
-  .venv/bin/python orchestrator.py deploy --scope all --env dev
-  .venv/bin/python orchestrator.py verify --scope all --env dev
+
+  # AWS (default provider)
+  .venv/bin/python orchestrator.py deploy --provider aws --scope all --env dev
+  .venv/bin/python orchestrator.py deploy --provider aws --scope all --env dev --cloud-region us-east-1
+  .venv/bin/python orchestrator.py verify --provider aws --scope all --env dev
+
+  # GCP
+  .venv/bin/python orchestrator.py deploy --provider gcp --scope all --env dev
+  .venv/bin/python orchestrator.py deploy --provider gcp --scope all --env dev --cloud-region us-central1
+  .venv/bin/python orchestrator.py verify --provider gcp --scope all --env dev
+
+  # Doctor (preflight checks) – any provider
+  .venv/bin/python orchestrator.py doctor --provider gcp --env dev --cloud-region us-central1
+
+  # Teardown – any provider
+  .venv/bin/python orchestrator.py teardown --provider gcp --scope all --env dev --non-interactive
+
+Environment:
+  FRU_ENV, CLOUD_REGION, GCP_PROJECT_ID, etc. from .env.
+  --cloud-region overrides CLOUD_REGION when set.
 
 No PYTHONPATH=. needed: orchestrator sets it for subprocesses.
 Deploy runs 'pip install -r requirements.txt' first (use --skip-ensure-deps to skip).
@@ -70,7 +91,7 @@ def ensure_deps():
         )
 
 def handle_aws(args):
-    """Route commands to AWS tools."""
+    """Route commands to AWS tools (tools/aws/*). Supports --cloud-region for multi-region."""
     base_path = "tools/aws"
     
     cmd_args = []
@@ -120,6 +141,8 @@ def handle_aws(args):
             deploy_args.append("--skip-build")
         if args.force_build:
             deploy_args.append("--force-build")
+        if args.force_refresh_data:
+            deploy_args.append("--force-refresh-data")
         if args.elb:
             deploy_args.append("--elb")
             
@@ -151,6 +174,10 @@ def handle_aws(args):
             hb_msg += f" region={args.cloud_region}"
         with logger.Heartbeat(hb_msg, timeout=-1):  # Teardown can take 60+ min; -1 = no timeout
             run_command(["python", script] + cmd_args, force_no_timeout=True)
+        # Verify teardown: confirm resources are gone (namespace, ECS cluster, etc.)
+        logger.step("Verifying teardown...")
+        verify_teardown_script = f"{base_path}/scope_shared/verify/verify_all_teardown.py"
+        run_command(["python", verify_teardown_script] + cmd_args)
         
     elif args.command == "verify":
         if not args.scope:
@@ -167,7 +194,7 @@ def handle_aws(args):
         sys.exit(1)
 
 def handle_gcp(args):
-    """Route commands to GCP tools."""
+    """Route commands to GCP tools (tools/gcp/*). Supports --cloud-region for multi-region."""
     base_path = "tools/gcp"
     cmd_args = []
     if args.env:
@@ -204,23 +231,33 @@ def handle_gcp(args):
             deploy_args.append("--skip-doctor")
         if args.skip_build:
             deploy_args.append("--skip-build")
+        if getattr(args, "force_refresh_data", False):
+            deploy_args.append("--force-refresh-data")
         if getattr(args, "gke_disable_deletion_protection", False):
             deploy_args.append("--gke-disable-deletion-protection")
         with logger.Heartbeat(f"Deployment scope={args.scope} env={args.env}"):
             run_command(deploy_args)
-        if args.preempt:
-            logger.step("Initiating automatic verification...")
-            run_command(["python", f"{base_path}/scope_shared/verify/verify_all_deploy.py"] + cmd_args + ["--scope", args.scope])
+        # Auto-verify after deploy (matches AWS)
+        logger.step("Initiating automatic verification...")
+        run_command(["python", f"{base_path}/scope_shared/verify/verify_all_deploy.py"] + cmd_args + ["--scope", args.scope])
     elif args.command == "teardown":
         if not args.scope:
             logger.error("Error: --scope required for teardown")
             sys.exit(1)
         script = f"{base_path}/teardown.py"
         cmd_args.extend(["--scope", args.scope])
+        if args.incl_dura_all:
+            cmd_args.append("--incl-dura-all")
+        elif args.incl_dura:
+            cmd_args.append("--incl-dura")
         if args.non_interactive or args.force:
             cmd_args.append("--non-interactive")
         with logger.Heartbeat(f"Teardown scope={args.scope} env={args.env}", timeout=-1):
             run_command(["python", script] + cmd_args, force_no_timeout=True)
+        # Verify teardown: confirm Cloud Run / GKE resources are gone
+        logger.step("Verifying teardown...")
+        verify_teardown_script = f"{base_path}/scope_shared/verify/verify_all_teardown.py"
+        run_command(["python", verify_teardown_script] + cmd_args)
     elif args.command == "verify":
         if not args.scope:
             logger.error("Error: --scope required for verify")
@@ -234,27 +271,40 @@ def handle_gcp(args):
         sys.exit(1)
 
 def handle_local(args):
-    """Route commands to Local tools."""
+    """Route commands to Local tools. Implementation pending."""
     print("Local provider implementation is pending.")
     sys.exit(1)
 
 def main():
-    parser = argparse.ArgumentParser(description="Unified Orchestrator for FRU GenAI Analytics")
-    
+    parser = argparse.ArgumentParser(
+        description="Unified Orchestrator for FRU GenAI Analytics. Supports AWS and GCP across multiple regions."
+    )
+
     # Core arguments
     parser.add_argument("command", choices=["deploy", "teardown", "doctor", "verify"], help="Action to perform")
-    parser.add_argument("--provider", choices=["aws", "gcp", "local"], default="aws", help="Target infrastructure provider")
+    parser.add_argument(
+        "--provider",
+        choices=["aws", "gcp", "local"],
+        default="aws",
+        help="Target cloud provider (aws, gcp, or local; local is pending)",
+    )
     
     # Passthrough arguments (common across providers)
     parser.add_argument("--scope", choices=["kube", "nonkube", "all"], help="Scope of operation (deployment targets)")
     parser.add_argument("--env", default=os.getenv("FRU_ENV", "dev"), help="Environment (dev, prod, etc.)")
-    parser.add_argument("--cloud-region", default=None, help="Cloud region (default: CLOUD_REGION from .env); passed as --region to deploy/teardown/verify/doctor")
+    parser.add_argument(
+        "--cloud-region",
+        default=None,
+        help="Cloud region (e.g. us-east-1, us-central1). Default: CLOUD_REGION from .env. Passed as --region to child scripts.",
+    )
     parser.add_argument("--non-interactive", action="store_true", help="Skip confirmation prompts")
     parser.add_argument("--force", action="store_true", help="Legacy alias for --non-interactive")
     parser.add_argument("--skip-doctor", action="store_true", help="Skip preflight checks (deploy only)")
     parser.add_argument("--skip-ensure-deps", action="store_true", help="Skip pip install -r requirements.txt (deploy only)")
     parser.add_argument("--skip-build", action="store_true", help="Skip build; use repo:latest from ECR (deploy only)")
     parser.add_argument("--force-build", action="store_true", help="Force build even when content hash matches (deploy only)")
+    parser.add_argument("--force-refresh-data", action="store_true",
+                        help="Force reload DB schema and embeddings (deploy only; drops and repopulates fru_sales_embeddings)")
     parser.add_argument("--elb", action="store_true", help="[Kube only] Use in-tree Classic ELB instead of NLB (deploy only)")
     parser.add_argument("--preempt", action="store_true", help="Run full teardown and verification before deploy")
     parser.add_argument("--incl-dura", action="store_true", help="Include durable (VPC+Aurora) in teardown; secrets remain (scope=all only)")
@@ -268,7 +318,7 @@ def main():
     # Set CLOUD_PROVIDER so core_app and child scripts use the chosen provider
     os.environ["CLOUD_PROVIDER"] = args.provider
 
-    # Routing
+    # Route to provider-specific handlers (tools/aws/* or tools/gcp/*)
     if args.provider == "aws":
         handle_aws(args)
     elif args.provider == "gcp":

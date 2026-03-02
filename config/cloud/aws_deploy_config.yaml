@@ -1,0 +1,69 @@
+# =============================================================================
+# AWS Deploy Config: Region-Specific Zone and Placement Settings
+# =============================================================================
+#
+# PURPOSE:
+#   This file is the single source of truth for AWS region/zone configuration.
+#   The orchestrator passes --region (e.g. us-east-1); the config handler looks
+#   up that region below and returns the settings. Terraform uses these values
+#   for VPC subnets, EKS node placement, and Aurora.
+#
+# HOW IT WORKS:
+#   - "default" block: Applied to all regions unless a region block overrides.
+#   - Region blocks (us-east-1, us-west-2, etc.): Region-specific overrides.
+#   - Handler merges: region block overrides default; missing keys fall back.
+#
+# AWS CONCEPTS (for readers new to AWS):
+#   - Region: A geographic area (e.g. us-east-1 = N. Virginia, us-west-2 = Oregon).
+#   - Availability Zone (AZ): A data center within a region. Each region has
+#     multiple AZs (e.g. us-east-1a, us-east-1b). AZs are isolated for fault
+#     tolerance.
+#   - VPC: Virtual Private Cloud. Your network. Subnets live inside it.
+#   - Subnet: A segment of the VPC. Each subnet is in exactly one AZ.
+#   - EKS: Managed Kubernetes. Nodes run in subnets; subnets determine which AZs.
+#   - Aurora: Managed PostgreSQL. multi_az=true spreads across 2+ AZs for HA.
+#
+# =============================================================================
+
+default:
+  # Compute (EKS): desired node count. Nodes are spread across the AZs in network.azs.
+  compute:
+    desired_nodes: 1
+
+  # Aurora: false = single AZ (cheaper, dev); true = multi-AZ failover (production).
+  database:
+    multi_az: false
+
+# -----------------------------------------------------------------------------
+# us-east-1 (N. Virginia) - Common default region
+# Baseline: 2 AZs matches previous workflow (durable_azs_for_region).
+# -----------------------------------------------------------------------------
+us-east-1:
+  network:
+    # AZs for VPC subnets. Each AZ gets one public and one private subnet.
+    # EKS nodes are placed in these subnets, so they run in these AZs.
+    # 2 AZs = basic redundancy; 1 AZ = minimal (dev, lower cost).
+    azs: [us-east-1a, us-east-1b]
+
+    # CIDR blocks for subnets. Length must match azs (one per AZ).
+    # Public: for load balancers, NAT. Private: for EKS nodes, Aurora.
+    public_subnet_cidrs: ["10.0.1.0/24", "10.0.2.0/24"]
+    private_subnet_cidrs: ["10.0.101.0/24", "10.0.102.0/24"]
+
+# -----------------------------------------------------------------------------
+# us-east-2 (Ohio) - Example second region
+# -----------------------------------------------------------------------------
+us-east-2:
+  network:
+    azs: [us-east-2a, us-east-2b]
+    public_subnet_cidrs: ["10.0.1.0/24", "10.0.2.0/24"]
+    private_subnet_cidrs: ["10.0.101.0/24", "10.0.102.0/24"]
+
+# -----------------------------------------------------------------------------
+# us-west-2 (Oregon) - Example west coast region
+# -----------------------------------------------------------------------------
+us-west-2:
+  network:
+    azs: [us-west-2a, us-west-2b]
+    public_subnet_cidrs: ["10.0.1.0/24", "10.0.2.0/24"]
+    private_subnet_cidrs: ["10.0.101.0/24", "10.0.102.0/24"]

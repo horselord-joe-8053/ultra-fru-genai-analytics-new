@@ -78,7 +78,13 @@ def artifact_registry_repo_spark(env: str) -> str:
 
 
 def spark_job_name(env: str, region: str) -> str:
-    """Cloud Run Job name for Spark: {proj}-{env}-{component}. Override via SPARK_JOB_COMPONENT."""
+    """Cloud Run Job name for Spark (periodic): {proj}-{env}-{component}. Override via SPARK_JOB_COMPONENT."""
     proj = _proj_prefix()
     comp = os.getenv("SPARK_JOB_COMPONENT", "").strip() or _SPARK_JOB_COMPONENT
     return f"{proj}-{env}-{comp}"
+
+
+def db_setup_job_name(env: str, region: str) -> str:
+    """Cloud Run Job name for db-setup: {proj}-{env}-db-setup. Separate from main deploy flow."""
+    proj = _proj_prefix()
+    return f"{proj}-{env}-db-setup"

@@ -10,25 +10,25 @@ Usage:
 Requires: PGPASSWORD in .env; durable stack applied.
 """
 import argparse
+import json
 import os
 import subprocess
 import sys
 
-import json
-import subprocess
-
-from tools.cloud_shared.env import load_dotenv, require
+from tools.cloud_shared.env import load_dotenv
 from tools.aws.scope_shared.core.backend import backend_config, resolve_region
 from tools.aws.scope_shared.core.terra_runner import get_terra_env
 from tools.cloud_shared.retry import run_with_retry
 from tools.cloud_shared.logging import logger
+from tools.cloud_shared.deploy.setup_database_utils import (
+    FORCE_DROP_TABLES,
+    get_csv_path,
+    get_etl_script_path,
+    get_repo_root,
+    parse_schema_statements,
+)
 
 load_dotenv()
-
-REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
-SCHEMA_FILE = os.path.join(REPO_ROOT, "core_app", "sql", "schema_pgvector.sql")
-PARSE_SQL = os.path.join(REPO_ROOT, "tools", "cloud_shared", "sql", "parse_sql_statements.py")
-ETL_SCRIPT = os.path.join(REPO_ROOT, "core_app", "backend", "etl", "load_openai_embeddings_to_pgvector_rds_api.py")
 
 
 def get_durable_outputs(env: str, region: str | None = None) -> dict:
@@ -89,13 +89,8 @@ def ensure_pgvector(rds_client, cluster_arn: str, secret_arn: str, db_name: str)
 
 def init_schema(rds_client, cluster_arn: str, secret_arn: str, db_name: str, force: bool = False) -> None:
     """Execute schema SQL statements via RDS Data API."""
-    if not os.path.exists(SCHEMA_FILE):
-        raise FileNotFoundError(f"Schema file not found: {SCHEMA_FILE}")
-    if not os.path.exists(PARSE_SQL):
-        raise FileNotFoundError(f"parse_sql_statements.py not found: {PARSE_SQL}")
-
     if force:
-        for table in ["batch_analytics", "fru_sales_embeddings"]:
+        for table in FORCE_DROP_TABLES:
             try:
                 rds_client.execute_statement(
                     resourceArn=cluster_arn,
@@ -106,16 +101,7 @@ def init_schema(rds_client, cluster_arn: str, secret_arn: str, db_name: str, for
             except Exception:
                 pass
 
-    result = subprocess.run(
-        [sys.executable, PARSE_SQL, SCHEMA_FILE],
-        capture_output=True,
-        text=True,
-        cwd=REPO_ROOT,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(f"Failed to parse schema: {result.stderr}")
-
-    statements = [s.strip() for s in result.stdout.strip().split("\n") if s.strip()]
+    statements = parse_schema_statements()
     for i, stmt in enumerate(statements):
         try:
             rds_client.execute_statement(
@@ -151,11 +137,12 @@ def init_schema(rds_client, cluster_arn: str, secret_arn: str, db_name: str, for
 
 def load_data(env: str, cluster_arn: str, secret_arn: str, db_name: str, force: bool = False) -> None:
     """Run ETL to load embeddings into Aurora."""
-    if not os.path.exists(ETL_SCRIPT):
-        logger.warning(f"ETL script not found: {ETL_SCRIPT}; skipping load_data")
+    etl_script = get_etl_script_path()
+    if not os.path.exists(etl_script):
+        logger.warning(f"ETL script not found: {etl_script}; skipping load_data")
         return
 
-    csv_path = os.path.join(REPO_ROOT, "core_app", "data", "raw", "fridge_sales_with_rating.csv")
+    csv_path = get_csv_path()
     if not os.path.exists(csv_path):
         raise FileNotFoundError(f"CSV not found: {csv_path}")
 
@@ -166,7 +153,7 @@ def load_data(env: str, cluster_arn: str, secret_arn: str, db_name: str, force: 
     env_vars["FRU_CSV_PATH"] = csv_path
     env_vars.setdefault("OPENAI_EMBED_MODEL", "text-embedding-3-small")
     # ETL imports backend.* - need core_app on PYTHONPATH
-    core_app = os.path.join(REPO_ROOT, "core_app")
+    core_app = os.path.join(get_repo_root(), "core_app")
     env_vars["PYTHONPATH"] = core_app + (os.pathsep + env_vars.get("PYTHONPATH", "")) if env_vars.get("PYTHONPATH") else core_app
 
     # Idempotency: skip if data exists and not forcing (legacy parity)
@@ -191,9 +178,9 @@ def load_data(env: str, cluster_arn: str, secret_arn: str, db_name: str, force: 
 
     logger.info("Loading data (embeddings)...")
     result = subprocess.run(
-        [sys.executable, ETL_SCRIPT],
+        [sys.executable, etl_script],
         env=env_vars,
-        cwd=REPO_ROOT,
+        cwd=get_repo_root(),
     )
     if result.returncode != 0:
         raise RuntimeError("Data loading failed")

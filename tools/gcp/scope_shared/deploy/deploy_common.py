@@ -37,6 +37,21 @@ def apply_stack_with_plan(
     logger.success(f"[APPLY OK] {stack_dir}")
 
 
+def run_deploy_stack(
+    stack_path: str,
+    plan_vars: list[str],
+    region: str,
+    env: str,
+    apply: bool,
+) -> bool:
+    """Init, plan, and optionally apply stack. Returns True if plan succeeded."""
+    init_stack(stack_path, env, region)
+    result = terra(["plan", "-out=tfplan"] + plan_vars, cwd=stack_path, check=False)
+    if apply and result.returncode == 0:
+        apply_stack_with_plan(stack_path, plan_vars, region)
+    return result.returncode == 0
+
+
 def plan_shows_no_changes(
     stack_dir: str,
     plan_vars: list[str],

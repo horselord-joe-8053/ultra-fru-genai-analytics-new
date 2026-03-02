@@ -1,16 +1,45 @@
 #!/usr/bin/env python3
 """
-GCP Cloud SQL database setup: run schema (pgvector, batch_analytics, fru_sales_embeddings).
+GCP Cloud SQL database setup: pgvector, schema, load_data.
+Overlord for db setup; consistent with tools/aws/scope_shared/deploy/setup_database.py.
 
-For private-IP-only Cloud SQL, run from a machine with VPC access (e.g. GCE VM in same VPC):
-  cloud-sql-proxy --private-ip fru-proj-1:us-central1:fru-dev-sql &
-  PGHOST=127.0.0.1 PGPORT=5432 PGUSER=postgres PGPASSWORD=... PGDATABASE=fru_db python tools/gcp/scope_shared/deploy/setup_database.py
+1. Usage
+   python tools/gcp/scope_shared/deploy/setup_database.py --env dev --region us-central1
+   python tools/gcp/scope_shared/deploy/setup_database.py --env dev --force-refresh-data
 
-For public IP (if enabled):
-  python tools/gcp/scope_shared/deploy/setup_database.py --env dev --region us-central1 --use-proxy
+2. Requirements
+   PGPASSWORD in .env; durable stack applied.
+
+3. Deploy behavior (main flow)
+   tools/gcp/deploy.py invokes with --env and --region only. No PGHOST → Cloud Run Job
+   container runs schema + load_data inside GCP; host verifies record count from logs.
+   The ETL (schema + embeddings load) runs entirely in the container, not on the host.
+
+4. Manual-only options (not used by deploy; for local/CI when you have direct TCP to DB)
+
+   4.1 --use-proxy
+       Cloud SQL Proxy locally; connect to localhost:5432. Use from laptop when you want
+       schema + load_data (Cloud Run Job does both).
+       Prerequisite: public IP on Cloud SQL (durable stack is private-IP only).
+       Workflow:
+         (1) gcloud sql instances patch INSTANCE_NAME --assign-ip --project=PROJECT
+             (INSTANCE_NAME = last part of cloud_sql_connection_name "project:region:instance")
+         (2) python setup_database.py --env dev --region us-central1 --use-proxy
+         (3) gcloud sql instances patch INSTANCE_NAME --no-assign-ip --project=PROJECT
+       Install: gcloud components install cloud-sql-proxy
+
+   4.2 --env-only
+       Use PGHOST, PGPASSWORD from env. For machines in same VPC as Cloud SQL (GCP VM,
+       Cloud Shell, container). Set PGHOST to private IP (durable outputs), PGPASSWORD.
+
+   4.3 PGHOST=... (no flag)
+       Direct TCP when machine can reach private IP. Same as 4.2; inferred when both
+       PGHOST and PGPASSWORD are set.
+
+   4.4 --use-cloud-job
+       Explicitly use Cloud Run Job (default when no PGHOST). Schema + load_data.
 """
 import argparse
-import json
 import os
 import shutil
 import subprocess
@@ -19,86 +48,69 @@ import time
 
 from tools.cloud_shared.env import load_dotenv
 from tools.cloud_shared.logging import logger
+from tools.cloud_shared.deploy.setup_database_utils import get_csv_path, get_schema_file_path
+from tools.gcp.scope_shared.deploy.db_setup.db_common import (
+    apply_schema,
+    connect_db,
+    get_db_config,
+)
+from tools.gcp.scope_shared.deploy.db_setup.load import load_embeddings
 
 load_dotenv()
 
-REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
-SCHEMA_FILE = os.path.join(REPO_ROOT, "core_app", "sql", "schema_pgvector.sql")
-PARSE_SQL = os.path.join(REPO_ROOT, "tools", "cloud_shared", "sql", "parse_sql_statements.py")
-
 
 def get_durable_outputs(env: str, region: str) -> dict:
-    """Get Cloud SQL connection info from durable stack."""
-    from tools.gcp.scope_shared.core.backend import backend_config
-    from tools.gcp.scope_shared.core.terra_runner import get_terra_env
+    """Get Cloud SQL connection info from durable stack. Uses retry for tofu init."""
+    from tools.gcp.scope_shared.deploy.db_setup.config import get_tofu_output_json
 
-    stack_dir = os.path.join(REPO_ROOT, "infra_terraform/live_deploy/gcp/scope_shared/durable")
-    cfg = backend_config(stack_dir, env, region, cloud="gcp")
-    args = ["init", "-lock=false", "-upgrade", "-reconfigure"]
-    for c in cfg:
-        args += ["-backend-config", c]
-    exe = os.getenv("FRU_TF_BIN", "tofu")
-    subprocess.run([exe] + args, cwd=stack_dir, env=get_terra_env(region), check=True, capture_output=True)
-    out_raw = subprocess.check_output([exe, "output", "-json"], cwd=stack_dir, text=True, env=get_terra_env(region))
-    out = json.loads(out_raw)
+    out = get_tofu_output_json("infra_terraform/live_deploy/gcp/scope_shared/durable", env, region, description="durable")
     conn_name = out.get("cloud_sql_connection_name", {}).get("value", "")
     private_ip = out.get("cloud_sql_private_ip", {}).get("value", "")
     db_name = out.get("cloud_sql_database_name", {}).get("value", "fru_db")
     return {"connection_name": conn_name, "private_ip": private_ip, "db_name": db_name}
 
 
-def run_schema(host: str, port: int, user: str, password: str, dbname: str) -> None:
-    """Execute schema SQL via psycopg2."""
-    import psycopg2
+# -----------------------------------------------------------------------------
+# Local / manual ETL path (_do_schema_and_load)
+# -----------------------------------------------------------------------------
+# NOT part of the main deploy flow. The main deploy flow uses a Cloud Run Job
+# container (run_schema_and_load.py) that runs schema + load inside GCP.
+#
+# _do_schema_and_load is for manual or CI deployment when you have direct TCP
+# to Cloud SQL: --env-only (VPC VM/Cloud Shell), --use-proxy (laptop with
+# Cloud SQL Proxy), or PGHOST set (machine in same VPC).
+# -----------------------------------------------------------------------------
 
-    if not os.path.exists(SCHEMA_FILE):
-        raise FileNotFoundError(f"Schema file not found: {SCHEMA_FILE}")
-    if not os.path.exists(PARSE_SQL):
-        raise FileNotFoundError(f"parse_sql_statements.py not found: {PARSE_SQL}")
 
-    result = subprocess.run(
-        [sys.executable, PARSE_SQL, SCHEMA_FILE],
-        capture_output=True,
-        text=True,
-        cwd=REPO_ROOT,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(f"Failed to parse schema: {result.stderr}")
-
-    statements = [s.strip() for s in result.stdout.strip().split("\n") if s.strip()]
-    conn = psycopg2.connect(
-        host=host,
-        port=port,
-        user=user,
-        password=password,
-        dbname=dbname,
-        connect_timeout=10,
-    )
+def _do_schema_and_load(
+    host: str, port: int, user: str, password: str, dbname: str, force: bool = False
+) -> None:
+    """Apply schema and load embeddings. For manual/local/CI when direct TCP to DB."""
+    config = get_db_config(host=host, port=port, user=user, password=password, dbname=dbname)
+    conn = connect_db(config)
     try:
-        with conn.cursor() as cur:
-            for i, stmt in enumerate(statements):
-                try:
-                    cur.execute(stmt)
-                    conn.commit()
-                    logger.info(f"Executed statement {i + 1}/{len(statements)}")
-                except Exception as e:
-                    conn.rollback()
-                    if "already exists" in str(e).lower():
-                        logger.info(f"Statement {i + 1} skipped (already exists)")
-                    else:
-                        raise
-        logger.success("Schema applied successfully")
+        apply_schema(conn, schema_path=get_schema_file_path(), force=force)
+        load_embeddings(conn, csv_path=get_csv_path(), config=config, force=force)
     finally:
         conn.close()
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Setup GCP Cloud SQL schema")
+    ap = argparse.ArgumentParser(description="Setup GCP Cloud SQL (pgvector, schema, data)")
     ap.add_argument("--env", default=os.getenv("FRU_ENV", "dev"))
-    ap.add_argument("--region", default=os.getenv("GCP_REGION") or os.getenv("CLOUD_REGION", "us-central1"))
+    ap.add_argument("--region", default=os.getenv("CLOUD_REGION", "us-central1"))
+    ap.add_argument("--force-refresh-data", action="store_true", help="Drop tables and reload (match AWS)")
     ap.add_argument("--use-proxy", action="store_true",
-        help="Start Cloud SQL Proxy and connect to localhost (requires cloud_sql_proxy in PATH)")
+        help="Start Cloud SQL Proxy locally; needs public IP enabled on Cloud SQL (see module docstring)")
+    ap.add_argument("--env-only", action="store_true",
+        help="Use PGHOST, PGPASSWORD from env; for VPC machines (VM, Cloud Shell, container)")
+    ap.add_argument("--use-cloud-job", action="store_true",
+        help="Run schema + load_data via Cloud Run Job (default when no PGHOST)")
     args = ap.parse_args()
+
+    from tools.gcp.scope_shared.core.backend import resolve_region
+    region = resolve_region(args.region)
+    os.environ["CLOUD_REGION"] = region
 
     host = os.getenv("PGHOST", "").strip()
     port = int(os.getenv("PGPORT", "5432"))
@@ -106,8 +118,40 @@ def main():
     password = os.getenv("PGPASSWORD", "").strip()
     dbname = os.getenv("PGDATABASE", "fru_db")
 
+    # localhost/127.0.0.1 from .env is for local dev; cannot reach private-IP Cloud SQL
+    if host in ("localhost", "127.0.0.1"):
+        host = ""
+
+    logger.step("Setting up database (pgvector, schema, data)")
+
+    # --env-only: use PGHOST, PGPASSWORD from env (VM, Cloud Shell, or container in VPC)
+    if args.env_only:
+        if not host or not password:
+            logger.error("--env-only requires PGHOST and PGPASSWORD")
+            sys.exit(1)
+        _do_schema_and_load(host, port, user, password, dbname or "fru_db", force=args.force_refresh_data)
+        logger.success("Database setup completed")
+        return
+
+    # --use-cloud-job or no direct path: run via Cloud Run Job + verify (private-IP Cloud SQL)
+    if args.use_cloud_job or (not host and not args.use_proxy):
+        from tools.gcp.scope_shared.deploy.db_setup.cloud_job import run_and_verify, run_verify_only
+        try:
+            if not run_and_verify(args.env, region, force=args.force_refresh_data):
+                sys.exit(1)
+        except Exception as e:
+            logger.warning(f"Database setup failed: {e}")
+            logger.info("Checking if DB is already initialized (verify-only)...")
+            if run_verify_only(args.env, region):
+                logger.success("Database already initialized; continuing")
+                return
+            raise
+        logger.success("Database setup completed")
+        return
+
+    # --use-proxy: start Cloud SQL Proxy locally; requires public IP on Cloud SQL (see docstring)
     if args.use_proxy:
-        outputs = get_durable_outputs(args.env, args.region)
+        outputs = get_durable_outputs(args.env, region)
         conn_name = outputs["connection_name"]
         if not conn_name:
             logger.error("cloud_sql_connection_name not in durable outputs")
@@ -121,8 +165,6 @@ def main():
         if not proxy_cmd:
             logger.error("cloud-sql-proxy not found. Install: gcloud components install cloud-sql-proxy")
             sys.exit(1)
-        # Use default port 5432 for Postgres (proxy listens on localhost:5432)
-        # Note: For private-IP-only instances, run this from a machine with VPC access (e.g. GCE VM)
         proxy = subprocess.Popen(
             [proxy_cmd, conn_name],
             stdout=subprocess.DEVNULL,
@@ -139,17 +181,40 @@ def main():
             if not password:
                 logger.error("PGPASSWORD required")
                 sys.exit(1)
-            run_schema(host, port, user, password, dbname or outputs["db_name"])
+            _do_schema_and_load(host, port, user, password, dbname or outputs["db_name"], force=args.force_refresh_data)
         finally:
             proxy.terminate()
             proxy.wait(timeout=5)
-    elif host and password:
-        run_schema(host, port, user, password, dbname)
-    else:
-        logger.error("Set PGHOST, PGPASSWORD (and optionally PGUSER, PGDATABASE) or use --use-proxy")
-        logger.info("For private IP: run 'cloud_sql_proxy -instances=PROJECT:REGION:INSTANCE=tcp:5432' first, then PGHOST=localhost")
-        sys.exit(1)
+        logger.success("Database setup completed")
+        return
+
+    # Direct PGHOST: machine can reach private IP (VM, container in VPC)
+    if host and password:
+        _do_schema_and_load(host, port, user, password, dbname, force=args.force_refresh_data)
+        logger.success("Database setup completed")
+        return
+
+    # No path: default to cloud job + verify
+    logger.info("No PGHOST set; using Cloud Run Job for private-IP Cloud SQL")
+    from tools.gcp.scope_shared.deploy.db_setup.cloud_job import run_and_verify, run_verify_only
+    try:
+        if not run_and_verify(args.env, region, force=args.force_refresh_data):
+            sys.exit(1)
+    except Exception as e:
+        logger.warning(f"Database setup failed: {e}")
+        logger.info("Checking if DB is already initialized (verify-only)...")
+        if run_verify_only(args.env, region):
+            logger.success("Database already initialized; continuing")
+            return
+        raise
+    logger.success("Database setup completed")
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        logger.error(f"Database setup failed: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)

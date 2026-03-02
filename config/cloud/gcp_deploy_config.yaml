@@ -1,0 +1,68 @@
+# =============================================================================
+# GCP Deploy Config: Region-Specific Zone and Placement Settings
+# =============================================================================
+#
+# PURPOSE:
+#   This file is the single source of truth for GCP region/zone configuration.
+#   The orchestrator passes --region (e.g. us-central1); the config handler looks
+#   up that region below and returns the settings. Terraform uses these for
+#   GKE cluster placement and Cloud SQL.
+#
+# HOW IT WORKS:
+#   - "default" block: Applied to all regions unless a region block overrides.
+#   - Region blocks (us-central1, us-east1, etc.): Region-specific overrides.
+#   - Handler merges: region block overrides default; missing keys fall back.
+#
+# GCP CONCEPTS (for readers new to GCP):
+#   - Region: A geographic area (e.g. us-central1 = Iowa, us-east1 = S. Carolina).
+#   - Zone: A data center within a region. Each region has multiple zones
+#     (e.g. us-central1-a, us-central1-b, us-central1-c). Zones are isolated.
+#   - GKE: Google Kubernetes Engine. Two modes:
+#     * Zonal: Cluster in ONE zone. 1 node = 1 node total. Lower cost, dev.
+#     * Regional: Cluster spans ALL zones in region. 1 node = 1 per zone (3 nodes).
+#       Higher quota/cost; use when you need HA.
+#   - Cloud SQL: Managed PostgreSQL. high_availability=true uses multiple zones.
+#
+# QUOTA NOTE (us-central1):
+#   Regional GKE with initial_node_count=1 creates 3 nodes (1 per zone), each
+#   with 100GB pd-balanced disk. That exceeds typical SSD_TOTAL_GB (250GB).
+#   Zonal GKE with zone=us-central1-a creates 1 node, staying under quota.
+#
+# =============================================================================
+
+default:
+  # GKE: zonal = 1 zone, 1 node pool; regional = all zones, 1 node per zone.
+  compute:
+    location_type: zonal
+    initial_node_count: 1
+
+  # Cloud SQL: false = single zone (dev); true = multi-zone HA (production).
+  database:
+    high_availability: false
+
+# -----------------------------------------------------------------------------
+# us-central1 (Iowa) - Zonal cluster to avoid SSD quota (250GB limit)
+# -----------------------------------------------------------------------------
+us-central1:
+  network:
+    # Zones used for networking. Full zone names.
+    zones: [us-central1-a]
+
+  compute:
+    # Zonal cluster: 1 node in one zone. Fixes GCE_QUOTA_EXCEEDED (SSD_TOTAL_GB).
+    # Regional would create 3 nodes (1 per zone) = 300GB+ SSD.
+    location_type: zonal
+    zone: us-central1-a
+    initial_node_count: 1
+
+# -----------------------------------------------------------------------------
+# us-east1 (S. Carolina) - Example second region
+# -----------------------------------------------------------------------------
+us-east1:
+  network:
+    zones: [us-east1-b]
+
+  compute:
+    location_type: zonal
+    zone: us-east1-b
+    initial_node_count: 1

@@ -1,8 +1,8 @@
 """
-Claude API client for local development.
-Implements LLMClient interface for local Claude API usage.
+Claude API client for local development and GCP (when GCP_LLM_PROVIDER=claude).
+Implements LLMClient interface for Anthropic Claude API usage.
 
-Applicable environment: [local]
+Applicable environment: [local] [gcp with GCP_LLM_PROVIDER=claude]
 """
 from backend.env_utils.cloud_shared.interfaces.llm_client import LLMClient
 from anthropic import Anthropic
@@ -12,16 +12,20 @@ from typing import Dict, Any, Optional, Iterator
 
 logger = logging.getLogger(__name__)
 
+# Default model when CLAUDE_MODEL not set (matches Bedrock claude-3-5-haiku)
+_DEFAULT_CLAUDE_MODEL = "claude-3-5-haiku-20241022"
+
 
 class LocalClaudeClient(LLMClient):
-    """Claude API client (local development)."""
+    """Claude API client (Anthropic API). Used for local dev and GCP when provider=claude."""
     
     def __init__(self):
         api_key = os.environ.get("CLAUDE_API_KEY", "").strip()
         if not api_key:
             raise ValueError("CLAUDE_API_KEY must be set for local Claude API")
         self.client = Anthropic(api_key=api_key)
-        self.model = "claude-3-5-haiku-20241022"  # Match Bedrock model
+        # Model from .env; no hardcoding (user preference)
+        self.model = os.environ.get("CLAUDE_MODEL", "").strip() or _DEFAULT_CLAUDE_MODEL
     
     def complete(
         self,

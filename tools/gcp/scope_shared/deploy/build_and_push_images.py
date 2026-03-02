@@ -114,7 +114,6 @@ def main():
     from tools.gcp.scope_shared.core.backend import resolve_region
     region = resolve_region(args.region)
     os.environ["CLOUD_REGION"] = region
-    os.environ["GCP_REGION"] = region
 
     logger.step("Building and pushing Docker images" if not args.push_only else "Push-only (no build)")
     logger.info(f"[BUILD] Region: {region}")
