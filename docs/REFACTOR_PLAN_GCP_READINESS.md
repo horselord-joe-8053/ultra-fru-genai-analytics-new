@@ -36,8 +36,6 @@
 # =============================================================================
 # Project & region
 GCP_PROJECT_ID=your-gcp-project-id
-GCP_REGION=us-central1
-# Use CLOUD_REGION for provider-agnostic code; GCP tools can map GCP_REGION -> CLOUD_REGION
 CLOUD_REGION=us-central1
 
 # Credentials – Option A: Path to JSON key file (recommended for local dev)
@@ -147,8 +145,7 @@ Vertex AI requires more setup than Google AI Studio. Follow these steps when upg
 | Env var | Purpose |
 |---------|---------|
 | `GCP_PROJECT_ID` | GCP project ID (for deploy, GCS, GKE) |
-| `GCP_REGION` | GCP region (e.g. `us-central1`) |
-| `CLOUD_REGION` | Provider-agnostic; set to same as `GCP_REGION` when using GCP |
+| `CLOUD_REGION` | Cloud region (e.g. `us-east-1`, `us-central1`); used by both AWS and GCP |
 | `GOOGLE_APPLICATION_CREDENTIALS` | Path to Service Account JSON (for deploy, GCS, GKE) |
 | `GOOGLE_APPLICATION_CREDENTIALS_JSON` | (Optional) Inline JSON for CI/containers |
 | `GOOGLE_AI_API_KEY` | Gemini API key from ai.google.dev (for LLM only) |
@@ -384,7 +381,7 @@ client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY") or os.environ.get
 client = genai.Client(
     vertexai=True,
     project=os.environ["GCP_PROJECT_ID"],
-    location=os.environ["GCP_REGION"],
+    location=os.environ["CLOUD_REGION"],
 )
 # SDK uses Application Default Credentials (env GOOGLE_APPLICATION_CREDENTIALS or metadata)
 
@@ -552,7 +549,7 @@ tools/gcp/
 | Task | Description | Effort |
 |------|-------------|--------|
 | 4.1 | Create `tools/gcp/scope_shared/core/backend.py` | High |
-| | - `resolve_region()`: use `GCP_REGION` or `CLOUD_REGION` | |
+| | - `resolve_region()`: use `CLOUD_REGION` | |
 | | - `gcs_state_bucket()`: GCS bucket for Terraform state (like `resolve_state_bucket` for S3) | |
 | | - `stack_id_from_dir()`: reuse logic; cloud=`gcp` | |
 | 4.2 | Create `tools/gcp/scope_shared/core/terra_runner.py` | Medium |
@@ -797,7 +794,7 @@ When you need Vertex AI instead of Google AI Studio (see Section 1.2), add this 
 | | - Use **`google-genai`** SDK with `vertexai=True` | |
 | | - **Standard (ADC):** `genai.Client(vertexai=True, project=..., location=...)` — SDK uses `GOOGLE_APPLICATION_CREDENTIALS` or metadata | |
 | | - **Org-restricted (API keys disabled):** Load creds with `google.oauth2.service_account.Credentials.from_service_account_file(key_path, scopes=["https://www.googleapis.com/auth/cloud-platform"])`; pass `credentials=creds` | |
-| | - Env: `GCP_PROJECT_ID`, `GCP_REGION`, `GOOGLE_APPLICATION_CREDENTIALS` (or explicit `credentials=` when ADC restricted) | |
+| | - Env: `GCP_PROJECT_ID`, `CLOUD_REGION`, `GOOGLE_APPLICATION_CREDENTIALS` (or explicit `credentials=` when ADC restricted) | |
 | | - Optional: `GCP_VERTEX_MODEL` (e.g. `gemini-2.5-flash`) | |
 | | - Same `client.models.generate_content()` / `generate_content_stream()` as AI Studio | |
 | 3.2.4 | Extend GCP's `get_llm_client()`: add Vertex AI branch | Low |
@@ -825,7 +822,7 @@ GCP env_utils/gcp/get_llm_client():
 # Use Vertex AI instead of Gemini API
 GCP_LLM_USE_VERTEX_AI=true
 GCP_PROJECT_ID=your-project
-GCP_REGION=us-central1
+CLOUD_REGION=us-central1
 GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
 # Optional model override
 # GCP_VERTEX_MODEL=gemini-1.5-flash-001

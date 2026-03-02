@@ -83,6 +83,7 @@ def _get_gcp_outputs(env: str, region: str) -> dict:
         "db_password": result.get("db_password_secret_id", {}).get("value") or "",
         "db_password_plain": result.get("db_password_plain_secret_id", {}).get("value") or "",
         "google_ai_api_key": result.get("google_ai_api_key_secret_id", {}).get("value") or "",
+        "claude_api_key": result.get("claude_api_key_secret_id", {}).get("value") or "",
     }
 
 
@@ -195,6 +196,21 @@ def ensure_secrets(provider: str, env: str, region: str) -> None:
                 logger.warning("[SECRETS] google_ai_api_key_secret_id not in durable outputs; agent may be disabled")
         else:
             logger.warning("[SECRETS] GOOGLE_AI_API_KEY not set in .env; agent-based query will be disabled")
+
+        claude_api = (os.getenv("CLAUDE_API_KEY") or "").strip()
+        if claude_api:
+            ref = outputs.get("claude_api_key")
+            if ref:
+                logger.info("[SECRETS] Setting CLAUDE_API_KEY...")
+                project_id = os.getenv("GCP_PROJECT_ID", "").strip()
+                if not project_id:
+                    raise ValueError("GCP_PROJECT_ID must be set for GCP ensure_secrets")
+                _put_gcp_secret(ref, claude_api, project_id)
+                logger.success("[SECRETS] CLAUDE_API_KEY set")
+            else:
+                logger.warning("[SECRETS] claude_api_key_secret_id not in durable outputs; run deploy durable_with_cooloff first")
+        else:
+            logger.warning("[SECRETS] CLAUDE_API_KEY not set in .env; skip (use GCP_LLM_PROVIDER=claude to avoid Gemini quota)")
 
     logger.success("[SECRETS] All secrets ensured")
 

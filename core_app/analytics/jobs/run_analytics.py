@@ -119,14 +119,19 @@ def main(delta_path: str = None, output_dir: str = None):
         .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
         .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
     )
-    # S3 access: ECS Fargate uses container metadata (no EC2 instance metadata)
-    aws_region = os.environ.get("CLOUD_REGION") or "us-east-1"
-    builder = builder.config("spark.hadoop.fs.s3a.endpoint.region", aws_region)
-    # ContainerCredentialsProvider first (ECS Fargate), then default chain (local/EC2)
-    builder = builder.config(
-        "spark.hadoop.fs.s3a.aws.credentials.provider",
-        "com.amazonaws.auth.ContainerCredentialsProvider,com.amazonaws.auth.DefaultAWSCredentialsProviderChain",
-    )
+    cloud_provider = os.environ.get("CLOUD_PROVIDER", "").lower()
+    if cloud_provider == "gcp":
+        # GCS connector: use Application Default Credentials (Cloud Run workload identity)
+        builder = builder.config("spark.hadoop.fs.gs.impl", "com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem")
+        builder = builder.config("spark.hadoop.fs.AbstractFileSystem.gs.impl", "com.google.cloud.hadoop.fs.gcs.GoogleHadoopFS")
+    else:
+        # S3 access: ECS Fargate uses container metadata (no EC2 instance metadata)
+        aws_region = os.environ.get("CLOUD_REGION") or "us-east-1"
+        builder = builder.config("spark.hadoop.fs.s3a.endpoint.region", aws_region)
+        builder = builder.config(
+            "spark.hadoop.fs.s3a.aws.credentials.provider",
+            "com.amazonaws.auth.ContainerCredentialsProvider,com.amazonaws.auth.DefaultAWSCredentialsProviderChain",
+        )
     spark = builder.getOrCreate()
 
     path = _ensure_fru_sales_exists(spark, delta_path)

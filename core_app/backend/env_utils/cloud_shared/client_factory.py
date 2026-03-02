@@ -4,6 +4,9 @@ Provider-driven: each provider defines get_llm_client(); factory dispatches by C
 or falls back to aws → gcp → local (cloud-first).
 
 Applicable environment: [local] [aws {ecs | eks}] [gcp {cloud-run | gke}]
+
+GCP provider choice (claude vs gemini): handled inside gcp.get_llm_client() via GCP_LLM_PROVIDER.
+Factory stays generic; no provider-specific override here.
 """
 from backend.env_utils.cloud_shared.interfaces.llm_client import LLMClient
 from backend.env_utils.cloud_shared.provider import get_cloud_provider
@@ -25,6 +28,8 @@ def create_llm_client() -> LLMClient:
     1. If CLOUD_PROVIDER is explicitly set → call only that provider's get_llm_client(); raise if None.
     2. If unset → try aws → gcp → local (cloud-first) until one returns non-None.
     3. Raise ValueError if no client found.
+
+    GCP: gcp.get_llm_client() chooses Claude vs Gemini via GCP_LLM_PROVIDER (Option B).
     """
     explicit = os.environ.get("CLOUD_PROVIDER", "").strip().lower()
 

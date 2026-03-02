@@ -23,7 +23,6 @@ def main():
     from tools.gcp.scope_shared.core.backend import resolve_region
     region = resolve_region(args.region)
     os.environ["CLOUD_REGION"] = region
-    os.environ["GCP_REGION"] = region
 
     try:
         ensure_secrets("gcp", args.env, region)

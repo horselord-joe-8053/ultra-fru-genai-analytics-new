@@ -62,7 +62,6 @@ def get_terra_env(region: str | None = None, extra: dict | None = None):
             env["GOOGLE_APPLICATION_CREDENTIALS"] = abs_creds
     if region:
         env["CLOUD_REGION"] = region
-        env["GCP_REGION"] = region
         env["TF_VAR_gcp_region"] = region
     if extra:
         env.update(extra)

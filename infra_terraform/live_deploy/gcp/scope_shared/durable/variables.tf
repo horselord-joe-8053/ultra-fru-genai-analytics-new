@@ -21,3 +21,9 @@ variable "cloud_sql_deletion_protection" {
   type    = bool
   default = false
 }
+
+# Placeholder image for db-setup job; setup_database.py updates via gcloud deploy.
+variable "db_setup_job_image" {
+  type    = string
+  default = "gcr.io/google-samples/hello-app:1.0"
+}

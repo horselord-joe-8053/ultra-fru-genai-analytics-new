@@ -22,13 +22,13 @@ load_dotenv()
 
 
 def _resolve_region(arg_region: str) -> str:
-    """Resolve region from arg, GCP_REGION, or CLOUD_REGION."""
+    """Resolve region from arg or CLOUD_REGION."""
     if arg_region:
         return arg_region
-    r = os.environ.get("GCP_REGION", "").strip() or os.environ.get("CLOUD_REGION", "").strip()
+    r = os.environ.get("CLOUD_REGION", "").strip()
     if r:
         return r
-    raise EnvVarNotFound("GCP_REGION or CLOUD_REGION", "Set in .env or pass --region")
+    raise EnvVarNotFound("CLOUD_REGION", "Set in .env or pass --region")
 
 
 def has(exe: str) -> bool:
@@ -47,7 +47,7 @@ def has(exe: str) -> bool:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--env", default=os.getenv("FRU_ENV", "dev"))
-    ap.add_argument("--region", default=None, help="Region (default: GCP_REGION or CLOUD_REGION)")
+    ap.add_argument("--region", default=None, help="Region (default: CLOUD_REGION)")
     args = ap.parse_args()
 
     try:
@@ -56,7 +56,6 @@ def main():
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
     os.environ["CLOUD_REGION"] = region
-    os.environ["GCP_REGION"] = region
 
     require("GCP_PROJECT_ID")
     if not (

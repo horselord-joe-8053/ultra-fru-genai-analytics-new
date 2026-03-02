@@ -12,6 +12,9 @@ from typing import Dict, Any, Optional, Iterator
 
 logger = logging.getLogger(__name__)
 
+# Default model when GOOGLE_MODEL/GEMINI_MODEL not set
+_DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+
 
 class GCPGeminiAPIClient(LLMClient):
     """Gemini API client (Google AI Studio, API key auth)."""
@@ -29,7 +32,12 @@ class GCPGeminiAPIClient(LLMClient):
         from google import genai
 
         self.client = genai.Client(api_key=api_key)
-        self.model = os.environ.get("GEMINI_MODEL", "").strip() or "gemini-2.5-flash"
+        # Model from .env; GOOGLE_MODEL preferred, GEMINI_MODEL fallback (user preference)
+        self.model = (
+            os.environ.get("GOOGLE_MODEL", "").strip()
+            or os.environ.get("GEMINI_MODEL", "").strip()
+            or _DEFAULT_GEMINI_MODEL
+        )
 
     def complete(
         self,

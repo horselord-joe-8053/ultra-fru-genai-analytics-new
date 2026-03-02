@@ -63,7 +63,18 @@ resource "google_secret_manager_secret" "google_ai_api_key" {
   labels = module.tags.common_tags
 }
 
+resource "google_secret_manager_secret" "claude_api_key" {
+  secret_id = "${var.prefix}-${var.env}-claude_api_key-${var.gcp_region}"
+
+  replication {
+    auto {}
+  }
+
+  labels = module.tags.common_tags
+}
+
 output "openai_api_key_secret_id"   { value = google_secret_manager_secret.openai_api_key.secret_id }
 output "google_ai_api_key_secret_id" { value = google_secret_manager_secret.google_ai_api_key.secret_id }
+output "claude_api_key_secret_id"   { value = google_secret_manager_secret.claude_api_key.secret_id }
 output "db_password_secret_id" { value = google_secret_manager_secret.db_password.secret_id }
 output "db_password_plain_secret_id" { value = google_secret_manager_secret.db_password_plain.secret_id }

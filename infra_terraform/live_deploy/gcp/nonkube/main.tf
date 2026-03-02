@@ -50,6 +50,7 @@ locals {
     OPENAI_API_KEY     = try(data.terraform_remote_state.shared_durable.outputs.openai_api_key_secret_id, "")
     PGPASSWORD         = try(data.terraform_remote_state.shared_durable.outputs.db_password_plain_secret_id, "")
     GOOGLE_AI_API_KEY  = try(data.terraform_remote_state.shared_durable.outputs.google_ai_api_key_secret_id, "")
+    CLAUDE_API_KEY     = try(data.terraform_remote_state.shared_durable.outputs.claude_api_key_secret_id, "")
   }
 }
 
@@ -64,6 +65,9 @@ module "cloud_run" {
 
   env_vars = merge({
     CLOUD_PROVIDER                       = "gcp"
+    GCP_LLM_PROVIDER                     = var.llm_provider
+    LLM_PROVIDER                         = var.llm_provider
+    CLAUDE_MODEL                         = var.claude_model
     CLOUD_REGION                         = var.gcp_region
     LOG_LEVEL                            = var.log_level
     ALLOWED_ORIGINS                      = var.allowed_origins
@@ -85,6 +89,8 @@ module "cloud_run" {
   allow_unauthenticated  = true
 }
 
+# Single Spark job: scheduled (Cloud Scheduler) + one-off bootstrap (deploy runs gcloud run jobs execute).
+# DRY: one job, two invocation modes. Bootstrap populates batch_analytics immediately after deploy.
 module "spark_job" {
   source = "../../../modules/gcp/cloud_run_job"
 
@@ -93,9 +99,12 @@ module "spark_job" {
   project_id = var.gcp_project_id
   image      = var.spark_image
 
+  vpc_connector_id = try(data.terraform_remote_state.shared_durable.outputs.vpc_connector_id, null)
+
   command = [
     "/opt/spark/bin/spark-submit",
     "--packages", "io.delta:delta-spark_2.12:3.1.0,org.apache.hadoop:hadoop-aws:3.3.4",
+    "--jars", "/opt/fru/jars/gcs-connector-hadoop3-2.2.7-shaded.jar",
     "/opt/fru/jobs/periodic.py"
   ]
 

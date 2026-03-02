@@ -9,7 +9,7 @@ from tools.aws.scope_shared.core.phases import PhaseTracker
 
 
 def deploy_phases(scope: str) -> list[str]:
-    """Return phase names for GCP deploy (order matches deploy.py). Dynamic by scope."""
+    """Return phase names for GCP deploy (order matches deploy.py). Match AWS flow."""
     base = [
         "Doctor checks",
         "State backend bootstrap",
@@ -17,6 +17,7 @@ def deploy_phases(scope: str) -> list[str]:
         "Shared durable (VPC)",
         "Shared nondurable (GCS)",
         "Ensure secrets",
+        "Database setup (pgvector, schema, data)",
         "Build & push images",
     ]
     if scope == "kube":
