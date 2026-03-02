@@ -2,7 +2,7 @@
 
 A short guide to what we mean by **layers** in Terraform/Terragrunt in this repo, how **deployment order** is determined, and how that connects to **long-term components** (e.g. Secrets Manager) and **Option B: separate long-term layer**.
 
-**See also:** [VPC_LEARNED.md](VPC_LEARNED.md) (VPC + state + locks; [§3.2 Option B — Import](VPC_LEARNED.md#32-how-we-fix-it-align-state-and-reality) for fixing subnet group by importing), [DEPLOYMENT_ERRORS_AND_FIXES.md](../DEPLOYMENT_ERRORS_AND_FIXES.md), [README_WAR_STORIES.md](../../README_WAR_STORIES.md).
+**See also:** [VPC_LEARNED.md](VPC_LEARNED.md) (VPC + state + locks; [§3.2 Option B — Import](VPC_LEARNED.md#32-how-we-fix-it-align-state-and-reality) for fixing subnet group by importing), [DEPLOYMENT_ERRORS_AND_FIXES.md](../DEPLOYMENT_ERRORS_AND_FIXES.md), [war_stories/WAR_STORIES_CLOUD_SHARED.md](../../../war_stories/WAR_STORIES_CLOUD_SHARED.md).
 
 ---
 
@@ -265,4 +265,4 @@ The root_* modules are “abstract” by design: they are the **root module for 
 
 ---
 
-*This doc: `docs/learned/terra/TERRA_LEARNED.md`. Related: [VPC_LEARNED.md](../VPC_LEARNED.md), [DEPLOYMENT_ERRORS_AND_FIXES.md](../../DEPLOYMENT_ERRORS_AND_FIXES.md), [README_WAR_STORIES.md](../../../README_WAR_STORIES.md).*
+*This doc: `docs/learned/terra/TERRA_LEARNED.md`. Related: [VPC_LEARNED.md](../VPC_LEARNED.md), [DEPLOYMENT_ERRORS_AND_FIXES.md](../../DEPLOYMENT_ERRORS_AND_FIXES.md), [war_stories/WAR_STORIES_CLOUD_SHARED.md](../../../war_stories/WAR_STORIES_CLOUD_SHARED.md).*

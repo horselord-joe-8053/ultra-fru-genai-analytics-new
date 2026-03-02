@@ -4,7 +4,7 @@ Orphan cleanup for teardown.
 EKS cluster/node SGs: Created by AWS as side effects of aws_eks_cluster and
 aws_eks_node_group (not Terraform resources). AWS does not always delete them
 when the cluster is removed. Post-destroy CLI cleanup is the common industry
-practice. See README_WAR_STORIES ##41.
+practice. See war_stories/WAR_STORIES_AWS.md ##23.
 
 k8s-elb-* SGs: In-tree cloud provider creates these when a Classic ELB Service
 (type LoadBalancer without aws-load-balancer-type) is applied. When we kubectl
@@ -111,7 +111,7 @@ def remove_orphaned_eks_security_groups(
     These SGs are created by AWS (not Terraform) when aws_eks_cluster and
     aws_eks_node_group are applied. AWS does not always delete them on cluster
     destroy. Terraform has no state for them—post-destroy CLI cleanup is the
-    common industry practice. Idempotent. See README_WAR_STORIES ##41.
+    common industry practice. Idempotent. See war_stories/WAR_STORIES_AWS.md ##23.
     """
     from tools.cloud_shared.logging import logger
 

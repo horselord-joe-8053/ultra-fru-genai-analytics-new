@@ -16,7 +16,8 @@ NC = "\033[0m"
 _SCOPE_W = 10
 _ENDPOINT_W = 12
 _STATUS_W = 6
-_NOTES_W = 45
+# No truncation: use full notes/URLs so users see complete output
+_NOTES_W = 0  # 0 = no truncation
 
 
 @dataclass
@@ -29,15 +30,15 @@ class VerifyRow:
 
 
 def _truncate(s: str, max_len: int) -> str:
-    """Truncate string with ellipsis if needed."""
-    if len(s) <= max_len:
+    """Truncate string with ellipsis if needed. max_len<=0 means no truncation."""
+    if max_len <= 0 or len(s) <= max_len:
         return s
     return s[: max_len - 3] + "..."
 
 
 def _format_row(row: VerifyRow) -> str:
     """Format a single row; status uses color (fixed 5-char display)."""
-    notes = _truncate(row.notes, _NOTES_W)
+    notes = _truncate(row.notes, _NOTES_W) if _NOTES_W > 0 else row.notes
     status = f"{GREEN}  ✓  {NC}" if row.ok else f"{RED}  ✗  {NC}"
     return (
         f"{row.scope:<{_SCOPE_W}} "
@@ -60,7 +61,7 @@ def print_verify_summary(
         f"{'Scope':<{_SCOPE_W}} "
         f"{'Endpoint':<{_ENDPOINT_W}} "
         f"{'Status':<{_STATUS_W}} "
-        f"{'URL / Notes':<{_NOTES_W}}"
+        f"{'URL / Notes'}"
     )
     sep = "-" * (len(header) + 10)  # +10 for ANSI codes in status column
 

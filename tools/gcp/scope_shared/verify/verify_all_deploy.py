@@ -397,7 +397,9 @@ def main():
                 logger.operation_end("Verify", args.scope, args.env, region, int(time.time() - verify_start), ok=False)
                 sys.exit(1)
         else:
-            logger.info(f"No base URL for {scope} (stack not deployed or no frontend/LB). Skipping endpoints.")
+            skip_note = "No base URL (stack not deployed or no frontend/LB). Skipping endpoints."
+            logger.info(skip_note)
+            all_rows.append(VerifyRow(scope=scope, endpoint="Endpoints", ok=True, notes=skip_note))
 
         phase_secs = int(time.time() - phase_start_time)
         logger.phase_end(phase_idx, total_phases, verify_phases[phase_idx - 1], phase_secs)

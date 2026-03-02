@@ -6,7 +6,7 @@ kube_pre_destroy removes them before tofu destroy. Both live under tools/aws/kub
 
 Why kubectl (not Terraform): K8s resources are applied via kubectl (kube_apply.py), not in
 Terraform state. Moving them into Terraform kubernetes provider would require templating,
-provider config, and secret wiring—cons outweighed pros. See README_WAR_STORIES ##40.
+provider config, and secret wiring—cons outweighed pros. See war_stories/WAR_STORIES_CLOUD_SHARED.md ##20.
 """
 import os
 import subprocess
