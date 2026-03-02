@@ -4,7 +4,7 @@ A visual crash course on how **VPC, LB, DNS, CloudFront, EKS, and Aurora** are w
 
 > **Load balancer type:** See [KUBE_INGRESS_LEARNED.md](KUBE_INGRESS_LEARNED.md) Section 0 for Classic ELB vs NLB, `--elb` flag, and manifest selection.
 
-**See also:** [VPC_LEARNED.md](VPC_LEARNED.md), [TERRA_LEARNED.md](terra/TERRA_LEARNED.md), [TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md](terra/TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md), [ANALYTICS_KUBE_NONKUBE_SHARED_DATA.md](ANALYTICS_KUBE_NONKUBE_SHARED_DATA.md), [README_WAR_STORIES.md](../../README_WAR_STORIES.md).
+**See also:** [VPC_LEARNED.md](VPC_LEARNED.md), [TERRA_LEARNED.md](terra/TERRA_LEARNED.md), [TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md](terra/TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md), [ANALYTICS_KUBE_NONKUBE_SHARED_DATA.md](ANALYTICS_KUBE_NONKUBE_SHARED_DATA.md), [war_stories/README.md](../../war_stories/README.md).
 
 ---
 
@@ -134,9 +134,9 @@ flowchart TB
 
 ### 3.1 Shared Resource Ownership: Durable vs Kube (Subnet Tags)
 
-**Who owns what:** Durable **creates** VPC and subnets. Kube **uses** them (EKS in private subnets) and **adds tags** to public subnets via `aws_ec2_tag` so load balancers (Classic or NLB) can be placed in public subnets. Without these tags → LB in private subnets → CloudFront 502 ([War Story 43](../../README_WAR_STORIES.md#43-cloudfront-502-when-nlb-in-wrong-subnets)).
+**Who owns what:** Durable **creates** VPC and subnets. Kube **uses** them (EKS in private subnets) and **adds tags** to public subnets via `aws_ec2_tag` so load balancers (Classic or NLB) can be placed in public subnets. Without these tags → LB in private subnets → CloudFront 502 ([War Story 43](../../war_stories/WAR_STORIES_AWS.md#25-cloudfront-502-on-api-paths-nlb-internal-probe-timeouts-and-the-need-for-fail-fast-pod-verification)).
 
-**Tag drift risk:** Durable's desired state did not include `kubernetes.io/*` tags. On durable apply, Terraform planned to remove them; kube re-added them → endless cycle. **Fix:** `lifecycle { ignore_changes = [tags] }` on subnet resources in the VPC module ([War Story 58](../../README_WAR_STORIES.md#58-vpc-subnet-tag-drift-durable-vs-kube-and-lifecycle-ignore_changes)).
+**Tag drift risk:** Durable's desired state did not include `kubernetes.io/*` tags. On durable apply, Terraform planned to remove them; kube re-added them → endless cycle. **Fix:** `lifecycle { ignore_changes = [tags] }` on subnet resources in the VPC module ([War Story 58](../../war_stories/WAR_STORIES_AWS.md#35-vpc-subnet-tag-drift-durable-vs-kube-and-lifecycle-ignore_changes)).
 
 **Deep dive:** [TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md](terra/TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md).
 
@@ -335,4 +335,4 @@ fru-genai-analytics-new/
 
 ---
 
-*Doc: `docs/learned/FULL_ARCH_KUBE_LEARN.md`. Related: [FULL_ARCH_NONKUBE_LEARN.md](FULL_ARCH_NONKUBE_LEARN.md), [VPC_LEARNED.md](VPC_LEARNED.md), [TERRA_LEARNED.md](terra/TERRA_LEARNED.md), [README_WAR_STORIES.md](../../README_WAR_STORIES.md).*
+*Doc: `docs/learned/FULL_ARCH_KUBE_LEARN.md`. Related: [FULL_ARCH_NONKUBE_LEARN.md](FULL_ARCH_NONKUBE_LEARN.md), [VPC_LEARNED.md](VPC_LEARNED.md), [TERRA_LEARNED.md](terra/TERRA_LEARNED.md), [war_stories/README.md](../../war_stories/README.md).*

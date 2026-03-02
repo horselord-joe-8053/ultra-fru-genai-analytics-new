@@ -2,7 +2,7 @@
 
 A visual crash course on how **VPC, ALB, CloudFront, ECS Fargate, and Aurora** are wired together to create a fully working nonkube (ECS-based) infrastructure.
 
-**See also:** [FULL_ARCH_KUBE_LEARN.md](FULL_ARCH_KUBE_LEARN.md), [ANALYTICS_KUBE_NONKUBE_SHARED_DATA.md](ANALYTICS_KUBE_NONKUBE_SHARED_DATA.md), [VPC_LEARNED.md](VPC_LEARNED.md), [README_WAR_STORIES.md](../../README_WAR_STORIES.md).
+**See also:** [FULL_ARCH_KUBE_LEARN.md](FULL_ARCH_KUBE_LEARN.md), [ANALYTICS_KUBE_NONKUBE_SHARED_DATA.md](ANALYTICS_KUBE_NONKUBE_SHARED_DATA.md), [VPC_LEARNED.md](VPC_LEARNED.md), [war_stories/README.md](../../war_stories/README.md).
 
 ---
 
@@ -370,4 +370,4 @@ flowchart TB
 
 ---
 
-*Doc: `docs/learned/FULL_ARCH_NONKUBE_LEARN.md`. Related: [FULL_ARCH_KUBE_LEARN.md](FULL_ARCH_KUBE_LEARN.md), [VPC_LEARNED.md](VPC_LEARNED.md), [README_WAR_STORIES.md](../../README_WAR_STORIES.md).*
+*Doc: `docs/learned/FULL_ARCH_NONKUBE_LEARN.md`. Related: [FULL_ARCH_KUBE_LEARN.md](FULL_ARCH_KUBE_LEARN.md), [VPC_LEARNED.md](VPC_LEARNED.md), [war_stories/README.md](../../war_stories/README.md).*

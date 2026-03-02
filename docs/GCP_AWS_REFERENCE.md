@@ -2,6 +2,8 @@
 
 **Purpose:** Every GCP component references its AWS counterpart. Use this document to ensure parity and guide implementation.
 
+**Building for Oracle, Azure, or another provider?** Use this doc as a template for `{PROVIDER}_AWS_REFERENCE.md`. See [WHAT_TO_DO_TO_BUILD_FOR_ANOTHER_CLOUD_PROVIDER.md](WHAT_TO_DO_TO_BUILD_FOR_ANOTHER_CLOUD_PROVIDER.md) for the full implementation guide.
+
 ---
 
 ## 1. core_app/backend/env_utils/

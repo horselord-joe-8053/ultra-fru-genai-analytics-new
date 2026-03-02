@@ -2,7 +2,7 @@
 
 A unified view of how the **API image**, **Spark image**, **Aurora PostgreSQL**, and **deploy tooling** work together. Includes code composition, data flow, and where Aurora is created per region.
 
-**Related docs:** [FULL_ARCH_KUBE_LEARN.md](learned/FULL_ARCH_KUBE_LEARN.md), [FULL_ARCH_NONKUBE_LEARN.md](learned/FULL_ARCH_NONKUBE_LEARN.md), [ANALYTICS_KUBE_NONKUBE_SHARED_DATA.md](learned/ANALYTICS_KUBE_NONKUBE_SHARED_DATA.md), [CODE_STRUCTURE_WITH_AWS.md](CODE_STRUCTURE_WITH_AWS.md), [README_WAR_STORIES.md](../README_WAR_STORIES.md).
+**Related docs:** [FULL_ARCH_KUBE_LEARN.md](learned/FULL_ARCH_KUBE_LEARN.md), [FULL_ARCH_NONKUBE_LEARN.md](learned/FULL_ARCH_NONKUBE_LEARN.md), [ANALYTICS_KUBE_NONKUBE_SHARED_DATA.md](learned/ANALYTICS_KUBE_NONKUBE_SHARED_DATA.md), [CODE_STRUCTURE_WITH_AWS.md](CODE_STRUCTURE_WITH_AWS.md), [war_stories/](../war_stories/README.md).
 
 ---
 
@@ -257,5 +257,5 @@ Both use the **same Aurora instance** in that region. API reads `fru_sales_embed
 | Nonkube architecture (ECS, ALB, Aurora) | [FULL_ARCH_NONKUBE_LEARN.md](learned/FULL_ARCH_NONKUBE_LEARN.md) |
 | Shared data (batch_analytics, Delta) | [ANALYTICS_KUBE_NONKUBE_SHARED_DATA.md](learned/ANALYTICS_KUBE_NONKUBE_SHARED_DATA.md) |
 | Terraform stack ownership | [TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md](learned/terra/TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md) |
-| Aurora, Secrets, DB password flow | [README_WAR_STORIES.md](../README_WAR_STORIES.md) §44 |
+| Aurora, Secrets, DB password flow | [WAR_STORIES_AWS.md](../war_stories/WAR_STORIES_AWS.md#26-analytics-database-not-configured-and-query-stream-agent-disabled--aurora-secrets-manager-and-aws-credentials) |
 | Code structure by cloud/scope | [CODE_STRUCTURE_WITH_AWS.md](CODE_STRUCTURE_WITH_AWS.md) |
