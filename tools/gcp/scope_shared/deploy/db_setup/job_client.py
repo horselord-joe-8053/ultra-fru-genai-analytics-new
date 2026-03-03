@@ -75,14 +75,17 @@ def create_or_update_job(
         secret_path = f"projects/{project_number}/secrets/{secret_id}:latest"
         args.extend(["--set-secrets", f"{k}={secret_path}"])
 
-    subprocess.run(args, check=True, timeout=120)
+    # gcloud run jobs deploy can take 3–5 min under load (provisioning, image pull)
+    subprocess.run(args, check=True, timeout=600)
 
 
-def execute_job(project_id: str, region: str, job_name: str) -> str:
+def execute_job(project_id: str, region: str, job_name: str, timeout_sec: int = 300) -> str:
     """
     Execute the Cloud Run Job. Returns execution resource name for polling.
 
     Example: projects/PROJECT/locations/REGION/jobs/JOB/executions/EXEC_ID
+
+    Timeout: Cloud Run cold start / execution submission can take 2–5 min under load.
     """
     result = subprocess.run(
         [
@@ -94,7 +97,7 @@ def execute_job(project_id: str, region: str, job_name: str) -> str:
         capture_output=True,
         text=True,
         check=True,
-        timeout=150,
+        timeout=timeout_sec,
     )
     execution_name = result.stdout.strip()
     if not execution_name:

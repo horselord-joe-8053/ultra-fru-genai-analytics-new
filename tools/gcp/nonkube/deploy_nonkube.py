@@ -37,13 +37,13 @@ def run_deploy_nonkube(
     repo_app = artifact_registry_repo_app(env)
     repo_spark = artifact_registry_repo_spark(env)
 
-    _placeholder = "gcr.io/google-samples/hello-app:1.0"
-    app_img = os.getenv("TF_VAR_app_image") or (
-        _placeholder if args.skip_build else f"{region}-docker.pkg.dev/{gcp_proj}/{repo_app}/app:latest"
-    )
-    spark_img = os.getenv("TF_VAR_spark_image") or (
-        _placeholder if args.skip_build else f"{region}-docker.pkg.dev/{gcp_proj}/{repo_spark}/spark:latest"
-    )
+    # Fail-fast: require real Artifact Registry images. No placeholder to avoid hiding config errors.
+    if not gcp_proj:
+        raise ValueError("GCP_PROJECT_ID required for app/spark image resolution")
+    _app_img = f"{region}-docker.pkg.dev/{gcp_proj}/{repo_app}/app:latest"
+    _spark_img = f"{region}-docker.pkg.dev/{gcp_proj}/{repo_spark}/spark:latest"
+    app_img = os.getenv("TF_VAR_app_image") or _app_img
+    spark_img = os.getenv("TF_VAR_spark_image") or _spark_img
 
     llm_provider = os.getenv("GCP_LLM_PROVIDER") or os.getenv("LLM_PROVIDER", "gemini")
     llm_provider = llm_provider.strip().lower()
@@ -61,6 +61,7 @@ def run_deploy_nonkube(
     ]
 
     def _apply():
+        logger.info("Applying nonkube stack (Cloud Run + Spark + frontend CDN)...")
         return run_deploy_stack(stack_path, plan_vars, region, env, args.apply)
 
     if stats:
@@ -78,4 +79,30 @@ def run_deploy_nonkube(
         else:
             run_analytics_bootstrap(env, region, force=getattr(args, "force_refresh_data", False))
         logger.success("Analytics bootstrap complete")
+
+        # Deploy frontend to GCS (Cloud CDN serves from this bucket)
+        from tools.gcp.scope_shared.deploy.db_setup.config import get_tofu_output_json
+        from tools.gcp.scope_shared.deploy.deploy_frontend import (
+            deploy_frontend_to_gcs,
+            invalidate_cloud_cdn,
+        )
+        try:
+            logger.info("Fetching nonkube outputs for frontend deploy...")
+            nonkube_out = get_tofu_output_json(
+                "infra_terraform/live_deploy/gcp/nonkube", env, region, "nonkube"
+            )
+            frontend_bucket = nonkube_out.get("frontend_bucket_name", {}).get("value")
+            if frontend_bucket:
+                deploy_frontend_to_gcs(frontend_bucket, env, scope="nonkube", project_id=gcp_proj)
+                url_map = nonkube_out.get("url_map_name", {}).get("value")
+                if url_map and gcp_proj:
+                    invalidate_cloud_cdn(url_map, gcp_proj)
+            else:
+                logger.warning("frontend_bucket_name not in nonkube outputs; skipping nonkube frontend deploy")
+        except Exception as e:
+            logger.warning(
+                "Could not deploy nonkube frontend: %s. Frontend may be stale; re-run deploy to sync.",
+                e,
+            )
+
     return ok

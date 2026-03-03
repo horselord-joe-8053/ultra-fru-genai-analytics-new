@@ -1,0 +1,104 @@
+# GCP kube: API deployment. No AWS credentials; uses GCP LLM (Claude API or Gemini).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fru-api
+  namespace: fru-kube
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: fru-api
+  template:
+    metadata:
+      labels:
+        app: fru-api
+    spec:
+      containers:
+      - name: api
+        image: ${APP_IMAGE}
+        ports:
+        - containerPort: 5001
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5001
+          initialDelaySeconds: 60
+          periodSeconds: 15
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5001
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 10
+          failureThreshold: 3
+        env:
+        - name: PGHOST
+          value: "${PGHOST}"
+        - name: PGPORT
+          value: "${PGPORT}"
+        - name: PGUSER
+          value: "${PGUSER}"
+        - name: PGDATABASE
+          value: "${PGDATABASE}"
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: PGPASSWORD
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: app-credentials
+              key: OPENAI_API_KEY
+        - name: CLAUDE_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: app-credentials
+              key: CLAUDE_API_KEY
+              optional: true
+        - name: GOOGLE_AI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: app-credentials
+              key: GOOGLE_AI_API_KEY
+              optional: true
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: ALLOWED_ORIGINS
+          value: "${ALLOWED_ORIGINS}"
+        - name: OPENAI_EMBED_MODEL
+          value: "text-embedding-3-small"
+        - name: USE_AGENT_QUERY
+          value: "true"
+        - name: CLOUD_PROVIDER
+          value: "gcp"
+        - name: CLOUD_REGION
+          value: "${CLOUD_REGION}"
+        - name: CONTAINER_IMAGE
+          value: "${APP_IMAGE}"
+        - name: CONTAINER_IMAGE_TAGS
+          value: "${CONTAINER_IMAGE_TAGS}"
+        - name: CONTAINER_TYPE
+          value: "gke"
+        - name: DELTA_TABLE_PATH
+          value: "${DELTA_TABLE_PATH}"
+        - name: DELTA_LAKE_PACKAGE
+          value: "${DELTA_LAKE_PACKAGE}"
+        - name: SPARK_HOME
+          value: "${SPARK_HOME}"
+        - name: GCP_LLM_PROVIDER
+          value: "${GCP_LLM_PROVIDER}"
+        - name: LLM_PROVIDER
+          value: "${GCP_LLM_PROVIDER}"
+        - name: CLAUDE_MODEL
+          value: "${CLAUDE_MODEL}"
+        - name: GOOGLE_MODEL
+          value: "${GOOGLE_MODEL}"
+        - name: ENABLE_ANALYTICS_SCHEDULER
+          value: "${ENABLE_ANALYTICS_SCHEDULER}"
+        - name: ANALYTICS_SCHEDULER_INTERVAL_SECONDS
+          value: "${ANALYTICS_SCHEDULER_INTERVAL_SECONDS}"

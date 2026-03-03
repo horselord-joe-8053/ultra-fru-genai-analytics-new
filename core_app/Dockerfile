@@ -41,7 +41,8 @@ COPY nginx.conf /etc/nginx/nginx.conf
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
 
-# Expose port (Nginx listens on 5001 as per config)
+# Expose port (Nginx listens on PORT from env, default 5001)
 EXPOSE 5001
 
-ENTRYPOINT ["/app/docker-entrypoint.sh"]
+# Use explicit bash to avoid exec format error when script is exec'd directly
+ENTRYPOINT ["/bin/bash", "/app/docker-entrypoint.sh"]

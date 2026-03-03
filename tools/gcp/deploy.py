@@ -63,6 +63,7 @@ def main():
     ap.add_argument("--region", default=None)
     ap.add_argument("--skip-doctor", action="store_true")
     ap.add_argument("--skip-build", action="store_true")
+    ap.add_argument("--no-cache-build", action="store_true", help="Build images with Docker --no-cache (fixes corrupted cache)")
     ap.add_argument("--apply", action="store_true", help="Run tofu apply after plan (default: plan only)")
     ap.add_argument("--force-refresh-data", action="store_true",
                     help="Force reload DB schema and embeddings (reserved for future db_setup integration)")
@@ -89,6 +90,8 @@ def main():
             doctor_cmd = [sys.executable, "tools/gcp/standalone/doctor.py", "--env", args.env]
             if region:
                 doctor_cmd.extend(["--region", region])
+            if args.skip_build:
+                doctor_cmd.append("--skip-docker")
             subprocess.run(doctor_cmd, check=True, cwd=repo_root)
         logger.success("Doctor OK")
     else:
@@ -161,8 +164,11 @@ def main():
                 if not build_env.get("SPARK_IMAGE_TAG"):
                     build_env["SPARK_IMAGE_TAG"] = "latest"
                 with stats.timed("Build & push", "build_and_push_images"):
+                    build_cmd = [sys.executable, "tools/gcp/scope_shared/deploy/build_and_push_images.py", "--env", args.env, "--region", region]
+                    if getattr(args, "no_cache_build", False):
+                        build_cmd.append("--no-cache")
                     subprocess.run(
-                        [sys.executable, "tools/gcp/scope_shared/deploy/build_and_push_images.py", "--env", args.env, "--region", region],
+                        build_cmd,
                         check=True,
                         cwd=repo_root,
                         env=build_env,

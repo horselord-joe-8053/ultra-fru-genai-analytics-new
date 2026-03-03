@@ -135,3 +135,4 @@ output "cloud_run_service_name" { value = module.cloud_run.service_name }
 output "spark_job_name" { value = module.spark_job.job_name }
 output "cloudfront_domain_name" { value = module.frontend.cdn_domain_name }
 output "frontend_bucket_name" { value = module.frontend.bucket_name }
+output "url_map_name" { value = module.frontend.url_map_name }

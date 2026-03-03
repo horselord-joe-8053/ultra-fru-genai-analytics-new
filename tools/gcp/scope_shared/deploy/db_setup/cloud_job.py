@@ -246,9 +246,15 @@ def run_verify_only(env: str, region: str) -> bool:
     else:
         logger.warning("Verify-only job timed out")
         return False
-    sleep_with_heartbeat(5, "Waiting for log propagation")
-    logs = fetch_job_logs(cfg["project_id"], region, cfg["job_name"], freshness_min=5)
-    count = _parse_count_from_logs(logs)
+    # Log propagation can take 30–60s; retry parsing with backoff
+    count = None
+    for attempt in range(6):
+        sleep_with_heartbeat(10 if attempt > 0 else 5, "Waiting for log propagation")
+        logs = fetch_job_logs(cfg["project_id"], region, cfg["job_name"], freshness_min=5)
+        count = _parse_count_from_logs(logs)
+        if count is not None:
+            break
+        logger.info(f"Verify-only: FRU_EMBEDDINGS_COUNT not in logs yet (attempt {attempt + 1}/6)")
     if count == expected:
         logger.success(f"Verify-only OK: DB already initialized ({count} rows)")
         return True
@@ -277,13 +283,25 @@ def run_and_verify(env: str, region: str, force: bool = False) -> bool:
     count = None
     for attempt in range(5):
         logs = fetch_job_logs(project_id, region, job_name)
-        log_lines = len([l for l in logs.splitlines() if l.strip()]) if logs else 0
+        all_lines = [l.strip() for l in (logs or "").splitlines() if l.strip()]
+        log_lines = len(all_lines)
         logger.info(f"Fetched {log_lines} log lines from job {job_name}")
         count = _parse_count_from_logs(logs)
         logger.info(f"Parsed FRU_EMBEDDINGS_COUNT={count} from logs")
         if count is not None:
             break
-        logger.info(f"FRU_EMBEDDINGS_COUNT not found in logs (attempt {attempt + 1}/5)")
+        # Diagnostics: distinguish "no logs" (getting) vs "logs present but no match" (setting/format)
+        if log_lines == 0:
+            logger.info(
+                f"FRU_EMBEDDINGS_COUNT not found (attempt {attempt + 1}/5): no log lines returned "
+                "(Cloud Logging may be delayed; container may not have emitted yet)"
+            )
+        else:
+            snippet = "\n".join(all_lines[-5:])[:400]
+            logger.info(
+                f"FRU_EMBEDDINGS_COUNT not found (attempt {attempt + 1}/5): {log_lines} lines present "
+                f"but no FRU_EMBEDDINGS_COUNT=N match. Last 5 lines (snippet):\n{snippet}"
+            )
         sleep_with_heartbeat(10, "Retrying log fetch")
 
     if count is None:

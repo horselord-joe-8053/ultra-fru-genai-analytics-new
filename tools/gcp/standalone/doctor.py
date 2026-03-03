@@ -44,10 +44,21 @@ def has(exe: str) -> bool:
     return False
 
 
+def docker_daemon_available() -> bool:
+    """Return True if Docker daemon is running and reachable."""
+    try:
+        subprocess.check_output(["docker", "info"], stderr=subprocess.DEVNULL, text=True, timeout=5)
+        return True
+    except Exception:
+        return False
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--env", default=os.getenv("FRU_ENV", "dev"))
     ap.add_argument("--region", default=None, help="Region (default: CLOUD_REGION)")
+    ap.add_argument("--skip-docker", action="store_true",
+                    help="Skip Docker daemon check (use with --skip-build when images already exist)")
     args = ap.parse_args()
 
     try:
@@ -75,6 +86,20 @@ def main():
 
     if not has("docker"):
         raise SystemExit("Missing required executable: docker")
+    if not args.skip_docker and not docker_daemon_available():
+        raise SystemExit(
+            "Docker daemon is not running. Start Docker Desktop, or run with --skip-docker "
+            "(and --skip-build when deploying, if images already exist in Artifact Registry)."
+        )
+
+    # GKE/kubectl: gke-gcloud-auth-plugin required for kubectl to authenticate with GKE
+    if has("kubectl"):
+        auth_plugin = shutil.which("gke-gcloud-auth-plugin")
+        if not auth_plugin or not os.access(auth_plugin, os.X_OK):
+            raise SystemExit(
+                "gke-gcloud-auth-plugin not found or not executable. Required for kubectl with GKE. "
+                "Install: gcloud components install gke-gcloud-auth-plugin"
+            )
 
     try:
         out = subprocess.check_output(

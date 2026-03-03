@@ -48,22 +48,24 @@ module "gke" {
   deletion_protection = var.gke_deletion_protection
 }
 
-# Cloud CDN + GCS frontend (API origin via ingress_hostname when LB is ready)
+# Cloud CDN + GCS frontend (API origin via ingress_hostname when GKE LB is ready)
 module "frontend" {
   source = "../../../modules/gcp/primitives/cloud_cdn"
   prefix = var.prefix
   env    = var.env
-  suffix  = "kube"
+  suffix = "kube"
 
-  gcp_region     = var.gcp_region
-  gcp_project_id = var.gcp_project_id
-  tags           = module.tags.common_tags
+  gcp_region          = var.gcp_region
+  gcp_project_id      = var.gcp_project_id
+  tags                = module.tags.common_tags
+  api_origin_hostname = var.ingress_hostname
 }
 
 output "gke_cluster_name" { value = module.gke.cluster_name }
 output "gke_cluster_endpoint" { value = module.gke.cluster_endpoint }
 output "cloudfront_domain_name" { value = module.frontend.cdn_domain_name }
 output "frontend_bucket_name" { value = module.frontend.bucket_name }
+output "url_map_name" { value = module.frontend.url_map_name }
 output "artifact_registry_app_url" { value = try(data.terraform_remote_state.shared_nondurable.outputs.artifact_registry_app_url, "") }
 output "artifact_registry_spark_url" { value = try(data.terraform_remote_state.shared_nondurable.outputs.artifact_registry_spark_url, "") }
 output "delta_bucket" { value = try(data.terraform_remote_state.shared_nondurable.outputs.delta_bucket_name, "") }

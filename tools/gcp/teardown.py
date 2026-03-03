@@ -55,6 +55,14 @@ def main():
         stack_path = os.path.join(repo_root, stack)
         if not os.path.isdir(stack_path):
             continue
+        # Pre-destroy kube: remove CronJob, Job, LoadBalancer svc, namespace before tofu destroy
+        if "kube" in stack and "scope_shared" not in stack:
+            logger.step("Pre-destroy kube: removing CronJob, Job, LoadBalancer, namespace...")
+            try:
+                from tools.gcp.kube.kube_pre_destroy import k8s_pre_destroy_cleanup
+                k8s_pre_destroy_cleanup(args.env, region, stats=stats)
+            except Exception as e:
+                logger.warning(f"Pre-destroy kube: {e}")
         stats.set_scope(scope_for(stack))
         logger.step(f"Destroy {stack}...")
         from tools.gcp.scope_shared.core.terra_init import init_stack
