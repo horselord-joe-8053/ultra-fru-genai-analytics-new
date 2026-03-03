@@ -384,8 +384,9 @@ def main():
             logger.info("Fetching kube tofu outputs (tofu init + output, ~30-60s)...")
             sys.stdout.flush()
             stack_out = get_tofu_output("infra_terraform/live_deploy/gcp/kube", args.env)
-            # GCP kube: gke_cluster_endpoint is API server, not app URL; would need LB ingress
-            base_url = stack_out.get("load_balancer_url", {}).get("value") or stack_out.get("ingress_url", {}).get("value")
+            # GCP kube: Cloud CDN IP serves frontend + API (when ingress_hostname wired)
+            cdn_ip = stack_out.get("cloudfront_domain_name", {}).get("value")
+            base_url = f"http://{cdn_ip}" if cdn_ip else None
 
         if base_url:
             base_url = base_url if base_url.startswith("http") else f"https://{base_url}"

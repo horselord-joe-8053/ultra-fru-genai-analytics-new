@@ -53,6 +53,8 @@ def main() -> None:
                 count = cur.fetchone()[0]
             success(f"fru_sales_embeddings has {count} rows")
             info(f"FRU_EMBEDDINGS_COUNT={count}")
+            info("(verify-only) Emitting FRU_EMBEDDINGS_COUNT for log parsing; flushing stdout")
+            sys.stdout.flush()
             return
 
         step("Phase 1: Applying schema...")
@@ -63,8 +65,11 @@ def main() -> None:
         count = load_embeddings(conn, csv_path=csv_path, config=config, force=force)
 
         # Output parseable count for verification (info ensures bracketed timestamp for log parsing)
+        info(f"About to emit FRU_EMBEDDINGS_COUNT (count={count})")
         success(f"Done. FRU_EMBEDDINGS_COUNT={count}")
         info(f"FRU_EMBEDDINGS_COUNT={count}")
+        info("Emitting FRU_EMBEDDINGS_COUNT complete; flushing stdout")
+        sys.stdout.flush()
     finally:
         conn.close()
         info("Connection closed")

@@ -104,7 +104,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--env", default=os.getenv("FRU_ENV", "dev"))
     ap.add_argument("--region", default=None, help="Region (default: CLOUD_REGION)")
-    ap.add_argument("--no-cache", action="store_true", help="Build Spark image without cache")
+    ap.add_argument("--no-cache", action="store_true", help="Build app and Spark images without Docker cache")
     ap.add_argument("--skip-untag-ecr", action="store_true", help="Keep registry tags locally after push")
     ap.add_argument("--skip-untag", action="store_true", dest="skip_untag_ecr", help="Alias for --skip-untag-ecr")
     ap.add_argument("--force-build", action="store_true", help="Force build (no-op)")
@@ -194,12 +194,13 @@ def main():
     app_hash = compute_build_context_hash("core_app", "Dockerfile")
     spark_hash = compute_build_context_hash("core_app", "analytics/docker/Dockerfile")
 
-    run_docker_with_progress(
-        ["docker", "build", "--progress=plain", "--platform", platform,
+    app_build_cmd = ["docker", "build", "--progress=plain", "--platform", platform,
          "--build-arg", f"BUILD_CONTEXT_HASH={app_hash}",
-         "-t", f"{app_repo_name}:{app_tag}", "core_app"],
-        "Building app image", 1, 4,
-    )
+         "-t", f"{app_repo_name}:{app_tag}", "core_app"]
+    if args.no_cache:
+        app_build_cmd.insert(2, "--no-cache")
+        logger.info("[BUILD] App: --no-cache (fresh build)")
+    run_docker_with_progress(app_build_cmd, "Building app image", 1, 4)
     spark_build_cmd = ["docker", "build", "--progress=plain", "--platform", platform,
          "--build-arg", f"BUILD_CONTEXT_HASH={spark_hash}",
          "-t", f"{spark_repo_name}:{spark_tag}", "-f", "core_app/analytics/docker/Dockerfile", "core_app"]

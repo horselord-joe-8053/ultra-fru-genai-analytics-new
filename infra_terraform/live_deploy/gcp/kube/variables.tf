@@ -14,5 +14,12 @@ variable "gke_deletion_protection" {
   default = false
 }
 
+# GKE LoadBalancer hostname for Cloud CDN API origin. Set after kube_apply creates the LB.
+# Two-phase deploy: first apply without, then kube_apply, poll hostname, second apply with.
+variable "ingress_hostname" {
+  type    = string
+  default = null
+}
+
 variable "tf_state_bucket" { type = string }
 variable "tf_state_prefix" { type = string }

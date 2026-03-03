@@ -73,7 +73,8 @@ def filter_new_container_log_lines(
     Return container log lines with bracketed timestamps later than last_shown.
     Avoids repeating logs on each heartbeat. Updates last_shown_timestamp_ref[0].
     """
-    BRACKETED_TS = re.compile(r"\[(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d+)\s*(?:UTC)?\]", re.I)
+    # Timestamp is from our logger; allow any timezone suffix (UTC, AEST, etc.) or none
+    BRACKETED_TS = re.compile(r"\[(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d+)[^\]]*\]", re.I)
     last = last_shown_timestamp_ref[0]
 
     def parse_ts(line: str) -> datetime | None:
@@ -103,5 +104,6 @@ def filter_new_container_log_lines(
 
 def filter_container_lines_with_timestamps(lines: list[str]) -> list[str]:
     """Filter to lines with bracketed timestamps (container stdout format)."""
-    BRACKETED_TS = re.compile(r"\[\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d+\s*(?:UTC)?\]", re.I)
+    # Timestamp is from our logger; allow any timezone suffix (UTC, AEST, etc.) or none
+    BRACKETED_TS = re.compile(r"\[\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d+[^\]]*\]", re.I)
     return [l for l in lines if BRACKETED_TS.search(l)]

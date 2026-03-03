@@ -98,9 +98,14 @@ output "vpc_connector_id" { value = google_vpc_access_connector.cloud_run.id }
 # Db-setup Cloud Run Job: runs schema (and optionally load_data) for private-IP Cloud SQL.
 # Created by Terraform for clean teardown; image updated by setup_database.py (gcloud deploy).
 # No scheduler; executed on demand during deploy.
+# lifecycle: ignore template changes so Terraform does not revert gcloud updates (real image, env).
 resource "google_cloud_run_v2_job" "db_setup" {
   name     = "${var.prefix}-${var.env}-db-setup"
   location = var.gcp_region
+
+  lifecycle {
+    ignore_changes = [template, client, client_version]
+  }
 
   template {
     template {
