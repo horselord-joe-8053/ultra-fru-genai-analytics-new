@@ -75,3 +75,4 @@ teardown-all-*.log
 tmp/
 vscode_gen/
 tfplan
+tfplan*
