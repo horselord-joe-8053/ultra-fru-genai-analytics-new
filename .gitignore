@@ -76,3 +76,4 @@ tmp/
 vscode_gen/
 tfplan
 tfplan*
+tfplan_migration
