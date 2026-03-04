@@ -159,9 +159,18 @@ def main():
             if not args.skip_build:
                 logger.step(f"[8/{len(phases)}] Building and pushing images...")
                 build_env = {**os.environ}
-                if not build_env.get("APP_IMAGE_TAG"):
-                    build_env["APP_IMAGE_TAG"] = "latest"
-                if not build_env.get("SPARK_IMAGE_TAG"):
+                # Standardize image tagging: use shared git-based version tag (mirrors AWS).
+                from tools.cloud_shared.image_tag import generate_image_tag, get_container_image_tags
+
+                app_tag = (build_env.get("APP_IMAGE_TAG") or "").strip()
+                if not app_tag or app_tag == "latest":
+                    version_tag = generate_image_tag(args.env)
+                    build_env["APP_IMAGE_TAG"] = version_tag
+                    build_env["CONTAINER_IMAGE_TAGS"] = get_container_image_tags(version_tag)
+                else:
+                    build_env["CONTAINER_IMAGE_TAGS"] = app_tag
+
+                if not (build_env.get("SPARK_IMAGE_TAG") or "").strip():
                     build_env["SPARK_IMAGE_TAG"] = "latest"
                 with stats.timed("Build & push", "build_and_push_images"):
                     build_cmd = [sys.executable, "tools/gcp/scope_shared/deploy/build_and_push_images.py", "--env", args.env, "--region", region]

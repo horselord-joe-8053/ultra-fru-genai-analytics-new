@@ -18,7 +18,6 @@ from tools.aws.scope_shared.deploy.deploy_common import (
     apply_stack,
     plan_shows_no_changes,
     tofu_output_json,
-    upload_csv_to_delta_bucket,
 )
 from tools.aws.scope_shared.deploy.deploy_frontend import (
     deploy_frontend_to_s3,
@@ -166,7 +165,6 @@ def run_deploy_kube(
 
     # Phase 10: K8s bootstrap + schedule
     delta_bucket = snd["delta_bucket"]["value"]
-    csv_uploaded = upload_csv_to_delta_bucket(delta_bucket, region)
     durable = tofu_output_json("infra_terraform/live_deploy/aws/scope_shared/durable", env, region)
     aurora_endpoint = durable.get("aurora_endpoint", {}).get("value", "")
     db_secret_arn = durable.get("db_password_plain_secret_arn", {}).get("value", "")
@@ -196,8 +194,6 @@ def run_deploy_kube(
         kube_apply_args += ["--bedrock-inference-profile-id", bedrock_profile]
     if bedrock_model:
         kube_apply_args += ["--bedrock-model-id", bedrock_model]
-    if csv_uploaded:
-        kube_apply_args += ["--force"]
 
     def _kube_bootstrap():
         subprocess.run(kube_apply_args, check=True)

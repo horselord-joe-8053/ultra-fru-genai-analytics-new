@@ -1,7 +1,10 @@
 """
-Image tag generation for backend container (mirrors legacy git_helpers.sh).
+Image tag generation for backend containers (shared across AWS and GCP).
 
-Format: fru_<env>_<date>_<sha>_<slug> (clean) or fru_<env>_<date>_<sha>_dirty_<timestamp> (dirty)
+Format: fru_<env>_<date>_<sha>_<slug> (clean)
+    or: fru_<env>_<date>_<sha>_dirty_<timestamp> (dirty)
+
+Shared across AWS and GCP.
 """
 import os
 import re
@@ -27,7 +30,6 @@ def generate_image_tag(env: str | None = None) -> str:
         ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
         return f"fru_{env}_{datetime.utcnow().strftime('%Y%m%d')}_build_{ts}"
 
-    commit_date = ""
     try:
         out = subprocess.check_output(
             ["git", "log", "-1", "--format=%cd", "--date=format:%Y%m%d", "HEAD"],
@@ -38,7 +40,6 @@ def generate_image_tag(env: str | None = None) -> str:
     except Exception:
         commit_date = datetime.utcnow().strftime("%Y%m%d")
 
-    base_sha = ""
     try:
         base_sha = subprocess.check_output(
             ["git", "rev-parse", "--short", "HEAD"],
@@ -69,7 +70,6 @@ def generate_image_tag(env: str | None = None) -> str:
         ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
         return f"fru_{env}_{commit_date}_{base_sha}_dirty_{ts}"
 
-    commit_msg = "unknown"
     try:
         commit_msg = subprocess.check_output(
             ["git", "log", "-1", "--format=%s", "HEAD"],
@@ -77,7 +77,7 @@ def generate_image_tag(env: str | None = None) -> str:
             cwd=os.getcwd(),
         ).strip()
     except Exception:
-        pass
+        commit_msg = "unknown"
 
     slug = commit_msg.lower()
     slug = re.sub(r"[^a-z0-9._ -]", "", slug)
@@ -92,3 +92,7 @@ def get_container_image_tags(version_tag: str, include_latest: bool = True) -> s
     if include_latest:
         return f"{version_tag},latest"
     return version_tag
+
+
+__all__ = ["generate_image_tag", "get_container_image_tags"]
+

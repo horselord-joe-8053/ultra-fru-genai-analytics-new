@@ -179,8 +179,10 @@ def run_deploy_kube(
             "artifact_registry_spark_url and artifact_registry_app_url required from nondurable. "
             "Run deploy without --skip-build first, or ensure shared nondurable stack is applied."
         )
-    spark_img = f"{spark_base}:latest"
-    app_img = f"{app_base}:latest"
+    app_tag = (os.getenv("APP_IMAGE_TAG") or "").strip() or "latest"
+    spark_tag = (os.getenv("SPARK_IMAGE_TAG") or "").strip() or "latest"
+    spark_img = f"{spark_base}/spark:{spark_tag}"
+    app_img = f"{app_base}/app:{app_tag}"
     delta_table = f"gs://{delta_bucket}/delta/fru_sales"
 
     kube_apply_args = [

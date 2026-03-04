@@ -378,7 +378,7 @@ def main():
             # When APP_IMAGE_TAG is "latest" or unset, generate version tag and push both
             app_tag = os.getenv("APP_IMAGE_TAG", "latest")
             if app_tag == "latest":
-                from tools.aws.scope_shared.deploy.image_tag import generate_image_tag, get_container_image_tags
+                from tools.cloud_shared.image_tag import generate_image_tag, get_container_image_tags
                 version_tag = generate_image_tag(env)
                 os.environ["APP_IMAGE_TAG"] = version_tag
                 os.environ["CONTAINER_IMAGE_TAGS"] = get_container_image_tags(version_tag)
