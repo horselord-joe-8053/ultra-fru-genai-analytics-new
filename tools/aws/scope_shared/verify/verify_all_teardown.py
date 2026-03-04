@@ -4,29 +4,19 @@ import os
 import sys
 import subprocess
 import time
+
 from tools.cloud_shared.logging import logger
 from tools.cloud_shared.env import load_dotenv, EnvVarNotFound
 from tools.aws.scope_shared.core.backend import resolve_region
+from tools.aws.scope_shared.deploy.bootstrap_helpers import K8S_NAMESPACE
+from tools.cloud_shared.verify.verify_kubectl import verify_kubectl_namespace_gone
 
 load_dotenv()
 
 
 def _verify_kube(env: str, region: str) -> bool:
     """Verify kube teardown: namespace is gone. Returns True if ok."""
-    from tools.aws.scope_shared.deploy.bootstrap_helpers import K8S_NAMESPACE
-
-    logger.info(f"Verifying Kubernetes namespace '{K8S_NAMESPACE}' is gone...")
-    try:
-        subprocess.check_call(
-            ["kubectl", "get", "ns", K8S_NAMESPACE],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        logger.error(f"✗ Namespace '{K8S_NAMESPACE}' still exists!")
-        return False
-    except subprocess.CalledProcessError:
-        logger.success(f"✓ Namespace '{K8S_NAMESPACE}' is gone.")
-        return True
+    return verify_kubectl_namespace_gone(K8S_NAMESPACE)
 
 
 def _verify_nonkube(env: str, region: str) -> bool:

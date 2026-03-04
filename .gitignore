@@ -65,8 +65,9 @@ override.tf.json
 # Node (frontend)
 core_app/frontend/node_modules/
 
-# GCP service key (sensitive; use gcp_service_key.example.json as template)
-.cred_config/gcp_service_key.json
+# GCP / credentials (sensitive)
+.cred_config/
+google-cloud-cli-darwin-arm.tar.gz
 
 # Project specific
 .DS_Store
