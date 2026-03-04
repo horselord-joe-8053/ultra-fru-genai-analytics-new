@@ -16,26 +16,14 @@ from tools.cloud_shared.logging import logger
 from tools.cloud_shared.env import load_dotenv, EnvVarNotFound
 from tools.gcp.scope_shared.core.backend import resolve_region
 from tools.gcp.scope_shared.core import resource_names
+from tools.cloud_shared.verify.verify_kubectl import verify_kubectl_namespace_gone
 
 load_dotenv()
 
 
 def _verify_kube(env: str, region: str) -> bool:
     """Verify kube teardown: GKE namespace is gone. Returns True if ok."""
-    namespace = resource_names.k8s_namespace()
-
-    logger.info(f"Verifying Kubernetes namespace '{namespace}' is gone...")
-    try:
-        subprocess.check_call(
-            ["kubectl", "get", "ns", namespace],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        logger.error(f"✗ Namespace '{namespace}' still exists!")
-        return False
-    except subprocess.CalledProcessError:
-        logger.success(f"✓ Namespace '{namespace}' is gone.")
-        return True
+    return verify_kubectl_namespace_gone(resource_names.k8s_namespace())
 
 
 def _verify_nonkube(env: str, region: str) -> bool:
