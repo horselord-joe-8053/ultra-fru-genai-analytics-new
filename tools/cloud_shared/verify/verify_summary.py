@@ -1,7 +1,8 @@
 """
 Verify summary: tabular output for verify_all_deploy results.
 
-Cloud-agnostic. Uses print() (no logger prefix) for clean table display with colors.
+Cloud-agnostic. Provider column = aws/gcp (endpoints) or local (LLM client test).
+Uses print() (no logger prefix) for clean table display with colors.
 """
 from dataclasses import dataclass
 from typing import Sequence
@@ -13,6 +14,7 @@ BLUE = "\033[0;34m"
 NC = "\033[0m"
 
 # Column widths (compact)
+_PROVIDER_W = 8
 _SCOPE_W = 10
 _ENDPOINT_W = 12
 _STATUS_W = 6
@@ -22,7 +24,8 @@ _NOTES_W = 0  # 0 = no truncation
 
 @dataclass
 class VerifyRow:
-    """Single row in the verify summary table."""
+    """Single row in verify summary. provider: aws|gcp (endpoints) or local (LLM client)."""
+    provider: str
     scope: str
     endpoint: str
     ok: bool
@@ -41,6 +44,7 @@ def _format_row(row: VerifyRow) -> str:
     notes = _truncate(row.notes, _NOTES_W) if _NOTES_W > 0 else row.notes
     status = f"{GREEN}  ✓  {NC}" if row.ok else f"{RED}  ✗  {NC}"
     return (
+        f"{row.provider:<{_PROVIDER_W}} "
         f"{row.scope:<{_SCOPE_W}} "
         f"{row.endpoint:<{_ENDPOINT_W}} "
         f"{status} "
@@ -58,6 +62,7 @@ def print_verify_summary(
     Uses colors for status: green ✓ for pass, red ✗ for fail.
     """
     header = (
+        f"{'Provider':<{_PROVIDER_W}} "
         f"{'Scope':<{_SCOPE_W}} "
         f"{'Endpoint':<{_ENDPOINT_W}} "
         f"{'Status':<{_STATUS_W}} "

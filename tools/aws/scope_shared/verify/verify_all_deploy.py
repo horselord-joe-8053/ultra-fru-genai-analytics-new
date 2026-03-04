@@ -5,7 +5,6 @@ import json
 import subprocess
 import argparse
 import requests
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Force immediate output so orchestrator subprocess doesn't appear stuck
 print("verify_all_deploy: starting...", flush=True)
@@ -13,10 +12,11 @@ print("verify_all_deploy: starting...", flush=True)
 from tools.cloud_shared.logging import logger
 from tools.cloud_shared.env import load_dotenv, require, get_int_env, EnvVarNotFound
 from tools.aws.scope_shared.core.terra_var_handling import get_base_vars
-from tools.cloud_shared.retry import poll_until, update_heartbeat
+from tools.cloud_shared.retry import poll_until
 from tools.aws.scope_shared.deploy.bootstrap_helpers import K8S_NAMESPACE
 from tools.aws.scope_shared.core.terra_runner import ensure_shared_terra_env
 from tools.cloud_shared.verify.verify_summary import VerifyRow, print_verify_summary
+from tools.cloud_shared.verify.verify_llm_client import verify_llm_client
 
 load_dotenv()
 print("verify_all_deploy: imports done, entering main()", flush=True)
@@ -48,11 +48,9 @@ def get_total_rec_from_csv() -> int:
 # 502/503 = may be transient (ECS/ALB not ready yet) - we poll until timeout; persistent 502/503 will fail.
 VERIFY_RETRIABLE_HTTP_CODES = frozenset({502, 503})
 
-# --- Acceptable-error policy (refactor: strict by default) ---
-# Analytics: no acceptable errors; DB not configured/unreachable = fail (fix credentials).
-# QueryStream: "Agent disabled" acceptable only when USE_AGENT_QUERY=false (env, same as deploy).
-# CloudWatch: ECS (nonkube) creates path-style Spark log group (e.g. /fru/cloud-log-group-spark/dev/us-east-1);
-#   EKS (kube) does not. For nonkube/all, enforce fail when log group missing (PASS not allowed). For kube only, allow skip (PASS).
+# Analytics: 200 + has data; total_records correctness verified by ETL self-check (run_analytics).
+# QueryStream: "Agent disabled" acceptable only when USE_AGENT_QUERY=false.
+# CloudWatch: removed; ETL self-check replaces log scraping.
 
 def get_tofu_output(stack_dir, env):
     """Retrieve output from Tofu (assumed already applied)."""
@@ -139,6 +137,7 @@ def verify_api_endpoints(
     base_url: str,
     total_rec: int,
     scope: str,
+    provider: str = "aws",  # For VerifyRow: aws or gcp
     timeout_secs=None,
     heartbeat_interval_sec=None,
 ) -> tuple[bool, list]:
@@ -189,10 +188,9 @@ def verify_api_endpoints(
                     return False
                 # No "acceptable" errors: DB not configured/unreachable = fail (fix credentials).
                 raise RuntimeError(f"Analytics error (non-retriable): {err}")
+            # 200 + has data; total_records correctness done by ETL self-check
             total_records = data.get("total_records") or 0
-            if total_records != total_rec:
-                return False
-            return True
+            return total_records > 0
         except RuntimeError:
             raise
         except Exception:
@@ -287,103 +285,16 @@ def verify_api_endpoints(
                     else f"total_rec={total_rec} in answer"
                 )
             elif e["name"] == "Analytics":
-                notes = f"total_records={total_rec}"
+                notes = "has data"
         else:
             s = last_status[e["name"]]
             err = last_error[e["name"]]
             notes = f"HTTP {s}" if s else (err or "Unknown error")
-        rows.append(VerifyRow(scope=scope, endpoint=e["name"], ok=results[e["name"]], notes=notes))
+        rows.append(VerifyRow(provider=provider, scope=scope, endpoint=e["name"], ok=results[e["name"]], notes=notes))
 
     if not ok:
         logger.error(f"[VERIFICATION TIMEOUT] Endpoints failed within {timeout_secs}s")
     return ok, rows
-
-def verify_cloudwatch(env, timeout_mins=None, scope: str = "nonkube") -> tuple[bool, str]:
-    """
-    Return (ok, note) for summary table.
-    ECS (nonkube) creates Spark log group; EKS (kube) does not.
-    - nonkube/all: enforce fail when log group not found or check failed (PASS not allowed).
-    - kube only: allow skip (PASS) when missing—EKS does not create this log group.
-    """
-    from tools.aws.scope_shared.core.backend import resolve_region
-    from tools.aws.scope_shared.core import resource_names
-    region = resolve_region(None)
-    log_group = resource_names.log_group_spark(env, region)
-    # Only kube may skip; nonkube/all must fail when log group missing (ECS creates it).
-    skip_when_missing = scope == "kube"
-
-    timeout_secs = (timeout_mins * 60) if timeout_mins else get_int_env("LOGGING_TASK_DEFAULT_TIMEOUT", VERIFY_TIMEOUT_SEC)
-    heartbeat_interval = VERIFY_HEARTBEAT_INTERVAL_SEC
-
-    logger.info(f"Monitoring CloudWatch Log Group: {log_group} (timeout={timeout_secs}s)")
-    
-    start_time = time.time()
-    
-    try:
-        out = subprocess.check_output([
-            "aws", "logs", "describe-log-groups",
-            "--log-group-name-prefix", log_group,
-            "--region", region
-        ], text=True)
-        groups = json.loads(out).get("logGroups", [])
-        if not any(g["logGroupName"] == log_group for g in groups):
-            if skip_when_missing:
-                logger.warning(f"Log group {log_group} not found. Skipping (kube; EKS does not create it).")
-                return True, "log group not found (skipped; kube)"
-            # nonkube/all: ECS creates this; fail—PASS not allowed.
-            logger.error(f"Log group {log_group} not found.")
-            return False, "log group not found"
-    except Exception as e:
-        if skip_when_missing:
-            logger.warning(f"Log group check failed. Skipping (kube). ({e})")
-            return True, "check failed (skipped; kube)"
-        # nonkube/all: enforce fail.
-        logger.error(f"Log group check failed: {e}")
-        return False, f"check failed: {e}"
-
-    last_heartbeat = 0
-    while (time.time() - start_time) < timeout_secs:
-        elapsed = int(time.time() - start_time)
-        last_heartbeat = update_heartbeat(
-            elapsed, last_heartbeat, heartbeat_interval,
-            f"  Still waiting for CloudWatch logs... {elapsed} s elapsed",
-        )
-
-        try:
-            streams = subprocess.check_output([
-                "aws", "logs", "describe-log-streams",
-                "--log-group-name", log_group,
-                "--order-by", "LastEventTime",
-                "--descending",
-                "--limit", "3",
-                "--region", region
-            ], text=True)
-            
-            stream_list = json.loads(streams).get("logStreams", [])
-            
-            for s in stream_list:
-                stream_name = s["logStreamName"]
-                events = subprocess.check_output([
-                    "aws", "logs", "get-log-events",
-                    "--log-group-name", log_group,
-                    "--log-stream-name", stream_name,
-                    "--limit", "100",
-                    "--region", region
-                ], text=True)
-                
-                log_content = events.lower()
-                if "fru bootstrap success" in log_content:
-                    return True, f"{log_group} — success pattern in {stream_name}"
-                elif "fru bootstrap start" in log_content:
-                    pass  # still waiting
-                
-        except Exception as e:
-            logger.warning(f"Waiting for logs... ({e})")
-
-        time.sleep(min(15, heartbeat_interval))
-
-    logger.error(f"Timed out waiting for success logs after {timeout_secs}s.")
-    return False, f"timeout after {timeout_secs}s"
 
 def main():
     ap = argparse.ArgumentParser()
@@ -405,9 +316,10 @@ def main():
     logger.operation_start("Verify", args.scope, args.env, region)
     logger.step(f"Full Verification Interface (env: {env}, region: {region}, total_rec from CSV: {total_rec})")
     
-    # When scope=all, verify nonkube first then kube (matches deploy order)
+    os.environ.setdefault("CLOUD_PROVIDER", "aws")
     scopes_to_verify = ["nonkube", "kube"] if args.scope == "all" else [args.scope]
-    verify_phases = [f"Endpoints ({s})" for s in scopes_to_verify] + ["CloudWatch logs"]
+    # Phases: endpoints per scope + local LLM client (provider=local in summary)
+    verify_phases = [f"Endpoints ({s})" for s in scopes_to_verify] + ["LLM client"]
     total_phases = len(verify_phases)
     all_rows: list[VerifyRow] = []
     phase_idx = 0
@@ -424,7 +336,7 @@ def main():
             alb_dns = stack_out.get("alb_dns_name", {}).get("value")
             base_url = f"https://{cf_domain}" if cf_domain else (f"http://{alb_dns}" if alb_dns else None)
             if base_url:
-                ok, rows = verify_api_endpoints(base_url, total_rec, scope="nonkube")
+                ok, rows = verify_api_endpoints(base_url, total_rec, scope="nonkube", provider="aws")
                 all_rows.extend(rows)
                 if not ok:
                     logger.error("[VERIFICATION FAILED] API endpoints are not responding correctly (nonkube)")
@@ -442,7 +354,7 @@ def main():
             cf_domain = stack_out.get("cloudfront_domain_name", {}).get("value")
             if cf_domain:
                 base_url = f"https://{cf_domain}"
-                ok, rows = verify_api_endpoints(base_url, total_rec, scope="kube")
+                ok, rows = verify_api_endpoints(base_url, total_rec, scope="kube", provider="aws")
                 all_rows.extend(rows)
                 if not ok:
                     logger.error("[VERIFICATION FAILED] API endpoints are not responding correctly (kube)")
@@ -466,7 +378,7 @@ def main():
                     time.sleep(10)
 
                 if lb_host:
-                    ok, rows = verify_api_endpoints(f"http://{lb_host}", total_rec, scope="kube")
+                    ok, rows = verify_api_endpoints(f"http://{lb_host}", total_rec, scope="kube", provider="aws")
                     all_rows.extend(rows)
                     if not ok:
                         logger.error("[VERIFICATION FAILED] API endpoints are not responding correctly (kube)")
@@ -477,27 +389,27 @@ def main():
         phase_secs = int(time.time() - phase_start_time)
         logger.phase_end(phase_idx, total_phases, verify_phases[phase_idx - 1], phase_secs)
 
-    # CloudWatch: nonkube/all enforce fail when missing; kube may skip (ECS creates log group, EKS does not)
+    # Local LLM client verification (provider=local; runs on verify machine)
     phase_idx += 1
     phase_start_time = time.time()
-    logger.phase_start(phase_idx, total_phases, verify_phases[phase_idx - 1])
-    cw_ok, cw_note = verify_cloudwatch(env, scope=args.scope)
+    logger.phase_start(phase_idx, total_phases, "LLM client")
+    llm_ok, llm_rows = verify_llm_client()
+    all_rows.extend(llm_rows)
     phase_secs = int(time.time() - phase_start_time)
-    logger.phase_end(phase_idx, total_phases, verify_phases[phase_idx - 1], phase_secs)
-    all_rows.append(VerifyRow(scope="shared", endpoint="CloudWatch", ok=cw_ok, notes=cw_note))
-    
-    # 3. Print summary table (no logger prefix)
-    print_verify_summary(all_rows, env, total_rec)
-    
-    verify_dur = int(time.time() - verify_start)
-    if cw_ok:
-        logger.operation_end("Verify", args.scope, args.env, region, verify_dur, ok=True)
-        logger.success("FULL VERIFICATION: SUCCESS")
-        sys.exit(0)
-    else:
-        logger.operation_end("Verify", args.scope, args.env, region, verify_dur, ok=False)
-        logger.error("FULL VERIFICATION: FAILED - CloudWatch logs did not show success pattern")
+    logger.phase_end(phase_idx, total_phases, "LLM client", phase_secs)
+
+    if not llm_ok:
+        logger.error("[VERIFICATION FAILED] LLM client failed")
+        print_verify_summary(all_rows, env, total_rec)
+        logger.operation_end("Verify", args.scope, args.env, region, int(time.time() - verify_start), ok=False)
         sys.exit(1)
+
+    print_verify_summary(all_rows, env, total_rec)
+
+    verify_dur = int(time.time() - verify_start)
+    logger.operation_end("Verify", args.scope, args.env, region, verify_dur, ok=True)
+    logger.success("FULL VERIFICATION: SUCCESS")
+    sys.exit(0)
 
 if __name__ == "__main__":
     try:

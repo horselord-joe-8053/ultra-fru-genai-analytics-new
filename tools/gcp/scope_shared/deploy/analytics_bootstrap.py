@@ -1,11 +1,9 @@
 """
-GCP analytics bootstrap: one-off run of Spark job to populate batch_analytics.
+GCP analytics bootstrap: one-off Spark job to populate batch_analytics.
 
-Uses the same Cloud Run Job as periodic (spark_job); deploy runs it once via gcloud run jobs execute.
-Ensures /analytics has meaningful data immediately after deploy (vs waiting for schedule).
-Idempotent: skips if Cloud Logging shows "fru bootstrap success" in Spark logs.
-
-Reference: tools/aws/scope_shared/deploy/deploy_common.run_ecs_bootstrap
+Same Cloud Run Job as periodic; deploy runs once via gcloud run jobs execute.
+Always runs; ETL self-check verifies DB save; job exit status indicates success.
+No Cloud Logging check; run_analytics raises on save mismatch.
 """
 import os
 import time
@@ -13,7 +11,6 @@ from datetime import datetime
 
 from tools.cloud_shared.logging import logger
 from tools.cloud_shared.retry.with_heartbeat import poll_until, sleep_with_heartbeat
-from tools.gcp.scope_shared.core.resource_names import spark_job_name
 from tools.gcp.scope_shared.deploy.db_setup.config import get_tofu_output_json
 from tools.gcp.scope_shared.deploy.db_setup.job_client import execute_job, get_execution_status
 from tools.gcp.scope_shared.logging_special import (
@@ -27,38 +24,9 @@ from tools.gcp.scope_shared.logging_special import (
     format_container_log_line,
 )
 
-_NONDURABLE_STACK = "infra_terraform/live_deploy/gcp/scope_shared/nondurable"
 _NONKUBE_STACK = "infra_terraform/live_deploy/gcp/nonkube"
-BOOTSTRAP_SUCCESS_PATTERN = "fru bootstrap success"
 BOOTSTRAP_TIMEOUT_SEC = 600  # Spark job can take 2–5 min
 LOG_FETCH_INTERVAL_SEC = 15
-
-
-def _check_bootstrap_succeeded_via_logs(env: str, region: str, project_id: str) -> bool:
-    """Check Cloud Logging for bootstrap success. Returns True if pattern found."""
-    try:
-        import subprocess
-        log_filter = (
-            f'resource.type="cloud_run_job" '
-            f'resource.labels.job_name="{spark_job_name(env, region)}" '
-            f'textPayload=~"{BOOTSTRAP_SUCCESS_PATTERN}"'
-        )
-        result = subprocess.run(
-            [
-                "gcloud", "logging", "read", log_filter,
-                "--project", project_id,
-                "--limit", "5",
-                "--format", "value(textPayload)",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            return BOOTSTRAP_SUCCESS_PATTERN in result.stdout
-    except Exception as e:
-        logger.warning(f"Could not check Cloud Logging for bootstrap success: {e}")
-    return False
 
 
 def _print_spark_logs_on_success(
@@ -113,23 +81,17 @@ def _print_spark_logs_on_failure(
 def run_analytics_bootstrap(env: str, region: str, force: bool = False) -> None:
     """
     Execute analytics bootstrap: run Spark job once (same job as periodic).
-    Idempotent: skips if already succeeded (unless force=True).
+    ETL self-check verifies DB save; job exit status indicates success.
     """
-    if not force and _check_bootstrap_succeeded_via_logs(env, region, os.environ.get("GCP_PROJECT_ID", "")):
-        logger.success("[ANALYTICS BOOTSTRAP] Skip: bootstrap already succeeded (idempotent)")
-        return
-
     from tools.gcp.scope_shared.core.backend import resolve_region
+    from tools.gcp.scope_shared.core.resource_names import spark_job_name
     region = region or resolve_region(None)
     project_id = os.environ.get("GCP_PROJECT_ID", "").strip()
     if not project_id:
         raise SystemExit("GCP_PROJECT_ID must be set for analytics bootstrap")
 
     nonkube_out = get_tofu_output_json(_NONKUBE_STACK, env, region, description="nonkube")
-    job_name = nonkube_out.get("spark_job_name", {}).get("value", "")
-    if not job_name:
-        job_name = spark_job_name(env, region)
-        logger.info(f"spark_job_name not in outputs; using {job_name}")
+    job_name = nonkube_out.get("spark_job_name", {}).get("value") or spark_job_name(env, region)
 
     logger.step("Executing analytics bootstrap (Spark job, one-off)")
     t0 = time.time()

@@ -1,9 +1,7 @@
 """
 GCP deployment verification.
-Reference: tools/aws/scope_shared/verify/verify_all_deploy.py (phases, endpoints, CloudWatch/Cloud Logging).
-
-Verifies LLM client, API endpoints (when deployed), and Cloud Logging.
-Uses same logger format, phase structure, and summary table as AWS.
+Phases: Endpoints (nonkube/kube) + local LLM client. No Cloud Logging; ETL self-check verifies DB.
+Reference: tools/aws/scope_shared/verify/verify_all_deploy.py.
 """
 import argparse
 import json
@@ -21,8 +19,9 @@ from tools.cloud_shared.env import load_dotenv, get_int_env, EnvVarNotFound
 from tools.gcp.scope_shared.core.backend import resolve_region
 from tools.gcp.scope_shared.deploy.bootstrap_state_backend import load_gcp_env
 from tools.gcp.scope_shared.core.terra_runner import get_terra_env
-from tools.cloud_shared.retry import poll_until, update_heartbeat
+from tools.cloud_shared.retry import poll_until
 from tools.cloud_shared.verify.verify_summary import VerifyRow, print_verify_summary
+from tools.cloud_shared.verify.verify_llm_client import verify_llm_client
 
 load_dotenv()
 load_gcp_env()  # Fix multi-line GOOGLE_APPLICATION_CREDENTIALS_JSON for tofu subprocess
@@ -140,6 +139,7 @@ def verify_api_endpoints(
     base_url: str,
     total_rec: int,
     scope: str,
+    provider: str = "gcp",  # For VerifyRow: aws or gcp
     timeout_secs=None,
     heartbeat_interval_sec=None,
 ) -> tuple[bool, list]:
@@ -185,10 +185,9 @@ def verify_api_endpoints(
                 if "No analytics data available yet" in err:
                     return False
                 raise RuntimeError(f"Analytics error (non-retriable): {err}")
+            # 200 + has data; total_records correctness done by ETL self-check
             total_records = data.get("total_records") or 0
-            if total_records != total_rec:
-                return False
-            return True
+            return total_records > 0
         except RuntimeError:
             raise
         except Exception:
@@ -275,65 +274,18 @@ def verify_api_endpoints(
                 passed_via_disabled = use_agent_disabled_by_config and resp and "Agent-based query processing is disabled" in (resp.text or "")
                 notes = "agent disabled by config (USE_AGENT_QUERY=false)" if passed_via_disabled else f"total_rec={total_rec} in answer"
             elif e["name"] == "Analytics":
-                notes = f"total_records={total_rec}"
+                notes = "has data"
             else:
                 notes = base_url.rstrip("/") + e["path"]
         else:
             s = last_status[e["name"]]
             err = last_error[e["name"]]
             notes = f"HTTP {s}" if s else (err or "Unknown error")
-        rows.append(VerifyRow(scope=scope, endpoint=e["name"], ok=results[e["name"]], notes=notes))
+        rows.append(VerifyRow(provider=provider, scope=scope, endpoint=e["name"], ok=results[e["name"]], notes=notes))
 
     if not ok:
         logger.error(f"[VERIFICATION TIMEOUT] Endpoints failed within {timeout_secs}s")
     return ok, rows
-
-
-def verify_llm_and_query(total_rec: int) -> tuple[bool, list]:
-    """
-    Verify LLM client and simple query (GCP phase when no kube/nonkube API deployed).
-    Returns (ok, rows) for summary table.
-    """
-    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
-    sys.path.insert(0, os.path.join(repo_root, "core_app"))
-
-    rows = []
-    client = None
-    try:
-        from backend.env_utils.cloud_shared.client_factory import create_llm_client
-        client = create_llm_client()
-        llm_ok = True
-        notes = type(client).__name__
-    except Exception as e:
-        llm_ok = False
-        notes = str(e)
-    rows.append(VerifyRow(scope="shared", endpoint="LLM client", ok=llm_ok, notes=notes))
-
-    if not llm_ok or client is None:
-        return False, rows
-
-    try:
-        r = client.complete("You are helpful.", "Say OK in one word.")
-        text = r.get("text", "")[:50]
-        query_ok = "ok" in text.lower() or "OK" in text
-        notes = f"total_rec={total_rec} (query test)" if query_ok else text or "empty response"
-    except Exception as e:
-        query_ok = False
-        notes = str(e)
-    rows.append(VerifyRow(scope="shared", endpoint="Query", ok=query_ok, notes=notes))
-
-    return query_ok, rows
-
-
-def verify_cloud_logging(env: str, scope: str, timeout_secs: int | None = None) -> tuple[bool, str]:
-    """
-    GCP Cloud Logging verification (reference: AWS verify_cloudwatch).
-    When GCP nonkube (Cloud Run) creates Spark logs, verify success pattern.
-    kube (GKE): may skip when missing (GKE does not create this log by default).
-    """
-    # GCP Cloud Logging: not yet implemented for Spark; skip for now (like kube skips CloudWatch)
-    logger.info("Cloud Logging verification: skipped (GCP Spark logs not yet wired)")
-    return True, "skipped (GCP Spark logs not yet wired)"
 
 
 def main():
@@ -362,7 +314,8 @@ def main():
     logger.step(f"Full Verification Interface (env: {args.env}, region: {region}, total_rec from CSV: {total_rec})")
 
     scopes_to_verify = ["nonkube", "kube"] if args.scope == "all" else [args.scope]
-    verify_phases = [f"Endpoints ({s})" for s in scopes_to_verify] + ["LLM / Query", "Cloud Logging"]
+    # Phases: endpoints per scope + local LLM client (provider=local in summary)
+    verify_phases = [f"Endpoints ({s})" for s in scopes_to_verify] + ["LLM client"]
     total_phases = len(verify_phases)
     all_rows: list[VerifyRow] = []
     phase_idx = 0
@@ -392,7 +345,7 @@ def main():
 
         if base_url:
             base_url = base_url if base_url.startswith("http") else f"https://{base_url}"
-            ok, rows = verify_api_endpoints(base_url, total_rec, scope)
+            ok, rows = verify_api_endpoints(base_url, total_rec, scope, provider="gcp")
             all_rows.extend(rows)
             if not ok:
                 logger.error(f"[VERIFICATION FAILED] API endpoints are not responding correctly ({scope})")
@@ -402,39 +355,30 @@ def main():
         else:
             skip_note = "No base URL (stack not deployed or no frontend/LB). Skipping endpoints."
             logger.info(skip_note)
-            all_rows.append(VerifyRow(scope=scope, endpoint="Endpoints", ok=True, notes=skip_note))
+            all_rows.append(VerifyRow(provider="gcp", scope=scope, endpoint="Endpoints", ok=True, notes=skip_note))
 
         phase_secs = int(time.time() - phase_start_time)
         logger.phase_end(phase_idx, total_phases, verify_phases[phase_idx - 1], phase_secs)
 
-    # LLM / Query: always run (works without deployed API)
+    # Local LLM client verification (provider=local; works without deployed API)
     phase_idx += 1
     phase_start_time = time.time()
-    logger.phase_start(phase_idx, total_phases, "LLM / Query")
-    llm_ok, llm_rows = verify_llm_and_query(total_rec)
+    logger.phase_start(phase_idx, total_phases, "LLM client")
+    llm_ok, llm_rows = verify_llm_client()
     all_rows.extend(llm_rows)
     phase_secs = int(time.time() - phase_start_time)
-    logger.phase_end(phase_idx, total_phases, "LLM / Query", phase_secs)
+    logger.phase_end(phase_idx, total_phases, "LLM client", phase_secs)
 
     if not llm_ok:
-        logger.error("[VERIFICATION FAILED] LLM client or query test failed")
+        logger.error("[VERIFICATION FAILED] LLM client failed")
         print_verify_summary(all_rows, args.env, total_rec)
         logger.operation_end("Verify", args.scope, args.env, region, int(time.time() - verify_start), ok=False)
         sys.exit(1)
 
-    # Cloud Logging
-    phase_idx += 1
-    phase_start_time = time.time()
-    logger.phase_start(phase_idx, total_phases, "Cloud Logging")
-    cw_ok, cw_note = verify_cloud_logging(args.env, args.scope)
-    phase_secs = int(time.time() - phase_start_time)
-    logger.phase_end(phase_idx, total_phases, "Cloud Logging", phase_secs)
-    all_rows.append(VerifyRow(scope="shared", endpoint="Cloud Logging", ok=cw_ok, notes=cw_note))
-
     print_verify_summary(all_rows, args.env, total_rec)
 
     verify_dur = int(time.time() - verify_start)
-    if cw_ok and llm_ok:
+    if llm_ok:
         logger.operation_end("Verify", args.scope, args.env, region, verify_dur, ok=True)
         logger.success("FULL VERIFICATION: SUCCESS")
         sys.exit(0)

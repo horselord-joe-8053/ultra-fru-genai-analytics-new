@@ -15,9 +15,10 @@ if _UTILS_DIR not in sys.path:
     sys.path.insert(0, _UTILS_DIR)
 
 try:
-    from save_to_db import save_analytics_to_db
+    from save_to_db import save_analytics_to_db, verify_saved_total_records
 except ImportError:
     save_analytics_to_db = None
+    verify_saved_total_records = None
 
 
 def _to_spark_path(path: str) -> str:
@@ -249,7 +250,7 @@ def main(delta_path: str = None, output_dir: str = None):
     }
 
     if save_analytics_to_db:
-        save_analytics_to_db(
+        ok = save_analytics_to_db(
             sales_by_brand=sales_by_brand_list,
             store_performance=store_performance_list,
             feedback_analysis=feedback_analysis_list,
@@ -258,6 +259,9 @@ def main(delta_path: str = None, output_dir: str = None):
             total_records=total_records,
             total_revenue=total_revenue,
         )
+        # ETL self-check: assert DB save matches computed total (replaces log-based verification)
+        if ok and verify_saved_total_records:
+            verify_saved_total_records(total_records)
     else:
         print("Warning: save_analytics_to_db not available")
 
