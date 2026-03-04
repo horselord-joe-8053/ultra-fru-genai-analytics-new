@@ -12,8 +12,6 @@ from tools.aws.scope_shared.core.backend import resolve_region
 from tools.cloud_shared.logging import logger
 from tools.aws.scope_shared.core.terra_var_handling import get_base_vars
 from tools.cloud_shared.retry import run_with_retry
-from tools.aws.scope_shared.deploy.bootstrap_helpers import check_ecs_bootstrap_succeeded
-
 load_dotenv()
 
 ECS_NOT_IDEMPOTENT_MSG = "Creation of service was not idempotent"
@@ -136,13 +134,10 @@ def tofu_output_json(stack_dir: str, env: str, region: str | None = None) -> dic
 
 
 def run_ecs_bootstrap(env: str, region: str | None = None, force: bool = False) -> None:
-    """Run ECS one-off Spark task (run_analytics). Idempotent: skips if already succeeded."""
+    """Run ECS one-off Spark task (run_analytics). Always runs; ETL self-check verifies DB save."""
     from tools.aws.scope_shared.core.backend import resolve_region
+    from tools.aws.scope_shared.core import resource_names
     region = region or resolve_region(None)
-
-    if not force and check_ecs_bootstrap_succeeded(env):
-        logger.success("[ECS BOOTSTRAP] Skip: bootstrap already succeeded (idempotent)")
-        return
 
     logger.step("Executing ECS analytics bootstrap (Spark run_analytics)")
     out = tofu_output_json("infra_terraform/live_deploy/aws/nonkube", env, region)

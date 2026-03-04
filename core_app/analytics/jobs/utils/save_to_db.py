@@ -65,3 +65,37 @@ def save_analytics_to_db(
     except Exception as e:
         print(f"✗ Error saving analytics to database: {e}")
         return False
+
+
+def verify_saved_total_records(expected: int, db_config: Optional[Dict[str, Any]] = None) -> None:
+    """
+    ETL self-check: verify latest batch_analytics row has total_records == expected.
+    Raises RuntimeError on mismatch. Replaces CloudWatch/Cloud Logging log scraping.
+    """
+    if db_config is None:
+        db_config = {
+            "host": os.environ.get("PGHOST", ""),
+            "port": int(os.environ.get("PGPORT", "5432")),
+            "user": os.environ.get("PGUSER", "postgres"),
+            "password": os.environ.get("PGPASSWORD", ""),
+            "dbname": os.environ.get("PGDATABASE", "fru_db"),
+        }
+    if not db_config.get("host") or not db_config.get("password"):
+        raise RuntimeError("PGHOST and PGPASSWORD required for verify_saved_total_records")
+
+    import psycopg2
+    conn = psycopg2.connect(**db_config)
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT total_records FROM batch_analytics ORDER BY created_at DESC LIMIT 1"
+    )
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    if row is None:
+        raise RuntimeError("No batch_analytics row found after save")
+    db_total = int(row[0])
+    if db_total != expected:
+        raise RuntimeError(
+            f"ETL self-check failed: saved total_records={db_total} != expected={expected}"
+        )

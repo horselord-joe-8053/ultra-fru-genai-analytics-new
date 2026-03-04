@@ -1,9 +1,8 @@
 """
-Helpers for idempotent bootstrap: skip if already succeeded.
+Bootstrap helpers for K8s and deploy.
 
-Used by deploy.py (ECS) and kube_apply.py (K8s) to avoid re-running bootstrap
-when a successful run already completed. K8s pre-destroy (kubectl delete) lives
-in tools/aws/kube/kube_pre_destroy.py for symmetry with kube_apply.py.
+K8s: check_k8s_bootstrap_job_succeeded skips re-run when Job already succeeded.
+ECS: run_ecs_bootstrap always runs; ETL self-check (run_analytics) verifies DB; no CloudWatch.
 """
 import json
 import socket
@@ -14,49 +13,10 @@ from tools.cloud_shared.env import load_dotenv
 
 load_dotenv()
 
-# Log pattern for bootstrap success (from run_analytics.py)
-BOOTSTRAP_SUCCESS_PATTERN = "fru bootstrap success"
-
 # K8s Job/CronJob names and namespace (must match infra_terraform/modules/cloud_shared/k8s/)
 JOB_BOOTSTRAP = "fru-analytics-bootstrap-kube"
 CRONJOB_PERIODIC = "fru-analytics-periodic-kube"
 K8S_NAMESPACE = "fru-kube"
-
-
-def check_ecs_bootstrap_succeeded(env: str, log_group: str | None = None) -> bool:
-    """
-    Check CloudWatch logs for ECS bootstrap success. Used to skip re-running.
-    Returns True if 'fru bootstrap success' found in log_group streams.
-    Log group: path-style /{proj}/{component}/{env}/{region} (e.g. /fru/cloud-log-group-spark/dev/us-east-1).
-    """
-    from tools.aws.scope_shared.core.backend import resolve_region
-    from tools.aws.scope_shared.core import resource_names
-    region = resolve_region(None)
-    lg = log_group or os.getenv("CLOUDWATCH_LOG_GROUP") or resource_names.log_group_spark(env, region)
-    try:
-        out = subprocess.check_output([
-            "aws", "logs", "describe-log-streams",
-            "--log-group-name", lg,
-            "--order-by", "LastEventTime",
-            "--descending",
-            "--limit", "5",
-            "--region", region,
-        ], text=True, timeout=10, stderr=subprocess.DEVNULL)
-        streams = json.loads(out).get("logStreams", [])
-        for s in streams:
-            stream_name = s["logStreamName"]
-            events = subprocess.check_output([
-                "aws", "logs", "get-log-events",
-                "--log-group-name", lg,
-                "--log-stream-name", stream_name,
-                "--limit", "200",
-                "--region", region,
-            ], text=True, timeout=10, stderr=subprocess.DEVNULL)
-            if BOOTSTRAP_SUCCESS_PATTERN in events.lower():
-                return True
-    except (subprocess.CalledProcessError, FileNotFoundError, json.JSONDecodeError):
-        pass
-    return False
 
 
 def check_k8s_bootstrap_job_succeeded(env: str) -> bool:
