@@ -19,43 +19,6 @@ load_dotenv()
 ECS_NOT_IDEMPOTENT_MSG = "Creation of service was not idempotent"
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
-CSV_PATH = os.path.join(REPO_ROOT, "core_app", "data", "raw", "fridge_sales_with_rating.csv")
-
-
-def upload_csv_to_delta_bucket(delta_bucket: str, region: str) -> bool:
-    """Upload CSV to S3 raw/. Returns True if upload succeeded."""
-    if not os.path.exists(CSV_PATH):
-        logger.warning(f"CSV not found: {CSV_PATH}; Spark will use bundled CSV")
-        return False
-    s3_uri = f"s3://{delta_bucket}/raw/fridge_sales_with_rating.csv"
-    logger.info(f"Uploading CSV to {s3_uri}")
-    try:
-        subprocess.run(
-            ["aws", "s3", "cp", CSV_PATH, s3_uri, "--region", region],
-            cwd=REPO_ROOT,
-            check=True,
-        )
-        logger.success("CSV uploaded to S3")
-        return True
-    except subprocess.CalledProcessError as e:
-        logger.warning(f"CSV upload failed: {e}; Spark may fall back to bundled CSV")
-        return False
-
-
-def clear_delta_table(delta_bucket: str, region: str) -> None:
-    """Clear existing Delta table in S3 so bootstrap creates fresh from CSV."""
-    prefix = "delta/fru_sales/"
-    s3_uri = f"s3://{delta_bucket}/{prefix}"
-    logger.info(f"Clearing Delta table at {s3_uri}")
-    try:
-        subprocess.run(
-            ["aws", "s3", "rm", s3_uri, "--recursive", "--region", region],
-            cwd=REPO_ROOT,
-            check=True,
-        )
-        logger.success("Delta table cleared")
-    except subprocess.CalledProcessError as e:
-        logger.warning(f"Delta clear failed: {e}; bootstrap may upgrade existing table")
 
 
 def plan_shows_no_changes(

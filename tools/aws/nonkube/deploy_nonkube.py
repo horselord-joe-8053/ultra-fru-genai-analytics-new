@@ -14,8 +14,6 @@ from tools.aws.scope_shared.deploy.deploy_common import (
     apply_stack_nonkube_with_ecs_import_retry,
     plan_shows_no_changes,
     tofu_output_json,
-    upload_csv_to_delta_bucket,
-    clear_delta_table,
     run_ecs_bootstrap,
 )
 from tools.aws.scope_shared.deploy.deploy_frontend import (
@@ -122,15 +120,8 @@ def run_deploy_nonkube(
         logger.warning("frontend_s3_bucket_id not found; skipping frontend deploy")
 
     # Phase 10: ECS bootstrap
-    delta_bucket = snd.get("delta_bucket", {}).get("value", "")
-    csv_uploaded = False
-    if delta_bucket:
-        csv_uploaded = upload_csv_to_delta_bucket(delta_bucket, region)
-        if csv_uploaded:
-            clear_delta_table(delta_bucket, region)
-
     def _ecs_bootstrap():
-        run_ecs_bootstrap(env, region, force=csv_uploaded)
+        run_ecs_bootstrap(env, region)
 
     _timed("ECS bootstrap", "run_analytics one-off", _ecs_bootstrap)
     logger.success("ECS bootstrap complete")

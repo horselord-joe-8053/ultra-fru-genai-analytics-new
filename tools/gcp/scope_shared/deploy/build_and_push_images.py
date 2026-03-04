@@ -130,16 +130,20 @@ def main():
         logger.error("Run deploy first so nondurable is applied. Or: python tools/gcp/deploy.py --scope all --env dev")
         raise SystemExit(1)
 
-    # Canonical local names (like AWS): fru-api-img-gcp-dev, fru-spark-img-gcp-dev
+    # Canonical local names (like AWS): fru-api-img-gcp-dev, fru-spark-img-gcp-dev, fru-kube-proxy-img-gcp-dev
     from tools.gcp.scope_shared.core.resource_names import artifact_registry_repo_app, artifact_registry_repo_spark
     app_repo_name = artifact_registry_repo_app(args.env)
     spark_repo_name = artifact_registry_repo_spark(args.env)
+    kube_proxy_repo_name = f"fru-kube-proxy-img-gcp-{args.env}"
 
     # Artifact Registry format: REGISTRY/PROJECT/REPOSITORY/IMAGE:TAG (IMAGE required)
+    # kube-proxy uses app repo (same registry) for GCP kube Cloud Run proxy
     _APP_IMAGE_NAME = "app"
     _SPARK_IMAGE_NAME = "spark"
+    _KUBE_PROXY_IMAGE_NAME = "kube-proxy"
     app_image_url = f"{app_repo_url}/{_APP_IMAGE_NAME}"
     spark_image_url = f"{spark_repo_url}/{_SPARK_IMAGE_NAME}"
+    kube_proxy_image_url = f"{app_repo_url}/{_KUBE_PROXY_IMAGE_NAME}"
 
     # Validate URL format (no duplicate project in path)
     if app_repo_url.count("fru-proj-1") > 1 or spark_repo_url.count("fru-proj-1") > 1:
@@ -152,11 +156,17 @@ def main():
     _artifact_registry_login(registry_host)
 
     if args.push_only:
-        if _artifact_registry_image_exists(app_image_url, "latest") and _artifact_registry_image_exists(spark_image_url, "latest"):
-            logger.info("[PUSH-ONLY] Target Artifact Registry already has app and spark images; skipping push")
+        has_all = (
+            _artifact_registry_image_exists(app_image_url, "latest")
+            and _artifact_registry_image_exists(spark_image_url, "latest")
+            and _artifact_registry_image_exists(kube_proxy_image_url, "latest")
+        )
+        if has_all:
+            logger.info("[PUSH-ONLY] Target Artifact Registry already has app, spark, and kube-proxy; skipping push")
             sys.exit(0)
         need_app = not _artifact_registry_image_exists(app_image_url, "latest")
         need_spark = not _artifact_registry_image_exists(spark_image_url, "latest")
+        need_kube_proxy = not _artifact_registry_image_exists(kube_proxy_image_url, "latest")
         if need_app:
             sh(["docker", "tag", f"{app_repo_name}:latest", f"{app_image_url}:latest"])
             sh(["docker", "push", f"{app_image_url}:latest"])
@@ -165,7 +175,11 @@ def main():
             sh(["docker", "tag", f"{spark_repo_name}:latest", f"{spark_image_url}:latest"])
             sh(["docker", "push", f"{spark_image_url}:latest"])
             logger.success(f"[PUSH-ONLY] Pushed spark image to Artifact Registry")
-        if (need_app or need_spark) and not args.skip_untag_ecr:
+        if need_kube_proxy:
+            sh(["docker", "tag", f"{kube_proxy_repo_name}:latest", f"{kube_proxy_image_url}:latest"])
+            sh(["docker", "push", f"{kube_proxy_image_url}:latest"])
+            logger.success(f"[PUSH-ONLY] Pushed kube-proxy image to Artifact Registry")
+        if (need_app or need_spark or need_kube_proxy) and not args.skip_untag_ecr:
             untag_registry_refs_after_push(
                 app_image_url, spark_image_url, "latest", "latest",
                 app_canonical_name=app_repo_name, spark_canonical_name=spark_repo_name,
@@ -183,12 +197,18 @@ def main():
                 logger.warning(f"[PUSH-ONLY] Could not store hashes: {e}")
         sys.exit(0)
 
-    app_tag = os.getenv("APP_IMAGE_TAG", "latest")
-    spark_tag = os.getenv("SPARK_IMAGE_TAG", "latest")
+    app_tag = (os.getenv("APP_IMAGE_TAG") or "").strip() or "latest"
+    spark_tag = (os.getenv("SPARK_IMAGE_TAG") or "").strip() or "latest"
+    container_tags_env = (os.getenv("CONTAINER_IMAGE_TAGS") or "").strip()
+    if container_tags_env:
+        container_tags = [t.strip() for t in container_tags_env.split(",") if t.strip()]
+    else:
+        container_tags = [app_tag]
     platform = os.getenv("DOCKER_RUN_REMOTE_PLATFORM", "linux/amd64")
 
     logger.info(f"[BUILD] Platform: {platform}")
     logger.info(f"[BUILD] App tag: {app_tag}")
+    logger.info(f"[BUILD] App container tags: {','.join(container_tags)}")
     logger.info(f"[BUILD] Spark tag: {spark_tag}")
 
     app_hash = compute_build_context_hash("core_app", "Dockerfile")
@@ -200,19 +220,28 @@ def main():
     if args.no_cache:
         app_build_cmd.insert(2, "--no-cache")
         logger.info("[BUILD] App: --no-cache (fresh build)")
-    run_docker_with_progress(app_build_cmd, "Building app image", 1, 4)
+    run_docker_with_progress(app_build_cmd, "Building app image", 1, 5)
     spark_build_cmd = ["docker", "build", "--progress=plain", "--platform", platform,
          "--build-arg", f"BUILD_CONTEXT_HASH={spark_hash}",
          "-t", f"{spark_repo_name}:{spark_tag}", "-f", "core_app/analytics/docker/Dockerfile", "core_app"]
     if args.no_cache:
         spark_build_cmd.insert(2, "--no-cache")
         logger.info("[BUILD] Spark: --no-cache (fresh build)")
-    run_docker_with_progress(spark_build_cmd, "Building spark image", 2, 4)
+    run_docker_with_progress(spark_build_cmd, "Building spark image", 2, 5)
+    kube_proxy_hash = compute_build_context_hash("core_app/kube_proxy", "Dockerfile")
+    kube_proxy_build_cmd = ["docker", "build", "--progress=plain", "--platform", platform,
+         "--build-arg", f"BUILD_CONTEXT_HASH={kube_proxy_hash}",
+         "-t", f"{kube_proxy_repo_name}:{app_tag}", "-f", "core_app/kube_proxy/Dockerfile", "core_app/kube_proxy"]
+    if args.no_cache:
+        kube_proxy_build_cmd.insert(2, "--no-cache")
+    run_docker_with_progress(kube_proxy_build_cmd, "Building kube-proxy image", 3, 5)
 
     if app_tag != "latest":
         sh(["docker", "tag", f"{app_repo_name}:{app_tag}", f"{app_repo_name}:latest"])
     if spark_tag != "latest":
         sh(["docker", "tag", f"{spark_repo_name}:{spark_tag}", f"{spark_repo_name}:latest"])
+    if app_tag != "latest":
+        sh(["docker", "tag", f"{kube_proxy_repo_name}:{app_tag}", f"{kube_proxy_repo_name}:latest"])
 
     step = 3
     sh(["docker", "tag", f"{app_repo_name}:{app_tag}", f"{app_image_url}:{app_tag}"])
@@ -237,7 +266,20 @@ def main():
         sh(["docker", "tag", f"{spark_repo_name}:latest", f"{spark_image_url}:latest"])
         run_docker_with_progress(
             ["docker", "push", f"{spark_image_url}:latest"],
-            "Pushing spark image (latest)", step + 1, 5,
+            "Pushing spark image (latest)", step + 1, 6,
+        )
+        step += 1
+    # kube-proxy: GCP kube Cloud Run proxy (HTTPS + *.run.app)
+    sh(["docker", "tag", f"{kube_proxy_repo_name}:{app_tag}", f"{kube_proxy_image_url}:{app_tag}"])
+    run_docker_with_progress(
+        ["docker", "push", f"{kube_proxy_image_url}:{app_tag}"],
+        "Pushing kube-proxy image", step + 1, 6,
+    )
+    if app_tag != "latest":
+        sh(["docker", "tag", f"{kube_proxy_repo_name}:latest", f"{kube_proxy_image_url}:latest"])
+        run_docker_with_progress(
+            ["docker", "push", f"{kube_proxy_image_url}:latest"],
+            "Pushing kube-proxy image (latest)", step + 2, 6,
         )
 
     if delta_bucket:
@@ -253,6 +295,7 @@ def main():
     logger.success("All images pushed to Artifact Registry:")
     print("  ", f"{app_image_url}:{app_tag}")
     print("  ", f"{spark_image_url}:{spark_tag}")
+    print("  ", f"{kube_proxy_image_url}:{app_tag}")
 
     if not args.skip_untag_ecr:
         untag_registry_refs_after_push(

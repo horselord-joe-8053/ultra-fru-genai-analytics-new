@@ -24,15 +24,6 @@ def _to_spark_path(path: str) -> str:
     return path.replace("s3://", "s3a://", 1) if path.startswith("s3://") else path
 
 
-def _s3_csv_path_from_delta(delta_path: str) -> str:
-    """Derive S3 raw CSV path from Delta path (legacy: s3a://bucket/raw/fridge_sales_with_rating.csv)."""
-    # s3a://bucket/delta/fru_sales -> s3a://bucket/raw/fridge_sales_with_rating.csv
-    p = _to_spark_path(delta_path)
-    if "/delta/" in p or "/delta" in p:
-        base = p.split("/delta")[0]
-        return f"{base}/raw/fridge_sales_with_rating.csv"
-    return ""
-
 def _ensure_fru_sales_exists(spark: SparkSession, delta_path: str) -> str:
     """Create fru_sales Delta table if missing. Loads from bundled CSV or S3 CSV. Fails if no CSV source available."""
     path = _to_spark_path(delta_path)
@@ -48,26 +39,21 @@ def _ensure_fru_sales_exists(spark: SparkSession, delta_path: str) -> str:
     except Exception:
         print("No Delta table found; will create from CSV")
 
-    # Try CSV sources: bundled first (no S3 creds needed), then S3, then local dev paths
+    # Try CSV sources: bundled (container), then local dev paths
     # Bundled in container: /opt/fru/data/fridge_sales_with_rating.csv (Dockerfile COPY)
     _jobs_dir = os.path.dirname(os.path.abspath(__file__))
     csv_paths = [
-        "/opt/fru/data/fridge_sales_with_rating.csv",  # Bundled in Spark image - always works in ECS
+        "/opt/fru/data/fridge_sales_with_rating.csv",  # Bundled in Spark image
         os.path.join(_jobs_dir, "..", "..", "data", "raw", "fridge_sales_with_rating.csv"),
         os.path.join(_jobs_dir, "..", "..", "data", "fridge_sales_with_rating.csv"),
     ]
-    s3_csv = _s3_csv_path_from_delta(delta_path)
-    if s3_csv:
-        csv_paths.insert(1, s3_csv)  # S3 as fallback (deploy uploads; needs ContainerCredentialsProvider)
     bundled = "/opt/fru/data/fridge_sales_with_rating.csv"
     print(f"Bundled CSV exists: {os.path.exists(bundled)}, size={os.path.getsize(bundled) if os.path.exists(bundled) else 0}")
     print(f"Trying CSV sources in order: {csv_paths}")
     for csv_path in csv_paths:
         can_read = False
         spark_path = csv_path
-        if csv_path.startswith("s3") or csv_path.startswith("s3a"):
-            can_read = True  # Try Spark read (will fail if missing)
-        elif os.path.exists(csv_path):
+        if os.path.exists(csv_path):
             can_read = True
             # Use file:// for local paths so Spark reads from container filesystem (ECS/Fargate)
             if not csv_path.startswith("file://"):
@@ -97,8 +83,8 @@ def _ensure_fru_sales_exists(spark: SparkSession, delta_path: str) -> str:
 
     raise RuntimeError(
         "No CSV source available to create fru_sales Delta table. "
-        "Ensure CSV exists at bundled path /opt/fru/data/fridge_sales_with_rating.csv, "
-        "S3 raw/ path, or run deploy to upload CSV before bootstrap."
+        "Ensure CSV exists at bundled path /opt/fru/data/fridge_sales_with_rating.csv or "
+        "core_app/data/raw/fridge_sales_with_rating.csv (local dev)."
     )
 
 
