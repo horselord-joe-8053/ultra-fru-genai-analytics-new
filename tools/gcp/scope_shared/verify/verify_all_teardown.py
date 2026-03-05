@@ -47,8 +47,9 @@ def _verify_nonkube(env: str, region: str) -> bool:
             text=True,
         )
         if result.returncode != 0:
-            # Service not found (NOT_FOUND) or gcloud error = assume gone
-            if "NOT_FOUND" in (result.stderr or "") or "not found" in (result.stderr or "").lower():
+            # Service not found = assume gone
+            err = (result.stderr or result.stdout or "").lower()
+            if "not_found" in err or "not found" in err or "cannot find service" in err:
                 logger.success("✓ Cloud Run service not found.")
                 return True
             logger.warning(f"Could not verify Cloud Run service: {result.stderr or result.stdout}")
@@ -66,6 +67,9 @@ def main():
     ap.add_argument("--env", default=os.getenv("FRU_ENV", "dev"))
     ap.add_argument("--scope", choices=["kube", "nonkube", "all"], default="nonkube")
     ap.add_argument("--region", default=None, help="Region (default: CLOUD_REGION)")
+    ap.add_argument("--non-interactive", action="store_true", help="Accepted for orchestrator compatibility; no-op")
+    ap.add_argument("--incl-dura", action="store_true", help="Accepted for orchestrator compatibility; no-op")
+    ap.add_argument("--incl-dura-all", action="store_true", help="Accepted for orchestrator compatibility; no-op")
     args = ap.parse_args()
 
     if args.region:

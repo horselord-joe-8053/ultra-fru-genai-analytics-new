@@ -88,3 +88,15 @@ def db_setup_job_name(env: str, region: str) -> str:
     """Cloud Run Job name for db-setup: {proj}-{env}-db-setup. Separate from main deploy flow."""
     proj = _proj_prefix()
     return f"{proj}-{env}-db-setup"
+
+
+def cloud_sql_instance(env: str) -> str:
+    """Cloud SQL instance name: {proj}-{env}-sql. Matches durable main.tf instance_name."""
+    proj = _proj_prefix()
+    return f"{proj}-{env}-sql"
+
+
+def durable_network_name(env: str) -> str:
+    """Durable VPC network name: {prefix}-{env}-net. Matches durable main.tf module.vpc name."""
+    proj = _proj_prefix()
+    return f"{proj}-{env}-net"

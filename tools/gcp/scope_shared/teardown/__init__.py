@@ -1,1 +1,1 @@
-"""GCP teardown helpers: pre-destroy and post-destroy (placeholder for future Cloud CDN, etc.)."""
+"""GCP teardown helpers: pre-destroy (durable Cloud SQL async), post-destroy (future Cloud CDN, etc.)."""
