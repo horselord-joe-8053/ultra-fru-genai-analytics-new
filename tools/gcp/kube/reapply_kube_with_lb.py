@@ -4,7 +4,7 @@ Re-apply kube stack with GKE LoadBalancer hostname for Cloud CDN API origin.
 
 Use when deploy finished with "LoadBalancer hostname not available" (GKE LB can take 5–10 min).
 Same pattern as AWS: first apply without LB, kube_apply, poll for LB, second apply with hostname.
-Reference: war_stories/WAR_STORIES_CLOUD_SHARED.md §25.
+Reference: docs/war_stories/WAR_STORIES_CLOUD_SHARED.md §25.
 
 Usage:
   PYTHONPATH=. python tools/gcp/kube/reapply_kube_with_lb.py --env dev --region us-central1

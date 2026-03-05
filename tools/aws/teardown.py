@@ -22,7 +22,7 @@ is empty, destroy is no-op and rule stays; CLI delete handles both in-state and 
 EKS security groups: cluster-sg/nodes-sg created by AWS as side effects; k8s-elb-* created
 by in-tree when Classic ELB Service exists. AWS does not always delete them. We remove
 cluster-sg/nodes-sg in pre_destroy (if cluster gone); k8s-elb-* in post kube destroy,
-before durable (blocks VPC delete). See war_stories/WAR_STORIES_AWS.md ##23, ##6.
+before durable (blocks VPC delete). See docs/war_stories/WAR_STORIES_AWS.md ##23, ##6.
 
 Post-destroy (--incl-dura): After all stacks destroyed, removes durable orphans:
 RDS log group, ECS Container Insights log group, state bucket, lock table. Next

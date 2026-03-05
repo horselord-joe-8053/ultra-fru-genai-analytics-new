@@ -105,7 +105,7 @@ def main():
                 logger.error("✗ Password in .env does NOT match Aurora (password authentication failed)")
                 logger.error("  → Aurora was created with a different password.")
                 logger.error("  → Fix: set Aurora password in RDS console, or ensure .env has the original password.")
-                logger.error("  → See war_stories/WAR_STORIES_AWS.md ## 26")
+                logger.error("  → See docs/war_stories/WAR_STORIES_AWS.md ## 26")
                 sys.exit(1)
             # Timeout / connection refused — can't reach Aurora from this machine
             logger.warning("✗ Cannot reach Aurora from this machine (private subnet / network).")

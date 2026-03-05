@@ -258,7 +258,7 @@ flowchart TB
 
 | Topic | Reference |
 |-------|-----------|
-| <span style="color:#0d47a1">GCP service networking</span> | [WAR_STORIES_GCP.md §8](../../../war_stories/WAR_STORIES_GCP.md) |
+| <span style="color:#0d47a1">GCP service networking</span> | [WAR_STORIES_GCP.md §8](../../war_stories/WAR_STORIES_GCP.md) |
 | <span style="color:#0d47a1">GCP Cloud SQL wiring</span> | [GCP_API_CLOUD_SQL_WIRING.md](../cloud_shared/GCP_API_CLOUD_SQL_WIRING.md) |
 | <span style="color:#e65100">AWS ELB ENI release</span> | [KUBE_INGRESS_LEARNED.md §0.7](../KUBE_INGRESS_LEARNED.md) |
 | Terraform provider issue | [terraform-provider-google #19908](https://github.com/hashicorp/terraform-provider-google/issues/19908) |

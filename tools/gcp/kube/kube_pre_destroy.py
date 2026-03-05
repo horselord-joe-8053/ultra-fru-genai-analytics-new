@@ -5,7 +5,7 @@ Mirrors kube_apply.py: kube_apply applies manifests (api-service, deployment, cr
 kube_pre_destroy removes them before tofu destroy. Reference: tools/aws/kube/kube_pre_destroy.py.
 
 Why kubectl (not Terraform): K8s resources are applied via kubectl (kube_apply.py), not in
-Terraform state. See war_stories/WAR_STORIES_CLOUD_SHARED.md ##20.
+Terraform state. See docs/war_stories/WAR_STORIES_CLOUD_SHARED.md ##20.
 """
 import os
 import subprocess

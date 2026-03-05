@@ -43,8 +43,8 @@
 | `docs/GCP_AWS_REFERENCE.md` | Template for provider mapping; use as structure for Oracle/Azure |
 | `docs/REFACTOR_PLAN_GCP_READINESS.md` | Phase breakdown, env vars, LLM strategy |
 | `docs/learned/cloud_shared/COMMON_CLOUD_COMPONENTS.md` | Cross-cloud component mapping (including how many container images per provider and why) |
-| `war_stories/WAR_STORIES_CLOUD_SHARED.md` | War Stories 30–37 (multi-cloud lessons) |
-| `war_stories/WAR_STORIES_GCP.md` | GCP-specific lessons |
+| `docs/war_stories/WAR_STORIES_CLOUD_SHARED.md` | War Stories 30–37 (multi-cloud lessons) |
+| `docs/war_stories/WAR_STORIES_GCP.md` | GCP-specific lessons |
 
 ### 2.2 Create Your Provider Reference
 
@@ -480,5 +480,5 @@ Before implementing, research and document these for your provider. Use the gotc
 | `docs/learned/cloud_shared/COMMON_CLOUD_COMPONENTS.md` | Cross-cloud component table |
 | `config/cloud/aws_deploy_config.yaml` | Region config template (AZs, subnets) |
 | `config/cloud/gcp_deploy_config.yaml` | GCP region config |
-| `war_stories/WAR_STORIES_CLOUD_SHARED.md` | War Stories 30–37 (multi-cloud) |
-| `war_stories/WAR_STORIES_GCP.md` | GCP-specific war stories |
+| `docs/war_stories/WAR_STORIES_CLOUD_SHARED.md` | War Stories 30–37 (multi-cloud) |
+| `docs/war_stories/WAR_STORIES_GCP.md` | GCP-specific war stories |

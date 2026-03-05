@@ -8,7 +8,7 @@ import re
 import os
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-WAR_DIR = os.path.join(REPO_ROOT, "war_stories")
+WAR_DIR = os.path.join(REPO_ROOT, "docs", "war_stories")
 
 
 def renumber_file(path: str):
