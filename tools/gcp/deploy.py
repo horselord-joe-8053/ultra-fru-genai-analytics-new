@@ -161,8 +161,14 @@ def main():
                     version_tag = generate_image_tag(args.env)
                     build_env["APP_IMAGE_TAG"] = version_tag
                     build_env["CONTAINER_IMAGE_TAGS"] = get_container_image_tags(version_tag)
+                    # Propagate to parent env so later steps (nonkube, kube, kube_apply)
+                    # see the same tags and backend /version is consistent.
+                    os.environ["APP_IMAGE_TAG"] = version_tag
+                    os.environ["CONTAINER_IMAGE_TAGS"] = get_container_image_tags(version_tag)
                 else:
                     build_env["CONTAINER_IMAGE_TAGS"] = app_tag
+                    os.environ["APP_IMAGE_TAG"] = app_tag
+                    os.environ["CONTAINER_IMAGE_TAGS"] = app_tag
 
                 if not (build_env.get("SPARK_IMAGE_TAG") or "").strip():
                     build_env["SPARK_IMAGE_TAG"] = "latest"

@@ -42,7 +42,7 @@
 |----------|---------|
 | `docs/GCP_AWS_REFERENCE.md` | Template for provider mapping; use as structure for Oracle/Azure |
 | `docs/REFACTOR_PLAN_GCP_READINESS.md` | Phase breakdown, env vars, LLM strategy |
-| `docs/learned/cloud_shared/COMMON_CLOUD_COMPONENTS.md` | Cross-cloud component mapping |
+| `docs/learned/cloud_shared/COMMON_CLOUD_COMPONENTS.md` | Cross-cloud component mapping (including how many container images per provider and why) |
 | `war_stories/WAR_STORIES_CLOUD_SHARED.md` | War Stories 30–37 (multi-cloud lessons) |
 | `war_stories/WAR_STORIES_GCP.md` | GCP-specific lessons |
 

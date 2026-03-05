@@ -48,6 +48,7 @@ def run_deploy_nonkube(
     llm_provider = os.getenv("GCP_LLM_PROVIDER") or os.getenv("LLM_PROVIDER", "gemini")
     llm_provider = llm_provider.strip().lower()
     claude_model = os.getenv("CLAUDE_MODEL", "").strip() or "claude-3-5-haiku-20241022"
+    img_tags = os.getenv("CONTAINER_IMAGE_TAGS", "").strip()
     plan_vars = [
         f"-var=prefix={prefix}", f"-var=env={env}",
         f"-var=gcp_region={region}", f"-var=gcp_project_id={gcp_proj}",
@@ -59,6 +60,8 @@ def run_deploy_nonkube(
         f"-var=llm_provider={llm_provider}",
         f"-var=claude_model={claude_model}",
     ]
+    if img_tags:
+        plan_vars.append(f"-var=app_image_tags={img_tags}")
 
     def _apply():
         logger.info("Applying nonkube stack (Cloud Run + Spark + frontend CDN)...")
