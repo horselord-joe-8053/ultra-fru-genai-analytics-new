@@ -160,10 +160,11 @@
 | — | `aws/.../import_preexist/nonkube.py` | GCP: import Cloud Run |
 | — | `aws/.../import_preexist/kube.py` | GCP: import GKE |
 
-### 4.9 scope_shared/teardown (GCP gaps)
+### 4.9 scope_shared/teardown
 
 | GCP | AWS | Notes |
 |-----|-----|-------|
+| `gcp/.../teardown/durable_pre_destroy.py` | — | GCP: Cloud SQL targeted destroy + gcloud compute peerings delete (Compute API) + state rm. Avoids Service Networking API "Producer services still using" block (40+ min). See WAR_STORIES_GCP §8. |
 | — | `aws/.../teardown/cloudfront_pre_destroy.py` | GCP: Cloud CDN pre-destroy |
 | — | `aws/.../teardown/durable_post_destroy.py` | GCP: durable post-destroy orphans |
 

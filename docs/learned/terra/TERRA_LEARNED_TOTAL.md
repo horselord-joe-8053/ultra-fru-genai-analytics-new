@@ -322,7 +322,8 @@ No step in this flow **edits** the committed repo; only the cache and remote sta
 | **State key** | From root.hcl: `path_relative_to_include()/terraform.tfstate` (e.g. `dev/infrastructure/terraform.tfstate`). |
 | **Generated files** | backend.tf, provider.tf (from root.hcl); lock file can live in layer dir or cache; state in S3. |
 | **Import/reconcile scripts** | Per-layer `import-existing-*.sh` helpers that reconcile Terraform state with AWS before **apply** and **destroy** (including lock handling and “already managed / non-existent” cases). See [TERRA_LEARN_IMPORT_PREEXIST.md](TERRA_LEARN_IMPORT_PREEXIST.md). |
+| **Async deletion** | Cloud resources that delete asynchronously; dependent resources block until release. Strategies: pre-destroy scripts, alternative API paths, post-destroy orphan cleanup. See [TERRA_ASYNCHRONOUS_DELETION.md](TERRA_ASYNCHRONOUS_DELETION.md). |
 
 ---
 
-*This doc: `docs/learned/terra/TERRA_LEARNED_TOTAL.md`. For layers, deploy order, Option B, and teardown: [TERRA_LEARNED.md](TERRA_LEARNED.md).*
+*This doc: `docs/learned/terra/TERRA_LEARNED_TOTAL.md`. For layers, deploy order, Option B, and teardown: [TERRA_LEARNED.md](TERRA_LEARNED.md). For async deletion strategies: [TERRA_ASYNCHRONOUS_DELETION.md](TERRA_ASYNCHRONOUS_DELETION.md).*

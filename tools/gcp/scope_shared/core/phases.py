@@ -9,14 +9,16 @@ from tools.aws.scope_shared.core.phases import PhaseTracker
 
 
 def deploy_phases(scope: str) -> list[str]:
-    """Return phase names for GCP deploy (order matches deploy.py). Match AWS flow."""
+    """Return phase names for GCP deploy (order matches deploy.py). Match AWS flow.
+    Ensure secrets runs after durable_with_cooloff and before durable (db_setup job
+    needs secret versions to exist)."""
     base = [
         "Doctor checks",
         "State backend bootstrap",
         "Durable-with-cooloff (Secrets)",
+        "Ensure secrets",
         "Shared durable (VPC)",
         "Shared nondurable (GCS)",
-        "Ensure secrets",
         "Database setup (pgvector, schema, data)",
         "Build & push images",
     ]

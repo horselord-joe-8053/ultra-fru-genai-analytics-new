@@ -286,3 +286,90 @@ AWS state bucket uses `{prefix}-{component}-{env}-{region}-{account_id}`. GCP us
 (1) `tools/aws/backend.py` calls `get_account_id()`; `tools/gcp/backend.py` uses `os.getenv("GCP_PROJECT_ID")`. (2) Do not try to derive project ID from gcloud config in tools—use env var for consistency with Terraform and CI. (3) `doctor.py` should verify `GCP_PROJECT_ID` is set.
 
 ---
+
+## 8. Service Networking Peering Teardown: Compute API vs Service Networking API
+
+**creation:** `<260305>`
+**last_updated:** `<260305>`
+
+**keywords:** GCP, service networking, VPC peering, Cloud SQL, teardown, Producer services still using, Compute API, durable pre-destroy
+**difficulty:** 8
+**significance:** 9
+
+### 8.1 Context
+
+When tearing down the GCP durable stack (VPC + Cloud SQL + Private Service Access), the conventional approach is: (1) destroy Cloud SQL first, (2) wait for it to be gone, (3) destroy the service networking connection (`google_service_networking_connection.default`). Terraform and `gcloud services vpc-peerings delete` both use the **Service Networking API**. After Cloud SQL is deleted, that API enforces a check that no producer services (Cloud SQL, Memorystore, etc.) are still using the connection. GCP's backend releases the connection asynchronously—often taking **10–30+ minutes**, and in our case **40+ minutes** with no success.
+
+### 8.2 The Problem: "Producer services still using"
+
+Using the conventional commands:
+
+- `tofu destroy -target=google_service_networking_connection.default`
+- `gcloud services vpc-peerings delete --network=fru-dev-net`
+
+Both fail repeatedly with:
+
+```
+Error: Unable to remove Service Networking Connection, err: Error waiting for Delete Service Networking Connection: 
+Error code 9, message: Failed to delete connection; Producer services (e.g. CloudSQL, Cloud Memstore, etc.) 
+are still using this connection.
+```
+
+We polled for **40+ minutes**—Cloud SQL was long gone (`gcloud sql instances list` showed 0), but the Service Networking API kept rejecting the delete. GCP does not expose a status to poll; the only "verification" is retrying the delete until it succeeds. Community reports (Terraform provider issue #19908) describe the same issue lasting **days** in some cases.
+
+### 8.3 The Breakthrough: Console UI Delete Works Instantly
+
+In the GCP Console, we navigated to **VPC network → VPC network peering**, selected `servicenetworking-googleapis-com`, and clicked **Delete**. The peering was removed **instantly**—no "Producer services still using" error. The same peering that the Service Networking API refused to delete for 40+ minutes was gone in seconds via the UI.
+
+**Why?** The Console's VPC network peering page uses the **Compute Engine API** (`networks.removePeering`), not the Service Networking API. The Compute API removes the peering from the consumer's network side and does **not** enforce the "Producer services still using" check. Both APIs operate on the same underlying peering; they simply take different deletion paths.
+
+### 8.4 The Solution: gcloud compute + tofu state rm
+
+We adopted the equivalent of the Console delete:
+
+1. **`gcloud compute networks peerings delete servicenetworking-googleapis-com --network=fru-dev-net --project=...`** — Uses Compute API; succeeds immediately (or reports "there is no peering" if already gone).
+2. **`tofu state rm google_service_networking_connection.default`** — Removes the resource from Terraform state so the subsequent full durable destroy does not attempt a Service Networking API delete (which would fail or block).
+
+This "strange combo" is necessary because: (a) Terraform manages the connection via the Service Networking API, which blocks; (b) the Compute API bypasses that block; (c) after deleting via Compute API, the resource is gone in GCP but still in Terraform state—we must `state rm` to keep state in sync.
+
+### 8.5 Workflow Diagram
+
+```mermaid
+%%{init: {'themeVariables': {'fontSize': '8px', 'fontFamily': 'arial'}}}%%
+flowchart TB
+    subgraph CONV["❌ Conventional (Service Networking API)"]
+        direction TB
+        A1["tofu destroy -target=module.cloud_sql"] --> A2["Poll: gcloud sql describe until 404"]
+        A2 --> A3["tofu destroy -target=google_service_networking_connection"]
+        A3 -->|"40+ min: Producer services still using"| A4["⏳ Blocked"]
+    end
+
+    subgraph SOL["✅ Our approach (Compute API)"]
+        direction TB
+        B1["tofu destroy -target=module.cloud_sql"] --> B2["Poll: gcloud sql describe until 404"]
+        B2 --> B3["gcloud compute networks peerings delete"]
+        B3 -->|"Instant (or 'no peering')"| B4["tofu state rm connection"]
+        B4 --> B5["Full durable destroy"]
+    end
+
+    subgraph INSP["💡 Inspiration"]
+        C1["Console UI: VPC peering → Delete"]
+        C2["Works instantly"]
+        C1 --> C2
+    end
+
+    style CONV fill:#ffcccc
+    style SOL fill:#ccffcc
+    style INSP fill:#ffffcc
+    style A4 fill:#ff9999
+```
+
+### 8.6 Key Insight
+
+> Two deletion paths exist for the same service networking peering: (1) **Service Networking API** (tofu, `gcloud services vpc-peerings delete`) — enforces "Producer services still using" and can block for 40+ min or days. (2) **Compute API** (`gcloud compute networks peerings delete`, Console UI) — removes peering from consumer network, succeeds immediately. Use the Compute API path in pre-destroy, then `tofu state rm` to sync state.
+
+### 8.7 Takeaway
+
+(1) Pre-destroy in `durable_pre_destroy.py` uses `gcloud compute networks peerings delete` instead of tofu targeted destroy. (2) Treat "there is no peering" / "not found" as success (idempotent when peering already deleted manually). (3) Always run `tofu state rm google_service_networking_connection.default` after deleting via gcloud so full destroy doesn't attempt Service Networking API delete. (4) Reference: `tools/gcp/scope_shared/teardown/durable_pre_destroy.py` and Terraform provider issue [#19908](https://github.com/hashicorp/terraform-provider-google/issues/19908).
+
+---

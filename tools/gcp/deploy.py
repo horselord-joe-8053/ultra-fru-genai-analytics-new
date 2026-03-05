@@ -10,11 +10,12 @@ Flow:
 1) doctor
 2) bootstrap backend (GCS bucket)
 3) apply shared durable_with_cooloff (secrets)
-4) apply shared durable (VPC)
-5) apply shared nondurable (buckets)
-6) ensure secrets values
-7) build & push images (Artifact Registry)
-8) apply kube/nonkube stack
+4) ensure secrets values (must run before durable: db_setup job needs secret versions)
+5) apply shared durable (VPC, Cloud SQL, db_setup job)
+6) apply shared nondurable (buckets)
+7) database setup (pgvector, schema, data)
+8) build & push images (Artifact Registry)
+9) apply kube/nonkube stack
 
 Scope "all": deploys nonkube first, then kube (matches AWS).
 """
@@ -110,11 +111,14 @@ def main():
     prefix = os.getenv("PROJ_PREFIX", "").strip() or os.getenv("FRU_PREFIX", "fru")
     gcp_proj = os.getenv("GCP_PROJECT_ID", "")
 
-    # Phases 3–6: durable_with_cooloff, durable, nondurable, kube/nonkube
+    # Phases 3–6: durable_with_cooloff, ensure_secrets (before durable!), durable, nondurable, kube/nonkube
+    # ensure_secrets must run after durable_with_cooloff (secrets exist) and before durable (db_setup job
+    # references db_password_plain; Cloud Run requires secret to have a version).
     stacks = [
         ("infra_terraform/live_deploy/gcp/scope_shared/durable_with_cooloff", 3),
-        ("infra_terraform/live_deploy/gcp/scope_shared/durable", 4),
-        ("infra_terraform/live_deploy/gcp/scope_shared/nondurable", 5),
+        ("_ensure_secrets", 4),  # Sentinel: run ensure_secrets before durable
+        ("infra_terraform/live_deploy/gcp/scope_shared/durable", 5),
+        ("infra_terraform/live_deploy/gcp/scope_shared/nondurable", 6),
     ]
     if args.scope == "kube":
         stacks.append(("infra_terraform/live_deploy/gcp/kube", 9))
@@ -129,17 +133,7 @@ def main():
 
     for stack, phase_idx in stacks:
         if needs_secrets_build_and_db and phase_idx >= 9:
-            tracker.start_phase(6)
-            stats.set_scope("shared")
-            logger.step(f"[6/{len(phases)}] Ensuring secrets...")
-            with stats.timed("Secrets", "ensure_secrets"):
-                subprocess.run(
-                    [sys.executable, "tools/gcp/scope_shared/deploy/ensure_secrets.py", "--env", args.env, "--region", region],
-                    check=True,
-                    cwd=repo_root,
-                )
-            logger.success("Secrets ensured")
-            tracker.end_phase(6)
+            # ensure_secrets already ran before durable (phase 4)
             tracker.start_phase(7)
             logger.step(f"[7/{len(phases)}] Setting up database (pgvector, schema, data)...")
             setup_db_cmd = [sys.executable, "tools/gcp/scope_shared/deploy/setup_database.py", "--env", args.env, "--region", region]
@@ -191,7 +185,18 @@ def main():
         phase_name = phases[phase_idx - 1]
         tracker.start_phase(phase_idx)
 
-        if "nonkube" in stack:
+        if stack == "_ensure_secrets":
+            stats.set_scope("shared")
+            logger.step(f"[{phase_idx}/{len(phases)}] Ensuring secrets (before durable)...")
+            with stats.timed("Secrets", "ensure_secrets"):
+                subprocess.run(
+                    [sys.executable, "tools/gcp/scope_shared/deploy/ensure_secrets.py", "--env", args.env, "--region", region],
+                    check=True,
+                    cwd=repo_root,
+                )
+            logger.success("Secrets ensured")
+            ok = True
+        elif "nonkube" in stack:
             stats.set_scope(scope_for(stack))
             logger.step(f"[{phase_idx}/{len(phases)}] Init and plan {stack}...")
             ok = run_deploy_nonkube(repo_root, args.env, region, prefix, gcp_proj, args, stats=stats)

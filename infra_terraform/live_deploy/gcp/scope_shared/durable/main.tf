@@ -49,6 +49,9 @@ resource "google_compute_global_address" "private_ip_alloc" {
   network       = module.vpc.network_id
 }
 
+# Service networking connection for Cloud SQL private IP. Deletion order: Cloud SQL first
+# (async delete 5–15+ min), then this connection. Pre-destroy (durable_pre_destroy.py) runs
+# targeted Cloud SQL destroy and polls until instance gone before full durable destroy.
 resource "google_service_networking_connection" "default" {
   network                 = module.vpc.network_id
   service                 = "servicenetworking.googleapis.com"

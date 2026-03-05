@@ -428,7 +428,7 @@ AWS has scripts that GCP does not yet have: `import_preexist/` (reconcile orphan
 | Gap | Purpose | Recommendation |
 |-----|---------|----------------|
 | **import_preexist** | Import pre-existing resources into Terraform state before apply/destroy | **Defer** for v1. Implement when you have orphaned resources to reconcile. |
-| **Pre-destroy** (e.g. Cloud CDN invalidation, CronJob deletion) | Clean up resources that block Terraform destroy | **Implement** if the provider has equivalent (e.g. OCI CDN pre-destroy). Kube pre-destroy (delete CronJob, Job, namespace) is **required** for kube scope. |
+| **Pre-destroy** (e.g. Cloud CDN invalidation, CronJob deletion) | Clean up resources that block Terraform destroy | **Implement** if the provider has equivalent (e.g. OCI CDN pre-destroy). Kube pre-destroy (delete CronJob, Job, namespace) is **required** for kube scope. **GCP durable pre-destroy:** Cloud SQL + service networking peering—use `gcloud compute networks peerings delete` (Compute API), not tofu; Service Networking API blocks 40+ min. See `durable_pre_destroy.py`, WAR_STORIES_GCP §8. |
 | **Post-destroy orphans** | Clean up resources Terraform doesn't manage | **Defer** for v1. Add when you encounter orphan cleanup needs. |
 
 **Kube pre-destroy is required:** Before destroying the kube stack, delete CronJobs, Jobs, and optionally the namespace so Terraform can cleanly destroy. Reference: `tools/aws/kube/kube_pre_destroy.py`, `tools/gcp/kube/` (create equivalent).

@@ -115,6 +115,7 @@ User → Cloud CDN (global forwarding rule IP)
 ### 3.9 GCP Teardown (`tools/gcp/teardown.py`)
 
 - Before destroying kube stack: call `k8s_pre_destroy_cleanup(args.env, region, stats)`
+- Before destroying durable stack: call `pre_destroy_durable` (targeted Cloud SQL destroy → poll until gone → `gcloud compute networks peerings delete` + `tofu state rm`). Uses Compute API to avoid Service Networking "Producer services still using" block (40+ min). See `durable_pre_destroy.py` and WAR_STORIES_GCP §8.
 
 ---
 
@@ -155,8 +156,9 @@ orchestrator deploy --provider gcp --scope kube --env dev --apply
 
 ---
 
-## 6. Teardown Flow (GCP kube)
+## 6. Teardown Flow (GCP)
 
+**Kube scope:**
 ```
 orchestrator teardown --provider gcp --scope kube --env dev --non-interactive
   → teardown.py
@@ -164,6 +166,8 @@ orchestrator teardown --provider gcp --scope kube --env dev --non-interactive
       1. k8s_pre_destroy_cleanup (scale, delete svc, cronjob, job, namespace)
       2. tofu destroy
 ```
+
+**Scope=all with --incl-dura / --incl-dura-all:** Before durable destroy, `pre_destroy_durable` runs: targeted Cloud SQL destroy → poll until instance gone → `gcloud compute networks peerings delete` (Compute API) → `tofu state rm` connection → full durable destroy. Avoids Service Networking API block (WAR_STORIES_GCP §8).
 
 ---
 

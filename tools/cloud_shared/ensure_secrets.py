@@ -54,11 +54,12 @@ def _get_aws_outputs(env: str, region: str) -> dict:
 
 
 def _get_gcp_outputs(env: str, region: str) -> dict:
-    """Get secret refs from GCP durable stack outputs."""
+    """Get secret refs from GCP durable_with_cooloff stack (creates secrets). Use this stack
+    so ensure_secrets can run before durable apply (durable has no state on first deploy)."""
     from tools.gcp.scope_shared.core.backend import backend_config, resolve_region
     from tools.gcp.scope_shared.core.terra_runner import get_terra_env
 
-    stack_dir = "infra_terraform/live_deploy/gcp/scope_shared/durable"
+    stack_dir = "infra_terraform/live_deploy/gcp/scope_shared/durable_with_cooloff"
     cfg = backend_config(stack_dir, env, region, cloud="gcp")
     args = ["init", "-lock=false", "-upgrade", "-reconfigure"]
     for c in cfg:

@@ -73,7 +73,7 @@ def verify_api_endpoints(
                     return False
                 raise RuntimeError(f"Analytics error (non-retriable): {err}")
             total_records = data.get("total_records") or 0
-            return total_records > 0
+            return total_records == total_rec
         except RuntimeError:
             raise
         except Exception:
@@ -168,7 +168,12 @@ def verify_api_endpoints(
                     else f"total_rec={total_rec} in answer"
                 )
             elif e["name"] == "Analytics":
-                notes = "has data"
+                try:
+                    data = last_resp.get(e["name"])
+                    total_records = data.json().get("total_records", 0) if data else 0
+                    notes = f"total_records={total_records}"
+                except Exception:
+                    notes = "has data"
         else:
             s = last_status[e["name"]]
             err = last_error[e["name"]]
