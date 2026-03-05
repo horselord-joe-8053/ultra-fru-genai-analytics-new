@@ -478,7 +478,11 @@ def _check_credentials_status() -> dict:
 
 @app.route("/version", methods=["GET"])
 def version():
-    """Returns the backend container image version(s) as [tag1, tag2, ...]."""
+    """Returns container image version tag(s) as [tag1, tag2, ...].
+
+    Frontend and API backend share a single container image; this endpoint is
+    the canonical build/version source for the UI and verification.
+    """
     tags_raw = os.environ.get("CONTAINER_IMAGE_TAGS", "").strip()
     if tags_raw:
         # Comma-separated list from deploy (e.g. "fru_dev_20260218_abc123,latest")
