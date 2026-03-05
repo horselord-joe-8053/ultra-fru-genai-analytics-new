@@ -2,7 +2,7 @@
 
 **Purpose:** Adopt the naming convention with clear separation of `<project_prefix>` and `<component_prefix>`, and refactor `.env` vars to hold only the appropriate part. This document is the refactor plan for the renaming phase.
 
-**Related:** `war_stories/WAR_STORIES_AWS.md` §39 (path-style naming).
+**Related:** `docs/war_stories/WAR_STORIES_AWS.md` §39 (path-style naming).
 
 ---
 

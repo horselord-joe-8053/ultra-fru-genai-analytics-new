@@ -323,6 +323,7 @@ No step in this flow **edits** the committed repo; only the cache and remote sta
 | **Generated files** | backend.tf, provider.tf (from root.hcl); lock file can live in layer dir or cache; state in S3. |
 | **Import/reconcile scripts** | Per-layer `import-existing-*.sh` helpers that reconcile Terraform state with AWS before **apply** and **destroy** (including lock handling and “already managed / non-existent” cases). See [TERRA_LEARN_IMPORT_PREEXIST.md](TERRA_LEARN_IMPORT_PREEXIST.md). |
 | **Async deletion** | Cloud resources that delete asynchronously; dependent resources block until release. Strategies: pre-destroy scripts, alternative API paths, post-destroy orphan cleanup. See [TERRA_ASYNCHRONOUS_DELETION.md](TERRA_ASYNCHRONOUS_DELETION.md). |
+| **Durable vs non-durable, teardown rules** | Durable stacks never destroyed implicitly; kube/nonkube teardown only destroys scope-owned state. See [TERRA_DURABLE_TEARDOWN_RULES.md](TERRA_DURABLE_TEARDOWN_RULES.md). |
 
 ---
 

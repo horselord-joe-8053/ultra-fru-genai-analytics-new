@@ -195,7 +195,7 @@ def main():
     if scope in ("kube", "nonkube", "all") and not os.getenv("PGPASSWORD"):
         logger.error("PGPASSWORD must be set in .env when deploying kube/nonkube.")
         logger.error("Aurora and db_password_plain in Secrets Manager must use the same password.")
-        logger.error("See war_stories/WAR_STORIES_AWS.md ## 26 for resolution steps.")
+        logger.error("See docs/war_stories/WAR_STORIES_AWS.md ## 26 for resolution steps.")
         raise SystemExit(1)
 
     try:

@@ -213,7 +213,7 @@ When tearing down the durable stack, the `google_service_networking_connection` 
 
 **Solution:** Use `gcloud compute networks peerings delete servicenetworking-googleapis-com --network={network}` (Compute API), which succeeds immediately—same as the VPC Network Peering Console Delete. Then `tofu state rm google_service_networking_connection.default` to sync Terraform state.
 
-**Reference:** [WAR_STORIES_GCP.md §8](../../../war_stories/WAR_STORIES_GCP.md), `tools/gcp/scope_shared/teardown/durable_pre_destroy.py`.
+**Reference:** [WAR_STORIES_GCP.md §8](../../war_stories/WAR_STORIES_GCP.md), `tools/gcp/scope_shared/teardown/durable_pre_destroy.py`.
 
 ---
 

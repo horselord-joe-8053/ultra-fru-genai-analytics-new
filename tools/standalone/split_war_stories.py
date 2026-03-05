@@ -37,7 +37,7 @@ def parse_stories(content: str) -> list[tuple[int, str]]:
 
 def main():
     src = os.path.join(REPO_ROOT, "README_WAR_STORIES.md")
-    war_dir = os.path.join(REPO_ROOT, "war_stories")
+    war_dir = os.path.join(REPO_ROOT, "docs", "war_stories")
     os.makedirs(war_dir, exist_ok=True)
 
     with open(src, "r") as f:
@@ -71,7 +71,7 @@ def main():
             f.write("\n")
         print(f"Wrote {p}")
 
-    # Step 1: Move README to war_stories/WAR_STORIES.md
+    # Step 1: Move README to docs/war_stories/WAR_STORIES.md
     dest = os.path.join(war_dir, "WAR_STORIES.md")
     with open(dest, "w") as f:
         f.write(content)

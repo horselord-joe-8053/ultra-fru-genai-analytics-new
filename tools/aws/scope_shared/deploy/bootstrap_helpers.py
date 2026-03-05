@@ -147,7 +147,7 @@ def verify_api_db_connected(base_url: str, timeout_seconds: int = 30, max_retrie
             if db_err:
                 logger.error(f"  Error: {db_err}")
             logger.error("  → Ensure PGPASSWORD in .env matches Aurora; run ensure_secrets; re-bootstrap.")
-            logger.error("  → See war_stories/WAR_STORIES_AWS.md ## 26")
+            logger.error("  → See docs/war_stories/WAR_STORIES_AWS.md ## 26")
             raise SystemExit(1)
         except SystemExit:
             raise

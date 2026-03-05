@@ -1,6 +1,6 @@
 # Terraform Stack Ownership and Shared Resources
 
-A guide to **who owns what** across our Terraform stacks, how stacks **share** AWS resources, and how to avoid **tag drift** and other conflicts. Essential reading after [War Story 58: VPC Subnet Tag Drift](../../../war_stories/WAR_STORIES_AWS.md#35-vpc-subnet-tag-drift-durable-vs-kube-and-lifecycle-ignore_changes).
+A guide to **who owns what** across our Terraform stacks, how stacks **share** AWS resources, and how to avoid **tag drift** and other conflicts. Essential reading after [War Story 58: VPC Subnet Tag Drift](../../war_stories/WAR_STORIES_AWS.md#35-vpc-subnet-tag-drift-durable-vs-kube-and-lifecycle-ignore_changes).
 
 **See also:** [FULL_ARCH_KUBE_LEARN.md](../FULL_ARCH_KUBE_LEARN.md), [VPC_LEARNED.md](../VPC_LEARNED.md), [TERRA_LEARNED_TOTAL.md](TERRA_LEARNED_TOTAL.md).
 
@@ -208,4 +208,4 @@ flowchart TB
 
 ---
 
-*Doc: `docs/learned/terra/TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md`. Related: [FULL_ARCH_KUBE_LEARN.md](../FULL_ARCH_KUBE_LEARN.md), [VPC_LEARNED.md](../VPC_LEARNED.md), [WAR_STORIES_AWS.md](../../../war_stories/WAR_STORIES_AWS.md).*
+*Doc: `docs/learned/terra/TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md`. Related: [FULL_ARCH_KUBE_LEARN.md](../FULL_ARCH_KUBE_LEARN.md), [VPC_LEARNED.md](../VPC_LEARNED.md), [WAR_STORIES_AWS.md](../../war_stories/WAR_STORIES_AWS.md).*

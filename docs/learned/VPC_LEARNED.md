@@ -4,7 +4,7 @@ A short, visual crash course that bridges two gaps: **cloud (AWS VPC)** and **Te
 
 **Context:** Useful for AWS Certified ML Engineer – Associate and Google Professional ML Engineer (concepts transfer to GCP VPC + Terraform).
 
-**See also:** [TERRA_LEARNED.md](terra/TERRA_LEARNED.md) (Terraform layers), [war_stories/WAR_STORIES_AWS.md](../../war_stories/WAR_STORIES_AWS.md).
+**See also:** [TERRA_LEARNED.md](terra/TERRA_LEARNED.md) (Terraform layers), [war_stories/WAR_STORIES_AWS.md](../war_stories/WAR_STORIES_AWS.md).
 
 ---
 
@@ -60,10 +60,10 @@ VPC → Subnets → things that live in subnets (ENIs, **DB subnet group**, etc.
 You can't delete a VPC while something still depends on it (subnets, ENIs, security groups, etc.). So **teardown order** is the reverse of creation:
 
 1. Delete resources that use subnets (Aurora, then DB subnet group; ALBs; EKS; etc.).
-2. Release ENIs (often after ALB/EKS deletion; AWS may take 10–30 min — see [War Story 6: ELB ENIs](../../war_stories/WAR_STORIES_AWS.md#6-elb-deletion-and-enis-eventual-consistency-not-a-bug)).
+2. Release ENIs (often after ALB/EKS deletion; AWS may take 10–30 min — see [War Story 6: ELB ENIs](../war_stories/WAR_STORIES_AWS.md#6-elb-deletion-and-enis-eventual-consistency-not-a-bug)).
 3. Delete VPC endpoints, then subnets, then security groups, then the VPC.
 
-See [War Story 5: VPC teardown dependency order](../../war_stories/WAR_STORIES_AWS.md#5-vpc-teardown-dependency-order-enis-and-vpc-endpoints) for the full graph and script order.
+See [War Story 5: VPC teardown dependency order](../war_stories/WAR_STORIES_AWS.md#5-vpc-teardown-dependency-order-enis-and-vpc-endpoints) for the full graph and script order.
 
 ### 1.4 One Picture: "Healthy" Single-VPC Setup
 
@@ -168,7 +168,7 @@ flowchart TB
 ```
 
 **Recovery:**  
-`terragrunt force-unlock <LOCK_ID>` (and type `yes`, or `echo yes | terragrunt force-unlock <LOCK_ID>`). See [War Story 7: State lock and fail-fast](../../war_stories/WAR_STORIES_CLOUD_SHARED.md#7-preempt-teardown-state-lock-failure-and-teardown-reporting-success-on-failure).
+`terragrunt force-unlock <LOCK_ID>` (and type `yes`, or `echo yes | terragrunt force-unlock <LOCK_ID>`). See [War Story 7: State lock and fail-fast](../war_stories/WAR_STORIES_CLOUD_SHARED.md#7-preempt-teardown-state-lock-failure-and-teardown-reporting-success-on-failure).
 
 ### 2.3 Terragrunt in One Sentence
 
@@ -227,7 +227,7 @@ So: **cloud rule** (subnet group must stay in one VPC) + **Terraform behavior** 
 
 ### 3.2 How We Fix It (Align State and Reality)
 
-- **Option A — Clean slate:** Tear down **everything** Terraform manages for that env (including **shared** infra: VPC, Aurora, DB subnet group), then apply again. That removes the old subnet group and creates one new VPC + new subnet group + new Aurora. So state and AWS match again. (Our preempt now uses `--container-type all` so shared is destroyed too; see [War Story 16](../../war_stories/WAR_STORIES_AWS.md#10-phase-2-infrastructure-rds-subnet-group-vpc-mismatch).)
+- **Option A — Clean slate:** Tear down **everything** Terraform manages for that env (including **shared** infra: VPC, Aurora, DB subnet group), then apply again. That removes the old subnet group and creates one new VPC + new subnet group + new Aurora. So state and AWS match again. (Our preempt now uses `--container-type all` so shared is destroyed too; see [War Story 16](../war_stories/WAR_STORIES_AWS.md#10-phase-2-infrastructure-rds-subnet-group-vpc-mismatch).)
 - **Option B — Import:** If you want to **keep** the existing VPC/subnet group in AWS, import them into Terraform state so Terraform "owns" that VPC and those subnets; then it won't try to create a second VPC or change the subnet group to another VPC.
 
 ### 3.3 One Diagram: Before vs After Fix (Clean Slate)
@@ -267,7 +267,7 @@ flowchart LR
 
 ### 4.2 Tag Drift and lifecycle ignore_changes
 
-Without coordination, Durable's apply would **remove** kube's tags (Terraform sees "extra" tags in AWS and plans to match desired state). Kube's apply would then **re-add** them. Fix: add `lifecycle { ignore_changes = [tags] }` to subnet resources in the VPC module ([War Story 58](../../war_stories/WAR_STORIES_AWS.md#35-vpc-subnet-tag-drift-durable-vs-kube-and-lifecycle-ignore_changes)).
+Without coordination, Durable's apply would **remove** kube's tags (Terraform sees "extra" tags in AWS and plans to match desired state). Kube's apply would then **re-add** them. Fix: add `lifecycle { ignore_changes = [tags] }` to subnet resources in the VPC module ([War Story 58](../war_stories/WAR_STORIES_AWS.md#35-vpc-subnet-tag-drift-durable-vs-kube-and-lifecycle-ignore_changes)).
 
 **Deep dive:** [TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md](terra/TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md).
 
@@ -278,12 +278,12 @@ Without coordination, Durable's apply would **remove** kube's tags (Terraform se
 | Topic | Idea |
 |-------|------|
 | **VPC** | Isolated network; subnets are chunks of it; resources (e.g. RDS subnet group) must use subnets from **one** VPC. |
-| **Teardown order** | Reverse of creation: delete DB/subnet group, ENIs, then subnets/VPC; ENIs can lag after ALB/EKS delete ([War Story 5](../../war_stories/WAR_STORIES_AWS.md#5-vpc-teardown-dependency-order-enis-and-vpc-endpoints), [6](../../war_stories/WAR_STORIES_AWS.md#6-elb-deletion-and-enis-eventual-consistency-not-a-bug)). |
+| **Teardown order** | Reverse of creation: delete DB/subnet group, ENIs, then subnets/VPC; ENIs can lag after ALB/EKS delete ([War Story 5](../war_stories/WAR_STORIES_AWS.md#5-vpc-teardown-dependency-order-enis-and-vpc-endpoints), [6](../war_stories/WAR_STORIES_AWS.md#6-elb-deletion-and-enis-eventual-consistency-not-a-bug)). |
 | **State** | Terraform's list of what it manages; stored remotely (e.g. S3); must stay in sync with AWS. |
-| **Lock** | Prevents two applies/destroys from writing state at once; stale lock → "Error acquiring the state lock" → `force-unlock <ID>` ([War Story 7](../../war_stories/WAR_STORIES_CLOUD_SHARED.md#7-preempt-teardown-state-lock-failure-and-teardown-reporting-success-on-failure)). |
-| **Mismatch** | State says "VPC B"; live DB subnet group is in VPC A → apply fails. Fix: align state and reality (full teardown or import) ([War Story 16](../../war_stories/WAR_STORIES_AWS.md#10-phase-2-infrastructure-rds-subnet-group-vpc-mismatch)). |
-| **Multi-stack tags** | Durable owns subnets; kube adds `kubernetes.io/*` tags via `aws_ec2_tag`. Use `lifecycle { ignore_changes = [tags] }` on subnets to avoid drift ([War Story 58](../../war_stories/WAR_STORIES_AWS.md#35-vpc-subnet-tag-drift-durable-vs-kube-and-lifecycle-ignore_changes)). |
+| **Lock** | Prevents two applies/destroys from writing state at once; stale lock → "Error acquiring the state lock" → `force-unlock <ID>` ([War Story 7](../war_stories/WAR_STORIES_CLOUD_SHARED.md#7-preempt-teardown-state-lock-failure-and-teardown-reporting-success-on-failure)). |
+| **Mismatch** | State says "VPC B"; live DB subnet group is in VPC A → apply fails. Fix: align state and reality (full teardown or import) ([War Story 16](../war_stories/WAR_STORIES_AWS.md#10-phase-2-infrastructure-rds-subnet-group-vpc-mismatch)). |
+| **Multi-stack tags** | Durable owns subnets; kube adds `kubernetes.io/*` tags via `aws_ec2_tag`. Use `lifecycle { ignore_changes = [tags] }` on subnets to avoid drift ([War Story 58](../war_stories/WAR_STORIES_AWS.md#35-vpc-subnet-tag-drift-durable-vs-kube-and-lifecycle-ignore_changes)). |
 
 ---
 
-*This doc: `docs/learned/VPC_LEARNED.md`. Layers: [TERRA_LEARNED.md](terra/TERRA_LEARNED.md). Stack ownership: [TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md](terra/TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md). War stories: [war_stories/WAR_STORIES_AWS.md](../../war_stories/WAR_STORIES_AWS.md).*
+*This doc: `docs/learned/VPC_LEARNED.md`. Layers: [TERRA_LEARNED.md](terra/TERRA_LEARNED.md). Stack ownership: [TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md](terra/TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md). War stories: [war_stories/WAR_STORIES_AWS.md](../war_stories/WAR_STORIES_AWS.md).*

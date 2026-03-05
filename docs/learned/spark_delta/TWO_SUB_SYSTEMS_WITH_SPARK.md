@@ -381,3 +381,20 @@ def query():
      - ETL job must load the CSV and build `fru_sales_embeddings` (and can be re‑run idempotently).
    - After that, both subsystems can be re‑run independently (e.g., new analytics batch, re‑embedding with a new model) without changing the other.
 
+---
+
+## 5. Why We Rejected Managed Spark Services (EMR, Dataproc, Glue)
+
+We use **containerized, self-hosted Spark** instead of managed services:
+
+- **No EMR/Dataproc/Glue dependency** — Spark runs in our own containers (ECS task or K8s Job/CronJob).
+- **Delta** is stored on object storage (S3/GCS) via `delta-spark`.
+- **Kube**: Spark-on-Kubernetes (K8s Job for bootstrap, CronJob for recurring).
+- **Nonkube**: Spark container runs as ECS task (EventBridge schedule to RunTask).
+
+Scheduling:
+- Must run **once at bootstrap** to avoid "no data" UI.
+- Then runs on a **recurring schedule**:
+  - kube: Kubernetes CronJob
+  - nonkube: EventBridge schedule to ECS RunTask
+
