@@ -1,11 +1,7 @@
 """
-GCP phase tracking.
-Reference: tools/aws/scope_shared/core/phases.py (PhaseTracker, deploy_phases, teardown_phases).
-Dynamic phase count and numeration for deploy/teardown/verify.
+GCP phase tracking. PhaseTracker from cloud_shared; phase lists are GCP-specific.
 """
-from typing import Sequence
-
-from tools.aws.scope_shared.core.phases import PhaseTracker
+from tools.cloud_shared.core.phases import PhaseTracker
 
 
 def deploy_phases(scope: str) -> list[str]:

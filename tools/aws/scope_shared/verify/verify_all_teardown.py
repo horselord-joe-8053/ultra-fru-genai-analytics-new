@@ -1,12 +1,14 @@
-import argparse
+"""
+AWS teardown verification. Verifies ECS cluster inactive/gone (nonkube) and namespace gone (kube).
+"""
 import json
 import os
-import sys
 import subprocess
-import time
+import sys
 
-from tools.cloud_shared.logging import logger
 from tools.cloud_shared.env import load_dotenv, EnvVarNotFound
+from tools.cloud_shared.logging import logger
+from tools.cloud_shared.verify.verify_all_teardown_common import run_verify_all_teardown
 from tools.aws.scope_shared.core.backend import resolve_region
 from tools.aws.scope_shared.deploy.bootstrap_helpers import K8S_NAMESPACE
 from tools.cloud_shared.verify.verify_kubectl import verify_kubectl_namespace_gone
@@ -15,26 +17,17 @@ load_dotenv()
 
 
 def _verify_kube(env: str, region: str) -> bool:
-    """Verify kube teardown: namespace is gone. Returns True if ok."""
     return verify_kubectl_namespace_gone(K8S_NAMESPACE)
 
 
 def _verify_nonkube(env: str, region: str) -> bool:
-    """Verify nonkube teardown: ECS cluster is gone or inactive. Returns True if ok."""
+    """Verify nonkube teardown: ECS cluster is gone or inactive."""
     from tools.aws.scope_shared.core import resource_names
     cluster_name = resource_names.ecs_cluster(env, region)
     logger.info(f"Verifying ECS cluster '{cluster_name}' is inactive/gone...")
     try:
         out = subprocess.check_output(
-            [
-                "aws",
-                "ecs",
-                "describe-clusters",
-                "--clusters",
-                cluster_name,
-                "--region",
-                region,
-            ],
+            ["aws", "ecs", "describe-clusters", "--clusters", cluster_name, "--region", region],
             text=True,
         )
         data = json.loads(out)
@@ -50,10 +43,11 @@ def _verify_nonkube(env: str, region: str) -> bool:
         return False
     except Exception as e:
         logger.warning(f"Could not verify ECS cluster status: {e}")
-        return True  # Assume ok on describe failure (permission or already gone)
+        return True
 
 
 def main():
+    import argparse
     ap = argparse.ArgumentParser()
     ap.add_argument("--env", default=os.getenv("FRU_ENV", "dev"))
     ap.add_argument("--scope", choices=["kube", "nonkube", "all"], default="nonkube")
@@ -69,37 +63,13 @@ def main():
         logger.error(str(e))
         sys.exit(1)
 
-    # When scope=all, verify nonkube first then kube (matches teardown order)
-    scopes_to_verify = ["nonkube", "kube"] if args.scope == "all" else [args.scope]
-    verify_phases = [f"Teardown ({s})" for s in scopes_to_verify]
-    total_phases = len(verify_phases)
-
-    verify_start = time.time()
-    logger.operation_start("Verify Teardown", args.scope, args.env, region)
-    logger.step(f"Teardown verification (env: {args.env}, region: {region}, scope: {args.scope})")
-
-    all_ok = True
-    for phase_idx, scope in enumerate(scopes_to_verify, start=1):
-        phase_start = time.time()
-        logger.phase_start(phase_idx, total_phases, verify_phases[phase_idx - 1])
-        if scope == "kube":
-            ok = _verify_kube(args.env, region)
-        else:
-            ok = _verify_nonkube(args.env, region)
-        if not ok:
-            all_ok = False
-        phase_secs = int(time.time() - phase_start)
-        logger.phase_end(phase_idx, total_phases, verify_phases[phase_idx - 1], phase_secs)
-
-    verify_dur = int(time.time() - verify_start)
-    logger.operation_end("Verify Teardown", args.scope, args.env, region, verify_dur, ok=all_ok)
-
-    if all_ok:
-        logger.success("Teardown verification complete.")
-        sys.exit(0)
-    else:
-        logger.error("Teardown verification FAILED: some resources still present.")
-        sys.exit(1)
+    run_verify_all_teardown(
+        env=args.env,
+        region=region,
+        scope=args.scope,
+        verify_kube_fn=_verify_kube,
+        verify_nonkube_fn=_verify_nonkube,
+    )
 
 
 if __name__ == "__main__":

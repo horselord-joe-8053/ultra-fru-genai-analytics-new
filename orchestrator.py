@@ -90,36 +90,31 @@ def ensure_deps():
             cwd=os.getcwd(),
         )
 
-def handle_aws(args):
-    """Route commands to AWS tools (tools/aws/*). Supports --cloud-region for multi-region."""
-    base_path = "tools/aws"
-    
+def _handle_provider(args, base_path: str, provider: str, deploy_extra_before: list[str] | None = None):
+    """Unified provider handler. Routes doctor, deploy, teardown, verify to provider-specific tools."""
+    deploy_extra_before = deploy_extra_before or []
+
     cmd_args = []
     if args.env:
         cmd_args.extend(["--env", args.env])
     if args.cloud_region:
         cmd_args.extend(["--region", args.cloud_region])
-    
+
     if args.command == "doctor":
         script = f"{base_path}/standalone/doctor.py"
         with logger.Heartbeat("Preflight checks"):
             run_command(["python", script] + cmd_args)
-        
+
     elif args.command == "deploy":
         if not args.scope:
             logger.error("Error: --scope required for deploy")
             sys.exit(1)
-        
         if not args.skip_ensure_deps:
             ensure_deps()
-            
-        # Preempt logic: Teardown -> Verify Teardown
+
         if args.preempt:
             logger.step("Executing Preempt Sequence: Teardown -> Verify Teardown -> Deploy -> Verify Deploy")
-            
-            # 1. Teardown
             teardown_script = f"{base_path}/teardown.py"
-            # Ensure non-interactive for preempt
             teardown_args = cmd_args + ["--non-interactive", "--scope", args.scope]
             if args.incl_dura_all:
                 teardown_args.append("--incl-dura-all")
@@ -127,34 +122,32 @@ def handle_aws(args):
                 teardown_args.append("--incl-dura")
             with logger.Heartbeat(f"Preempt Teardown scope={args.scope} env={args.env}", timeout=-1):
                 run_command(["python", teardown_script] + teardown_args, force_no_timeout=True)
-                
-            # 2. Verify Teardown
             verify_teardown_script = f"{base_path}/scope_shared/verify/verify_all_teardown.py"
             run_command(["python", verify_teardown_script] + cmd_args + ["--scope", args.scope])
-            
-        # 3. Deploy
+
         script = f"{base_path}/deploy.py"
-        deploy_args = cmd_args + ["--scope", args.scope]
+        deploy_args = ["python", script] + deploy_extra_before + ["--scope", args.scope] + cmd_args
         if args.skip_doctor:
             deploy_args.append("--skip-doctor")
         if args.skip_build:
             deploy_args.append("--skip-build")
-        if args.force_build:
+        if getattr(args, "force_build", False):
             deploy_args.append("--force-build")
-        if args.force_refresh_data:
+        if getattr(args, "force_refresh_data", False):
             deploy_args.append("--force-refresh-data")
-        if args.elb:
+        if getattr(args, "elb", False):
             deploy_args.append("--elb")
-            
+        if getattr(args, "gke_disable_deletion_protection", False):
+            deploy_args.append("--gke-disable-deletion-protection")
+
         with logger.Heartbeat(f"Deployment scope={args.scope} env={args.env}"):
-            run_command(["python", script] + deploy_args)
-        
-        # 4. Auto-verify after successful deploy (Verify Deploy)
+            run_command(deploy_args)
+
         logger.step("Initiating automatic verification...")
         verify_script = f"{base_path}/scope_shared/verify/verify_all_deploy.py"
-        verify_args = cmd_args + ["--scope", args.scope]  # verify does not accept --skip-doctor
+        verify_args = cmd_args + ["--scope", args.scope]
         run_command(["python", verify_script] + verify_args)
-        
+
     elif args.command == "teardown":
         if not args.scope:
             logger.error("Error: --scope required for teardown")
@@ -165,110 +158,40 @@ def handle_aws(args):
             cmd_args.append("--incl-dura-all")
         elif args.incl_dura:
             cmd_args.append("--incl-dura")
-        # Translate --force to --non-interactive for compatibility if user habitually uses force
         if args.non_interactive or args.force:
             cmd_args.append("--non-interactive")
-            
+
         hb_msg = f"Teardown scope={args.scope} env={args.env}"
         if args.cloud_region:
             hb_msg += f" region={args.cloud_region}"
-        with logger.Heartbeat(hb_msg, timeout=-1):  # Teardown can take 60+ min; -1 = no timeout
+        with logger.Heartbeat(hb_msg, timeout=-1):
             run_command(["python", script] + cmd_args, force_no_timeout=True)
-        # Verify teardown: confirm resources are gone (namespace, ECS cluster, etc.)
         logger.step("Verifying teardown...")
         verify_teardown_script = f"{base_path}/scope_shared/verify/verify_all_teardown.py"
         run_command(["python", verify_teardown_script] + cmd_args)
-        
+
     elif args.command == "verify":
         if not args.scope:
             logger.error("Error: --scope required for verify")
             sys.exit(1)
         script = f"{base_path}/scope_shared/verify/verify_all_deploy.py"
         cmd_args.extend(["--scope", args.scope])
-        # verify_all_deploy.py itself polls, so we wrap it here for a top-level heartbeat
         with logger.Heartbeat(f"Verification scope={args.scope} env={args.env}"):
             run_command(["python", script] + cmd_args)
-        
+
     else:
-        logger.error(f"Unknown command for AWS: {args.command}")
+        logger.error(f"Unknown command for {provider}: {args.command}")
         sys.exit(1)
+
+
+def handle_aws(args):
+    """Route commands to AWS tools (tools/aws/*). Supports --cloud-region for multi-region."""
+    _handle_provider(args, "tools/aws", "aws", deploy_extra_before=[])
+
 
 def handle_gcp(args):
     """Route commands to GCP tools (tools/gcp/*). Supports --cloud-region for multi-region."""
-    base_path = "tools/gcp"
-    cmd_args = []
-    if args.env:
-        cmd_args.extend(["--env", args.env])
-    if args.cloud_region:
-        cmd_args.extend(["--region", args.cloud_region])
-
-    if args.command == "doctor":
-        script = f"{base_path}/standalone/doctor.py"
-        with logger.Heartbeat("Preflight checks"):
-            run_command(["python", script] + cmd_args)
-    elif args.command == "deploy":
-        if not args.scope:
-            logger.error("Error: --scope required for deploy")
-            sys.exit(1)
-        if not args.skip_ensure_deps:
-            ensure_deps()
-        # Preempt: Teardown -> Verify Teardown -> Deploy -> Verify (reference: AWS handle_aws)
-        if args.preempt:
-            logger.step("Executing Preempt Sequence: Teardown -> Verify Teardown -> Deploy -> Verify Deploy")
-            teardown_script = f"{base_path}/teardown.py"
-            teardown_args = cmd_args + ["--non-interactive", "--scope", args.scope]
-            if args.incl_dura_all:
-                teardown_args.append("--incl-dura-all")
-            elif args.incl_dura:
-                teardown_args.append("--incl-dura")
-            with logger.Heartbeat(f"Preempt Teardown scope={args.scope} env={args.env}", timeout=-1):
-                run_command(["python", teardown_script] + teardown_args, force_no_timeout=True)
-            verify_teardown_script = f"{base_path}/scope_shared/verify/verify_all_teardown.py"
-            run_command(["python", verify_teardown_script] + cmd_args + ["--scope", args.scope])
-        script = f"{base_path}/deploy.py"
-        deploy_args = ["python", script, "--scope", args.scope, "--apply"] + cmd_args
-        if args.skip_doctor:
-            deploy_args.append("--skip-doctor")
-        if args.skip_build:
-            deploy_args.append("--skip-build")
-        if getattr(args, "force_refresh_data", False):
-            deploy_args.append("--force-refresh-data")
-        if getattr(args, "gke_disable_deletion_protection", False):
-            deploy_args.append("--gke-disable-deletion-protection")
-        with logger.Heartbeat(f"Deployment scope={args.scope} env={args.env}"):
-            run_command(deploy_args)
-        # Auto-verify after deploy (matches AWS)
-        logger.step("Initiating automatic verification...")
-        run_command(["python", f"{base_path}/scope_shared/verify/verify_all_deploy.py"] + cmd_args + ["--scope", args.scope])
-    elif args.command == "teardown":
-        if not args.scope:
-            logger.error("Error: --scope required for teardown")
-            sys.exit(1)
-        script = f"{base_path}/teardown.py"
-        cmd_args.extend(["--scope", args.scope])
-        if args.incl_dura_all:
-            cmd_args.append("--incl-dura-all")
-        elif args.incl_dura:
-            cmd_args.append("--incl-dura")
-        if args.non_interactive or args.force:
-            cmd_args.append("--non-interactive")
-        with logger.Heartbeat(f"Teardown scope={args.scope} env={args.env}", timeout=-1):
-            run_command(["python", script] + cmd_args, force_no_timeout=True)
-        # Verify teardown: confirm Cloud Run / GKE resources are gone
-        logger.step("Verifying teardown...")
-        verify_teardown_script = f"{base_path}/scope_shared/verify/verify_all_teardown.py"
-        run_command(["python", verify_teardown_script] + cmd_args)
-    elif args.command == "verify":
-        if not args.scope:
-            logger.error("Error: --scope required for verify")
-            sys.exit(1)
-        script = f"{base_path}/scope_shared/verify/verify_all_deploy.py"
-        cmd_args.extend(["--scope", args.scope])
-        with logger.Heartbeat(f"Verification scope={args.scope} env={args.env}"):
-            run_command(["python", script] + cmd_args)
-    else:
-        logger.error(f"Unknown command for GCP: {args.command}")
-        sys.exit(1)
+    _handle_provider(args, "tools/gcp", "gcp", deploy_extra_before=["--apply"])
 
 def handle_local(args):
     """Route commands to Local tools. Implementation pending."""

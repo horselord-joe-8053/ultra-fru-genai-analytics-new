@@ -3,17 +3,13 @@ GCP teardown verification.
 Reference: tools/aws/scope_shared/verify/verify_all_teardown.py (namespace, ECS/Cloud Run checks).
 
 Verifies GKE namespace is gone (kube) and Cloud Run service is inactive/gone (nonkube).
-Uses same logger format and phase structure as AWS.
 """
-import argparse
-import json
 import os
 import sys
-import subprocess
-import time
 
-from tools.cloud_shared.logging import logger
 from tools.cloud_shared.env import load_dotenv, EnvVarNotFound
+from tools.cloud_shared.logging import logger
+from tools.cloud_shared.verify.verify_all_teardown_common import run_verify_all_teardown
 from tools.gcp.scope_shared.core.backend import resolve_region
 from tools.gcp.scope_shared.core import resource_names
 from tools.cloud_shared.verify.verify_kubectl import verify_kubectl_namespace_gone
@@ -22,12 +18,11 @@ load_dotenv()
 
 
 def _verify_kube(env: str, region: str) -> bool:
-    """Verify kube teardown: GKE namespace is gone. Returns True if ok."""
     return verify_kubectl_namespace_gone(resource_names.k8s_namespace())
 
 
 def _verify_nonkube(env: str, region: str) -> bool:
-    """Verify nonkube teardown: Cloud Run service is gone or inactive. Returns True if ok."""
+    """Verify nonkube teardown: Cloud Run service is gone or inactive."""
     service_name = resource_names.cloud_run_service(env, region)
     project = os.environ.get("GCP_PROJECT_ID", "").strip()
     if not project:
@@ -36,6 +31,7 @@ def _verify_nonkube(env: str, region: str) -> bool:
 
     logger.info(f"Verifying Cloud Run service '{service_name}' is inactive/gone...")
     try:
+        import subprocess
         result = subprocess.run(
             [
                 "gcloud", "run", "services", "describe", service_name,
@@ -47,14 +43,12 @@ def _verify_nonkube(env: str, region: str) -> bool:
             text=True,
         )
         if result.returncode != 0:
-            # Service not found = assume gone
             err = (result.stderr or result.stdout or "").lower()
             if "not_found" in err or "not found" in err or "cannot find service" in err:
                 logger.success("✓ Cloud Run service not found.")
                 return True
             logger.warning(f"Could not verify Cloud Run service: {result.stderr or result.stdout}")
             return True
-        # Service exists = fail
         logger.error(f"✗ Cloud Run service '{service_name}' still exists")
         return False
     except Exception as e:
@@ -63,6 +57,7 @@ def _verify_nonkube(env: str, region: str) -> bool:
 
 
 def main():
+    import argparse
     ap = argparse.ArgumentParser()
     ap.add_argument("--env", default=os.getenv("FRU_ENV", "dev"))
     ap.add_argument("--scope", choices=["kube", "nonkube", "all"], default="nonkube")
@@ -81,36 +76,13 @@ def main():
         logger.error(str(e))
         sys.exit(1)
 
-    scopes_to_verify = ["nonkube", "kube"] if args.scope == "all" else [args.scope]
-    verify_phases = [f"Teardown ({s})" for s in scopes_to_verify]
-    total_phases = len(verify_phases)
-
-    verify_start = time.time()
-    logger.operation_start("Verify Teardown", args.scope, args.env, region)
-    logger.step(f"Teardown verification (env: {args.env}, region: {region}, scope: {args.scope})")
-
-    all_ok = True
-    for phase_idx, scope in enumerate(scopes_to_verify, start=1):
-        phase_start = time.time()
-        logger.phase_start(phase_idx, total_phases, verify_phases[phase_idx - 1])
-        if scope == "kube":
-            ok = _verify_kube(args.env, region)
-        else:
-            ok = _verify_nonkube(args.env, region)
-        if not ok:
-            all_ok = False
-        phase_secs = int(time.time() - phase_start)
-        logger.phase_end(phase_idx, total_phases, verify_phases[phase_idx - 1], phase_secs)
-
-    verify_dur = int(time.time() - verify_start)
-    logger.operation_end("Verify Teardown", args.scope, args.env, region, verify_dur, ok=all_ok)
-
-    if all_ok:
-        logger.success("Teardown verification complete.")
-        sys.exit(0)
-    else:
-        logger.error("Teardown verification FAILED: some resources still present.")
-        sys.exit(1)
+    run_verify_all_teardown(
+        env=args.env,
+        region=region,
+        scope=args.scope,
+        verify_kube_fn=_verify_kube,
+        verify_nonkube_fn=_verify_nonkube,
+    )
 
 
 if __name__ == "__main__":
