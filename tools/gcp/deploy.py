@@ -185,6 +185,32 @@ def main():
                 logger.success("Images built and pushed")
             else:
                 logger.info("Skipping build (--skip-build)")
+                # When skip-build, get CONTAINER_IMAGE_TAGS from Artifact Registry (mirrors AWS ECR logic)
+                if not (os.environ.get("CONTAINER_IMAGE_TAGS") or "").strip():
+                    try:
+                        from tools.gcp.scope_shared.core.resource_names import artifact_registry_repo_app
+                        repo_app = artifact_registry_repo_app(args.env)
+                        app_image = f"{region}-docker.pkg.dev/{gcp_proj}/{repo_app}/app"
+                        out = subprocess.check_output(
+                            ["gcloud", "artifacts", "docker", "images", "list", app_image,
+                             "--include-tags", "--format=json"],
+                            text=True, timeout=15, cwd=repo_root,
+                        )
+                        import json
+                        images = json.loads(out)
+                        tags_list = []
+                        for img in images:
+                            for t in img.get("tags", []) or []:
+                                if t and t not in tags_list:
+                                    tags_list.append(t)
+                        if tags_list:
+                            os.environ["CONTAINER_IMAGE_TAGS"] = ",".join(tags_list[:5])
+                            logger.info(f"[SKIP-BUILD] App image tags from Artifact Registry: {os.environ['CONTAINER_IMAGE_TAGS']}")
+                        else:
+                            os.environ["CONTAINER_IMAGE_TAGS"] = "latest"
+                    except Exception as e:
+                        logger.warning(f"[SKIP-BUILD] Could not get tags from Artifact Registry: {e}. Using 'latest'.")
+                        os.environ["CONTAINER_IMAGE_TAGS"] = "latest"
             tracker.end_phase(8)
             needs_secrets_build_and_db = False
 

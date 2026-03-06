@@ -1815,3 +1815,38 @@ Both Cloud Run and ECS Fargate are serverless container platforms. But their net
 (1) ECS: task definition specifies subnets; traffic to Aurora stays in VPC. (2) Cloud Run: add `vpc_access { connector, egress = PRIVATE_RANGES_ONLY }` to the service. (3) Same pattern for Cloud Run Job (Spark)—it also needs the connector to reach Cloud SQL. (4) Reference: `docs/learned/cloud_shared/GCP_API_CLOUD_SQL_WIRING.md`.
 
 ---
+
+## 38. Nonkube Verification Passed, UI Failed Later: Scale-to-Zero and Lazy Agent Init
+
+**creation:** `<260306>`
+**last_updated:** `<260306>`
+
+**keywords:** nonkube, Cloud Run, scale-to-zero, cold start, verification, ensure_agent, /query/stream, CONTAINER_IMAGE_TAGS
+**difficulty:** 7
+**significance:** 8
+
+### 38.1 Context
+
+GCP nonkube showed "Build: No Version Info Found," "Agent-based query processing is disabled," and "Backend API not reachable" in the UI—yet verification had passed 10 hours earlier. The same URL worked again after redeploy.
+
+### 38.2 Root Cause
+
+(1) **Scale-to-zero:** `min_instance_count=0` lets Cloud Run scale to zero. Verification runs right after deploy (warm instances, retries). Hours later, a user hit a cold-started instance. (2) **Lazy agent init:** The UI uses `/query/stream`, which did not call `ensure_agent()` before checking `query_agent is None`. If the background `_run_slow_init()` hadn't finished or had failed, the instance served "Agent disabled" indefinitely. (3) **CONTAINER_IMAGE_TAGS:** With `--skip-build`, GCP deploy never set tags; `/version` returned 500 when empty.
+
+### 38.3 Key Insight
+
+> Verification passing ≠ production healthy. Cold-started instances can fail agent init. Ensure the primary UI endpoint (`/query/stream`) calls `ensure_agent()` before the `query_agent is None` check. For GCP skip-build, populate `CONTAINER_IMAGE_TAGS` from Artifact Registry.
+
+### 38.4 Resolution
+
+- Added `ensure_agent()` to `/query/stream` before the check.
+- GCP deploy: fetch `CONTAINER_IMAGE_TAGS` from Artifact Registry when `--skip-build`.
+- Nonkube Terraform: always pass `app_image_tags` (default `"latest"`).
+- `/version`: fallback to `"latest"` when tags empty.
+- Removed unused `/query-v2`; annotated `/query` as deprecated (UI uses `/query/stream`).
+
+### 38.5 Takeaway
+
+For nonkube with scale-to-zero: (1) call `ensure_agent()` on every agent-dependent endpoint, including `/query/stream`; (2) populate version tags even when skip-build; (3) optionally set `min_instance_count=1` to avoid cold starts. See `docs/learned/cloud_shared/BACKEND_SCALING_NONKUBE_MULTI_CLOUD.md` for full architecture, GCP vs AWS scaling, and best practices.
+
+---

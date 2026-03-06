@@ -70,7 +70,6 @@ allowed_origins = get_required_env("ALLOWED_ORIGINS", "Comma-separated list of a
 CORS(app, resources={
     r"/query": {"origins": allowed_origins},
     r"/query/stream": {"origins": allowed_origins},
-    r"/query-v2": {"origins": allowed_origins},
     r"/analytics": {"origins": allowed_origins},
     r"/metrics/agent": {"origins": allowed_origins},
     r"/health": {"origins": "*"},
@@ -489,69 +488,17 @@ def version():
         tags = [t.strip() for t in tags_raw.split(",") if t.strip()]
     else:
         # Fallback: derive from CONTAINER_IMAGE
-        container_image = os.environ.get("CONTAINER_IMAGE", "")
-        if not container_image or container_image == "unknown":
-            return jsonify({"error": "No Version Info Found"}), 500
-        if ":" in container_image:
+        container_image = os.environ.get("CONTAINER_IMAGE", "").strip()
+        if container_image and container_image != "unknown" and ":" in container_image:
             image_tag = container_image.split(":")[-1]
+            tags = [image_tag] if image_tag else []
         else:
-            image_tag = container_image
-        tags = [image_tag] if image_tag else []
-
+            tags = []
+    # Last resort: avoid 500 when neither CONTAINER_IMAGE_TAGS nor CONTAINER_IMAGE has a tag
     if not tags:
-        return jsonify({"error": "No Version Info Found"}), 500
+        tags = ["latest"]
 
     return jsonify({"version": tags})
-
-
-@app.route("/query-v2", methods=["POST"])
-def query_v2():
-    """New agent-based query endpoint."""
-    
-    # Trying to ensure agent is initialized
-    global query_agent
-    if USE_AGENT_QUERY and query_agent is None:
-        ensure_agent()
-    
-    if not USE_AGENT_QUERY or query_agent is None:
-        return jsonify({
-            "error": "Agent-based query processing is disabled",
-            "use_endpoint": "/query",
-            "message": "Set USE_AGENT_QUERY=true to enable"
-        }), 404
-    
-    try:
-        body = request.get_json(silent=True) or {}
-        question = body.get("query") or body.get("q") or ""
-        
-        # Validate input
-        is_valid, error_msg = validate_query(question)
-        if not is_valid:
-            app.logger.warning(f"Invalid query: {error_msg}")
-            return jsonify({"error": error_msg}), 400
-        
-        # Process with agent
-        result = query_agent.process_query(question)
-        
-        # Build response
-        response = {
-            "question": question,
-            "answer": result.get("answer", ""),
-            "method": result.get("method", "agentic"),
-            "iterations": result.get("iterations", 0),
-            "execution_time_ms": result.get("execution_time_ms", 0),
-        }
-        
-        # Add debug info if in debug mode
-        if app.debug:
-            response["debug_info"] = result.get("debug_info")
-            response["tool_calls"] = result.get("tool_calls", [])
-        
-        return jsonify(response)
-    
-    except Exception as e:
-        app.logger.error(f"Agent query error: {e}", exc_info=True)
-        return jsonify({"error": "Failed to process query with agent"}), 500
 
 
 @app.route("/metrics/agent", methods=["GET"])
@@ -570,7 +517,11 @@ def agent_metrics_endpoint():
 
 @app.route("/query", methods=["POST"])
 def query():
-    """Main query endpoint - uses agent if available, falls back to simple method."""
+    """Main query endpoint - uses agent if available, falls back to simple method.
+
+    DEPRECATED for UI use: The frontend uses /query/stream (SSE) exclusively.
+    Kept for: future use, deterministic unit tests (POST/JSON easier to assert than SSE).
+    """
     import uuid
     request_id = str(uuid.uuid4())[:8]
     
@@ -744,20 +695,24 @@ def query():
 @app.route("/query/stream", methods=["GET"])
 def query_stream():
     """Stream query execution progress via Server-Sent Events.
-    
-    Events are streamed one-by-one as each tool_call completes.
+
+    Primary UI endpoint. Events are streamed one-by-one as each tool_call completes.
     """
     import uuid
     import threading
     import queue
     import json as json_module
-    
+
     request_id = str(uuid.uuid4())[:8]
     question = request.args.get("query", "")
-    
+
     if not question:
         return jsonify({"error": "Missing query parameter"}), 400
-    
+
+    # Ensure agent is initialized before checking (handles cold start / lazy init)
+    if USE_AGENT_QUERY and query_agent is None:
+        ensure_agent()
+
     app.logger.info(f"[{request_id}] Streaming query: '{question}'")
     
     def generate():
