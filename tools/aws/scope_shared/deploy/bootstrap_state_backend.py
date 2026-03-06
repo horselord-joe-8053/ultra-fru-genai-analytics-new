@@ -1,14 +1,19 @@
-
 """
 Bootstrap the remote state backend.
 
-Legacy-aligned:
 - Creates the S3 state bucket if missing (versioning + encryption).
 - Uses S3-native lockfile by default (Terraform/OpenTofu `use_lockfile=true`).
-- Optionally creates a DynamoDB lock table if `TF_STATE_LOCK_TABLE` (or `TF_LOCK_TABLE`) is set.
+- Optionally creates a DynamoDB lock table if `TF_STATE_LOCK_TABLE` is set.
 
 Usage:
   python tools/aws/scope_shared/deploy/bootstrap_state_backend.py
+
+WHY OUTSIDE TERRAFORM: Chicken-and-egg—Terraform needs a backend before `tofu init`, so this
+bucket must exist first. Created via AWS CLI before any Terraform runs. Never destroyed by
+teardown (even --incl-dura-all); manual deletion only when decommissioning.
+
+Bucket: {prefix}-tf-state-{env}-{region}
+State paths: {prefix}/{env}/{region}/{stack_id}.tfstate
 """
 import os, subprocess
 from tools.cloud_shared.env import load_dotenv, require

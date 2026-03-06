@@ -1360,7 +1360,7 @@ The API container connects to Aurora PostgreSQL using `PGHOST`, `PGPORT`, `PGDAT
 - Sets `status["database"] = "disconnected"` in `/health`
 - Disables the agent (agent init requires a working DB connection pool)
 - Returns "Database not configured or unreachable" for `/analytics`
-- Returns "Agent-based query processing is disabled" for `/query/stream` and `/query-v2`
+- Returns "Agent-based query processing is disabled" for `/query/stream`
 
 **The real bug:** Aurora's master password and the value in AWS Secrets Manager (`db_password_plain`) did not match. The API pods get `PGPASSWORD` from a K8s secret `db-credentials`, which is populated at bootstrap by fetching from `db_password_plain_secret_arn`. If that secret has the wrong password, Aurora rejects the connection.
 

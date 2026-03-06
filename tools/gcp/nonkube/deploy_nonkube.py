@@ -60,8 +60,8 @@ def run_deploy_nonkube(
         f"-var=llm_provider={llm_provider}",
         f"-var=claude_model={claude_model}",
     ]
-    if img_tags:
-        plan_vars.append(f"-var=app_image_tags={img_tags}")
+    # Always pass app_image_tags so /version works. Use "latest" when empty (skip-build or first deploy).
+    plan_vars.append(f"-var=app_image_tags={img_tags or 'latest'}")
 
     def _apply():
         logger.info("Applying nonkube stack (Cloud Run + Spark + frontend CDN)...")

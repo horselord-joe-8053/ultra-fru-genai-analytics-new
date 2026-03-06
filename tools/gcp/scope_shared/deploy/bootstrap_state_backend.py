@@ -2,6 +2,13 @@
 Bootstrap the GCS remote state backend (reference: tools/aws/scope_shared/deploy/bootstrap_state_backend.py).
 Creates the GCS state bucket if missing (versioning enabled).
 Uses google-cloud-storage Python client (no gsutil required).
+
+WHY OUTSIDE TERRAFORM: Chicken-and-egg—Terraform needs a backend before `tofu init`, so this
+bucket must exist first. Created via GCS client before any Terraform runs. Never destroyed by
+teardown (even --incl-dura-all); manual deletion only when decommissioning.
+
+Bucket: {prefix}-tf-state-{env}-{region}-{project_id}
+State paths: {prefix}/{env}/{region}/{stack_id}.tfstate
 """
 import os
 import json
