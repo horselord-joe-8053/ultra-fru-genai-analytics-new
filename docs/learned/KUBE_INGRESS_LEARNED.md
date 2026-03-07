@@ -57,11 +57,13 @@ The annotations on the Service decide:
 ### 0.2 How the Choice Flows Through Deploy
 
 ```
-deploy.py --scope kube [--elb]
+orchestrator.py deploy --provider aws --scope kube [--elb] [--cloud-region REGION]
     │
-    ├── doctor.py [--elb]  →  NLB track: requires eksctl, helm (for controller install)
-    │
-    └── deploy_kube.py
+    └── tools/aws/deploy.py --scope kube [--region REGION]
+            │
+            ├── doctor (when not --skip-doctor)
+            │
+            └── deploy_kube.py
             │
             ├── Phase 9.5: Install AWS Load Balancer Controller  (skipped when --elb)
             │
@@ -113,8 +115,8 @@ annotations:
 
 ### 0.6 NLB Migration Steps (Classic ELB → NLB)
 
-1. **Deploy kube (NLB track):** `python tools/aws/deploy.py --scope kube --env dev` — controller installs automatically.
-2. **Verify:** `python tools/aws/scope_shared/verify/verify_all_deploy.py --scope kube --env dev`
+1. **Deploy kube (NLB track):** `python orchestrator.py deploy --provider aws --scope kube --env dev [--cloud-region REGION]` — controller installs automatically.
+2. **Verify:** `python orchestrator.py verify --provider aws --scope kube --env dev [--cloud-region REGION]`
 3. **Orphan scan:** `PYTHONPATH=$(pwd) python tools/aws/standalone/temp_one_off/resources_scan/scan_aws_remaining.py --cloud-regions us-east-1 --env dev --prefix fru` (omit `--elb` for NLB track)
 4. **Orphan removal:** Dry-run then `remove_for_orphans_data.py` for Classic ELBs and `k8s-elb-*` SGs
 5. **Re-verify:** Same verify command

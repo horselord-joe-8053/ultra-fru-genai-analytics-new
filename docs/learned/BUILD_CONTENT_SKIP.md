@@ -34,10 +34,10 @@ Git SHA only reflects **committed** state. Uncommitted changes (e.g. testing loc
 
 ## Implementation
 
-- **`tools/aws/scope_shared/deploy/build_context_hash.py`** — `compute_build_context_hash()`, `get_stored_build_hash()`, `store_build_hash()`
-- **`tools/aws/deploy.py`** — Content-based skip check before phase 7
-- **`tools/aws/scope_shared/deploy/build_and_push_images.py`** — `--build-arg BUILD_CONTEXT_HASH`, store hash after push
-- **Dockerfiles** — `ARG BUILD_CONTEXT_HASH` and `LABEL build_context_hash=${BUILD_CONTEXT_HASH}`
+- **`tools/cloud_shared/docker/build_context_hash.py`** — Core: `compute_build_context_hash()`; storage is provider-specific (S3 vs GCS).
+- **AWS:** `tools/aws/scope_shared/deploy/build_context_hash.py` wraps cloud_shared for S3; **`tools/aws/deploy.py`** runs content-skip check before build phase; **`tools/aws/scope_shared/deploy/build_and_push_images.py`** stores hash after push.
+- **GCP:** **`tools/gcp/scope_shared/deploy/build_and_push_images.py`** uses `tools.cloud_shared.docker.build_context_hash` with GCS; content-skip in **`tools/gcp/deploy.py`**.
+- **Dockerfiles** — `ARG BUILD_CONTEXT_HASH` and `LABEL build_context_hash=${BUILD_CONTEXT_HASH}` (where used).
 
 ## Requirements
 

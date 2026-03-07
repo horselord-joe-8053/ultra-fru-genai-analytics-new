@@ -1,6 +1,6 @@
 # Full Kube Architecture Crash Course
 
-A visual crash course on how **VPC, LB, DNS, CloudFront, EKS, and Aurora** are wired together to create a fully working kube-based infrastructure.
+A visual crash course on how **VPC, LB, DNS, CloudFront, EKS, and Aurora** are wired together to create a fully working kube-based infrastructure (AWS). Stacks live under `infra_terraform/live_deploy/aws/` (scope_shared/durable, scope_shared/nondurable, kube). **Entrypoint:** `orchestrator.py deploy --provider aws --scope kube [--cloud-region REGION]`.
 
 > **Load balancer type:** See [KUBE_INGRESS_LEARNED.md](KUBE_INGRESS_LEARNED.md) Section 0 for Classic ELB vs NLB, `--elb` flag, and manifest selection.
 
