@@ -209,6 +209,8 @@ data:
             api_subs = {
                 "APP_IMAGE": app_image,
                 "CONTAINER_IMAGE_TAGS": os.getenv("CONTAINER_IMAGE_TAGS", ""),
+                "DEPLOY_SCOPE": "kube",
+                "CLOUD_PROVIDER": "aws",
                 "PGHOST": args.pg_host or "localhost",
                 "PGPORT": args.pg_port,
                 "PGUSER": args.pg_user,

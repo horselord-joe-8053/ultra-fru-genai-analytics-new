@@ -26,9 +26,18 @@
 # =============================================================================
 
 default:
-  # Compute (EKS): desired node count. Nodes are spread across the AZs in network.azs.
+  # ---------------------------------------------------------------------------
+  # Compute (EKS node group)
+  # ---------------------------------------------------------------------------
+  # 1. desired_nodes: EKS worker node count. Currently NOT wired—Terraform uses
+  #    default (1). Future: deploy_kube.py will read via get_compute_config(region).
+  # 2. node_instance_type: EC2 type for nodes (e.g. t3.small, t3.medium). Per-region
+  #    because not all instance types exist in all regions. Future: wire to Terraform.
+  # 3. Why config (not .env): Region-specific; instance availability varies by region.
+  # See docs/learned/cloud_shared/BACKEND_SCALING_KUBE_MULTI_CLOUD.md.
   compute:
     desired_nodes: 1
+    node_instance_type: t3.small
 
   # Aurora: false = single AZ (cheaper, dev); true = multi-AZ failover (production).
   database:

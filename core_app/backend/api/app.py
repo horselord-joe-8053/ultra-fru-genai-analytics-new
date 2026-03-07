@@ -498,7 +498,16 @@ def version():
     if not tags:
         tags = ["latest"]
 
-    return jsonify({"version": tags})
+    scope = os.environ.get("DEPLOY_SCOPE", "").strip() or None
+    cloud_provider = os.environ.get("CLOUD_PROVIDER", "").strip() or None
+    region = os.environ.get("CLOUD_REGION", "").strip() or None
+
+    return jsonify({
+        "version": tags,
+        "scope": scope,
+        "cloud_provider": cloud_provider,
+        "region": region,
+    })
 
 
 @app.route("/metrics/agent", methods=["GET"])

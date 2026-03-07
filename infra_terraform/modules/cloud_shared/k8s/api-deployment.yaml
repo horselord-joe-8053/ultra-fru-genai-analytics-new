@@ -71,6 +71,10 @@ spec:
           value: "text-embedding-3-small"
         - name: USE_AGENT_QUERY
           value: "true"
+        - name: DEPLOY_SCOPE
+          value: "${DEPLOY_SCOPE}"
+        - name: CLOUD_PROVIDER
+          value: "${CLOUD_PROVIDER}"
         - name: CLOUD_REGION
           value: "${CLOUD_REGION}"
         - name: CONTAINER_IMAGE

@@ -52,7 +52,9 @@ def main():
     ap.add_argument("--env", default=os.getenv("FRU_ENV", "dev"))
     ap.add_argument("--scope", choices=["kube", "nonkube", "all"], default="nonkube")
     ap.add_argument("--region", default=None, help="Region (default: CLOUD_REGION)")
-    args = ap.parse_args()
+    args, unknown = ap.parse_known_args()
+    if unknown:
+        logger.warning(f"Ignoring unrecognized arguments (orchestrator passthrough): {unknown}")
 
     if args.region:
         os.environ["CLOUD_REGION"] = args.region

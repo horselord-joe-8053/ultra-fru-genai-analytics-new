@@ -215,6 +215,7 @@ data:
 
         api_subs = {
             "APP_IMAGE": app_image,
+            "DEPLOY_SCOPE": "kube",
             "PGHOST": pg_host,
             "PGPORT": args.pg_port,
             "PGUSER": args.pg_user,
