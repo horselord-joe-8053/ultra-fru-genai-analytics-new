@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import type { Message } from "../App";
 import { getBackendVersion } from "../utils/backendVersion";
+import type { BackendVersionInfo } from "../utils/backendVersion";
 
 interface ChatProps {
   messages: Message[];
@@ -10,7 +11,7 @@ interface ChatProps {
 
 const Chat: React.FC<ChatProps> = ({ messages, onSend, loading }) => {
   const [input, setInput] = useState("");
-  const [backendVersion, setBackendVersion] = useState<string>("loading...");
+  const [versionInfo, setVersionInfo] = useState<BackendVersionInfo | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   function handleSubmit(e: React.FormEvent) {
@@ -27,11 +28,22 @@ const Chat: React.FC<ChatProps> = ({ messages, onSend, loading }) => {
   useEffect(() => {
     // Fetch backend version on component mount
     // Force refresh on mount to ensure we get the latest version after deployments
-    getBackendVersion(true).then(setBackendVersion).catch(() => {
+    getBackendVersion(true).then(setVersionInfo).catch(() => {
       // If force refresh fails, try with cache
-      getBackendVersion(false).then(setBackendVersion);
+      getBackendVersion(false).then(setVersionInfo);
     });
   }, []);
+
+  const buildLine = versionInfo ? versionInfo.version : "loading...";
+  const scope = versionInfo?.scope ?? null;
+  const cloudProvider = versionInfo?.cloud_provider ?? null;
+  const region = versionInfo?.region ?? null;
+  const deployLine =
+    [scope, cloudProvider, region].filter(Boolean).length > 0
+      ? [scope && `Scope: ${scope}`, cloudProvider && `Cloud: ${cloudProvider}`, region && `Region: ${region}`]
+          .filter(Boolean)
+          .join(" · ")
+      : null;
 
   return (
     <div className="flex flex-col h-full">
@@ -39,7 +51,8 @@ const Chat: React.FC<ChatProps> = ({ messages, onSend, loading }) => {
         <div>
           <h1 className="text-lg font-semibold">FRU Analytics Assistant</h1>
           <div className="text-[10px] text-gray-400 font-mono leading-tight space-y-0.5">
-            <p>Build: {backendVersion}</p>
+            <p>Build: {buildLine}</p>
+            {deployLine && <p>{deployLine}</p>}
           </div>
           <p className="text-xs text-gray-500">
             Ask about sales, brands, stores, and customer feedback.

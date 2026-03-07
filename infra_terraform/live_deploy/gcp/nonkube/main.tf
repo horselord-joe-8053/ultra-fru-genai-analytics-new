@@ -64,7 +64,8 @@ module "cloud_run" {
   vpc_connector_id = try(data.terraform_remote_state.shared_durable.outputs.vpc_connector_id, null)
 
   env_vars = merge({
-    CLOUD_PROVIDER                       = "gcp"
+    DEPLOY_SCOPE                          = "nonkube"
+    CLOUD_PROVIDER                        = "gcp"
     GCP_LLM_PROVIDER                     = var.llm_provider
     LLM_PROVIDER                         = var.llm_provider
     CLAUDE_MODEL                         = var.claude_model

@@ -7,8 +7,18 @@ const VERSION_CACHE_KEY = "backend_version_cache";
 const VERSION_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 // Note: To force refresh, clear localStorage: localStorage.removeItem('backend_version_cache')
 
+export interface BackendVersionInfo {
+  version: string;
+  scope: string | null;
+  cloud_provider: string | null;
+  region: string | null;
+}
+
 interface VersionCache {
   version: string;
+  scope: string | null;
+  cloud_provider: string | null;
+  region: string | null;
   timestamp: number;
 }
 
@@ -17,7 +27,7 @@ interface VersionCache {
  * Uses caching to avoid repeated API calls
  * @param forceRefresh - If true, bypasses cache and fetches fresh version
  */
-export async function getBackendVersion(forceRefresh: boolean = false): Promise<string> {
+export async function getBackendVersion(forceRefresh: boolean = false): Promise<BackendVersionInfo> {
   // Check cache first (unless force refresh is requested)
   if (!forceRefresh) {
     try {
@@ -26,7 +36,12 @@ export async function getBackendVersion(forceRefresh: boolean = false): Promise<
         const cache: VersionCache = JSON.parse(cached);
         const now = Date.now();
         if (now - cache.timestamp < VERSION_CACHE_TTL) {
-          return cache.version;
+          return {
+            version: cache.version,
+            scope: cache.scope ?? null,
+            cloud_provider: cache.cloud_provider ?? null,
+            region: cache.region ?? null,
+          };
         }
       }
     } catch (e) {
@@ -47,7 +62,12 @@ export async function getBackendVersion(forceRefresh: boolean = false): Promise<
       try {
         const errorData = await response.json();
         if (errorData.error) {
-          return errorData.error;
+          return {
+            version: errorData.error,
+            scope: null,
+            cloud_provider: null,
+            region: null,
+          };
         }
       } catch (e) {
         // Ignore JSON parse errors
@@ -59,22 +79,33 @@ export async function getBackendVersion(forceRefresh: boolean = false): Promise<
 
     // Check for error in response
     if (data.error) {
-      return data.error;
+      return {
+        version: data.error,
+        scope: null,
+        cloud_provider: null,
+        region: null,
+      };
     }
 
     const version = data.version;
-    if (!version) {
-      return "Error: No Version Info Found";
-    }
+    const tags = Array.isArray(version) ? version : version ? [version] : [];
+    const versionDisplay =
+      tags.length > 0 ? `[${tags.join(", ")}]` : "Error: No Version Info Found";
 
-    // version is [tag1, tag2, ...]; format as "[tag1, tag2, ...]" for display
-    const tags = Array.isArray(version) ? version : [version];
-    const display = tags.length > 0 ? `[${tags.join(", ")}]` : "Error: No Version Info Found";
+    const result: BackendVersionInfo = {
+      version: versionDisplay,
+      scope: data.scope ?? null,
+      cloud_provider: data.cloud_provider ?? null,
+      region: data.region ?? null,
+    };
 
     // Cache the result
     try {
       const cache: VersionCache = {
-        version: display,
+        version: result.version,
+        scope: result.scope,
+        cloud_provider: result.cloud_provider,
+        region: result.region,
         timestamp: Date.now(),
       };
       localStorage.setItem(VERSION_CACHE_KEY, JSON.stringify(cache));
@@ -82,9 +113,14 @@ export async function getBackendVersion(forceRefresh: boolean = false): Promise<
       // Ignore cache errors
     }
 
-    return display;
+    return result;
   } catch (error) {
     console.warn("Failed to fetch backend version:", error);
-    return "Error: No Version Info Found";
+    return {
+      version: "Error: No Version Info Found",
+      scope: null,
+      cloud_provider: null,
+      region: null,
+    };
   }
 }

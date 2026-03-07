@@ -8,7 +8,6 @@ import subprocess
 import sys
 import time
 
-from tools.cloud_shared.env import require
 from tools.cloud_shared.logging import logger
 from tools.aws.scope_shared.core.terra_init import init_stack
 from tools.aws.scope_shared.core.terra_var_handling import get_base_vars
@@ -99,12 +98,10 @@ def run_deploy_kube(
     hostname_before_first_apply = _try_get_lb_hostname(env, region)
     if hostname_before_first_apply:
         logger.info(f"[Kube] LB hostname known before apply: {hostname_before_first_apply}; single apply (skip second)")
-    plan_vars = [
-        "-var", f"eks_instance_types=[\"{require('EKS_NODE_INSTANCE_TYPES')}\"]",
-        "-var", f"eks_desired_nodes={require('EKS_DESIRED_NODES')}",
-    ]
+    plan_vars: list[str] = []
     if hostname_before_first_apply:
-        plan_vars += ["-var", f"ingress_hostname={hostname_before_first_apply}"]
+        plan_vars.append("-var")
+        plan_vars.append(f"ingress_hostname={hostname_before_first_apply}")
 
     plan_clean = False  # set after init
 
@@ -138,10 +135,7 @@ def run_deploy_kube(
         if plan_clean:
             logger.info("[Kube] Skipping tofu apply: plan showed no changes (state clean)")
             return
-        extra_vars = [
-            "-var", f"eks_instance_types=[\"{require('EKS_NODE_INSTANCE_TYPES')}\"]",
-            "-var", f"eks_desired_nodes={require('EKS_DESIRED_NODES')}",
-        ]
+        extra_vars: list[str] = []
         if hostname_before_first_apply:
             extra_vars += ["-var", f"ingress_hostname={hostname_before_first_apply}"]
         apply_stack(kube_stack, env, extra_vars, region)
@@ -238,11 +232,7 @@ def run_deploy_kube(
             apply_stack(
                 "infra_terraform/live_deploy/aws/kube",
                 env,
-                [
-                    "-var", f"eks_instance_types=[\"{require('EKS_NODE_INSTANCE_TYPES')}\"]",
-                    "-var", f"eks_desired_nodes={require('EKS_DESIRED_NODES')}",
-                    "-var", f"ingress_hostname={hostname_to_use}",
-                ],
+                ["-var", f"ingress_hostname={hostname_to_use}"],
                 region,
             )
 
