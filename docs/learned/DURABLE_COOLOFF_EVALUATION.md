@@ -65,15 +65,13 @@ So the "curse" is the side effect: same-name recreation is blocked for up to 30 
 
 **Defer if** teardown-with-durable is rare. The restore workaround (`aws secretsmanager restore-secret`) is acceptable for occasional use.
 
-### Refactor Plan (If Proceeding)
+### As Implemented
 
-1. Create `infra_terraform/live_deploy/aws/scope_shared/durable_with_cooloff/` with `secrets.tf` only.
-2. Remove secrets from `durable/main.tf`; add `terraform_remote_state` in durable to read secret ARNs from `durable_with_cooloff` (or have durable depend on durable_with_cooloff).
-3. Actually: secrets are standalone—nothing in durable references them. Nondurable/kube read them via `tofu output` from durable. So we need: durable_with_cooloff outputs secret ARNs; durable outputs everything else. Deploy and other tools today read from durable. We’d need to either:
-   - Have durable use `terraform_remote_state` to re-export durable_with_cooloff outputs, or
-   - Update deploy/kube/nonkube to read from both stacks.
-4. Update `teardown.py`: `--incl-dura` destroys durable only; `--incl-dura-all` destroys durable then durable_with_cooloff.
-5. Update `deploy.py`: ensure durable_with_cooloff is applied before durable (or durable reads its outputs).
+1. **`infra_terraform/live_deploy/aws/scope_shared/durable_with_cooloff/`** exists with secrets only.
+2. Secrets are standalone; durable has no secrets. Nondurable/kube read them via `tofu output` from durable. So we need: durable_with_cooloff outputs secret ARNs; durable outputs everything else. Deploy and other tools today read from durable. We’d need to either:
+   Deploy and tools read from both stacks as needed (durable_with_cooloff applied first).
+3. **`teardown.py`:** `--incl-dura` destroys durable only (VPC, Aurora); secrets remain. `--incl-dura-all` destroys durable then durable_with_cooloff.
+4. **Deploy:** Applies durable_with_cooloff before durable; tools read from the appropriate stack outputs.
 
 ---
 

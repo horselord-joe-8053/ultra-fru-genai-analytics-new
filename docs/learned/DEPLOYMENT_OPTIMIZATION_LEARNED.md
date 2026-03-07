@@ -21,7 +21,7 @@ Concise refactor plans for the identified deployment optimizations. All implemen
 
 **Drift cycle:** Durable creates subnets (no k8s tags). Kube adds tags via `aws_ec2_tag`. Durable's next apply sees "extra" tags and plans to remove them. Kube re-adds. Repeat.
 
-**Fix:** `lifecycle { ignore_changes = [tags] }` on subnet resources in `infra_terraform/modules/aws/primitives/vpc/main.tf`. War Story 58.
+**Fix:** `lifecycle { ignore_changes = [tags] }` on subnet resources in `infra_terraform/modules/aws/primitives/vpc/main.tf`. See [docs/war_stories/WAR_STORIES_AWS.md](../war_stories/WAR_STORIES_AWS.md) War Story 58.
 
 ---
 
@@ -29,16 +29,16 @@ Concise refactor plans for the identified deployment optimizations. All implemen
 
 **Why twice:** LB hostname unknown until k8s creates Service. First apply (no hostname) → kube_apply → poll → second apply (with hostname for CloudFront).
 
-**Fix:** `_try_get_lb_hostname` before first apply; skip second apply when hostname already known. War Story 59.
+**Fix:** `_try_get_lb_hostname` before first apply; skip second apply when hostname already known. See [docs/war_stories](../war_stories/). War Story 59.
 
 ---
 
 ## 2.3 Skip Import + Apply When Plan Clean
 
-**Fix:** `plan_shows_no_changes()` before import; skip import and apply when plan shows no changes. War Story 60.
+**Fix:** `plan_shows_no_changes()` before import; skip import and apply when plan shows no changes. See [docs/war_stories](../war_stories/). War Story 60.
 
 ---
 
 ## 2.4 Content-Based Build Skip
 
-**Fix:** Build-context hash in S3; skip build when hash matches. `--force-build` bypasses. See [BUILD_CONTENT_SKIP.md](BUILD_CONTENT_SKIP.md). War Story 61.
+**Fix:** Build-context hash (S3/AWS, GCS/GCP); skip build when hash matches. `--force-build` bypasses. See [BUILD_CONTENT_SKIP.md](BUILD_CONTENT_SKIP.md). War Story 61.

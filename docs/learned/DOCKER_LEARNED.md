@@ -116,6 +116,8 @@ flowchart TB
 
 **Why regionless names?** ECR allows the same repo name in different regions. One canonical local compound tag (`fru-api-img-dev:latest`) works for all regions—we re-tag for the target registry at push time.
 
+**Multi-cloud:** GCP uses the same concepts with Artifact Registry (not ECR); build-context hash lives in `tools/cloud_shared/docker/build_context_hash.py` (GCS storage). AWS wrapper: `tools/aws/scope_shared/deploy/build_context_hash.py` (S3).
+
 ### 6.3 Content-Based Build Skip
 
 Deploy skips the Docker build when the build context (source + Dockerfile) hasn't changed.

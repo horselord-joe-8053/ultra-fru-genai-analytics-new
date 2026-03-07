@@ -25,4 +25,4 @@ The `/analytics` API reads from `batch_analytics` and returns the latest row. Ku
 
 In **PROD**, we deploy either Kube or Nonkube, not both. In **DEV**, both scopes run for learning and as templates. Both writing to the same `batch_analytics` table is acceptable — "last writer wins" is fine for dev.
 
-See **War Story 63** in `README_WAR_STORIES.md` for the CronJob credentials fix and full context.
+See **War Story 63** in [docs/war_stories/WAR_STORIES_CLOUD_SHARED.md](../war_stories/WAR_STORIES_CLOUD_SHARED.md) for the CronJob credentials fix and full context.

@@ -1,6 +1,6 @@
 # Full Nonkube Architecture Crash Course
 
-A visual crash course on how **VPC, ALB, CloudFront, ECS Fargate, and Aurora** are wired together to create a fully working nonkube (ECS-based) infrastructure.
+A visual crash course on how **VPC, ALB, CloudFront, ECS Fargate, and Aurora** are wired together to create a fully working nonkube (ECS-based) infrastructure (AWS). Stacks: `infra_terraform/live_deploy/aws/scope_shared/durable`, `nondurable`, `nonkube`. **Entrypoint:** `orchestrator.py deploy --provider aws --scope nonkube [--cloud-region REGION]`.
 
 **See also:** [FULL_ARCH_KUBE_LEARN.md](FULL_ARCH_KUBE_LEARN.md), [ANALYTICS_KUBE_NONKUBE_SHARED_DATA.md](ANALYTICS_KUBE_NONKUBE_SHARED_DATA.md), [VPC_LEARNED.md](VPC_LEARNED.md), [war_stories/README.md](../war_stories/README.md).
 
