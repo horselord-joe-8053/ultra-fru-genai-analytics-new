@@ -1,10 +1,10 @@
 """
 Run batch analytics on Delta table and save to PostgreSQL batch_analytics.
 Used by both bootstrap (one-off) and periodic (scheduled) jobs.
-Creates fru_sales Delta table from CSV if missing; fails if no CSV source is available (legacy-consistent).
+Reads raw data from fru_sales_raw (PostgreSQL) via psycopg2; creates/refreshes Delta from it.
 """
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, count, sum, avg, min, max, when, date_format, lit
+from pyspark.sql.functions import col, count, sum, avg, min, max, when, lit
 import os
 import sys
 
@@ -25,68 +25,74 @@ def _to_spark_path(path: str) -> str:
     return path.replace("s3://", "s3a://", 1) if path.startswith("s3://") else path
 
 
-def _ensure_fru_sales_exists(spark: SparkSession, delta_path: str) -> str:
-    """Create fru_sales Delta table if missing. Loads from bundled CSV or S3 CSV. Fails if no CSV source available."""
-    path = _to_spark_path(delta_path)
-    existing_count = 0
-    try:
-        df = spark.read.format("delta").load(path)
-        existing_count = df.count()
-        if existing_count > 10:  # Full dataset already loaded
-            print(f"✓ Delta table exists at {path} ({existing_count} rows)")
-            return path
-        # Few rows = incomplete; try to upgrade from CSV
-        print(f"Delta exists with {existing_count} rows; attempting upgrade from CSV...")
-    except Exception:
-        print("No Delta table found; will create from CSV")
+def _read_raw_from_postgres():
+    """Read fru_sales_raw from PostgreSQL via psycopg2. Returns list of dicts with uppercase keys."""
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
 
-    # Try CSV sources: bundled (container), then local dev paths
-    # Bundled in container: /opt/fru/data/fridge_sales_with_rating.csv (Dockerfile COPY)
-    _jobs_dir = os.path.dirname(os.path.abspath(__file__))
-    csv_paths = [
-        "/opt/fru/data/fridge_sales_with_rating.csv",  # Bundled in Spark image
-        os.path.join(_jobs_dir, "..", "..", "data", "raw", "fridge_sales_with_rating.csv"),
-        os.path.join(_jobs_dir, "..", "..", "data", "fridge_sales_with_rating.csv"),
-    ]
-    bundled = "/opt/fru/data/fridge_sales_with_rating.csv"
-    print(f"Bundled CSV exists: {os.path.exists(bundled)}, size={os.path.getsize(bundled) if os.path.exists(bundled) else 0}")
-    print(f"Trying CSV sources in order: {csv_paths}")
-    for csv_path in csv_paths:
-        can_read = False
-        spark_path = csv_path
-        if os.path.exists(csv_path):
-            can_read = True
-            # Use file:// for local paths so Spark reads from container filesystem (ECS/Fargate)
-            if not csv_path.startswith("file://"):
-                spark_path = "file://" + csv_path
-        if can_read:
-            try:
-                print(f"Creating fru_sales from CSV at {spark_path}...")
-                df = (
-                    spark.read.option("header", "true")
-                    .option("inferSchema", "true")
-                    .csv(spark_path)
-                )
-                row_count = df.count()
-                if row_count < 10:
-                    continue  # Skip tiny files, try next source
-                # Normalize column names (legacy ingest_delta: ID -> id)
-                if "ID" in df.columns:
-                    df = df.withColumnRenamed("ID", "id")
-                df.write.format("delta").mode("overwrite").save(path)
-                print(f"✓ Created fru_sales from CSV ({row_count} rows) at {path}")
-                return path
-            except Exception as ex:
-                import traceback
-                print(f"  CSV read failed for {csv_path}: {ex}")
-                traceback.print_exc()
-                continue
-
-    raise RuntimeError(
-        "No CSV source available to create fru_sales Delta table. "
-        "Ensure CSV exists at bundled path /opt/fru/data/fridge_sales_with_rating.csv or "
-        "core_app/data/raw/fridge_sales_with_rating.csv (local dev)."
+    conn = psycopg2.connect(
+        host=os.environ.get("PGHOST", ""),
+        port=int(os.environ.get("PGPORT", "5432")),
+        user=os.environ.get("PGUSER", "postgres"),
+        password=os.environ.get("PGPASSWORD", ""),
+        dbname=os.environ.get("PGDATABASE", "fru_db"),
+        connect_timeout=10,
     )
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT id, customer_id, brand, fridge_model, capacity_liters, price, sales_date, "
+                "store_name, store_address, customer_feedback, feedback_rating, feedback_sentiment_category "
+                "FROM fru_sales_raw"
+            )
+            rows = cur.fetchall()
+        # Map to uppercase keys for Spark (matches legacy CSV column names)
+        return [
+            {
+                "ID": r["id"],
+                "CUSTOMER_ID": r.get("customer_id") or "",
+                "BRAND": r["brand"] or "Unknown",
+                "FRIDGE_MODEL": r["fridge_model"] or "Unknown",
+                "CAPACITY_LITERS": r.get("capacity_liters"),
+                "PRICE": float(r["price"]) if r["price"] is not None else 0.0,
+                "SALES_DATE": r["sales_date"],
+                "STORE_NAME": r["store_name"] or "Unknown",
+                "STORE_ADDRESS": r.get("store_address") or "",
+                "CUSTOMER_FEEDBACK": r.get("customer_feedback") or "",
+                "FEEDBACK_RATING": r.get("feedback_rating"),
+                "FEEDBACK_SENTIMENT_CATEGORY": r.get("feedback_sentiment_category") or "Neutral",
+            }
+            for r in rows
+        ]
+    finally:
+        conn.close()
+
+
+def _ensure_fru_sales_exists(spark: SparkSession, delta_path: str) -> str:
+    """Create/refresh fru_sales Delta table from fru_sales_raw (PostgreSQL)."""
+    path = _to_spark_path(delta_path)
+
+    # Check if we have DB credentials
+    if not os.environ.get("PGHOST") or not os.environ.get("PGPASSWORD"):
+        raise RuntimeError(
+            "PGHOST and PGPASSWORD required for Spark to read fru_sales_raw. "
+            "Ensure these are set in the CronJob/ECS task environment."
+        )
+
+    print("Reading fru_sales_raw from PostgreSQL...")
+    rows = _read_raw_from_postgres()
+    if len(rows) < 10:
+        raise RuntimeError(
+            f"fru_sales_raw has only {len(rows)} rows. "
+            "Run database setup (load_raw_from_csv) first to populate fru_sales_raw."
+        )
+
+    df = spark.createDataFrame(rows)
+    if "ID" in df.columns:
+        df = df.withColumnRenamed("ID", "id")
+    df.write.format("delta").mode("overwrite").save(path)
+    print(f"✓ Created fru_sales from fru_sales_raw ({len(rows)} rows) at {path}")
+    return path
 
 
 def main(delta_path: str = None, output_dir: str = None):

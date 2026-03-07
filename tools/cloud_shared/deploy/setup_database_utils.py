@@ -6,8 +6,8 @@ import os
 import subprocess
 import sys
 
-# Table names dropped on --force-refresh-data (order matters for FK)
-FORCE_DROP_TABLES = ["batch_analytics", "fru_sales_embeddings"]
+# Table names dropped on --force-refresh-data (order: embeddings first, then raw)
+FORCE_DROP_TABLES = ["batch_analytics", "fru_sales_embeddings", "fru_sales_raw"]
 
 
 def get_repo_root() -> str:

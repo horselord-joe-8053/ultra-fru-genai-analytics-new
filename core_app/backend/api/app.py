@@ -71,6 +71,8 @@ CORS(app, resources={
     r"/query": {"origins": allowed_origins},
     r"/query/stream": {"origins": allowed_origins},
     r"/analytics": {"origins": allowed_origins},
+    r"/rawdata": {"origins": allowed_origins},
+    r"/rawdata/*": {"origins": allowed_origins},
     r"/metrics/agent": {"origins": allowed_origins},
     r"/health": {"origins": "*"},
     r"/version": {"origins": allowed_origins}
@@ -268,6 +270,63 @@ def pgvector_search_feedback(query_text: str, limit: int = 30) -> List[Dict[str,
             return_db_conn(conn)
 
 
+def _upsert_embeddings_for_rows(conn, rows: List[Dict[str, Any]]) -> None:
+    """Upsert rows into fru_sales_embeddings (embed CUSTOMER_FEEDBACK via OpenAI)."""
+    if not rows:
+        return
+    texts = [r.get("CUSTOMER_FEEDBACK") or r.get("customer_feedback") or "" for r in rows]
+    embeddings = []
+    for t in texts:
+        vec = embed_text(t)
+        embeddings.append(vec)
+    with conn.cursor() as cur:
+        for row_data, embedding in zip(rows, embeddings):
+            def _v(k: str) -> Any:
+                return row_data.get(k) or row_data.get(k.lower() if k.isupper() else k.upper())
+            fid = _v("ID") or _v("id")
+            feedback_rating = _v("FEEDBACK_RATING") or _v("feedback_rating")
+            try:
+                feedback_rating_int = int(feedback_rating) if feedback_rating is not None else None
+            except (ValueError, TypeError):
+                feedback_rating_int = None
+            cur.execute(
+                """
+                INSERT INTO fru_sales_embeddings
+                (id, customer_id, brand, fridge_model, capacity_liters, price, sales_date,
+                 store_name, store_address, customer_feedback, feedback_rating,
+                 feedback_sentiment_category, embedding)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::vector)
+                ON CONFLICT (id) DO UPDATE SET
+                  customer_id = EXCLUDED.customer_id,
+                  brand = EXCLUDED.brand,
+                  fridge_model = EXCLUDED.fridge_model,
+                  capacity_liters = EXCLUDED.capacity_liters,
+                  price = EXCLUDED.price,
+                  sales_date = EXCLUDED.sales_date,
+                  store_name = EXCLUDED.store_name,
+                  store_address = EXCLUDED.store_address,
+                  customer_feedback = EXCLUDED.customer_feedback,
+                  feedback_rating = EXCLUDED.feedback_rating,
+                  feedback_sentiment_category = EXCLUDED.feedback_sentiment_category,
+                  embedding = EXCLUDED.embedding
+                """,
+                (
+                    fid,
+                    _v("CUSTOMER_ID") or "",
+                    _v("BRAND") or "Unknown",
+                    _v("FRIDGE_MODEL") or "Unknown",
+                    _v("CAPACITY_LITERS"),
+                    float(_v("PRICE") or 0) if _v("PRICE") is not None else 0.0,
+                    _v("SALES_DATE"),
+                    _v("STORE_NAME") or "Unknown",
+                    _v("STORE_ADDRESS") or "",
+                    _v("CUSTOMER_FEEDBACK") or "",
+                    feedback_rating_int,
+                    _v("FEEDBACK_SENTIMENT_CATEGORY") or "Neutral",
+                    str(embedding),
+                ),
+            )
+        conn.commit()
 
 
 def build_claude_system_prompt() -> str:
@@ -508,6 +567,233 @@ def version():
         "cloud_provider": cloud_provider,
         "region": region,
     })
+
+
+# ---------- Raw data CRUD (fru_sales_raw) ----------
+
+
+@app.route("/rawdata", methods=["GET"])
+def rawdata_list():
+    """List raw data with pagination. GET /rawdata?limit=50&offset=0"""
+    if not os.environ.get("PGHOST"):
+        return jsonify({"error": "Database not configured"}), 503
+    limit = min(int(request.args.get("limit", get_optional_int_env("RAW_DATA_PAGE_SIZE", 100))), 500)
+    offset = max(0, int(request.args.get("offset", 0)))
+    conn = None
+    try:
+        conn = get_db_conn()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT COUNT(*) FROM fru_sales_raw")
+            total = cur.fetchone()["count"]
+            cur.execute(
+                "SELECT id, customer_id, brand, fridge_model, capacity_liters, price, sales_date, "
+                "store_name, store_address, customer_feedback, feedback_rating, feedback_sentiment_category "
+                "FROM fru_sales_raw ORDER BY id LIMIT %s OFFSET %s",
+                (limit, offset),
+            )
+            rows = cur.fetchall()
+        items = [{k: _json_safe(v) for k, v in dict(r).items()} for r in rows]
+        return jsonify({"items": items, "total": total, "limit": limit, "offset": offset})
+    except Exception as e:
+        app.logger.error(f"rawdata list error: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn:
+            return_db_conn(conn)
+
+
+@app.route("/rawdata/<id>", methods=["GET"])
+def rawdata_get(id: str):
+    """Get single raw record by id."""
+    if not os.environ.get("PGHOST"):
+        return jsonify({"error": "Database not configured"}), 503
+    conn = None
+    try:
+        conn = get_db_conn()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT id, customer_id, brand, fridge_model, capacity_liters, price, sales_date, "
+                "store_name, store_address, customer_feedback, feedback_rating, feedback_sentiment_category "
+                "FROM fru_sales_raw WHERE id = %s",
+                (id,),
+            )
+            row = cur.fetchone()
+        if not row:
+            return jsonify({"error": "Not found"}), 404
+        return jsonify({k: _json_safe(v) for k, v in dict(row).items()})
+    except Exception as e:
+        app.logger.error(f"rawdata get error: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn:
+            return_db_conn(conn)
+
+
+@app.route("/rawdata", methods=["POST"])
+def rawdata_create():
+    """Create new raw record. Syncs to fru_sales_embeddings."""
+    if not os.environ.get("PGHOST"):
+        return jsonify({"error": "Database not configured"}), 503
+    body = request.get_json(silent=True) or {}
+    id_val = body.get("id") or body.get("ID")
+    if not id_val:
+        return jsonify({"error": "id is required"}), 400
+    conn = None
+    try:
+        conn = get_db_conn()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO fru_sales_raw
+                (id, customer_id, brand, fridge_model, capacity_liters, price, sales_date,
+                 store_name, store_address, customer_feedback, feedback_rating, feedback_sentiment_category)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (id) DO UPDATE SET
+                  customer_id = EXCLUDED.customer_id, brand = EXCLUDED.brand, fridge_model = EXCLUDED.fridge_model,
+                  capacity_liters = EXCLUDED.capacity_liters, price = EXCLUDED.price, sales_date = EXCLUDED.sales_date,
+                  store_name = EXCLUDED.store_name, store_address = EXCLUDED.store_address,
+                  customer_feedback = EXCLUDED.customer_feedback, feedback_rating = EXCLUDED.feedback_rating,
+                  feedback_sentiment_category = EXCLUDED.feedback_sentiment_category
+                """,
+                (
+                    id_val,
+                    body.get("customer_id", ""),
+                    body.get("brand", "Unknown"),
+                    body.get("fridge_model", "Unknown"),
+                    body.get("capacity_liters"),
+                    float(body.get("price", 0) or 0),
+                    body.get("sales_date"),
+                    body.get("store_name", "Unknown"),
+                    body.get("store_address", ""),
+                    body.get("customer_feedback", ""),
+                    int(body["feedback_rating"]) if body.get("feedback_rating") is not None else None,
+                    body.get("feedback_sentiment_category", "Neutral"),
+                ),
+            )
+            conn.commit()
+        # Sync to embeddings
+        row_for_embed = {
+            "ID": id_val,
+            "CUSTOMER_ID": body.get("customer_id", ""),
+            "BRAND": body.get("brand", "Unknown"),
+            "FRIDGE_MODEL": body.get("fridge_model", "Unknown"),
+            "CAPACITY_LITERS": body.get("capacity_liters"),
+            "PRICE": float(body.get("price", 0) or 0),
+            "SALES_DATE": body.get("sales_date"),
+            "STORE_NAME": body.get("store_name", "Unknown"),
+            "STORE_ADDRESS": body.get("store_address", ""),
+            "CUSTOMER_FEEDBACK": body.get("customer_feedback", ""),
+            "FEEDBACK_RATING": int(body["feedback_rating"]) if body.get("feedback_rating") is not None else None,
+            "FEEDBACK_SENTIMENT_CATEGORY": body.get("feedback_sentiment_category", "Neutral"),
+        }
+        _upsert_embeddings_for_rows(conn, [row_for_embed])
+        return jsonify({"id": id_val, "message": "Created"}), 201
+    except Psycopg2Error as e:
+        if conn:
+            conn.rollback()
+        app.logger.error(f"rawdata create error: {e}")
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        app.logger.error(f"rawdata create error: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn:
+            return_db_conn(conn)
+
+
+@app.route("/rawdata/<id>", methods=["PUT"])
+def rawdata_update(id: str):
+    """Update raw record. Syncs to fru_sales_embeddings."""
+    if not os.environ.get("PGHOST"):
+        return jsonify({"error": "Database not configured"}), 503
+    body = request.get_json(silent=True) or {}
+    conn = None
+    try:
+        conn = get_db_conn()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE fru_sales_raw SET
+                  customer_id = %s, brand = %s, fridge_model = %s, capacity_liters = %s,
+                  price = %s, sales_date = %s, store_name = %s, store_address = %s,
+                  customer_feedback = %s, feedback_rating = %s, feedback_sentiment_category = %s
+                WHERE id = %s
+                """,
+                (
+                    body.get("customer_id", ""),
+                    body.get("brand", "Unknown"),
+                    body.get("fridge_model", "Unknown"),
+                    body.get("capacity_liters"),
+                    float(body.get("price", 0) or 0),
+                    body.get("sales_date"),
+                    body.get("store_name", "Unknown"),
+                    body.get("store_address", ""),
+                    body.get("customer_feedback", ""),
+                    int(body["feedback_rating"]) if body.get("feedback_rating") is not None else None,
+                    body.get("feedback_sentiment_category", "Neutral"),
+                    id,
+                ),
+            )
+            if cur.rowcount == 0:
+                return jsonify({"error": "Not found"}), 404
+            conn.commit()
+        row_for_embed = {
+            "ID": id,
+            "CUSTOMER_ID": body.get("customer_id", ""),
+            "BRAND": body.get("brand", "Unknown"),
+            "FRIDGE_MODEL": body.get("fridge_model", "Unknown"),
+            "CAPACITY_LITERS": body.get("capacity_liters"),
+            "PRICE": float(body.get("price", 0) or 0),
+            "SALES_DATE": body.get("sales_date"),
+            "STORE_NAME": body.get("store_name", "Unknown"),
+            "STORE_ADDRESS": body.get("store_address", ""),
+            "CUSTOMER_FEEDBACK": body.get("customer_feedback", ""),
+            "FEEDBACK_RATING": int(body["feedback_rating"]) if body.get("feedback_rating") is not None else None,
+            "FEEDBACK_SENTIMENT_CATEGORY": body.get("feedback_sentiment_category", "Neutral"),
+        }
+        _upsert_embeddings_for_rows(conn, [row_for_embed])
+        return jsonify({"id": id, "message": "Updated"})
+    except Psycopg2Error as e:
+        if conn:
+            conn.rollback()
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        app.logger.error(f"rawdata update error: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn:
+            return_db_conn(conn)
+
+
+@app.route("/rawdata/<id>", methods=["DELETE"])
+def rawdata_delete(id: str):
+    """Delete raw record. Also removes from fru_sales_embeddings."""
+    if not os.environ.get("PGHOST"):
+        return jsonify({"error": "Database not configured"}), 503
+    conn = None
+    try:
+        conn = get_db_conn()
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM fru_sales_embeddings WHERE id = %s", (id,))
+            cur.execute("DELETE FROM fru_sales_raw WHERE id = %s", (id,))
+            deleted = cur.rowcount
+        if deleted == 0:
+            conn.rollback()
+            return jsonify({"error": "Not found"}), 404
+        conn.commit()
+        return jsonify({"id": id, "message": "Deleted"})
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        app.logger.error(f"rawdata delete error: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn:
+            return_db_conn(conn)
 
 
 @app.route("/metrics/agent", methods=["GET"])

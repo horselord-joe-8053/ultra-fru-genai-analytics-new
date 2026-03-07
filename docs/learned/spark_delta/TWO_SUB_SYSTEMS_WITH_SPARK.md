@@ -7,7 +7,7 @@ This document explains the two main subsystems in our project that use **Spark**
 
 Both subsystems:
 
-- Share the **same raw CSV**: `core_app/data/raw/fridge_sales_with_rating.csv`.
+- Share the **same raw data source**: `fru_sales_raw` (PostgreSQL). Loaded from CSV at deploy via ETL; editable via `/rawdata` API and Data Management UI.
 - Share the **same Postgres database** (Aurora on AWS, Cloud SQL on GCP).
 - Write to **different tables** for different purposes:
   - `fru_sales` (Delta, on S3/GCS) → analytics source.
@@ -30,7 +30,7 @@ Color legend used in diagrams:
 %%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '11px', 'fontFamily': 'sans-serif' }}}%%
 flowchart LR
     subgraph RAW[" "]
-      CSV["Raw CSV<br/>fridge_sales_with_rating.csv"]
+      RAW_TBL["fru_sales_raw<br/>(PostgreSQL)"]
     end
 
     subgraph SPARK["Spark analytics image<br/>(core_app/analytics/docker/Dockerfile)"]
@@ -53,13 +53,13 @@ flowchart LR
       PANEL["Analytics panel<br/>(cards + charts)"]
     end
 
-    CSV -->|"CSV bootstrap"| RA
+    RAW_TBL -->|"psycopg2 read"| RA
     RA -->|"write/read Delta"| DELTA_SALES
     RA -->|"insert JSON stats"| BATCH
     ANALYTICS_API -->|"SELECT latest row"| BATCH
     PANEL -->|"poll /analytics"| ANALYTICS_API
 
-    style CSV fill:#e5e7eb,stroke:#6b7280
+    style RAW_TBL fill:#e5e7eb,stroke:#6b7280
     style RA fill:#e3f2fd,stroke:#2563eb
     style DELTA_SALES fill:#e0f2fe,stroke:#2563eb
     style BATCH fill:#e8f5e9,stroke:#059669
@@ -71,9 +71,7 @@ flowchart LR
 
 1. **Bootstrap / keep `fru_sales` Delta table up to date**
    - Entry point: `core_app/analytics/jobs/run_analytics.py`.
-   - On each run:
-     - Tries to read Delta path `.../fru_sales`.  
-     - If missing or too few rows, it **re‑creates** `fru_sales` by reading the CSV and writing it in Delta format.
+   - On each run: reads `fru_sales_raw` from PostgreSQL via psycopg2, creates Spark DataFrame, overwrites Delta at `.../fru_sales`.
 
 2. **Compute analytics with Spark**
    - Reads `fru_sales` into a Spark DataFrame.
@@ -104,34 +102,16 @@ flowchart LR
 
 > Note: these are **summaries**; see the source for full details.
 
-- **Create/read `fru_sales` Delta table from CSV (bootstrap path)** – `run_analytics.py`
+- **Create `fru_sales` Delta table from fru_sales_raw (PostgreSQL)** – `run_analytics.py`
 
 ```python
 def _ensure_fru_sales_exists(spark: SparkSession, delta_path: str) -> str:
-    path = _to_spark_path(delta_path)
-    try:
-        df = spark.read.format("delta").load(path)
-        existing_count = df.count()
-        if existing_count > 10:
-            return path
-    except Exception:
-        print("No Delta table found; will create from CSV")
-
-    csv_paths = [
-        "/opt/fru/data/fridge_sales_with_rating.csv",
-        os.path.join(_jobs_dir, "..", "..", "data", "raw", "fridge_sales_with_rating.csv"),
-    ]
-    for csv_path in csv_paths:
-        if os.path.exists(csv_path):
-            df = (
-                spark.read.option("header", "true")
-                .option("inferSchema", "true")
-                .csv("file://" + csv_path)
-            )
-            if "ID" in df.columns:
-                df = df.withColumnRenamed("ID", "id")
-            df.write.format("delta").mode("overwrite").save(path)
-            return path
+    # Read fru_sales_raw from PostgreSQL via psycopg2
+    rows = _read_raw_from_postgres()  # Returns list of dicts with uppercase keys
+    df = spark.createDataFrame(rows)
+    df = df.withColumnRenamed("ID", "id")
+    df.write.format("delta").mode("overwrite").save(path)
+    return path
 ```
 
 - **Run aggregations on `fru_sales`** – `run_analytics.py`
@@ -222,9 +202,9 @@ flowchart LR
       QUERY_PANEL["Main query panel"]
     end
 
-    CSV2["Raw CSV<br/>fridge_sales_with_rating.csv"]
+    RAW2["fru_sales_raw<br/>(PostgreSQL)"]
 
-    subgraph ETL["Backend ETL<br/>load_openai_embeddings_to_pgvector.py"]
+    subgraph ETL["Backend ETL<br/>load.py / run_schema_and_load"]
       ETL_JOB["Load + embed<br/>OpenAI embeddings"]
     end
 
@@ -233,16 +213,16 @@ flowchart LR
     end
 
     subgraph API2["Backend API"]
-      QUERY_API["/query<br/>/query/stream"]
+      QUERY_API["/query<br/>/query/stream<br/>/rawdata"]
     end
 
-    QUERY_PANEL -->|"HTTP /query or /query/stream"| QUERY_API
-    CSV2 -->|"read with pandas"| ETL_JOB
+    QUERY_PANEL -->|"HTTP /query, /query/stream, /rawdata"| QUERY_API
+    RAW2 -->|"read from DB"| ETL_JOB
     ETL_JOB -->|"INSERT + embedding"| EMB_TABLE
     QUERY_API -->|"pgvector_search_feedback()<br/>ANN search"| EMB_TABLE
     QUERY_API -->|"Claude / Agent<br/>reasoning"| QUERY_PANEL
 
-    style CSV2 fill:#e5e7eb,stroke:#6b7280
+    style RAW2 fill:#e5e7eb,stroke:#6b7280
     style ETL_JOB fill:#e3f2fd,stroke:#2563eb
     style EMB_TABLE fill:#e8f5e9,stroke:#059669
     style QUERY_API fill:#e0f2fe,stroke:#2563eb
@@ -276,11 +256,14 @@ flowchart LR
 
 ### 3.3 Key code paths (for reference)
 
-- **Load embeddings into `fru_sales_embeddings`** – `load_openai_embeddings_to_pgvector.py`
+- **Load embeddings into `fru_sales_embeddings`** – `load.py` (reads from fru_sales_raw)
 
 ```python
-df = pd.read_csv(csv_path)
-rows = df.to_dict(orient="records")
+# Read from fru_sales_raw (or CSV for legacy)
+with conn.cursor(cursor_factory=RealDictCursor) as cur:
+    cur.execute("SELECT * FROM fru_sales_raw")
+    raw_rows = cur.fetchall()
+rows = [map_to_uppercase(r) for r in raw_rows]
 
 for i in range(0, len(rows), batch_size):
     batch = rows[i:i+batch_size]
@@ -361,9 +344,9 @@ def query():
 ## 4. How the Two Subsystems Relate
 
 1. **Shared raw data**  
-   - Both subsystems ultimately start from the **same CSV**.
-   - Analytics: CSV → `fru_sales` (Delta) → `batch_analytics`.  
-   - Query/LLM: CSV → `fru_sales_embeddings` (pgvector).
+   - Both subsystems start from **fru_sales_raw** (PostgreSQL). CSV is loaded into fru_sales_raw at deploy.
+   - Analytics: fru_sales_raw → Spark → `fru_sales` (Delta) → `batch_analytics`.  
+   - Query/LLM: fru_sales_raw → `fru_sales_embeddings` (pgvector). CRUD via `/rawdata` syncs embeddings.
 
 2. **Shared database, separate tables**
    - Same Postgres instance:
