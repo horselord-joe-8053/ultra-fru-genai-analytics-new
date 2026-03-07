@@ -14,7 +14,7 @@ Usage:
   python tools/aws/standalone/temp_one_off/resources_scan/scan_aws_remaining.py --cloud-regions us-east-1 --env dev --prefix fru --elb  # Classic ELB track
 
 Search criteria (prefix, env) are dynamic from --prefix and --env (or PROJ_PREFIX/FRU_PREFIX, FRU_ENV).
---elb: Classic ELB track; affects orphan classification for LB/SG/TG (see docs/learned/KUBE_INGRESS_LEARNED.md Section 0).
+--elb: Classic ELB track; affects orphan classification for LB/SG/TG (see docs/learned/cloud_shared/KUBE_LB.md).
 """
 import argparse
 import json

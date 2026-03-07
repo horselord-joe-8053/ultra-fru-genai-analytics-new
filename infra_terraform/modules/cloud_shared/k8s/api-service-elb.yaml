@@ -1,7 +1,7 @@
 # Classic ELB track: fru-api-svc with in-tree cloud provider → Classic ELB (legacy).
 # Used when deploying kube WITH --elb. kube_apply selects this manifest.
 # Mutually exclusive with api-service.yaml: deploy uses exactly one.
-# See docs/learned/KUBE_INGRESS_LEARNED.md Section 0.
+# See docs/learned/cloud_shared/KUBE_LB.md.
 apiVersion: v1
 kind: Service
 metadata:

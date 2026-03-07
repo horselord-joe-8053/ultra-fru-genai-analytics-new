@@ -29,7 +29,7 @@ Why gcloud compute networks peerings delete (not tofu or gcloud services vpc-pee
   consumer's network side and succeeds immediately, bypassing the producer check.
 - Both paths delete the same underlying peering; we then state rm so Terraform stays in sync.
 
-Reference: docs/learned/KUBE_INGRESS_LEARNED.md §0.7 (LB delete → ENI release → SG delete).
+Reference: docs/learned/cloud_shared/KUBE_LB.md §6 (LB delete → ENI release → SG delete).
 """
 import os
 import subprocess

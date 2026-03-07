@@ -9,7 +9,7 @@ Usage:
   python tools/aws/deploy.py --scope all --env dev --force-build  # Force build (bypass content-based skip)
 
 Build skip: When build-context hash matches stored hash in S3, deploy skips build and uses repo:latest.
-Use --force-build when code changed. See docs/learned/BUILD_CONTENT_SKIP.md.
+Use --force-build when code changed. See docs/learned/cloud_shared/DEPLOY_BUILD_DOCKER.md.
 
 Key behaviors aligned with the legacy repo:
 - Uses `.env` env-map (names follow legacy)
@@ -131,7 +131,7 @@ def _maybe_push_only_for_region(env: str, target_region: str, snd: dict, artifac
     """
     When content-skip or --skip-build: if target ECR is empty, push from local image
     (from prior deploy to another region). Avoids ImageNotFoundException when deploying
-    to a new region. See docs/learned/BUILD_CONTENT_SKIP.md.
+    to a new region. See docs/learned/cloud_shared/DEPLOY_BUILD_DOCKER.md.
     """
     app_repo_url = snd.get("ecr_app_url", {}).get("value", "")
     spark_repo_url = snd.get("ecr_spark_url", {}).get("value", "")
@@ -227,7 +227,7 @@ def main():
         tracker.end_phase(2)
 
         # Phase 3a: Durable-with-cooloff (Secrets Manager only). Applied first so durable
-        # can read secret ARNs via terraform_remote_state. See docs/learned/DURABLE_COOLOFF_EVALUATION.md.
+        # can read secret ARNs via terraform_remote_state. See docs/learned/cloud_shared/DURABLE_COOLOFF_MULTI_CLOUD.md.
         tracker.start_phase(3)
         logger.step(f"[3/{len(phases)}] Applying durable_with_cooloff (Secrets)...")
         from tools.aws.scope_shared.deploy.deploy_common import apply_stack, init_stack
