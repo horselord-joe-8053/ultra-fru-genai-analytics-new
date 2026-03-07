@@ -2,8 +2,6 @@
 
 **Purpose:** Side-by-side comparison of `durable_with_cooloff` across cloud providers. Extensible for Oracle, Azure, Huawei, etc.
 
-**Related:** [DURABLE_COOLOFF_EVALUATION.md](../../learned/DURABLE_COOLOFF_EVALUATION.md)
-
 ---
 
 ## 1. What Is durable_with_cooloff?
@@ -108,8 +106,36 @@ When adding Oracle, Azure, Huawei, or another provider:
 
 ---
 
-## 9. Related Docs
+## 9. As Implemented
 
-- [DURABLE_COOLOFF_EVALUATION.md](../../learned/DURABLE_COOLOFF_EVALUATION.md) — AWS rationale, migration
+1. **`infra_terraform/live_deploy/aws/scope_shared/durable_with_cooloff/`** and **`live_deploy/gcp/scope_shared/durable_with_cooloff/`** exist with secrets only.
+2. Secrets are standalone; durable has no secrets. Nondurable/kube read them via `tofu output` from durable. Deploy and tools read from both stacks as needed (durable_with_cooloff applied first).
+3. **`teardown.py`:** `--incl-dura` destroys durable only (VPC, Aurora/Cloud SQL); secrets remain. `--incl-dura-all` destroys durable then durable_with_cooloff.
+4. **Deploy:** Applies durable_with_cooloff before durable; tools read from the appropriate stack outputs.
+
+### Why `recovery_window_in_days = 30` (AWS)
+
+The `recovery_window_in_days` parameter controls the AWS Secrets Manager recovery window. When Terraform destroys a secret, AWS schedules it for deletion. During that period (default 30 days): the secret is in "scheduled for deletion" state; **you cannot create a new secret with the same name** until the old one is either restored or permanently deleted. We set it explicitly for recovery capability (restore if teardown was accidental); the cool-off is the unavoidable consequence. **Alternative:** `ForceDeleteWithoutRecovery` would allow immediate same-name recreation but is irreversible—we do not use it.
+
+### Migration (Existing Deployments)
+
+If you have an **existing** deployment where secrets are in the `durable` state:
+
+1. **Import** existing secrets into durable_with_cooloff (deploy does this automatically).
+2. **Remove secrets from durable state** (keeps secrets in AWS):
+   ```bash
+   cd infra_terraform/live_deploy/aws/scope_shared/durable
+   tofu state rm aws_secretsmanager_secret.openai_api_key
+   tofu state rm aws_secretsmanager_secret.db_password
+   tofu state rm aws_secretsmanager_secret.db_password_plain
+   ```
+3. **Apply durable** — it will read secret ARNs from durable_with_cooloff via remote state.
+
+For **fresh** deployments, no migration needed.
+
+---
+
+## 10. Related Docs
+
 - [GCP_AWS_REFERENCE.md](../../GCP_AWS_REFERENCE.md) — Component mapping
 - [WAR_STORIES_CLOUD_SHARED.md](../../war_stories/WAR_STORIES_CLOUD_SHARED.md) — War story #36 (phase order)

@@ -2,7 +2,7 @@
 
 A guide to **who owns what** across our Terraform stacks, how stacks **share** AWS resources, and how to avoid **tag drift** and other conflicts. Essential reading after [War Story 58: VPC Subnet Tag Drift](../../war_stories/WAR_STORIES_AWS.md#35-vpc-subnet-tag-drift-durable-vs-kube-and-lifecycle-ignore_changes).
 
-**See also:** [FULL_ARCH_KUBE_LEARN.md](../FULL_ARCH_KUBE_LEARN.md), [VPC_LEARNED.md](../VPC_LEARNED.md), [TERRA_LEARNED_TOTAL.md](TERRA_LEARNED_TOTAL.md).
+**See also:** [ARCHITECTURE_AWS_GCP_GENERAL.md](../cloud_shared/ARCHITECTURE_AWS_GCP_GENERAL.md), [VPC_AND_NETWORK.md](../cloud_shared/VPC_AND_NETWORK.md), [TERRA_LEARNED_TOTAL.md](TERRA_LEARNED_TOTAL.md).
 
 ---
 
@@ -159,7 +159,7 @@ resource "aws_subnet" "example" {
 
 ### 5.3 Our Usage
 
-All four subnet resources in `infra_terraform/modules/aws/primitives/vpc/main.tf` have `lifecycle { ignore_changes = [tags] }` because kube adds `kubernetes.io/*` tags to public subnets. See [DEPLOYMENT_OPTIMIZATION_LEARNED.md](../DEPLOYMENT_OPTIMIZATION_LEARNED.md) §2.1.
+All four subnet resources in `infra_terraform/modules/aws/primitives/vpc/main.tf` have `lifecycle { ignore_changes = [tags] }` because kube adds `kubernetes.io/*` tags to public subnets. See [DEPLOY_BUILD_DOCKER.md](../cloud_shared/DEPLOY_BUILD_DOCKER.md) §2.
 
 ---
 
@@ -208,4 +208,4 @@ flowchart TB
 
 ---
 
-*Doc: `docs/learned/terra/TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md`. Related: [FULL_ARCH_KUBE_LEARN.md](../FULL_ARCH_KUBE_LEARN.md), [VPC_LEARNED.md](../VPC_LEARNED.md), [WAR_STORIES_AWS.md](../../war_stories/WAR_STORIES_AWS.md).*
+*Doc: `docs/learned/terra/TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md`. Related: [ARCHITECTURE_AWS_GCP_GENERAL.md](../cloud_shared/ARCHITECTURE_AWS_GCP_GENERAL.md), [VPC_AND_NETWORK.md](../cloud_shared/VPC_AND_NETWORK.md), [WAR_STORIES_AWS.md](../../war_stories/WAR_STORIES_AWS.md).*

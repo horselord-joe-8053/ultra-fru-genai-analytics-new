@@ -1062,7 +1062,7 @@ We kept the pre-destroy approach. The cons outweighed the pros: templating, prov
 
 ### 20.4 Takeaway
 
-Moving K8s resources into Terraform is possible but not always worth it. When templating, provider config, and secret wiring add substantial complexity, keeping kubectl + pre-destroy is a pragmatic choice. **Details:** Full Terraform vs kubectl comparison, including the in-tree ELB `k8s-elb-*` SG caveat, is in [KUBE_INGRESS_LEARNED.md](docs/learned/KUBE_INGRESS_LEARNED.md) Section 0.8.
+Moving K8s resources into Terraform is possible but not always worth it. When templating, provider config, and secret wiring add substantial complexity, keeping kubectl + pre-destroy is a pragmatic choice. **Details:** Full Terraform vs kubectl comparison, including the in-tree ELB `k8s-elb-*` SG caveat, is in [KUBE_LB.md](docs/learned/cloud_shared/KUBE_LB.md).
 
 ---
 
@@ -1260,7 +1260,7 @@ When supporting both Terraform and OpenTofu (or multiple providers), use error p
 
 ### 25.1 Context
 
-While documenting a refactor plan for "Kube Apply Ran Twice" (see `docs/learned/DEPLOYMENT_OPTIMIZATION_LEARNED.md` §2.2), AI-generated pseudocode was proposed for a two-phase deploy flow: first Terraform apply (possibly without NLB hostname), then kube_apply + poll for hostname, then a second Terraform apply to set CloudFront's API origin to the NLB DNS. The pseudocode looked plausible but contained a major logic bug.
+While documenting a refactor plan for "Kube Apply Ran Twice" (see `docs/learned/cloud_shared/DEPLOY_BUILD_DOCKER.md` §2), AI-generated pseudocode was proposed for a two-phase deploy flow: first Terraform apply (possibly without NLB hostname), then kube_apply + poll for hostname, then a second Terraform apply to set CloudFront's API origin to the NLB DNS. The pseudocode looked plausible but contained a major logic bug.
 
 ### 25.2 The Buggy Pseudocode
 
@@ -1352,7 +1352,7 @@ Before import for a stack, run `tofu plan -detailed-exitcode` with the same vars
 
 ### 26.5 Takeaway
 
-When import is "just in case" (reconcile state before apply), run `plan -detailed-exitcode` first. If no changes, skip import and apply. Saves time on re-deploys when infrastructure is already in sync. See `docs/learned/DEPLOYMENT_OPTIMIZATION_LEARNED.md` §2.3.
+When import is "just in case" (reconcile state before apply), run `plan -detailed-exitcode` first. If no changes, skip import and apply. Saves time on re-deploys when infrastructure is already in sync. See `docs/learned/cloud_shared/DEPLOY_BUILD_DOCKER.md` §2.
 
 ---
 
@@ -1375,7 +1375,7 @@ No content-aware skip. Options were: always build (slow) or `--skip-build` (use 
 
 ### 27.3 Resolution
 
-Compute a hash of the build context (files in `core_app/` + Dockerfile path). Store it in S3 after each successful build. Before build, compare current hash to stored hash. If both app and spark match, skip build and use `repo:latest`. `--force-build` bypasses. Uncommitted changes change the hash. See `docs/learned/BUILD_CONTENT_SKIP.md` and `tools/aws/scope_shared/deploy/build_context_hash.py`.
+Compute a hash of the build context (files in `core_app/` + Dockerfile path). Store it in S3 after each successful build. Before build, compare current hash to stored hash. If both app and spark match, skip build and use `repo:latest`. `--force-build` bypasses. Uncommitted changes change the hash. See `docs/learned/cloud_shared/DEPLOY_BUILD_DOCKER.md` and `tools/aws/scope_shared/deploy/build_context_hash.py`.
 
 ### 27.4 Overhead: Hash Check Cost Is Negligible
 
@@ -1398,7 +1398,7 @@ Phase 7 when skipping: 11 s total (includes ~8 s `tofu_output_json` for `artifac
 
 ### 27.6 Takeaway
 
-Use content-based hashing (not Git SHA) for build skip so uncommitted changes trigger rebuild. Store hash in S3; skip when current hash matches. `--force-build` for explicit override. The hash check overhead (~2–3 s) is negligible vs. build time saved (~95 s). See `docs/learned/BUILD_CONTENT_SKIP.md`. Related: War Story 20 (CONTAINER_IMAGE and --skip-build in background process).
+Use content-based hashing (not Git SHA) for build skip so uncommitted changes trigger rebuild. Store hash in S3; skip when current hash matches. `--force-build` for explicit override. The hash check overhead (~2–3 s) is negligible vs. build time saved (~95 s). See `docs/learned/cloud_shared/DEPLOY_BUILD_DOCKER.md`. Related: War Story 20 (CONTAINER_IMAGE and --skip-build in background process).
 
 ---
 

@@ -200,7 +200,7 @@ Don't assume load balancer types based on platform (EKS vs ECS). Verify the actu
 
 ### 3.6 Correction (2025)
 
-**Actual LB type:** The kube API is exposed via `fru-api-svc` (type LoadBalancer), not NGINX Ingress. Without `service.beta.kubernetes.io/aws-load-balancer-type: external`, the **in-tree** cloud provider reconciles it and creates a **Classic ELB**—not NLB. The protocol guidance (use HTTP for LB endpoints) still applies. See [KUBE_INGRESS_LEARNED.md](docs/learned/KUBE_INGRESS_LEARNED.md) Section 0.
+**Actual LB type:** The kube API is exposed via `fru-api-svc` (type LoadBalancer), not NGINX Ingress. Without `service.beta.kubernetes.io/aws-load-balancer-type: external`, the **in-tree** cloud provider reconciles it and creates a **Classic ELB**—not NLB. The protocol guidance (use HTTP for LB endpoints) still applies. See [KUBE_LB.md](docs/learned/cloud_shared/KUBE_LB.md).
 
 ---
 
@@ -255,7 +255,7 @@ Always search for similar patterns across the entire codebase when fixing protoc
 
 ### 4.6 Correction (2025)
 
-**Actual LB type:** The kube API uses `fru-api-svc` LoadBalancer (Classic ELB via in-tree), not NLB. The HTTP/HTTPS guidance still applies. See [KUBE_INGRESS_LEARNED.md](docs/learned/KUBE_INGRESS_LEARNED.md) Section 0.
+**Actual LB type:** The kube API uses `fru-api-svc` LoadBalancer (Classic ELB via in-tree), not NLB. The HTTP/HTTPS guidance still applies. See [KUBE_LB.md](docs/learned/cloud_shared/KUBE_LB.md).
 
 ---
 
@@ -314,7 +314,7 @@ After these changes, teardown could progress past subnets and security groups on
 
 Model the VPC dependency graph explicitly and implement teardown in a safe order: Load balancers / NAT → VPC Endpoints → ENIs → Subnets → Route Tables (non-main) → Security Groups (non-default) → Internet Gateway → VPC. Include ENIs and VPC endpoints in both inventory and removal; omitting them is a common cause of DependencyViolation during VPC teardown.
 
-**Related:** For EKS kube teardown with Classic ELB, the `k8s-elb-*` security group blocks VPC deletion until removed. See [KUBE_INGRESS_LEARNED.md](docs/learned/KUBE_INGRESS_LEARNED.md) Section 0.7 (VPC teardown, dependency order).
+**Related:** For EKS kube teardown with Classic ELB, the `k8s-elb-*` security group blocks VPC deletion until removed. See [KUBE_LB.md](docs/learned/cloud_shared/KUBE_LB.md).7 (VPC teardown, dependency order).
 
 ---
 
@@ -371,7 +371,7 @@ No code change can make AWS release the ENI sooner; the only correct behavior is
 
 ELB deletion is asynchronous; ENIs are released last and can linger for 10–30+ minutes. Do not force-delete the ENI, do not delete the subnet while the ENI exists, and do not treat this as a bug—it is eventual consistency. Implement wait-and-retry with a timeout and/or a "pending cleanup" skip so teardown scripts can either succeed after a wait or be re-run later when AWS has finished cleanup.
 
-**Related:** For in-tree Classic ELB, the `k8s-elb-*` SG depends on ENIs from the ELB; we must wait for ENI release before deleting it. See [KUBE_INGRESS_LEARNED.md](docs/learned/KUBE_INGRESS_LEARNED.md) Section 0.7, 0.8.
+**Related:** For in-tree Classic ELB, the `k8s-elb-*` SG depends on ENIs from the ELB; we must wait for ENI release before deleting it. See [KUBE_LB.md](docs/learned/cloud_shared/KUBE_LB.md).7, 0.8.
 
 ---
 
@@ -1150,7 +1150,7 @@ The common approach is **post-destroy cleanup**: run a script after `terraform d
 
 EKS cluster and node SGs are AWS-created side effects, not Terraform resources. Terraform cannot manage their lifecycle. Post-destroy CLI cleanup is the common industry practice. Document this so future maintainers understand why `remove_orphaned_eks_security_groups` exists and that it is not a workaround for missing Terraform—the SGs were never in Terraform.
 
-**Related:** The `k8s-elb-*` SG (in-tree Classic ELB) is a different orphan: created with the ELB, not auto-deleted when the ELB is gone. It blocks VPC deletion. See [KUBE_INGRESS_LEARNED.md](docs/learned/KUBE_INGRESS_LEARNED.md) Section 0.7, 0.8.
+**Related:** The `k8s-elb-*` SG (in-tree Classic ELB) is a different orphan: created with the ELB, not auto-deleted when the ELB is gone. It blocks VPC deletion. See [KUBE_LB.md](docs/learned/cloud_shared/KUBE_LB.md).7, 0.8.
 
 ---
 
@@ -1790,7 +1790,7 @@ S3 bucket names are globally unique. For multi-region deployments, include the r
 
 After teardown, some AWS resources survived: Classic ELBs, security groups (`k8s-elb-*`), target groups (`k8s-ingressn-*`), CloudFront OACs (legacy format), and IAM roles (e.g. AWS Load Balancer Controller). These are **orphans**—not in Terraform state, so `tofu destroy` never touches them. War Story 46 describes the problem; here we built a **scan-and-remove** pipeline to detect and delete them systematically.
 
-**Note:** The Classic ELB + `k8s-elb-*` SG pairs are created by `fru-api-svc` (type LoadBalancer) during kube deploy. Without `aws-load-balancer-type: external`, the in-tree cloud provider creates Classic ELBs. These pairs are **in use** while the cluster runs; only run orphan removal after teardown. To switch to NLB and avoid creating new Classic ELBs, add the annotation to `api-service.yaml`. See [KUBE_INGRESS_LEARNED.md](docs/learned/KUBE_INGRESS_LEARNED.md) Section 0.
+**Note:** The Classic ELB + `k8s-elb-*` SG pairs are created by `fru-api-svc` (type LoadBalancer) during kube deploy. Without `aws-load-balancer-type: external`, the in-tree cloud provider creates Classic ELBs. These pairs are **in use** while the cluster runs; only run orphan removal after teardown. To switch to NLB and avoid creating new Classic ELBs, add the annotation to `api-service.yaml`. See [KUBE_LB.md](docs/learned/cloud_shared/KUBE_LB.md).
 
 ### 33.2 How We Scan and Detect Orphans
 
@@ -1991,7 +1991,7 @@ Add `lifecycle { ignore_changes = [tags] }` to all subnet resources in `infra_te
 
 ### 35.5 Takeaway
 
-When two stacks manage the same resource (durable owns subnets; kube adds tags), use `lifecycle { ignore_changes = [tags] }` on the owning resource so the other stack's `aws_ec2_tag` additions are not reverted. See `docs/learned/DEPLOYMENT_OPTIMIZATION_LEARNED.md` §2.1.
+When two stacks manage the same resource (durable owns subnets; kube adds tags), use `lifecycle { ignore_changes = [tags] }` on the owning resource so the other stack's `aws_ec2_tag` additions are not reverted. See `docs/learned/cloud_shared/DEPLOY_BUILD_DOCKER.md` §2.
 
 **Deep dive:** [docs/learned/terra/TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md](docs/learned/terra/TERRA_STACK_OWNERSHIP_AND_SHARED_RESOURCES.md) — stack ownership model, `aws_ec2_tag`, and lifecycle patterns.
 
@@ -2070,7 +2070,7 @@ We considered separating analytics (e.g. `batch_analytics_kube` vs `batch_analyt
 
 ### 37.5 Takeaway
 
-EKS CronJob pods need AWS credentials for S3 access (unlike ECS, which uses task role). Use the same `aws-credentials` secret from bootstrap for both API and CronJob. Kube and Nonkube share Delta and `batch_analytics`; in PROD only one scope will be deployed. See `docs/learned/ANALYTICS_KUBE_NONKUBE_SHARED_DATA.md`.
+EKS CronJob pods need AWS credentials for S3 access (unlike ECS, which uses task role). Use the same `aws-credentials` secret from bootstrap for both API and CronJob. Kube and Nonkube share Delta and `batch_analytics`; in PROD only one scope will be deployed. See `docs/learned/cloud_shared/ANALYTICS_AND_DATA.md`.
 
 ---
 
@@ -2133,11 +2133,11 @@ deploy.py --scope kube [--elb]
 
 ### 38.5 Orphan Cleanup After Migration
 
-When switching from Classic ELB to NLB, the old Classic ELB and its `k8s-elb-*` security group become orphans (no longer in Terraform or K8s state). Run `remove_for_orphans_data.py` after verifying the NLB works. See [KUBE_INGRESS_LEARNED.md](docs/learned/KUBE_INGRESS_LEARNED.md) Section 0.6.
+When switching from Classic ELB to NLB, the old Classic ELB and its `k8s-elb-*` security group become orphans (no longer in Terraform or K8s state). Run `remove_for_orphans_data.py` after verifying the NLB works. See [KUBE_LB.md](docs/learned/cloud_shared/KUBE_LB.md).6.
 
 ### 38.6 Takeaway
 
-The `--elb` flag selects the load balancer track: Classic ELB (in-tree) vs NLB (AWS Load Balancer Controller). Two manifests, one annotation difference, one flag. Document this choice clearly—it affects deploy prerequisites (eksctl/helm for NLB), orphan cleanup, and CloudFront origin wiring. See `docs/learned/KUBE_INGRESS_LEARNED.md` Section 0.
+The `--elb` flag selects the load balancer track: Classic ELB (in-tree) vs NLB (AWS Load Balancer Controller). Two manifests, one annotation difference, one flag. Document this choice clearly—it affects deploy prerequisites (eksctl/helm for NLB), orphan cleanup, and CloudFront origin wiring. See `docs/learned/cloud_shared/KUBE_LB.md`.
 
 ---
 
@@ -2466,7 +2466,7 @@ ECR allows the same repo name in different regions. We use regionless names (`fr
 
 ### 42.6 Takeaway
 
-For multi-region Docker deploys: (1) Use regionless repo names so one local reference works everywhere. (2) Remove only ECR registry compound tags after push, not images. (3) Use content-based build skip so unchanged code skips build. (4) Push-only fills empty ECR in new regions without rebuild. Result: build once, deploy to N regions with one build and N-1 push-only steps. See `docs/learned/DOCKER_LEARNED.md`.
+For multi-region Docker deploys: (1) Use regionless repo names so one local reference works everywhere. (2) Remove only ECR registry compound tags after push, not images. (3) Use content-based build skip so unchanged code skips build. (4) Push-only fills empty ECR in new regions without rebuild. Result: build once, deploy to N regions with one build and N-1 push-only steps. See `docs/learned/cloud_shared/DEPLOY_BUILD_DOCKER.md`.
 
 ---
 
