@@ -2,7 +2,7 @@
 
 A short guide to what we mean by **layers** in Terraform/Terragrunt in this repo, how **deployment order** is determined, and how that connects to **long-term components** (e.g. Secrets Manager) and **Option B: separate long-term layer**.
 
-**See also:** [VPC_LEARNED.md](VPC_LEARNED.md) (VPC + state + locks; [§3.2 Option B — Import](VPC_LEARNED.md#32-how-we-fix-it-align-state-and-reality) for fixing subnet group by importing), [DEPLOYMENT_ERRORS_AND_FIXES.md](../DEPLOYMENT_ERRORS_AND_FIXES.md), [war_stories/WAR_STORIES_CLOUD_SHARED.md](../../war_stories/WAR_STORIES_CLOUD_SHARED.md).
+**See also:** [VPC_AND_NETWORK.md](../cloud_shared/VPC_AND_NETWORK.md) (VPC + state + locks), [DEPLOYMENT_ERRORS_AND_FIXES.md](../DEPLOYMENT_ERRORS_AND_FIXES.md), [war_stories/WAR_STORIES_CLOUD_SHARED.md](../../war_stories/WAR_STORIES_CLOUD_SHARED.md).
 
 ---
 
@@ -194,7 +194,7 @@ So **“layers”** are the knobs we turn to decide **what is applied together**
 | **Module** | Reusable Terraform code under `modules/`. A layer can use several modules. |
 | **Deploy order (layers)** | Fixed in `orchestration/terraform/deploy.sh`: longterm → infrastructure → (eks or ecs) → frontend; app branch chosen by `CONTAINER_TYPE` when `LAYER=all`. |
 | **Order within a layer** | Terraform dependency graph (references and `depends_on`); one `terragrunt apply` per layer. |
-| **Option B** | Separate Terragrunt layer (and tree **module_infra_longterm**) for long-term resources (e.g. secrets); main teardown (`all`) never destroys that layer; destroy it explicitly with `./teardown.sh <env> longterm`. *(The VPC/subnet “Option B — Import” is a different idea; see [VPC_LEARNED.md §3.2](VPC_LEARNED.md#32-how-we-fix-it-align-state-and-reality).)* |
+| **Option B** | Separate Terragrunt layer (and tree **module_infra_longterm**) for long-term resources (e.g. secrets); main teardown (`all`) never destroys that layer; destroy it explicitly with `./teardown.sh <env> longterm`. *(The VPC/subnet “Option B — Import” is a different idea; see [VPC_AND_NETWORK.md](../cloud_shared/VPC_AND_NETWORK.md) Part 3.)* |
 | **Fail-back** | *(Legacy)* When destroy failed on `prevent_destroy`, we used to remove protected resources from state and re-run destroy. With Option B, infrastructure no longer contains Secrets Manager, so this is no longer used. |
 
 ---
@@ -265,4 +265,4 @@ The root_* modules are “abstract” by design: they are the **root module for 
 
 ---
 
-*This doc: `docs/learned/terra/TERRA_LEARNED.md`. Related: [VPC_LEARNED.md](../VPC_LEARNED.md), [DEPLOYMENT_ERRORS_AND_FIXES.md](../../DEPLOYMENT_ERRORS_AND_FIXES.md), [war_stories/WAR_STORIES_CLOUD_SHARED.md](../../war_stories/WAR_STORIES_CLOUD_SHARED.md).*
+*This doc: `docs/learned/terra/TERRA_LEARNED.md`. Related: [VPC_AND_NETWORK.md](../cloud_shared/VPC_AND_NETWORK.md), [DEPLOYMENT_ERRORS_AND_FIXES.md](../../DEPLOYMENT_ERRORS_AND_FIXES.md), [war_stories/WAR_STORIES_CLOUD_SHARED.md](../../war_stories/WAR_STORIES_CLOUD_SHARED.md).*
