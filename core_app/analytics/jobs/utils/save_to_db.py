@@ -3,7 +3,7 @@ Save Spark analytics results to PostgreSQL batch_analytics table.
 Standalone - no backend.* dependencies. Uses os.environ for config.
 
 Note: batch_analytics is shared by both Kube (CronJob) and Nonkube (EventBridge) Spark jobs.
-In PROD only one scope is deployed; in DEV both may run. See docs/learned/ANALYTICS_KUBE_NONKUBE_SHARED_DATA.md.
+In PROD only one scope is deployed; in DEV both may run. See docs/learned/cloud_shared/ANALYTICS_AND_DATA.md.
 """
 import os
 import json

@@ -1,6 +1,6 @@
 # Variables for durable_with_cooloff stack (Secrets Manager only).
 # 30-day recovery window: when destroyed, secrets stay in "scheduled for deletion"
-# for 30 days; same-name recreation blocked until then. See docs/learned/DURABLE_COOLOFF_EVALUATION.md.
+# for 30 days; same-name recreation blocked until then. See docs/learned/cloud_shared/DURABLE_COOLOFF_MULTI_CLOUD.md.
 
 variable "prefix" { type = string }
 variable "env" { type = string }

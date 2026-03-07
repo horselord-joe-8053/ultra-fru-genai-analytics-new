@@ -32,7 +32,7 @@ This tool:
 - Removes old local images after successful build and push; use --cleanup-local to also remove current images
 - Content-based skip: deploy.py checks build-context hash before calling this; when hash
   matches stored value in S3, deploy may skip build and call --push-only for regions missing the image.
-  See docs/learned/BUILD_CONTENT_SKIP.md for details.
+  See docs/learned/cloud_shared/DEPLOY_BUILD_DOCKER.md for details.
 """
 import argparse, os, json, subprocess, sys
 from tools.cloud_shared.env import load_dotenv, require, get_int_env
@@ -103,7 +103,7 @@ def _run_push_only(
     """
     Push-only mode: tag local images (repo_name:latest) for target ECR and push.
     Skips if target ECR already has both images. Repo name is regionless (fru-api-img-dev),
-    so same local tag works for any region—just re-tag for target registry. See BUILD_CONTENT_SKIP.md.
+    so same local tag works for any region—just re-tag for target registry. See docs/learned/cloud_shared/DEPLOY_BUILD_DOCKER.md.
     After push: removes ECR registry tags locally (unless skip_untag_ecr) so only canonical names remain.
     """
     app_repo_name = target_app_url.split("/")[-1]
