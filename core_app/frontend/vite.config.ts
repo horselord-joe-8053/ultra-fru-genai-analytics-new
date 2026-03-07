@@ -9,18 +9,13 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      "/query": {
-        target: "http://localhost:5001",
-        changeOrigin: true,
-      },
-      "/analytics": {
-        target: "http://localhost:5001",
-        changeOrigin: true,
-      },
-      "/query/stream": {
-        target: "http://localhost:5001",
-        changeOrigin: true,
-      },
+      "/query": { target: "http://localhost:5001", changeOrigin: true },
+      "/query/stream": { target: "http://localhost:5001", changeOrigin: true },
+      "/analytics": { target: "http://localhost:5001", changeOrigin: true },
+      "/rawdata": { target: "http://localhost:5001", changeOrigin: true },
+      "/rawdata/*": { target: "http://localhost:5001", changeOrigin: true },
+      "/health": { target: "http://localhost:5001", changeOrigin: true },
+      "/version": { target: "http://localhost:5001", changeOrigin: true },
     },
   },
 });

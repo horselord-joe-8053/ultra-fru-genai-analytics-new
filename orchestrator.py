@@ -16,6 +16,14 @@ Usage (from project root, with venv):
   .venv/bin/python orchestrator.py deploy --provider gcp --scope all --env dev --cloud-region us-central1
   .venv/bin/python orchestrator.py verify --provider gcp --scope all --env dev
 
+  # Local (PostgreSQL + Spark via Docker; no --scope/--env/--cloud-region)
+  .venv/bin/python orchestrator.py deploy --provider local   # deploy + start API/frontend + verify (default)
+  .venv/bin/python orchestrator.py deploy --provider local --no-start-local   # deploy only
+  .venv/bin/python orchestrator.py deploy --provider local --shutdown-local   # terminate local API and frontend only
+  .venv/bin/python orchestrator.py teardown --provider local
+  .venv/bin/python orchestrator.py doctor --provider local
+  .venv/bin/python orchestrator.py verify --provider local
+
   # Doctor (preflight checks) – any provider
   .venv/bin/python orchestrator.py doctor --provider gcp --env dev --cloud-region us-central1
 
@@ -194,9 +202,70 @@ def handle_gcp(args):
     _handle_provider(args, "tools/gcp", "gcp", deploy_extra_before=["--apply"])
 
 def handle_local(args):
-    """Route commands to Local tools. Implementation pending."""
-    print("Local provider implementation is pending.")
-    sys.exit(1)
+    """Route commands to Local tools (PostgreSQL + Spark via Docker).
+    --start-local: deploy + start API/frontend + verify (default for deploy).
+    --shutdown-local: terminate local API and frontend only; or run before deploy for clean slate.
+    --no-start-local: deploy only, do not start or verify.
+    """
+    base_path = "tools/local"
+    project_root = os.getcwd()
+
+    if args.command == "doctor":
+        script = f"{base_path}/standalone/doctor.py"
+        with logger.Heartbeat("Local preflight"):
+            run_command(["python", script])
+
+    elif args.command == "deploy":
+        # --shutdown-local only (no --start-local): terminate API/frontend and exit
+        if getattr(args, "shutdown_local", False) and not getattr(args, "start_local", False):
+            logger.step("Shutting down local API and frontend")
+            run_command(["python", f"{base_path}/shutdown_local.py"])
+            return
+
+        if not args.skip_ensure_deps:
+            ensure_deps()
+        if not args.skip_doctor:
+            run_command(["python", f"{base_path}/standalone/doctor.py"])
+
+        # --shutdown-local with --start-local: clean slate before deploy
+        if getattr(args, "shutdown_local", False):
+            logger.step("Shutting down local API and frontend (clean slate)")
+            run_command(["python", f"{base_path}/shutdown_local.py"])
+
+        script = f"{base_path}/deploy.py"
+        with logger.Heartbeat("Local deploy"):
+            run_command(["python", script])
+
+        # Default: start + verify. Skip if --no-start-local
+        do_start = not getattr(args, "no_start_local", False)
+        if do_start:
+            logger.step("Starting local API and frontend")
+            run_command(["python", f"{base_path}/start_local.py"])
+            logger.step("Verifying local deployment")
+            run_command(["python", f"{base_path}/scope_shared/verify/verify_all_deploy.py"])
+        else:
+            logger.step("Local deploy complete. Start API and frontend to verify:")
+            logger.info("  python orchestrator.py deploy --provider local --start-local")
+            logger.info("  Or: PORT=5001 PYTHONPATH=core_app python -m backend.api.app")
+            logger.info("  And: cd core_app/frontend && npm run dev")
+
+    elif args.command == "teardown":
+        script = f"{base_path}/teardown.py"
+        logger.step("Shutting down local API and frontend")
+        run_command(["python", f"{base_path}/shutdown_local.py"])
+        with logger.Heartbeat("Local teardown"):
+            run_command(["python", script])
+        logger.step("Verifying teardown...")
+        run_command(["python", f"{base_path}/scope_shared/verify/verify_all_teardown.py"])
+
+    elif args.command == "verify":
+        script = f"{base_path}/scope_shared/verify/verify_all_deploy.py"
+        with logger.Heartbeat("Local verify (API must be running on localhost:5001)"):
+            run_command(["python", script])
+
+    else:
+        logger.error(f"Unknown command for local: {args.command}")
+        sys.exit(1)
 
 def main():
     parser = argparse.ArgumentParser(
@@ -234,6 +303,14 @@ def main():
     parser.add_argument("--incl-dura-all", action="store_true", help="Include durable and durable_with_cooloff (secrets); full teardown (scope=all only)")
     parser.add_argument("--gke-disable-deletion-protection", action="store_true",
                         help="[GCP] Before kube apply: disable deletion_protection on existing regional cluster (for migration to zonal)")
+
+    # Local-only flags (used when --provider local)
+    parser.add_argument("--start-local", action="store_true",
+                        help="[Local] After deploy: start API and frontend, then verify. Default for deploy --provider local.")
+    parser.add_argument("--shutdown-local", action="store_true",
+                        help="[Local] Terminate local API and frontend only (no deploy/teardown). Or run before deploy for clean slate.")
+    parser.add_argument("--no-start-local", action="store_true",
+                        help="[Local] Deploy only; do not start API/frontend or verify.")
 
     # Parse args
     args = parser.parse_args()

@@ -1,14 +1,17 @@
 """
-Shared load logic for fru_sales_embeddings (OpenAI embeddings + psycopg2).
+Shared load logic for fru_sales_raw and fru_sales_embeddings (OpenAI embeddings + psycopg2).
 
 Used by run_schema_and_load.py (container) and setup_database.py (host).
 Uses os.getenv() only – no backend.utils.env_helpers (container has no core_app).
+
+Flow: load_raw_from_csv (CSV → fru_sales_raw) then load_embeddings (fru_sales_raw → fru_sales_embeddings).
 """
 import os
 import time
 
 import pandas as pd
 from openai import OpenAI
+from psycopg2.extras import RealDictCursor
 
 REQUIRED_COLUMNS = [
     "ID", "CUSTOMER_ID", "BRAND", "FRIDGE_MODEL", "CAPACITY_LITERS", "PRICE",
@@ -17,14 +20,93 @@ REQUIRED_COLUMNS = [
 ]
 
 
-def load_embeddings(
+def load_raw_from_csv(
     conn,
     csv_path: str,
+    force: bool = False,
+) -> int:
+    """
+    Load CSV into fru_sales_raw. Idempotent: skips if data exists and not force.
+    Returns row count.
+    """
+    from tools.cloud_shared.logging.logger import info, success, error, step
+
+    if not force:
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM fru_sales_raw;")
+            existing = cur.fetchone()[0]
+        if existing > 0:
+            step(f"fru_sales_raw already loaded ({existing} rows); skipping (use force=True to reload)")
+            return existing
+
+    if not os.path.exists(csv_path):
+        error(f"CSV not found: {csv_path}")
+        raise FileNotFoundError(f"CSV not found: {csv_path}")
+
+    step(f"Loading CSV into fru_sales_raw from {csv_path}")
+    df = pd.read_csv(csv_path)
+    for c in REQUIRED_COLUMNS:
+        if c not in df.columns:
+            error(f"Missing required column: {c}")
+            raise RuntimeError(f"Missing required column: {c}")
+
+    rows = df.to_dict(orient="records")
+    with conn.cursor() as cur:
+        for r in rows:
+            cleaned = {k: (None if pd.isna(v) else v) for k, v in r.items()}
+            feedback_rating = cleaned.get("FEEDBACK_RATING")
+            try:
+                feedback_rating_int = int(feedback_rating) if feedback_rating is not None else None
+            except (ValueError, TypeError):
+                feedback_rating_int = None
+            cur.execute(
+                """
+                INSERT INTO fru_sales_raw
+                (id, customer_id, brand, fridge_model, capacity_liters, price, sales_date,
+                 store_name, store_address, customer_feedback, feedback_rating, feedback_sentiment_category)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (id) DO UPDATE SET
+                  customer_id = EXCLUDED.customer_id,
+                  brand = EXCLUDED.brand,
+                  fridge_model = EXCLUDED.fridge_model,
+                  capacity_liters = EXCLUDED.capacity_liters,
+                  price = EXCLUDED.price,
+                  sales_date = EXCLUDED.sales_date,
+                  store_name = EXCLUDED.store_name,
+                  store_address = EXCLUDED.store_address,
+                  customer_feedback = EXCLUDED.customer_feedback,
+                  feedback_rating = EXCLUDED.feedback_rating,
+                  feedback_sentiment_category = EXCLUDED.feedback_sentiment_category
+                """,
+                (
+                    cleaned["ID"],
+                    cleaned.get("CUSTOMER_ID", ""),
+                    cleaned["BRAND"],
+                    cleaned["FRIDGE_MODEL"],
+                    cleaned.get("CAPACITY_LITERS"),
+                    cleaned["PRICE"],
+                    cleaned["SALES_DATE"],
+                    cleaned["STORE_NAME"],
+                    cleaned.get("STORE_ADDRESS", ""),
+                    cleaned.get("CUSTOMER_FEEDBACK", ""),
+                    feedback_rating_int,
+                    cleaned.get("FEEDBACK_SENTIMENT_CATEGORY", ""),
+                ),
+            )
+        conn.commit()
+    success(f"Loaded {len(rows)} rows into fru_sales_raw")
+    return len(rows)
+
+
+def load_embeddings(
+    conn,
+    csv_path: str | None = None,
     config: dict | None = None,
     force: bool = False,
 ) -> int:
     """
-    Load CSV into fru_sales_embeddings via OpenAI embeddings.
+    Load fru_sales_raw into fru_sales_embeddings via OpenAI embeddings.
+    When csv_path is None, reads from fru_sales_raw. When csv_path is given, reads from CSV (legacy).
     Returns row count. Idempotent: skips if data exists and not force.
     """
     from tools.cloud_shared.logging.logger import info, success, error, step
@@ -40,16 +122,48 @@ def load_embeddings(
             step(f"Data already loaded ({existing} rows); skipping (use force=True to reload)")
             return existing
 
-    if not os.path.exists(csv_path):
-        error(f"CSV not found: {csv_path}")
-        raise FileNotFoundError(f"CSV not found: {csv_path}")
+    if csv_path:
+        if not os.path.exists(csv_path):
+            error(f"CSV not found: {csv_path}")
+            raise FileNotFoundError(f"CSV not found: {csv_path}")
+        step(f"Reading CSV from {csv_path}")
+        df = pd.read_csv(csv_path)
+        rows = df.to_dict(orient="records")
+    else:
+        step("Reading from fru_sales_raw")
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT id, customer_id, brand, fridge_model, capacity_liters, price, sales_date, "
+                "store_name, store_address, customer_feedback, feedback_rating, feedback_sentiment_category "
+                "FROM fru_sales_raw"
+            )
+            raw_rows = cur.fetchall()
+        # Map lowercase to uppercase keys for compatibility with insert logic
+        rows = [
+            {
+                "ID": r["id"],
+                "CUSTOMER_ID": r.get("customer_id") or "",
+                "BRAND": r["brand"],
+                "FRIDGE_MODEL": r["fridge_model"],
+                "CAPACITY_LITERS": r.get("capacity_liters"),
+                "PRICE": r["price"],
+                "SALES_DATE": r["sales_date"],
+                "STORE_NAME": r["store_name"],
+                "STORE_ADDRESS": r.get("store_address") or "",
+                "CUSTOMER_FEEDBACK": r.get("customer_feedback") or "",
+                "FEEDBACK_RATING": r.get("feedback_rating"),
+                "FEEDBACK_SENTIMENT_CATEGORY": r.get("feedback_sentiment_category") or "",
+            }
+            for r in raw_rows
+        ]
 
-    step(f"Reading CSV from {csv_path}")
-    df = pd.read_csv(csv_path)
-    info(f"Loaded {len(df)} rows from CSV")
+    info(f"Loaded {len(rows)} rows for embedding")
+    if not rows:
+        error("No rows to load")
+        raise RuntimeError("No rows in fru_sales_raw or CSV")
 
     for c in REQUIRED_COLUMNS:
-        if c not in df.columns:
+        if c not in rows[0]:
             error(f"Missing required column: {c}")
             raise RuntimeError(f"Missing required column: {c}")
 
@@ -57,7 +171,6 @@ def load_embeddings(
         step(f"Connecting to DB {config['host']}:{config['port']}/{config['dbname']}")
     info("Initializing OpenAI client")
     openai_client = OpenAI()
-    rows = df.to_dict(orient="records")
     batch_size = 64
     success_count = 0
     num_batches = (len(rows) + batch_size - 1) // batch_size

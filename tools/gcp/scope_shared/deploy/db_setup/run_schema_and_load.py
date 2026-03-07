@@ -16,7 +16,7 @@ sys.path.insert(0, "/app")
 from tools.cloud_shared.logging.logger import info, success, error, step
 
 from db_common import apply_schema, connect_db, get_db_config
-from load import load_embeddings
+from load import load_raw_from_csv, load_embeddings
 
 
 def _get_optional(name: str, default: str) -> str:
@@ -60,9 +60,12 @@ def main() -> None:
         step("Phase 1: Applying schema...")
         apply_schema(conn, schema_path="/app/schema.sql", force=force)
 
-        step("Phase 2: Loading embeddings via OpenAI API...")
+        step("Phase 2: Loading fru_sales_raw from CSV...")
         csv_path = _get_optional("FRU_CSV_PATH", "/app/data/fridge_sales_with_rating.csv")
-        count = load_embeddings(conn, csv_path=csv_path, config=config, force=force)
+        load_raw_from_csv(conn, csv_path=csv_path, force=force)
+
+        step("Phase 3: Loading embeddings via OpenAI API (from fru_sales_raw)...")
+        count = load_embeddings(conn, csv_path=None, config=config, force=force)
 
         # Output parseable count for verification (info ensures bracketed timestamp for log parsing)
         info(f"About to emit FRU_EMBEDDINGS_COUNT (count={count})")

@@ -1,8 +1,15 @@
 import React, { useState, useEffect, useRef } from "react";
+import { ThemeProvider, createTheme } from "@mui/material/styles";
+import { Tabs, Tab, Box } from "@mui/material";
 import Chat from "./components/Chat";
 import BatchAnalyticsPanel from "./components/BatchAnalyticsPanel";
 import ExecutionPanel, { ExecutionState } from "./components/ExecutionPanel";
+import DataManagement from "./components/DataManagement";
 import { handleBackendError } from "./utils/errorHandler";
+
+const theme = createTheme({
+  palette: { mode: "light" },
+});
 
 export interface Message {
   role: "user" | "assistant";
@@ -332,10 +339,23 @@ const App: React.FC = () => {
     // (handled in useEffect that watches executionState.answer)
   }
 
+  const [activeTab, setActiveTab] = useState(0);
+
   return (
-    <div className="flex h-full">
+    <ThemeProvider theme={theme}>
+      <div className="flex flex-col h-full min-h-0">
+        <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} sx={{ borderBottom: 1, borderColor: "divider", minHeight: 40, flexShrink: 0 }}>
+          <Tab label="Main" />
+          <Tab label="Data Management" />
+        </Tabs>
+        {activeTab === 1 ? (
+          <Box sx={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+            <DataManagement />
+          </Box>
+        ) : (
+    <div className="flex flex-1 min-h-0 overflow-hidden">
       {/* Chat Panel - Always visible, flexible width */}
-      <div className="flex-1 border-r bg-white">
+      <div className="flex-1 border-r bg-white min-w-0">
         <Chat messages={messages} onSend={sendQuery} loading={loading} />
       </div>
 
@@ -416,6 +436,9 @@ const App: React.FC = () => {
         </div>
       )}
     </div>
+        )}
+      </div>
+    </ThemeProvider>
   );
 };
 

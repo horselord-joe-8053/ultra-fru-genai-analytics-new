@@ -1,5 +1,22 @@
 CREATE EXTENSION IF NOT EXISTS vector;
 
+-- Raw data source for both query (embeddings) and Spark analytics subsystems.
+-- Loaded from CSV at deploy; editable via /rawdata API and Data Management UI.
+CREATE TABLE IF NOT EXISTS fru_sales_raw (
+    id TEXT PRIMARY KEY,
+    customer_id TEXT,
+    brand TEXT,
+    fridge_model TEXT,
+    capacity_liters NUMERIC,
+    price NUMERIC,
+    sales_date DATE,
+    store_name TEXT,
+    store_address TEXT,
+    customer_feedback TEXT,
+    feedback_rating INTEGER,
+    feedback_sentiment_category TEXT
+);
+
 CREATE TABLE IF NOT EXISTS fru_sales_embeddings (
     id TEXT PRIMARY KEY,
     customer_id TEXT,

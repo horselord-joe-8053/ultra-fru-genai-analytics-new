@@ -7,8 +7,6 @@ USER root
 RUN pip install --no-cache-dir psycopg2-binary
 # Add delta libraries via spark packages at runtime; keep image minimal here.
 COPY analytics/jobs /opt/fru/jobs
-COPY data/raw/fridge_sales_with_rating.csv /opt/fru/data/fridge_sales_with_rating.csv
-RUN chmod 644 /opt/fru/data/fridge_sales_with_rating.csv
 # GCS connector (shaded jar avoids Guava conflicts with Spark 3.5)
 RUN mkdir -p /opt/fru/jars && curl -sL -o /opt/fru/jars/gcs-connector-hadoop3-2.2.7-shaded.jar \
     https://repo1.maven.org/maven2/com/google/cloud/bigdataoss/gcs-connector/hadoop3-2.2.7/gcs-connector-hadoop3-2.2.7-shaded.jar \

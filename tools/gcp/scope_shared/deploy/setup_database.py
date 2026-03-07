@@ -54,7 +54,7 @@ from tools.gcp.scope_shared.deploy.db_setup.db_common import (
     connect_db,
     get_db_config,
 )
-from tools.gcp.scope_shared.deploy.db_setup.load import load_embeddings
+from tools.gcp.scope_shared.deploy.db_setup.load import load_raw_from_csv, load_embeddings
 
 load_dotenv()
 
@@ -85,12 +85,13 @@ def get_durable_outputs(env: str, region: str) -> dict:
 def _do_schema_and_load(
     host: str, port: int, user: str, password: str, dbname: str, force: bool = False
 ) -> None:
-    """Apply schema and load embeddings. For manual/local/CI when direct TCP to DB."""
+    """Apply schema, load fru_sales_raw from CSV, then load embeddings. For manual/local/CI when direct TCP to DB."""
     config = get_db_config(host=host, port=port, user=user, password=password, dbname=dbname)
     conn = connect_db(config)
     try:
         apply_schema(conn, schema_path=get_schema_file_path(), force=force)
-        load_embeddings(conn, csv_path=get_csv_path(), config=config, force=force)
+        load_raw_from_csv(conn, csv_path=get_csv_path(), force=force)
+        load_embeddings(conn, csv_path=None, config=config, force=force)
     finally:
         conn.close()
 
@@ -118,13 +119,14 @@ def main():
     password = os.getenv("PGPASSWORD", "").strip()
     dbname = os.getenv("PGDATABASE", "fru_db")
 
-    # localhost/127.0.0.1 from .env is for local dev; cannot reach private-IP Cloud SQL
-    if host in ("localhost", "127.0.0.1"):
+    # localhost/127.0.0.1 from .env cannot reach private-IP Cloud SQL; clear to force Cloud Run Job.
+    # Exception: --env-only trusts caller (e.g. local deploy with PGHOST=localhost).
+    if not args.env_only and host in ("localhost", "127.0.0.1"):
         host = ""
 
     logger.step("Setting up database (pgvector, schema, data)")
 
-    # --env-only: use PGHOST, PGPASSWORD from env (VM, Cloud Shell, or container in VPC)
+    # --env-only: use PGHOST, PGPASSWORD from env (VM, Cloud Shell, container, or local Postgres)
     if args.env_only:
         if not host or not password:
             logger.error("--env-only requires PGHOST and PGPASSWORD")
