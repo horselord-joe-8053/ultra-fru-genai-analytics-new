@@ -241,13 +241,20 @@ def handle_local(args):
         # Wrap deploy + start + verify in one Heartbeat so it exits when the flow completes.
         # Local deploy (Spark) can take 10+ min; use timeout=-1 to avoid heartbeat timeout.
         # AWS/GCP use deploy-only Heartbeat; local differs because start+verify run in-process.
+        deploy_args = ["python", script, "--scope", scope]
+        if getattr(args, "force_refresh_data", False):
+            deploy_args.append("--force-refresh-data")
+        if getattr(args, "skip_spark", False):
+            deploy_args.append("--skip-spark")
+        if getattr(args, "force_rebuild", False):
+            deploy_args.append("--force-rebuild")
         with logger.Heartbeat("Local deploy", timeout=-1):
-            run_command(["python", script, "--scope", scope], force_no_timeout=True)
+            run_command(deploy_args, force_no_timeout=True)
             if do_start:
                 logger.step("Starting local frontend (API in container/k8s)")
                 run_command(["python", f"{base_path}/start_local.py", "--scope", scope])
                 logger.step("Verifying local deployment")
-                run_command(["python", f"{base_path}/scope_shared/verify/verify_all_deploy.py"])
+                run_command(["python", f"{base_path}/scope_shared/verify/verify_all_deploy.py", "--scope", scope])
 
         if not do_start:
             logger.step("Local deploy complete. Start API and frontend to verify:")
@@ -261,15 +268,21 @@ def handle_local(args):
         if scope in ("nonkube", "all"):
             logger.step("Shutting down local API and frontend")
             run_command(["python", f"{base_path}/shutdown_local.py"])
+        teardown_args = ["--scope", scope]
+        if getattr(args, "incl_dura_all", False):
+            teardown_args.append("--incl-dura-all")
+        elif getattr(args, "incl_dura", False):
+            teardown_args.append("--incl-dura")
         with logger.Heartbeat("Local teardown"):
-            run_command(["python", script, "--scope", scope])
+            run_command(["python", script] + teardown_args)
         logger.step("Verifying teardown...")
         run_command(["python", f"{base_path}/scope_shared/verify/verify_all_teardown.py"])
 
     elif args.command == "verify":
         script = f"{base_path}/scope_shared/verify/verify_all_deploy.py"
-        with logger.Heartbeat("Local verify (API must be running on localhost:5001)"):
-            run_command(["python", script])
+        scope = getattr(args, "scope", None) or "nonkube"
+        with logger.Heartbeat(f"Local verify (scope={scope}, ports from config)"):
+            run_command(["python", script, "--scope", scope])
 
     else:
         logger.error(f"Unknown command for local: {args.command}")
@@ -317,6 +330,8 @@ def main():
                         help="[Local] After deploy: start API and frontend, then verify. Default for deploy --provider local.")
     parser.add_argument("--shutdown-local", action="store_true",
                         help="[Local] Terminate local API and frontend only (no deploy/teardown). Or run before deploy for clean slate.")
+    parser.add_argument("--skip-spark", action="store_true", help="[Local only] Skip Spark build and bootstrap (faster deploy)")
+    parser.add_argument("--force-rebuild", action="store_true", help="[Local only] Rebuild Docker images with --no-cache")
     parser.add_argument("--no-start-local", action="store_true",
                         help="[Local] Deploy only; do not start API/frontend or verify.")
 

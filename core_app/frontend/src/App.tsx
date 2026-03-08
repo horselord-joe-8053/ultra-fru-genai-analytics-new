@@ -71,6 +71,34 @@ const App: React.FC = () => {
     localStorage.setItem("panelVisibility", JSON.stringify(panelVisibility));
   }, [panelVisibility]);
 
+  // Log proxy setup once (browser → frontend port → API port). Always show destination; use /version when VITE_API_PORT unset.
+  useEffect(() => {
+    const frontendPort = window.location.port || "5173";
+    const envApiPort = import.meta.env.VITE_API_PORT || null;
+    if (envApiPort) {
+      console.info(
+        `[FRU] Traffic: browser → localhost:${frontendPort} (frontend) → proxy → localhost:${envApiPort} (API)`
+      );
+      return;
+    }
+    fetch("/version", { method: "GET" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        const port = data?.api_port != null ? String(data.api_port) : null;
+        const apiPart = port
+          ? `localhost:${port} (API)`
+          : "API port unknown (backend /version did not return api_port)";
+        console.info(
+          `[FRU] Traffic: browser → localhost:${frontendPort} (frontend) → proxy → ${apiPart}`
+        );
+      })
+      .catch(() => {
+        console.info(
+          `[FRU] Traffic: browser → localhost:${frontendPort} (frontend) → proxy → API port unknown (could not reach /version)`
+        );
+      });
+  }, []);
+
   // Cleanup EventSource on unmount
   useEffect(() => {
     return () => {

@@ -29,6 +29,7 @@ if _project_root not in sys.path:
 
 from tools.cloud_shared.env import load_dotenv
 from tools.cloud_shared.logging import logger
+from tools.local.scope_shared.local_deploy_config import get_ports_for_scope
 
 load_dotenv()
 
@@ -75,29 +76,30 @@ def _wait_for_postgres(timeout_sec: int = 60) -> bool:
     return False
 
 
-def _build_images(skip_spark: bool) -> int:
+def _build_images(skip_spark: bool, force_rebuild: bool = False) -> int:
     """Build fru-api:local and fru-spark:local."""
-    logger.step("Building API image (fru-api:local)...")
-    r = subprocess.run(
-        ["docker", "build", "-q", "-f", "core_app/Dockerfile", "-t", "fru-api:local", "core_app"],
-        cwd=PROJECT_ROOT,
-    )
+    build_args = ["docker", "build", "-q", "-f", "core_app/Dockerfile", "-t", "fru-api:local"]
+    if force_rebuild:
+        build_args.insert(2, "--no-cache")
+    build_args.extend(["core_app"])
+    logger.step("Building API image (fru-api:local)" + (" (--no-cache)" if force_rebuild else "") + "...")
+    r = subprocess.run(build_args, cwd=PROJECT_ROOT)
     if r.returncode != 0:
         logger.error("API image build failed")
         return 1
 
     if not skip_spark:
-        logger.step("Building Spark image (fru-spark:local)...")
-        r = subprocess.run(
-            [
-                "docker", "build", "-q",
-                "--platform", "linux/amd64",
-                "-f", "core_app/analytics/docker/Dockerfile",
-                "-t", "fru-spark:local",
-                "core_app",
-            ],
-            cwd=PROJECT_ROOT,
-        )
+        spark_args = [
+            "docker", "build", "-q",
+            "--platform", "linux/amd64",
+            "-f", "core_app/analytics/docker/Dockerfile",
+            "-t", "fru-spark:local",
+            "core_app",
+        ]
+        if force_rebuild:
+            spark_args.insert(2, "--no-cache")
+        logger.step("Building Spark image (fru-spark:local)" + (" (--no-cache)" if force_rebuild else "") + "...")
+        r = subprocess.run(spark_args, cwd=PROJECT_ROOT)
         if r.returncode != 0:
             logger.error("Spark image build failed")
             return 1
@@ -134,9 +136,17 @@ def main() -> int:
     ap.add_argument("--scope", choices=["kube", "nonkube", "all"], default="all",
                     help="Deploy scope (default: all)")
     ap.add_argument("--skip-spark", action="store_true", help="Skip Spark build/bootstrap")
+    ap.add_argument("--force-refresh-data", action="store_true",
+                    help="Force reload DB (schema, raw, embeddings) and re-run kube bootstrap; default is idempotent (skip if already loaded)")
+    ap.add_argument("--force-rebuild", action="store_true",
+                    help="Force rebuild Docker images (--no-cache); default uses cache")
     args = ap.parse_args()
 
-    logger.step(f"Local deploy: scope={args.scope}")
+    logger.step(
+        f"Local deploy: scope={args.scope}"
+        + (" (force-refresh-data)" if args.force_refresh_data else " (idempotent)")
+        + (" (force-rebuild)" if args.force_rebuild else "")
+    )
 
     # 1. Start PostgreSQL
     logger.info("Starting PostgreSQL...")
@@ -155,12 +165,15 @@ def main() -> int:
         logger.error(f"CSV not found: {csv_path}")
         return 1
 
-    if _run([sys.executable, "tools/gcp/scope_shared/deploy/setup_database.py", "--env-only", "--force-refresh-data"]) != 0:
+    setup_db_cmd = [sys.executable, "tools/gcp/scope_shared/deploy/setup_database.py", "--env-only"]
+    if args.force_refresh_data:
+        setup_db_cmd.append("--force-refresh-data")
+    if _run(setup_db_cmd) != 0:
         logger.error("DB setup failed")
         return 1
 
     # 3. Build images
-    if _build_images(args.skip_spark) != 0:
+    if _build_images(args.skip_spark, force_rebuild=args.force_rebuild) != 0:
         return 1
 
     scopes = ["nonkube", "kube"] if args.scope == "all" else [args.scope]
@@ -181,9 +194,11 @@ def main() -> int:
 
     logger.success("Local deploy complete")
     if "nonkube" in scopes:
-        logger.info("Nonkube API: http://localhost:5001")
+        p = get_ports_for_scope("nonkube")
+        logger.info(f"Nonkube API: http://localhost:{p['api_port']}  Frontend: http://localhost:{p['frontend_port']}")
     if "kube" in scopes:
-        logger.info("Kube API: http://localhost:30080 (NodePort) or kubectl get svc -n fru-kube")
+        p = get_ports_for_scope("kube")
+        logger.info(f"Kube API: http://localhost:{p['api_port']} (NodePort)  Frontend: http://localhost:{p['frontend_port']}")
     return 0
 
 

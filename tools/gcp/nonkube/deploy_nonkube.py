@@ -5,7 +5,12 @@ Called by deploy.py when scope is nonkube or all (nonkube first when scope=all).
 After apply: runs analytics bootstrap (one-off run_analytics) so /analytics has data immediately.
 """
 import os
+import sys
 from typing import TYPE_CHECKING
+
+_repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+if _repo_root not in sys.path:
+    sys.path.insert(0, _repo_root)
 
 from tools.cloud_shared.analytics_schedule import (
     get_required_analytics_scheduler_interval_seconds,
@@ -54,7 +59,8 @@ def run_deploy_nonkube(
 
     llm_provider = os.getenv("GCP_LLM_PROVIDER") or os.getenv("LLM_PROVIDER", "gemini")
     llm_provider = llm_provider.strip().lower()
-    claude_model = os.getenv("CLAUDE_MODEL", "").strip() or "claude-3-5-haiku-20241022"
+    from core_app.backend.env_utils.cloud_shared.model_config import require_claude_model
+    claude_model = require_claude_model().strip()
     img_tags = os.getenv("CONTAINER_IMAGE_TAGS", "").strip()
     plan_vars = [
         f"-var=prefix={prefix}", f"-var=env={env}",

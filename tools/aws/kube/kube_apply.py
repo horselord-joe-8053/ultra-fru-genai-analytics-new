@@ -13,6 +13,10 @@ This tool:
 - applies Job/CronJob manifests
 """
 import argparse, base64, json, os, subprocess, time
+import sys
+_repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+if _repo_root not in sys.path:
+    sys.path.insert(0, _repo_root)
 from tools.cloud_shared.analytics_schedule import (
     get_required_analytics_scheduler_interval_seconds,
     seconds_to_cron,
@@ -94,10 +98,17 @@ def main():
     ap.add_argument("--delta-table-path", default="", help="DELTA_TABLE_PATH (s3a://bucket/delta/fru_sales)")
     ap.add_argument("--delta-lake-package", default="io.delta:delta-spark_2.13:4.0.0", help="DELTA_LAKE_PACKAGE")
     ap.add_argument("--bedrock-inference-profile-id", default="", help="AWS_BEDROCK_INFERENCE_PROFILE_ID")
-    ap.add_argument("--bedrock-model-id", default="anthropic.claude-3-5-haiku-20241022-v1:0", help="AWS_BEDROCK_MODEL_ID")
+    ap.add_argument("--bedrock-model-id", default="", help="AWS_BEDROCK_MODEL_ID from .env (required if no inference profile)")
     ap.add_argument("--force", action="store_true", help="Force bootstrap even if already succeeded (e.g. after CSV upload)")
     ap.add_argument("--elb", action="store_true", help="Use in-tree Classic ELB instead of NLB (api-service template)")
     args = ap.parse_args()
+
+    # Bedrock: require model id from .env when inference profile not set
+    if not args.bedrock_inference_profile_id and not args.bedrock_model_id:
+        from core_app.backend.env_utils.cloud_shared.model_config import require_bedrock_model_id
+        args.bedrock_model_id = require_bedrock_model_id()
+    elif not args.bedrock_model_id:
+        args.bedrock_model_id = os.getenv("AWS_BEDROCK_MODEL_ID", "").strip()
 
     region = resolve_region(args.region)
     os.environ["CLOUD_REGION"] = region
@@ -224,7 +235,7 @@ data:
                 "DELTA_LAKE_PACKAGE": args.delta_lake_package,
                 "SPARK_HOME": "/opt/spark",
                 "AWS_BEDROCK_INFERENCE_PROFILE_ID": args.bedrock_inference_profile_id or os.getenv("AWS_BEDROCK_INFERENCE_PROFILE_ID", ""),
-                "AWS_BEDROCK_MODEL_ID": args.bedrock_model_id or os.getenv("AWS_BEDROCK_MODEL_ID", "anthropic.claude-3-5-haiku-20241022-v1:0"),
+                "AWS_BEDROCK_MODEL_ID": args.bedrock_model_id or os.getenv("AWS_BEDROCK_MODEL_ID", ""),
                 "ENABLE_ANALYTICS_SCHEDULER": os.getenv("ENABLE_ANALYTICS_SCHEDULER", "true"),
                 "ANALYTICS_SCHEDULER_INTERVAL_SECONDS": str(interval_sec),
             }

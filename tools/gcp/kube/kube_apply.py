@@ -14,6 +14,10 @@ import os
 import subprocess
 import sys
 
+_repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+if _repo_root not in sys.path:
+    sys.path.insert(0, _repo_root)
+
 from tools.cloud_shared.analytics_schedule import (
     get_required_analytics_scheduler_interval_seconds,
     seconds_to_cron,
@@ -89,10 +93,14 @@ def main():
     ap.add_argument("--google-secret-id", default="", help="GCP Secret Manager secret ID for google_ai_api_key")
     ap.add_argument("--delta-table-path", default="")
     ap.add_argument("--gcp-llm-provider", default=os.getenv("GCP_LLM_PROVIDER", "claude"))
-    ap.add_argument("--claude-model", default=os.getenv("CLAUDE_MODEL", "claude-3-5-haiku-20241022"))
-    ap.add_argument("--google-model", default=os.getenv("GOOGLE_MODEL", "gemini-2.5-flash"))
+    ap.add_argument("--claude-model", default=None, help="CLAUDE_MODEL from .env (required)")
+    ap.add_argument("--google-model", default=None, help="GOOGLE_MODEL or GEMINI_MODEL from .env (required)")
     ap.add_argument("--force", action="store_true", help="Force bootstrap even if already succeeded")
     args = ap.parse_args()
+
+    from core_app.backend.env_utils.cloud_shared.model_config import require_claude_model, require_google_model
+    args.claude_model = args.claude_model or require_claude_model()
+    args.google_model = args.google_model or require_google_model()
 
     region = resolve_region(args.region)
     os.environ["CLOUD_REGION"] = region

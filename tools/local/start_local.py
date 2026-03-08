@@ -19,13 +19,13 @@ import requests
 from tools.cloud_shared.analytics_schedule import get_required_analytics_scheduler_interval_seconds
 from tools.cloud_shared.env import load_dotenv
 from tools.cloud_shared.logging import logger
+from tools.local.scope_shared.local_deploy_config import get_memo_dir, get_ports_for_scope
 
 load_dotenv()
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-MEMO_DIR = os.path.join(PROJECT_ROOT, "tools", "local", "memo")
+MEMO_DIR = get_memo_dir()
 PID_FILE = os.path.join(MEMO_DIR, ".fru_local.pids")
-FRONTEND_PORT = 5173
 
 
 def _port_free(port: int) -> bool:
@@ -36,13 +36,6 @@ def _port_free(port: int) -> bool:
             return True
         except OSError:
             return False
-
-
-def _api_port_for_scope(scope: str) -> int:
-    """API port: nonkube=5001 (container), kube=30080 (NodePort)."""
-    if scope == "kube":
-        return 30080
-    return 5001
 
 
 def _find_api_port() -> int:
@@ -84,7 +77,9 @@ def main() -> int:
     args = ap.parse_args()
 
     skip_api = args.skip_api or args.scope in ("kube", "nonkube", "all")
-    api_port = args.api_port or _api_port_for_scope(args.scope)
+    ports = get_ports_for_scope(args.scope)
+    api_port = args.api_port or ports["api_port"]
+    frontend_port = ports["frontend_port"]
 
     logger.step("Starting local frontend" + ("" if skip_api else " and API"))
     os.makedirs(MEMO_DIR, exist_ok=True)
@@ -110,16 +105,16 @@ def main() -> int:
         pids_to_write.append(api_proc.pid)
         logger.info(f"API started (PID {api_proc.pid}, port {api_port})")
 
-    # Start frontend (Vite) - inherits VITE_API_PORT for proxy
+    # Start frontend (Vite) - port from config; proxy target from VITE_API_PORT
     frontend_proc = subprocess.Popen(
-        ["npm", "run", "dev"],
+        ["npm", "run", "dev", "--", "--port", str(frontend_port)],
         cwd=os.path.join(PROJECT_ROOT, "core_app", "frontend"),
         env=env,
         stdout=open(os.path.join(MEMO_DIR, ".fru_local_frontend.log"), "w"),
         stderr=subprocess.STDOUT,
         start_new_session=True,
     )
-    logger.info(f"Frontend started (PID {frontend_proc.pid}, port {FRONTEND_PORT})")
+    logger.info(f"Frontend started (PID {frontend_proc.pid}, port {frontend_port})")
     pids_to_write.append(frontend_proc.pid)
 
     scheduler_proc = None
@@ -142,6 +137,10 @@ def main() -> int:
         f.write("\n".join(str(p) for p in pids_to_write) + "\n")
     with open(os.path.join(MEMO_DIR, ".fru_local_api_port"), "w") as f:
         f.write(str(api_port))
+    with open(os.path.join(MEMO_DIR, ".fru_local_frontend_port"), "w") as f:
+        f.write(str(frontend_port))
+    with open(os.path.join(MEMO_DIR, ".fru_local_scope"), "w") as f:
+        f.write(args.scope)
 
     logger.info("Waiting for API to be ready...")
     if not _wait_for_api(base_url):
@@ -149,7 +148,7 @@ def main() -> int:
         return 1
 
     logger.success("Local API and frontend started")
-    logger.info(f"API: http://localhost:{api_port}  Frontend: http://localhost:{FRONTEND_PORT}")
+    logger.info(f"API: http://localhost:{api_port}  Frontend: http://localhost:{frontend_port} (scope={args.scope})")
     logger.info("Shutdown: python orchestrator.py deploy --provider local --shutdown-local (or teardown)")
     return 0
 

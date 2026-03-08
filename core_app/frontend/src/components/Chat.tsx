@@ -38,12 +38,18 @@ const Chat: React.FC<ChatProps> = ({ messages, onSend, loading }) => {
   const scope = versionInfo?.scope ?? null;
   const cloudProvider = versionInfo?.cloud_provider ?? null;
   const region = versionInfo?.region ?? null;
+  // Explicit Provider and Scope for local and cloud (always show both when we have any deploy info)
+  const cloudDisplay = cloudProvider ? cloudProvider.charAt(0).toUpperCase() + cloudProvider.slice(1).toLowerCase() : null;
+  const scopeDisplay = scope ?? (cloudDisplay ? "unknown" : null);
   const deployLine =
-    [scope, cloudProvider, region].filter(Boolean).length > 0
-      ? [scope && `Scope: ${scope}`, cloudProvider && `Cloud: ${cloudProvider}`, region && `Region: ${region}`]
+    [cloudDisplay, scopeDisplay, region].filter(Boolean).length > 0
+      ? [cloudDisplay && `Provider: ${cloudDisplay}`, scopeDisplay != null && `Scope: ${scopeDisplay}`, region && `Region: ${region}`]
           .filter(Boolean)
           .join(" · ")
       : null;
+  // Prefer VITE_API_PORT (set at dev start); fall back to backend /version api_port so proxy line is never "?"
+  const apiPort = import.meta.env.VITE_API_PORT || (versionInfo?.api_port != null ? String(versionInfo.api_port) : null);
+  const proxyLine = apiPort ? `Proxy: localhost:${window.location.port} → localhost:${apiPort}` : null;
 
   return (
     <div className="flex flex-col h-full">
@@ -53,6 +59,7 @@ const Chat: React.FC<ChatProps> = ({ messages, onSend, loading }) => {
           <div className="text-[10px] text-gray-400 font-mono leading-tight space-y-0.5">
             <p>Build: {buildLine}</p>
             {deployLine && <p>{deployLine}</p>}
+            {proxyLine && <p>{proxyLine}</p>}
           </div>
           <p className="text-xs text-gray-500">
             Ask about sales, brands, stores, and customer feedback.

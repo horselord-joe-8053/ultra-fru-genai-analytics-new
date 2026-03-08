@@ -19,6 +19,11 @@ import argparse
 import os
 import sys
 
+# Project root for core_app imports (model_config)
+_repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if _repo_root not in sys.path:
+    sys.path.insert(0, _repo_root)
+
 from tools.cloud_shared.env import load_dotenv
 from tools.cloud_shared.stats import TeardownStats, scope_for
 from tools.gcp.scope_shared.core.backend import resolve_region, resolve_state_bucket, gcs_delta_bucket
@@ -57,8 +62,8 @@ def _destroy_vars_for_stack(stack: str, env: str, region: str) -> list[str]:
         spark_img = os.getenv("TF_VAR_spark_image") or f"{region}-docker.pkg.dev/{gcp_proj}/{repo_spark}/spark:latest"
         llm_raw = (os.getenv("GCP_LLM_PROVIDER") or os.getenv("LLM_PROVIDER", "gemini")).strip()
         llm_provider = llm_raw.split("#")[0].strip().lower() or "gemini"
-        claude_raw = (os.getenv("CLAUDE_MODEL", "") or "claude-3-5-haiku-20241022").strip()
-        claude_model = claude_raw.split("#")[0].strip() or "claude-3-5-haiku-20241022"
+        from core_app.backend.env_utils.cloud_shared.model_config import require_claude_model
+        claude_model = require_claude_model().split("#")[0].strip()
         return base + [
             f"-var=cloud_run_service_name={cloud_run_service(env, region)}",
             f"-var=spark_job_name={spark_job_name(env, region)}",

@@ -3,14 +3,16 @@
 Local deployment verification. Aligned with AWS/GCP verify_all_deploy.
 
 Uses tools.cloud_shared.verify (verify_api_endpoints, verify_llm_client, verify_summary).
-Local: base_url from LOCAL_API_URL; API endpoints skip Frontend; separate Frontend (local)
-check at LOCAL_FRONTEND_URL (default http://localhost:5173); optional LLM client check.
+Ports per scope from config/local/local_deploy_config.yaml (LOCAL_DEPLOY_CONFIG).
+--scope kube | nonkube | all (default from memo .fru_local_scope if present).
 
 Usage:
-  python orchestrator.py verify --provider local
+  python orchestrator.py verify --provider local --scope kube
+  python tools/local/scope_shared/verify/verify_all_deploy.py --scope nonkube
 
 Prerequisite: API running (e.g. via deploy --provider local which starts it).
 """
+import argparse
 import os
 import sys
 import time
@@ -33,28 +35,38 @@ from tools.cloud_shared.verify.verify_api_endpoints import verify_api_endpoints
 from tools.cloud_shared.verify.verify_llm_client import verify_llm_client
 from tools.cloud_shared.verify.verify_summary import VerifyRow, print_verify_summary
 from tools.cloud_shared.verify.verify_csv import get_total_rec_from_csv
+from tools.local.scope_shared.local_deploy_config import get_memo_dir, get_ports_for_scope
 
 print("verify_all_deploy: imports done, entering main()", flush=True)
 
 
 def main() -> int:
-    # Prefer port file written by start_local (when deploy+start ran); else env
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--scope", choices=["kube", "nonkube", "all"], help="Scope to verify (default: from memo or nonkube)")
+    args, _ = ap.parse_known_args()
+
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
-    port_file = os.path.join(project_root, "tools", "local", "memo", ".fru_local_api_port")
-    if os.path.exists(port_file):
-        with open(port_file) as f:
-            port = f.read().strip()
-        base_url = f"http://localhost:{port}"
-    else:
-        base_url = os.environ.get("LOCAL_API_URL", "http://localhost:5001").rstrip("/")
+    memo_dir = get_memo_dir()
+    scope = args.scope
+    if not scope:
+        scope_file = os.path.join(memo_dir, ".fru_local_scope")
+        if os.path.exists(scope_file):
+            with open(scope_file) as f:
+                scope = f.read().strip() or "nonkube"
+        else:
+            scope = "nonkube"
+    ports = get_ports_for_scope(scope)
+    base_url = os.environ.get("LOCAL_API_URL") or f"http://localhost:{ports['api_port']}"
     if not base_url.startswith("http"):
         base_url = f"http://{base_url}"
+    frontend_url = os.environ.get("LOCAL_FRONTEND_URL") or f"http://localhost:{ports['frontend_port']}"
+    frontend_url = frontend_url.rstrip("/")
 
     total_rec = get_total_rec_from_csv()
     verify_start = time.time()
 
     logger.operation_start("Verify", "local", os.getenv("FRU_ENV", "dev"), "local")
-    logger.step(f"Full Verification Interface (local, total_rec from CSV: {total_rec})")
+    logger.step(f"Full Verification Interface (local, scope={scope}, total_rec from CSV: {total_rec})")
     logger.phase_start(1, 2, "Endpoints (local)")
 
     ok, rows = verify_api_endpoints(
@@ -65,8 +77,7 @@ def main() -> int:
         skip_frontend=True,
     )
 
-    # Frontend (local): Vite dev server at localhost:5173 (matches cloud verify which checks Frontend)
-    frontend_url = os.environ.get("LOCAL_FRONTEND_URL", "http://localhost:5173").rstrip("/")
+    # Frontend (local): port from config for this scope
     frontend_notes = frontend_url
     try:
         r = requests.get(frontend_url + "/", timeout=10)

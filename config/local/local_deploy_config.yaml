@@ -1,0 +1,18 @@
+# Local deployment: separate API + frontend ports per scope (like cloud uses separate containers).
+# Override via LOCAL_DEPLOY_CONFIG in .env if this file is elsewhere.
+# Used by: start_local, verify_all_deploy, deploy (logging).
+
+scope-shared:
+  # Optional shared defaults (currently unused; kube/nonkube define their own)
+
+kube:
+  # API: NodePort in Docker Desktop Kubernetes
+  api_port: 30080
+  # Frontend: Vite dev server (proxies to api_port)
+  frontend_port: 5173
+
+nonkube:
+  # API: Docker Compose container
+  api_port: 5001
+  # Frontend: different port so kube and nonkube can run side-by-side
+  frontend_port: 5174

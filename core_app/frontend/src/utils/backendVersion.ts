@@ -12,6 +12,7 @@ export interface BackendVersionInfo {
   scope: string | null;
   cloud_provider: string | null;
   region: string | null;
+  api_port: number | null;
 }
 
 interface VersionCache {
@@ -19,6 +20,7 @@ interface VersionCache {
   scope: string | null;
   cloud_provider: string | null;
   region: string | null;
+  api_port: number | null;
   timestamp: number;
 }
 
@@ -67,6 +69,7 @@ export async function getBackendVersion(forceRefresh: boolean = false): Promise<
             scope: null,
             cloud_provider: null,
             region: null,
+            api_port: null,
           };
         }
       } catch (e) {
@@ -84,6 +87,7 @@ export async function getBackendVersion(forceRefresh: boolean = false): Promise<
         scope: null,
         cloud_provider: null,
         region: null,
+        api_port: null,
       };
     }
 
@@ -92,11 +96,13 @@ export async function getBackendVersion(forceRefresh: boolean = false): Promise<
     const versionDisplay =
       tags.length > 0 ? `[${tags.join(", ")}]` : "Error: No Version Info Found";
 
+    const apiPort = data.api_port != null && Number.isInteger(Number(data.api_port)) ? Number(data.api_port) : null;
     const result: BackendVersionInfo = {
       version: versionDisplay,
       scope: data.scope ?? null,
       cloud_provider: data.cloud_provider ?? null,
       region: data.region ?? null,
+      api_port: apiPort,
     };
 
     // Cache the result
@@ -106,6 +112,7 @@ export async function getBackendVersion(forceRefresh: boolean = false): Promise<
         scope: result.scope,
         cloud_provider: result.cloud_provider,
         region: result.region,
+        api_port: result.api_port,
         timestamp: Date.now(),
       };
       localStorage.setItem(VERSION_CACHE_KEY, JSON.stringify(cache));
@@ -121,6 +128,7 @@ export async function getBackendVersion(forceRefresh: boolean = false): Promise<
       scope: null,
       cloud_provider: null,
       region: null,
+      api_port: null,
     };
   }
 }
