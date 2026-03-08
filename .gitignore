@@ -69,6 +69,11 @@ core_app/frontend/node_modules/
 .cred_config/
 google-cloud-cli-darwin-arm.tar.gz
 
+# Local runtime (logs, PIDs, port file)
+tools/local/memo/
+.fru_local*.log
+.fru_local.pids
+
 # Project specific
 .DS_Store
 teardown-all-*.log

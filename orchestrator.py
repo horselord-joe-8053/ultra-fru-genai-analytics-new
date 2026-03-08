@@ -148,8 +148,8 @@ def _handle_provider(args, base_path: str, provider: str, deploy_extra_before: l
         if getattr(args, "gke_disable_deletion_protection", False):
             deploy_args.append("--gke-disable-deletion-protection")
 
-        with logger.Heartbeat(f"Deployment scope={args.scope} env={args.env}"):
-            run_command(deploy_args)
+        with logger.Heartbeat(f"Deployment scope={args.scope} env={args.env}", timeout=-1):
+            run_command(deploy_args, force_no_timeout=True)
 
         logger.step("Initiating automatic verification...")
         verify_script = f"{base_path}/scope_shared/verify/verify_all_deploy.py"
@@ -233,17 +233,20 @@ def handle_local(args):
             run_command(["python", f"{base_path}/shutdown_local.py"])
 
         script = f"{base_path}/deploy.py"
-        with logger.Heartbeat("Local deploy"):
-            run_command(["python", script])
-
-        # Default: start + verify. Skip if --no-start-local
         do_start = not getattr(args, "no_start_local", False)
-        if do_start:
-            logger.step("Starting local API and frontend")
-            run_command(["python", f"{base_path}/start_local.py"])
-            logger.step("Verifying local deployment")
-            run_command(["python", f"{base_path}/scope_shared/verify/verify_all_deploy.py"])
-        else:
+
+        # Wrap deploy + start + verify in one Heartbeat so it exits when the flow completes.
+        # Local deploy (Spark) can take 10+ min; use timeout=-1 to avoid heartbeat timeout.
+        # AWS/GCP use deploy-only Heartbeat; local differs because start+verify run in-process.
+        with logger.Heartbeat("Local deploy", timeout=-1):
+            run_command(["python", script], force_no_timeout=True)
+            if do_start:
+                logger.step("Starting local API and frontend")
+                run_command(["python", f"{base_path}/start_local.py"])
+                logger.step("Verifying local deployment")
+                run_command(["python", f"{base_path}/scope_shared/verify/verify_all_deploy.py"])
+
+        if not do_start:
             logger.step("Local deploy complete. Start API and frontend to verify:")
             logger.info("  python orchestrator.py deploy --provider local --start-local")
             logger.info("  Or: PORT=5001 PYTHONPATH=core_app python -m backend.api.app")

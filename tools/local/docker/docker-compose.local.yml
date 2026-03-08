@@ -1,6 +1,6 @@
 # Local development: PostgreSQL with pgvector.
-# Usage: docker compose -f docker-compose.local.yml -p fru_local up -d
-# Teardown: docker compose -f docker-compose.local.yml -p fru_local down
+# Usage: docker compose -f tools/local/docker/docker-compose.local.yml -p fru_local up -d
+# Teardown: docker compose -f tools/local/docker/docker-compose.local.yml -p fru_local down
 services:
   postgres:
     image: pgvector/pgvector:pg16

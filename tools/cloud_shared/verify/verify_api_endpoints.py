@@ -31,6 +31,7 @@ def verify_api_endpoints(
     timeout_secs: int | None = None,
     heartbeat_interval_sec: int | None = None,
     query_stream_timeout_sec: int | None = None,
+    skip_frontend: bool = False,
 ) -> tuple[bool, list[VerifyRow]]:
     """
     Poll endpoints until all pass or timeout. Returns (ok, rows) for summary table.
@@ -86,6 +87,8 @@ def verify_api_endpoints(
         {"path": "/query/stream?query=total%20number%20of%20record", "name": "QueryStream", "check": check_query_stream, "timeout": query_stream_timeout_sec},
         {"path": "/analytics", "name": "Analytics", "check": check_analytics, "timeout": 10},
     ]
+    if skip_frontend:
+        endpoints = [e for e in endpoints if e["name"] != "Frontend"]
     results = {e["name"]: False for e in endpoints}
     last_status = {e["name"]: None for e in endpoints}
     last_error = {e["name"]: None for e in endpoints}

@@ -12,7 +12,7 @@ import sys
 from tools.cloud_shared.logging import logger
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-COMPOSE_FILE = "docker-compose.local.yml"
+COMPOSE_FILE = "tools/local/docker/docker-compose.local.yml"
 COMPOSE_PROJECT = "fru_local"
 
 

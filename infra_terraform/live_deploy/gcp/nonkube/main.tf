@@ -106,7 +106,7 @@ module "spark_job" {
     "/opt/spark/bin/spark-submit",
     "--packages", "io.delta:delta-spark_2.12:3.1.0,org.apache.hadoop:hadoop-aws:3.3.4",
     "--jars", "/opt/fru/jars/gcs-connector-hadoop3-2.2.7-shaded.jar",
-    "/opt/fru/jobs/periodic.py"
+    "/opt/fru/jobs/run_analytics.py"
   ]
 
   env_vars = merge({

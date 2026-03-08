@@ -21,7 +21,7 @@ from tools.cloud_shared.logging import logger
 load_dotenv()
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-COMPOSE_FILE = "docker-compose.local.yml"
+COMPOSE_FILE = "tools/local/docker/docker-compose.local.yml"
 COMPOSE_PROJECT = "fru_local"
 
 
@@ -99,9 +99,11 @@ def main() -> int:
     # 3. Build Spark image and run job (optional; skip if --skip-spark or disk full)
     if not args.skip_spark:
         logger.step("Building Spark image...")
+        # --platform linux/amd64: avoid "exec format error" on ARM Mac (apache/spark entrypoint is amd64)
         r = subprocess.run(
             [
                 "docker", "build", "-q",
+                "--platform", "linux/amd64",
                 "-f", "core_app/analytics/docker/Dockerfile",
                 "-t", "fru-spark:local",
                 "core_app",
@@ -109,33 +111,36 @@ def main() -> int:
             cwd=PROJECT_ROOT,
         )
         if r.returncode != 0:
-            logger.warning("Spark image build failed (e.g. disk full); continuing without Spark. Use --skip-spark to skip.")
-        else:
-            logger.step("Running Spark analytics job...")
-            pw = os.environ.get("PGPASSWORD", "")
-            if pw:
-                spark_cmd = [
-                    "docker", "run", "--rm",
-                    "--network", f"{COMPOSE_PROJECT}_default",
-                    "-e", "PGHOST=postgres",
-                    "-e", "PGPORT=5432",
-                    "-e", "PGUSER=postgres",
-                    "-e", f"PGPASSWORD={pw}",
-                    "-e", f"PGDATABASE={os.environ.get('PGDATABASE', 'fru_db')}",
-                    "-e", "DELTA_TABLE_PATH=file:///tmp/delta/fru_sales",
-                    "-v", "fru_delta:/tmp/delta",
-                    "fru-spark:local",
-                    "/opt/spark/bin/spark-submit",
-                    "--packages", "io.delta:delta-spark_2.12:3.1.0",
-                    "--conf", "spark.driver.extraJavaOptions=-Duser.home=/tmp",
-                    "--conf", "spark.executor.extraJavaOptions=-Duser.home=/tmp",
-                    "/opt/fru/jobs/run_analytics.py",
-                ]
-                r = subprocess.run(spark_cmd, cwd=PROJECT_ROOT)
-                if r.returncode != 0:
-                    logger.warning("Spark job failed; /analytics may be empty")
-            else:
-                logger.warning("PGPASSWORD not set; skipping Spark job")
+            logger.error("Spark image build failed")
+            return 1
+        logger.step("Running Spark analytics job...")
+        pw = os.environ.get("PGPASSWORD", "")
+        if not pw:
+            logger.error("PGPASSWORD required for Spark job")
+            return 1
+        # --user root: Docker volume /tmp/delta is root-owned; Spark (USER 1001) cannot write. Run as root.
+        spark_cmd = [
+            "docker", "run", "--rm",
+            "--user", "root",
+            "--network", f"{COMPOSE_PROJECT}_default",
+            "-e", "PGHOST=postgres",
+            "-e", "PGPORT=5432",
+            "-e", "PGUSER=postgres",
+            "-e", f"PGPASSWORD={pw}",
+            "-e", f"PGDATABASE={os.environ.get('PGDATABASE', 'fru_db')}",
+            "-e", "DELTA_TABLE_PATH=file:///tmp/delta/fru_sales",
+            "-v", "fru_delta:/tmp/delta",
+            "fru-spark:local",
+            "/opt/spark/bin/spark-submit",
+            "--packages", "io.delta:delta-spark_2.12:3.1.0",
+            "--conf", "spark.driver.extraJavaOptions=-Duser.home=/tmp",
+            "--conf", "spark.executor.extraJavaOptions=-Duser.home=/tmp",
+            "/opt/fru/jobs/run_analytics.py",
+        ]
+        r = subprocess.run(spark_cmd, cwd=PROJECT_ROOT)
+        if r.returncode != 0:
+            logger.error("Spark job failed")
+            return 1
     else:
         logger.info("Skipping Spark (--skip-spark)")
 
