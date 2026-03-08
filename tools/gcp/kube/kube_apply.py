@@ -15,21 +15,13 @@ import subprocess
 import sys
 
 from tools.cloud_shared.env import load_dotenv
+from tools.cloud_shared.k8s_j2_render import render
 from tools.gcp.scope_shared.core.backend import resolve_region
-from tools.cloud_shared.deploy.setup_database_utils import get_repo_root
 
 load_dotenv()
 
 K8S_NAMESPACE = "fru-kube"
 JOB_BOOTSTRAP = "fru-analytics-bootstrap-kube"
-K8S_DIR = "infra_terraform/modules/cloud_shared/k8s"
-
-
-def _render(template_path: str, subs: dict) -> str:
-    s = open(template_path, "r").read()
-    for k, v in subs.items():
-        s = s.replace("${" + k + "}", str(v))
-    return s
 
 
 def _kubectl(args: list, input_text: str | None = None) -> None:
@@ -114,7 +106,6 @@ def main():
         env={**os.environ, "CLOUD_REGION": region},
     )
 
-    repo_root = get_repo_root()
     nondurable = get_tofu_output_json(
         "infra_terraform/live_deploy/gcp/scope_shared/nondurable", args.env, region, "nondurable"
     )
@@ -199,6 +190,7 @@ data:
             print(f"[KUBE BOOTSTRAP] Skip: Job {JOB_BOOTSTRAP} already succeeded (idempotent)")
         else:
             subs = {
+                "cloud_provider": "gcp",
                 "SPARK_IMAGE": spark_image,
                 "DELTA_ROOT": delta_root,
                 "DELTA_TABLE_PATH": delta_table_path,
@@ -208,14 +200,16 @@ data:
                 "PGUSER": args.pg_user,
                 "CLOUD_REGION": region,
             }
-            path = os.path.join(repo_root, K8S_DIR, "bootstrap-job-gcp.yaml")
-            txt = _render(path, subs)
+            txt = render("bootstrap-job", subs)
             _kubectl(["delete", "job", JOB_BOOTSTRAP, "--ignore-not-found", "-n", K8S_NAMESPACE])
             _kubectl(["apply", "-f", "-"], input_text=txt)
 
         api_subs = {
+            "cloud_provider": "gcp",
             "APP_IMAGE": app_image,
+            "CONTAINER_TYPE": "gke",
             "DEPLOY_SCOPE": "kube",
+            "CLOUD_PROVIDER": "gcp",
             "PGHOST": pg_host,
             "PGPORT": args.pg_port,
             "PGUSER": args.pg_user,
@@ -232,14 +226,12 @@ data:
             "ANALYTICS_SCHEDULER_INTERVAL_SECONDS": "180",
             "CONTAINER_IMAGE_TAGS": os.getenv("CONTAINER_IMAGE_TAGS", ""),
         }
-        path = os.path.join(repo_root, K8S_DIR, "api-deployment-gcp.yaml")
-        _kubectl(["apply", "-f", "-"], input_text=_render(path, api_subs))
-
-        path = os.path.join(repo_root, K8S_DIR, "api-service-gke.yaml")
-        _kubectl(["apply", "-f", "-"], input_text=open(path).read())
+        _kubectl(["apply", "-f", "-"], input_text=render("api-deployment", api_subs))
+        _kubectl(["apply", "-f", "-"], input_text=render("api-service", {"cloud_provider": "gcp"}))
 
     else:
         subs = {
+            "cloud_provider": "gcp",
             "SPARK_IMAGE": spark_image,
             "DELTA_ROOT": delta_root,
             "DELTA_TABLE_PATH": delta_table_path,
@@ -249,8 +241,7 @@ data:
             "PGUSER": args.pg_user,
             "CLOUD_REGION": region,
         }
-        path = os.path.join(repo_root, K8S_DIR, "spark-cronjob-gcp.yaml")
-        _kubectl(["apply", "-f", "-"], input_text=_render(path, subs))
+        _kubectl(["apply", "-f", "-"], input_text=render("spark-cronjob", subs))
 
 
 if __name__ == "__main__":

@@ -1,0 +1,48 @@
+# One-off Spark analytics bootstrap. Populates batch_analytics.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: fru-analytics-bootstrap-kube
+  namespace: fru-kube
+spec:
+  template:
+    spec:
+      containers:
+      - name: spark
+        image: {{ SPARK_IMAGE }}
+{% if cloud_provider == "aws" %}
+        command: ["/opt/spark/bin/spark-submit", "--packages", "io.delta:delta-spark_2.12:3.1.0,org.apache.hadoop:hadoop-aws:3.3.4", "/opt/fru/jobs/run_analytics.py"]
+{% else %}
+        command: ["/opt/spark/bin/spark-submit", "--packages", "io.delta:delta-spark_2.12:3.1.0", "--jars", "/opt/fru/jars/gcs-connector-hadoop3-2.2.7-shaded.jar", "/opt/fru/jobs/run_analytics.py"]
+{% endif %}
+        env:
+        - name: SPARK_EXTRA_CONF
+          value: "spark.fru.delta_root={{ DELTA_ROOT }}"
+        - name: DELTA_TABLE_PATH
+          value: "{{ DELTA_TABLE_PATH }}"
+        - name: PGHOST
+          value: "{{ PGHOST }}"
+        - name: PGPORT
+          value: "{{ PGPORT }}"
+        - name: PGDATABASE
+          value: "{{ PGDATABASE }}"
+        - name: PGUSER
+          value: "{{ PGUSER }}"
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: PGPASSWORD
+{% if cloud_provider == "aws" %}
+        - name: AWS_ACCESS_KEY_ID
+          value: "{{ AWS_ACCESS_KEY_ID }}"
+        - name: AWS_SECRET_ACCESS_KEY
+          value: "{{ AWS_SECRET_ACCESS_KEY }}"
+{% else %}
+        - name: CLOUD_PROVIDER
+          value: "gcp"
+{% endif %}
+        - name: CLOUD_REGION
+          value: "{{ CLOUD_REGION }}"
+      restartPolicy: Never
+  backoffLimit: 4
