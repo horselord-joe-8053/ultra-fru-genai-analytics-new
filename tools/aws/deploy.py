@@ -110,7 +110,7 @@ def _log_success(frontend_url: str, alb_dns: str | None = None) -> None:
 
 
 def _ecr_has_images(app_repo_name: str, spark_repo_name: str, region: str) -> bool:
-    """Check if target ECR has both app and spark images (tag=latest)."""
+    """Return True if target ECR has both app and spark images (tag=latest)."""
     try:
         subprocess.check_output(
             ["aws", "ecr", "describe-images", "--repository-name", app_repo_name,
@@ -127,32 +127,35 @@ def _ecr_has_images(app_repo_name: str, spark_repo_name: str, region: str) -> bo
         return False
 
 
-def _maybe_push_only_for_region(env: str, target_region: str, snd: dict, artifacts_bucket: str) -> None:
+def _push_only_for_ecr_absence(env: str, target_region: str, snd: dict) -> None:
     """
-    When content-skip or --skip-build: if target ECR is empty, push from local image
-    (from prior deploy to another region). Avoids ImageNotFoundException when deploying
-    to a new region. See docs/learned/cloud_shared/DEPLOY_BUILD_DOCKER.md.
+    When build was skipped (content-skip or --skip-build): if target ECR does not have
+    the images, run push-only so local canonical images are pushed. Avoids
+    ImageNotFoundException when deploying to a new region. See DEPLOY_BUILD_DOCKER.md.
     """
+    from tools.cloud_shared.docker.push_only_for_registry_absence import push_only_for_registry_absence
+
     app_repo_url = snd.get("ecr_app_url", {}).get("value", "")
     spark_repo_url = snd.get("ecr_spark_url", {}).get("value", "")
     if not app_repo_url or not spark_repo_url:
         return
     app_repo_name = app_repo_url.split("/")[-1]
     spark_repo_name = spark_repo_url.split("/")[-1]
-    if _ecr_has_images(app_repo_name, spark_repo_name, target_region):
-        return
-    logger.info("[PUSH-ONLY] Target ECR empty; pushing from local canonical images")
-    try:
+
+    def registry_has_images() -> bool:
+        return _ecr_has_images(app_repo_name, spark_repo_name, target_region)
+
+    def push_local_images() -> None:
         proc = subprocess.run(
-            ["python", "tools/aws/scope_shared/deploy/build_and_push_images.py",
+            [sys.executable, "tools/aws/scope_shared/deploy/build_and_push_images.py",
              "--env", env, "--region", target_region, "--push-only"],
             cwd=os.getcwd(),
             env={**os.environ, "CLOUD_REGION": target_region},
         )
         if proc.returncode != 0:
-            logger.warning("[PUSH-ONLY] Push failed (no local image?); deploy may fail at ECR pull")
-    except Exception as e:
-        logger.warning(f"[PUSH-ONLY] Push failed: {e}")
+            raise RuntimeError("build_and_push_images --push-only failed")
+
+    push_only_for_registry_absence(registry_has_images, push_local_images, log_prefix="[PUSH-ONLY]")
 
 
 def main():
@@ -166,7 +169,8 @@ def main():
     ap.add_argument("--env", default=os.getenv("ENVIRONMENT", os.getenv("FRU_ENV", "dev")))
     ap.add_argument("--region", default="", help="Region (default: CLOUD_REGION)")
     ap.add_argument("--skip-doctor", action="store_true")
-    ap.add_argument("--force-spark-rebuild", action="store_true", help="Build Spark image with --no-cache")
+    ap.add_argument("--force-spark-rebuild", action="store_true", help="Build Spark image with --no-cache (deprecated: use --no-cache)")
+    ap.add_argument("--no-cache", action="store_true", help="Build all images with Docker --no-cache (cache-free)")
     ap.add_argument("--skip-build", action="store_true", help="Skip build; use repo:latest from ECR and query tags for display")
     ap.add_argument("--force-build", action="store_true",
         help="Force build even when content hash matches (bypasses content-based skip; use when code changed or you want a fresh image)")
@@ -337,26 +341,27 @@ def main():
             snd = tofu_output_json("infra_terraform/live_deploy/aws/scope_shared/nondurable", env, region)
             artifacts_bucket = snd.get("artifacts_bucket", {}).get("value", "")
             if artifacts_bucket:
-                from tools.aws.scope_shared.deploy.build_context_hash import (
-                    compute_build_context_hash,
-                    get_stored_build_hash,
-                )
-                app_hash = compute_build_context_hash("core_app", "Dockerfile")
-                spark_hash = compute_build_context_hash("core_app", "analytics/docker/Dockerfile")
+                from tools.cloud_shared.docker.build_skip_decision import decide_build_skip
+
                 app_key = f"build-metadata/{env}/app-build-hash.json"
                 spark_key = f"build-metadata/{env}/spark-build-hash.json"
-                stored_app = get_stored_build_hash(artifacts_bucket, app_key, region)
-                stored_spark = get_stored_build_hash(artifacts_bucket, spark_key, region)
-                if stored_app == app_hash and stored_spark == spark_hash:
+                skip_result = decide_build_skip(
+                    force_build=False,
+                    storage_bucket=artifacts_bucket,
+                    app_key=app_key,
+                    spark_key=spark_key,
+                    provider="s3",
+                    region=region,
+                )
+                if skip_result.skip:
                     content_skip = True
                     logger.step(f"[8/{len(phases)}] Skipping build (content hash matches); will use repo:latest from ECR")
-                    logger.info(f"[BUILD] App hash {app_hash[:8]}..., spark {spark_hash[:8]}... match stored. Use --force-build to rebuild.")
+                    logger.info(f"[BUILD] App hash {skip_result.app_hash[:8]}..., spark {skip_result.spark_hash[:8] if skip_result.spark_hash else 'n/a'}... match stored. Use --force-build to rebuild.")
                     if not os.getenv("APP_IMAGE_TAG"):
                         os.environ["APP_IMAGE_TAG"] = "latest"
                     if not os.getenv("SPARK_IMAGE_TAG"):
                         os.environ["SPARK_IMAGE_TAG"] = "latest"
-                    # Push-if-needed: if target ECR is empty, push from local (e.g. from another region)
-                    _maybe_push_only_for_region(env, region, snd, artifacts_bucket)
+                    _push_only_for_ecr_absence(env, region, snd)
                     tracker.end_phase(8)
 
         if args.skip_build:
@@ -366,7 +371,7 @@ def main():
             if not os.getenv("SPARK_IMAGE_TAG"):
                 os.environ["SPARK_IMAGE_TAG"] = "latest"
             snd = tofu_output_json("infra_terraform/live_deploy/aws/scope_shared/nondurable", env, region)
-            _maybe_push_only_for_region(env, region, snd, snd.get("artifacts_bucket", {}).get("value", ""))
+            _push_only_for_ecr_absence(env, region, snd)
             tracker.end_phase(8)
         elif content_skip:
             pass  # Already ended phase 8 above
@@ -388,7 +393,7 @@ def main():
             build_env = {**os.environ, "CLOUD_REGION": region}
             build_env["PYTHONUNBUFFERED"] = "1"
             build_cmd = ["python", "tools/aws/scope_shared/deploy/build_and_push_images.py", "--env", env, "--region", region]
-            if args.force_spark_rebuild:
+            if getattr(args, "no_cache", False) or args.force_spark_rebuild:
                 build_cmd.append("--no-cache")
             if args.force_build:
                 build_cmd.append("--force-build")

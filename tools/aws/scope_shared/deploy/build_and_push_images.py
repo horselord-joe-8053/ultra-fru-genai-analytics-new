@@ -308,18 +308,19 @@ def main():
     # Build with local tags only (max 2 per image: build-info + latest). Push tags to ECR.
     # --progress=plain: line-by-line output; avoids silent buffering in Cursor/CI.
     # --build-arg BUILD_CONTEXT_HASH: stored as image label for traceability.
-    run_docker_with_progress(
-        ["docker","build","--progress=plain","--platform",platform,
-         "--build-arg",f"BUILD_CONTEXT_HASH={app_hash}",
-         "-t",f"{app_repo_name}:{app_tag}","core_app"],
-        "Building app image", 1, 4,
-    )
-    spark_build_cmd = ["docker","build","--progress=plain","--platform",platform,
-         "--build-arg",f"BUILD_CONTEXT_HASH={spark_hash}",
-         "-t",f"{spark_repo_name}:{spark_tag}","-f","core_app/analytics/docker/Dockerfile","core_app"]
+    app_build_cmd = ["docker", "build", "--progress=plain", "--platform", platform,
+         "--build-arg", f"BUILD_CONTEXT_HASH={app_hash}",
+         "-t", f"{app_repo_name}:{app_tag}", "core_app"]
+    if args.no_cache:
+        app_build_cmd.insert(2, "--no-cache")
+        logger.info("[BUILD] App: --no-cache (cache-free)")
+    run_docker_with_progress(app_build_cmd, "Building app image", 1, 4)
+    spark_build_cmd = ["docker", "build", "--progress=plain", "--platform", platform,
+         "--build-arg", f"BUILD_CONTEXT_HASH={spark_hash}",
+         "-t", f"{spark_repo_name}:{spark_tag}", "-f", "core_app/analytics/docker/Dockerfile", "core_app"]
     if args.no_cache:
         spark_build_cmd.insert(2, "--no-cache")
-        logger.info("[BUILD] Spark: --no-cache (fresh build)")
+        logger.info("[BUILD] Spark: --no-cache (cache-free)")
     run_docker_with_progress(
         spark_build_cmd,
         "Building spark image", 2, 4,

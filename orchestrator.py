@@ -149,6 +149,8 @@ def _handle_provider(args, base_path: str, provider: str, deploy_extra_before: l
             deploy_args.append("--elb")
         if getattr(args, "gke_disable_deletion_protection", False):
             deploy_args.append("--gke-disable-deletion-protection")
+        if getattr(args, "no_cache", False):
+            deploy_args.append("--no-cache")
 
         with logger.Heartbeat(f"Deployment scope={args.scope} env={args.env}", timeout=-1):
             run_command(deploy_args, force_no_timeout=True)
@@ -246,8 +248,10 @@ def handle_local(args):
             deploy_args.append("--force-refresh-data")
         if getattr(args, "skip_spark", False):
             deploy_args.append("--skip-spark")
-        if getattr(args, "force_rebuild", False):
-            deploy_args.append("--force-rebuild")
+        if getattr(args, "force_build", False):
+            deploy_args.append("--force-build")
+        if getattr(args, "no_cache", False):
+            deploy_args.append("--no-cache")
         with logger.Heartbeat("Local deploy", timeout=-1):
             run_command(deploy_args, force_no_timeout=True)
             if do_start:
@@ -331,7 +335,7 @@ def main():
     parser.add_argument("--shutdown-local", action="store_true",
                         help="[Local] Terminate local API and frontend only (no deploy/teardown). Or run before deploy for clean slate.")
     parser.add_argument("--skip-spark", action="store_true", help="[Local only] Skip Spark build and bootstrap (faster deploy)")
-    parser.add_argument("--force-rebuild", action="store_true", help="[Local only] Rebuild Docker images with --no-cache")
+    parser.add_argument("--no-cache", action="store_true", help="Build images with Docker --no-cache (cache-free); applies to local, AWS, GCP")
     parser.add_argument("--no-start-local", action="store_true",
                         help="[Local] Deploy only; do not start API/frontend or verify.")
 

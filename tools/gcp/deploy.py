@@ -27,12 +27,30 @@ import time
 
 from tools.cloud_shared.env import load_dotenv
 from tools.cloud_shared.stats import DeployStats, scope_for
+from tools.cloud_shared.docker.build_skip_decision import decide_build_skip
 from tools.gcp.scope_shared.core.backend import resolve_region, resolve_state_bucket, gcs_delta_bucket
 from tools.gcp.scope_shared.core.phases import PhaseTracker, deploy_phases
+from tools.gcp.scope_shared.deploy.db_setup.config import get_tofu_output_json
 from tools.gcp.scope_shared.deploy.deploy_common import run_deploy_stack
 from tools.gcp.kube.deploy_kube import run_deploy_kube
 from tools.gcp.nonkube.deploy_nonkube import run_deploy_nonkube
 from tools.cloud_shared.logging import logger
+
+_NONDURABLE_STACK_DIR = "infra_terraform/live_deploy/gcp/scope_shared/nondurable"
+
+
+def _gcp_artifact_registry_has_image(registry_url: str, tag: str = "latest") -> bool:
+    """Return True if registry has the given image:tag (e.g. app_url + '/app')."""
+    try:
+        out = subprocess.check_output(
+            ["gcloud", "artifacts", "docker", "tags", "list", registry_url],
+            text=True,
+            stderr=subprocess.DEVNULL,
+            timeout=15,
+        )
+        return tag in out
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        return False
 
 load_dotenv()
 
@@ -64,7 +82,9 @@ def main():
     ap.add_argument("--region", default=None)
     ap.add_argument("--skip-doctor", action="store_true")
     ap.add_argument("--skip-build", action="store_true")
-    ap.add_argument("--no-cache-build", action="store_true", help="Build images with Docker --no-cache (fixes corrupted cache)")
+    ap.add_argument("--force-build", action="store_true", help="Bypass content-hash check; always build and push")
+    ap.add_argument("--no-cache", "--no-cache-build", dest="no_cache_build", action="store_true",
+                    help="Build images with Docker --no-cache (cache-free)")
     ap.add_argument("--apply", action="store_true", help="Run tofu apply after plan (default: plan only)")
     ap.add_argument("--force-refresh-data", action="store_true",
                     help="Force reload DB schema and embeddings (reserved for future db_setup integration)")
@@ -172,17 +192,68 @@ def main():
 
                 if not (build_env.get("SPARK_IMAGE_TAG") or "").strip():
                     build_env["SPARK_IMAGE_TAG"] = "latest"
-                with stats.timed("Build & push", "build_and_push_images"):
-                    build_cmd = [sys.executable, "tools/gcp/scope_shared/deploy/build_and_push_images.py", "--env", args.env, "--region", region]
+
+                build_skipped = False
+                if not getattr(args, "force_build", False):
+                    try:
+                        nondurable = get_tofu_output_json(_NONDURABLE_STACK_DIR, args.env, region, description="nondurable")
+                        delta_bucket = (nondurable.get("delta_bucket_name", {}) or {}).get("value", "")
+                        app_repo_url = (nondurable.get("artifact_registry_app_url", {}) or {}).get("value", "")
+                        spark_repo_url = (nondurable.get("artifact_registry_spark_url", {}) or {}).get("value", "")
+                        if delta_bucket and app_repo_url and spark_repo_url:
+                            app_key = f"build-metadata/{args.env}/app-build-hash.json"
+                            spark_key = f"build-metadata/{args.env}/spark-build-hash.json"
+                            app_image_url = f"{app_repo_url.rstrip('/')}/app"
+                            spark_image_url = f"{spark_repo_url.rstrip('/')}/spark"
+                            kube_proxy_image_url = f"{app_repo_url.rstrip('/')}/kube-proxy"
+
+                            def _registry_has_images() -> bool:
+                                return (
+                                    _gcp_artifact_registry_has_image(app_image_url, "latest")
+                                    and _gcp_artifact_registry_has_image(spark_image_url, "latest")
+                                    and _gcp_artifact_registry_has_image(kube_proxy_image_url, "latest")
+                                )
+
+                            skip_result = decide_build_skip(
+                                force_build=False,
+                                storage_bucket=delta_bucket,
+                                app_key=app_key,
+                                spark_key=spark_key,
+                                provider="gcs",
+                                registry_has_images=_registry_has_images,
+                                skip_reason_override=(
+                                    "content hash matches stored (GCS) and registry already has app, spark, and kube-proxy. "
+                                    "Use --force-build to rebuild."
+                                ),
+                            )
+                            build_skipped = skip_result.skip
+                            if build_skipped:
+                                logger.info(f"Will skip building images because {skip_result.skip_reason}")
+                    except Exception as e:
+                        logger.warning(f"[BUILD] Could not check build hash (proceeding with build): {e}")
+
+                if build_skipped:
+                    logger.success("Build skipped (content hash match)")
+                else:
+                    if getattr(args, "force_build", False):
+                        logger.info("Will start building images because --force-build was set.")
+                    else:
+                        logger.info(
+                            "Will start building images because content hash differs from stored or first deploy."
+                        )
                     if getattr(args, "no_cache_build", False):
-                        build_cmd.append("--no-cache")
-                    subprocess.run(
-                        build_cmd,
-                        check=True,
-                        cwd=repo_root,
-                        env=build_env,
-                    )
-                logger.success("Images built and pushed")
+                        logger.info("Building with --no-cache.")
+                    with stats.timed("Build & push", "build_and_push_images"):
+                        build_cmd = [sys.executable, "tools/gcp/scope_shared/deploy/build_and_push_images.py", "--env", args.env, "--region", region]
+                        if getattr(args, "no_cache_build", False):
+                            build_cmd.append("--no-cache")
+                        subprocess.run(
+                            build_cmd,
+                            check=True,
+                            cwd=repo_root,
+                            env=build_env,
+                        )
+                    logger.success("Images built and pushed")
             else:
                 logger.info("Skipping build (--skip-build)")
                 # When skip-build, get CONTAINER_IMAGE_TAGS from Artifact Registry (mirrors AWS ECR logic)
