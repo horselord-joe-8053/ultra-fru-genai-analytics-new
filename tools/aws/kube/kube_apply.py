@@ -14,16 +14,11 @@ This tool:
 """
 import argparse, base64, json, os, subprocess, time
 from tools.cloud_shared.env import load_dotenv, require
+from tools.cloud_shared.k8s_j2_render import render
 from tools.aws.scope_shared.core.backend import resolve_region
 from tools.aws.scope_shared.deploy.bootstrap_helpers import check_k8s_bootstrap_job_succeeded, JOB_BOOTSTRAP, K8S_NAMESPACE
 
 load_dotenv()
-
-def render(template_path, subs):
-    s = open(template_path, "r").read()
-    for k,v in subs.items():
-        s = s.replace("${"+k+"}", str(v))
-    return s
 
 def kubectl(args, input_text=None):
     cmd = ["kubectl"] + args
@@ -97,7 +92,7 @@ def main():
     ap.add_argument("--bedrock-inference-profile-id", default="", help="AWS_BEDROCK_INFERENCE_PROFILE_ID")
     ap.add_argument("--bedrock-model-id", default="anthropic.claude-3-5-haiku-20241022-v1:0", help="AWS_BEDROCK_MODEL_ID")
     ap.add_argument("--force", action="store_true", help="Force bootstrap even if already succeeded (e.g. after CSV upload)")
-    ap.add_argument("--elb", action="store_true", help="Use api-service-elb.yaml (in-tree Classic ELB) instead of api-service.yaml (NLB)")
+    ap.add_argument("--elb", action="store_true", help="Use in-tree Classic ELB instead of NLB (api-service template)")
     args = ap.parse_args()
 
     region = resolve_region(args.region)
@@ -188,6 +183,7 @@ data:
         else:
             delta_table_path = args.delta_table_path or f"s3a://{delta_bucket}/delta/fru_sales"
             subs = {
+                "cloud_provider": "aws",
                 "SPARK_IMAGE": spark_image,
                 "DELTA_ROOT": delta_root,
                 "DELTA_TABLE_PATH": delta_table_path,
@@ -199,7 +195,7 @@ data:
                 "AWS_SECRET_ACCESS_KEY": require("AWS_ADMIN_SECRET_ACCESS_KEY"),
                 "CLOUD_REGION": os.getenv("CLOUD_REGION", "").strip() or require("CLOUD_REGION")
             }
-            txt = render("infra_terraform/modules/cloud_shared/k8s/bootstrap-job.yaml", subs)
+            txt = render("bootstrap-job", subs)
             kubectl(["delete", "job", JOB_BOOTSTRAP, "--ignore-not-found", "-n", K8S_NAMESPACE])
             kubectl(["apply", "-f", "-"], input_text=txt)
 
@@ -207,8 +203,10 @@ data:
         try:
             delta_table_path = args.delta_table_path or f"s3a://{delta_bucket}/delta/fru_sales"
             api_subs = {
+                "cloud_provider": "aws",
                 "APP_IMAGE": app_image,
                 "CONTAINER_IMAGE_TAGS": os.getenv("CONTAINER_IMAGE_TAGS", ""),
+                "CONTAINER_TYPE": "eks",
                 "DEPLOY_SCOPE": "kube",
                 "CLOUD_PROVIDER": "aws",
                 "PGHOST": args.pg_host or "localhost",
@@ -225,10 +223,9 @@ data:
                 "ENABLE_ANALYTICS_SCHEDULER": os.getenv("ENABLE_ANALYTICS_SCHEDULER", "true"),
                 "ANALYTICS_SCHEDULER_INTERVAL_SECONDS": os.getenv("ANALYTICS_SCHEDULER_INTERVAL_SECONDS", "180"),
             }
-            txt = render("infra_terraform/modules/cloud_shared/k8s/api-deployment.yaml", api_subs)
+            txt = render("api-deployment", api_subs)
             kubectl(["apply","-f","-"], input_text=txt)
-            api_svc_manifest = "api-service-elb.yaml" if args.elb else "api-service.yaml"
-            txt = render(f"infra_terraform/modules/cloud_shared/k8s/{api_svc_manifest}", {})
+            txt = render("api-service", {"cloud_provider": "aws", "use_elb": args.elb})
             if args.elb:
                 kubectl(["apply","-f","-"], input_text=txt)
             else:
@@ -242,6 +239,7 @@ data:
         # Schedule phase: apply CronJob. Requires aws-credentials secret from bootstrap for S3 access.
         delta_table_path = args.delta_table_path or f"s3a://{delta_bucket}/delta/fru_sales"
         subs = {
+            "cloud_provider": "aws",
             "SPARK_IMAGE": spark_image,
             "DELTA_ROOT": delta_root,
             "DELTA_TABLE_PATH": delta_table_path,
@@ -251,7 +249,7 @@ data:
             "PGUSER": args.pg_user,
             "CLOUD_REGION": args.aws_region or os.getenv("CLOUD_REGION", "").strip() or require("CLOUD_REGION"),
         }
-        txt = render("infra_terraform/modules/cloud_shared/k8s/spark-cronjob.yaml", subs)
+        txt = render("spark-cronjob", subs)
         kubectl(["apply","-f","-"], input_text=txt)
 
 if __name__ == "__main__":

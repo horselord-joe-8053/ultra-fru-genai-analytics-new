@@ -1,0 +1,22 @@
+# LoadBalancer Service. Rendered for AWS (NLB/ELB) or GCP (GKE) via kube_apply.
+apiVersion: v1
+kind: Service
+metadata:
+  name: fru-api-svc
+  namespace: fru-kube
+{% if cloud_provider == "aws" %}
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+{% if not use_elb %}
+    service.beta.kubernetes.io/aws-load-balancer-type: external
+    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: instance
+{% endif %}
+{% endif %}
+spec:
+  selector:
+    app: fru-api
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 5001
+  type: LoadBalancer
