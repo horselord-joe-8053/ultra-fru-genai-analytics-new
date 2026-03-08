@@ -6,14 +6,12 @@ Uses google-genai SDK with API key (not Vertex AI).
 Applicable environment: [gcp {cloud-run | gke}]
 """
 from backend.env_utils.cloud_shared.interfaces.llm_client import LLMClient
+from backend.env_utils.cloud_shared.model_config import require_google_model
 import os
 import logging
 from typing import Dict, Any, Optional, Iterator
 
 logger = logging.getLogger(__name__)
-
-# Default model when GOOGLE_MODEL/GEMINI_MODEL not set
-_DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 
 
 class GCPGeminiAPIClient(LLMClient):
@@ -32,12 +30,7 @@ class GCPGeminiAPIClient(LLMClient):
         from google import genai
 
         self.client = genai.Client(api_key=api_key)
-        # Model from .env; GOOGLE_MODEL preferred, GEMINI_MODEL fallback (user preference)
-        self.model = (
-            os.environ.get("GOOGLE_MODEL", "").strip()
-            or os.environ.get("GEMINI_MODEL", "").strip()
-            or _DEFAULT_GEMINI_MODEL
-        )
+        self.model = require_google_model()
 
     def complete(
         self,

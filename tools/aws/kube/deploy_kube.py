@@ -8,6 +8,10 @@ import subprocess
 import sys
 import time
 
+_repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+if _repo_root not in sys.path:
+    sys.path.insert(0, _repo_root)
+
 from tools.cloud_shared.logging import logger
 from tools.aws.scope_shared.core.terra_init import init_stack
 from tools.aws.scope_shared.core.terra_var_handling import get_base_vars
@@ -182,8 +186,9 @@ def run_deploy_kube(
         kube_apply_args += ["--db-secret-arn", db_secret_arn]
     if openai_secret_arn:
         kube_apply_args += ["--openai-secret-arn", openai_secret_arn]
-    bedrock_profile = os.getenv("AWS_BEDROCK_INFERENCE_PROFILE_ID", "")
-    bedrock_model = os.getenv("AWS_BEDROCK_MODEL_ID", "anthropic.claude-3-5-haiku-20241022-v1:0")
+    from core_app.backend.env_utils.cloud_shared.model_config import get_bedrock_inference_profile_id, require_bedrock_model_id
+    bedrock_profile = get_bedrock_inference_profile_id()
+    bedrock_model = require_bedrock_model_id() if not bedrock_profile else (os.getenv("AWS_BEDROCK_MODEL_ID", "").strip())
     if bedrock_profile:
         kube_apply_args += ["--bedrock-inference-profile-id", bedrock_profile]
     if bedrock_model:

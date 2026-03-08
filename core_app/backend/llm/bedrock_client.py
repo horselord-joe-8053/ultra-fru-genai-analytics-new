@@ -102,8 +102,9 @@ def claude_complete(system_prompt, user_message, model_id=None, max_tokens=2000)
     if claude_client:
         logger.info("Using Claude API (local development)")
         try:
+            from backend.env_utils.cloud_shared.model_config import require_claude_model
             response = claude_client.messages.create(
-                model="claude-3-5-haiku-20241022",  # Match Bedrock model
+                model=model_id or require_claude_model(),
                 max_tokens=max_tokens,
                 system=system_prompt,
                 messages=[{"role": "user", "content": user_message}]
@@ -142,12 +143,8 @@ def claude_complete(system_prompt, user_message, model_id=None, max_tokens=2000)
     # Fallback to model ID if no inference profile
     if not inference_profile_id:
         if model_id is None:
-            model_id = os.environ.get("AWS_BEDROCK_MODEL_ID", "").strip()
-            if not model_id:
-                # Fail-fast if neither inference profile nor model ID is set
-                raise ValueError(
-                    "Either CLAUDE_API_KEY (for local dev), AWS_BEDROCK_INFERENCE_PROFILE_ID, or AWS_BEDROCK_MODEL_ID must be set"
-                )
+            from backend.env_utils.cloud_shared.model_config import require_bedrock_model_id
+            model_id = require_bedrock_model_id()
 
     try:
         client = get_bedrock_client()

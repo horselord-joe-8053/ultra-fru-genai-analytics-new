@@ -33,10 +33,13 @@ USE_AGENT_QUERY = get_optional_bool_env('USE_AGENT_QUERY', True)
 
 # Agent will be initialized after DB pool is ready
 query_agent = None
+# When init fails, store reason so /query/stream can return it instead of generic "disabled"
+_agent_init_error: Optional[str] = None
 
 def init_agent():
     """Initialize agent if feature flag is enabled."""
-    global query_agent
+    global query_agent, _agent_init_error
+    _agent_init_error = None
     if USE_AGENT_QUERY and _connection_pool is not None:
         try:
             from backend.agents.query_agent import QueryAgent
@@ -54,8 +57,16 @@ def init_agent():
             )
             app.logger.info("Agent-based query processing enabled")
         except Exception as e:
-            app.logger.error(f"Failed to initialize agent: {e}", exc_info=True)
             query_agent = None
+            _agent_init_error = str(e).split("\n")[0].strip()[:500]
+            app.logger.error(
+                f"Agent init failed (USE_AGENT_QUERY=true): {_agent_init_error}",
+                exc_info=True,
+            )
+            # Surface reason so verify and UI see real cause instead of generic "disabled"
+    elif USE_AGENT_QUERY and query_agent is None and _agent_init_error is None:
+        _agent_init_error = "not initialized (check DB pool and OPENAI_API_KEY)"
+        app.logger.warning(f"Agent not initialized: {_agent_init_error}")
 
 # Configure logging
 logging.basicConfig(
@@ -547,7 +558,11 @@ def version():
 
     Frontend and API backend share a single container image; this endpoint is
     the canonical build/version source for the UI and verification.
+    Also triggers agent init (if not yet done) and exposes agent_init_error so
+    verify/UI can see the real reason when agent is disabled.
     """
+    # Trigger agent init so _agent_init_error is populated (for verify/UI to show real reason)
+    ensure_agent()
     tags_raw = os.environ.get("CONTAINER_IMAGE_TAGS", "").strip()
     if tags_raw:
         # Comma-separated list from deploy (e.g. "fru_dev_20260218_abc123,latest")
@@ -567,12 +582,19 @@ def version():
     scope = os.environ.get("DEPLOY_SCOPE", "").strip() or None
     cloud_provider = os.environ.get("CLOUD_PROVIDER", "").strip() or None
     region = os.environ.get("CLOUD_REGION", "").strip() or None
+    # Expose which port this API process is listening on (for local: verify frontend proxy target)
+    api_port = os.environ.get("PORT", "").strip() or None
+    if api_port and api_port.isdigit():
+        api_port = int(api_port)
 
     return jsonify({
         "version": tags,
         "scope": scope,
         "cloud_provider": cloud_provider,
         "region": region,
+        "api_port": api_port,
+        "agent_enabled": query_agent is not None,
+        "agent_init_error": _agent_init_error,
     })
 
 
@@ -1033,9 +1055,10 @@ def query_stream():
             """Run agent in background thread."""
             try:
                 if not USE_AGENT_QUERY or query_agent is None:
-                    event_queue.put(("error", {
-                        "message": "Agent-based query processing is disabled"
-                    }))
+                    msg = "Agent-based query processing is disabled"
+                    if _agent_init_error:
+                        msg += f": {_agent_init_error}"
+                    event_queue.put(("error", {"message": msg}))
                     return
                 
                 result = query_agent.process_query(
@@ -1167,7 +1190,10 @@ if __name__ == "__main__":
     init_thread.start()
 
     port = get_optional_int_env("PORT", 5000)
-    app.logger.info(f"[STARTUP] Starting Flask on 0.0.0.0:{port} (init running in background)")
+    app.logger.info(
+        f"[STARTUP] API listening on 0.0.0.0:{port}. "
+        f"Frontend proxy: set VITE_API_PORT={port} (and --port <frontend_port>) so traffic browser → frontend → this API."
+    )
     try:
         app.run(host="0.0.0.0", port=port)
     except KeyboardInterrupt:

@@ -6,6 +6,7 @@ Works in both ECS and EKS containers (uses IAM role or AWS credentials).
 Applicable environment: [aws {ecs | eks}]
 """
 from backend.env_utils.cloud_shared.interfaces.llm_client import LLMClient
+from backend.env_utils.cloud_shared.model_config import get_bedrock_inference_profile_id, require_bedrock_model_id
 from backend.utils.env_helpers import get_required_env
 import boto3
 import os
@@ -30,8 +31,13 @@ class AWSBedrockClient(LLMClient):
             session = boto3.Session()
         
         self.client = session.client("bedrock-runtime", region_name=region)
-        self.inference_profile_id = os.environ.get("AWS_BEDROCK_INFERENCE_PROFILE_ID", "").strip()
-        self.model_id = os.environ.get("AWS_BEDROCK_MODEL_ID", "").strip()
+        self.inference_profile_id = get_bedrock_inference_profile_id()
+        # When using inference profile, model_id not required; otherwise require AWS_BEDROCK_MODEL_ID from .env
+        self.model_id = (
+            (os.environ.get("AWS_BEDROCK_MODEL_ID") or "").strip()
+            if self.inference_profile_id
+            else require_bedrock_model_id()
+        )
     
     def complete(
         self,
