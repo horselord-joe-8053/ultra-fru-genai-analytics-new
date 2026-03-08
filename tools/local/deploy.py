@@ -29,7 +29,13 @@ if _project_root not in sys.path:
 
 from tools.cloud_shared.env import load_dotenv
 from tools.cloud_shared.logging import logger
-from tools.local.scope_shared.local_deploy_config import get_ports_for_scope
+from tools.cloud_shared.docker.build_context_hash import (
+    LOCAL_DEFAULT_REGION,
+    compute_build_context_hash,
+    store_build_hash,
+)
+from tools.cloud_shared.docker.build_skip_decision import decide_build_skip
+from tools.local.scope_shared.local_deploy_config import get_memo_dir, get_ports_for_scope
 
 load_dotenv()
 
@@ -37,6 +43,8 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..
 COMPOSE_LOCAL = "tools/local/docker/docker-compose.local.yml"
 COMPOSE_NONKUBE = "tools/local/docker/docker-compose.nonkube.yml"
 COMPOSE_PROJECT = "fru_local"
+MEMO_DIR = get_memo_dir()
+BUILD_METADATA_PREFIX = f"build-metadata/{LOCAL_DEFAULT_REGION}"
 
 
 def _run(cmd: list[str], cwd: str | None = None, env: dict | None = None) -> int:
@@ -76,13 +84,13 @@ def _wait_for_postgres(timeout_sec: int = 60) -> bool:
     return False
 
 
-def _build_images(skip_spark: bool, force_rebuild: bool = False) -> int:
+def _build_images(skip_spark: bool, no_cache: bool = False) -> int:
     """Build fru-api:local and fru-spark:local."""
     build_args = ["docker", "build", "-q", "-f", "core_app/Dockerfile", "-t", "fru-api:local"]
-    if force_rebuild:
+    if no_cache:
         build_args.insert(2, "--no-cache")
     build_args.extend(["core_app"])
-    logger.step("Building API image (fru-api:local)" + (" (--no-cache)" if force_rebuild else "") + "...")
+    logger.step("Building API image (fru-api:local)" + (" (--no-cache)" if no_cache else "") + "...")
     r = subprocess.run(build_args, cwd=PROJECT_ROOT)
     if r.returncode != 0:
         logger.error("API image build failed")
@@ -96,9 +104,9 @@ def _build_images(skip_spark: bool, force_rebuild: bool = False) -> int:
             "-t", "fru-spark:local",
             "core_app",
         ]
-        if force_rebuild:
+        if no_cache:
             spark_args.insert(2, "--no-cache")
-        logger.step("Building Spark image (fru-spark:local)" + (" (--no-cache)" if force_rebuild else "") + "...")
+        logger.step("Building Spark image (fru-spark:local)" + (" (--no-cache)" if no_cache else "") + "...")
         r = subprocess.run(spark_args, cwd=PROJECT_ROOT)
         if r.returncode != 0:
             logger.error("Spark image build failed")
@@ -138,14 +146,17 @@ def main() -> int:
     ap.add_argument("--skip-spark", action="store_true", help="Skip Spark build/bootstrap")
     ap.add_argument("--force-refresh-data", action="store_true",
                     help="Force reload DB (schema, raw, embeddings) and re-run kube bootstrap; default is idempotent (skip if already loaded)")
-    ap.add_argument("--force-rebuild", action="store_true",
-                    help="Force rebuild Docker images (--no-cache); default uses cache")
+    ap.add_argument("--force-build", action="store_true",
+                    help="Bypass content-hash skip; always build images")
+    ap.add_argument("--no-cache", action="store_true",
+                    help="Build images with Docker --no-cache (cache-free build)")
     args = ap.parse_args()
 
     logger.step(
         f"Local deploy: scope={args.scope}"
         + (" (force-refresh-data)" if args.force_refresh_data else " (idempotent)")
-        + (" (force-rebuild)" if args.force_rebuild else "")
+        + (" (force-build)" if args.force_build else "")
+        + (" (no-cache)" if args.no_cache else "")
     )
 
     # 1. Start PostgreSQL
@@ -172,9 +183,32 @@ def main() -> int:
         logger.error("DB setup failed")
         return 1
 
-    # 3. Build images
-    if _build_images(args.skip_spark, force_rebuild=args.force_rebuild) != 0:
-        return 1
+    # 3. Build images (content-hash skip when hashes match stored in memo/)
+    app_key = f"{BUILD_METADATA_PREFIX}/app-build-hash.json"
+    spark_key = f"{BUILD_METADATA_PREFIX}/spark-build-hash.json"
+    skip_result = decide_build_skip(
+        force_build=args.force_build,
+        storage_bucket=MEMO_DIR,
+        app_key=app_key,
+        spark_key=spark_key,
+        provider="local",
+        skip_spark=args.skip_spark,
+    )
+    if skip_result.skip:
+        logger.step(f"Will skip building images because {skip_result.skip_reason}")
+        logger.info(f"App hash {skip_result.app_hash[:8]}... matches. Use --force-build to rebuild.")
+    else:
+        if args.force_build:
+            logger.step("Will start building images because --force-build was set.")
+        else:
+            logger.step("Will start building images because content hash does not match stored or first deploy.")
+        if args.no_cache:
+            logger.info("Building with --no-cache (cache-free).")
+        if _build_images(args.skip_spark, no_cache=args.no_cache) != 0:
+            return 1
+        store_build_hash(MEMO_DIR, app_key, "local", skip_result.app_hash, "latest")
+        if not args.skip_spark and skip_result.spark_hash:
+            store_build_hash(MEMO_DIR, spark_key, "local", skip_result.spark_hash, "latest")
 
     scopes = ["nonkube", "kube"] if args.scope == "all" else [args.scope]
 
