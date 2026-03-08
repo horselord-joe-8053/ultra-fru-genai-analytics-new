@@ -16,10 +16,12 @@ Usage (from project root, with venv):
   .venv/bin/python orchestrator.py deploy --provider gcp --scope all --env dev --cloud-region us-central1
   .venv/bin/python orchestrator.py verify --provider gcp --scope all --env dev
 
-  # Local (PostgreSQL + Spark via Docker; no --scope/--env/--cloud-region)
-  .venv/bin/python orchestrator.py deploy --provider local   # deploy + start API/frontend + verify (default)
-  .venv/bin/python orchestrator.py deploy --provider local --no-start-local   # deploy only
-  .venv/bin/python orchestrator.py deploy --provider local --shutdown-local   # terminate local API and frontend only
+  # Local (Docker Desktop k8s + Docker Compose; mirrors cloud kube/nonkube)
+  .venv/bin/python orchestrator.py deploy --provider local --scope all   # deploy kube + nonkube + start + verify
+  .venv/bin/python orchestrator.py deploy --provider local --scope kube   # kube only (Docker Desktop Kubernetes)
+  .venv/bin/python orchestrator.py deploy --provider local --scope nonkube   # nonkube only (API container)
+  .venv/bin/python orchestrator.py deploy --provider local --scope all --no-start-local   # deploy only
+  .venv/bin/python orchestrator.py deploy --provider local --shutdown-local   # terminate API/frontend processes only
   .venv/bin/python orchestrator.py teardown --provider local
   .venv/bin/python orchestrator.py doctor --provider local
   .venv/bin/python orchestrator.py verify --provider local
@@ -233,16 +235,17 @@ def handle_local(args):
             run_command(["python", f"{base_path}/shutdown_local.py"])
 
         script = f"{base_path}/deploy.py"
+        scope = getattr(args, "scope", None) or "all"
         do_start = not getattr(args, "no_start_local", False)
 
         # Wrap deploy + start + verify in one Heartbeat so it exits when the flow completes.
         # Local deploy (Spark) can take 10+ min; use timeout=-1 to avoid heartbeat timeout.
         # AWS/GCP use deploy-only Heartbeat; local differs because start+verify run in-process.
         with logger.Heartbeat("Local deploy", timeout=-1):
-            run_command(["python", script], force_no_timeout=True)
+            run_command(["python", script, "--scope", scope], force_no_timeout=True)
             if do_start:
-                logger.step("Starting local API and frontend")
-                run_command(["python", f"{base_path}/start_local.py"])
+                logger.step("Starting local frontend (API in container/k8s)")
+                run_command(["python", f"{base_path}/start_local.py", "--scope", scope])
                 logger.step("Verifying local deployment")
                 run_command(["python", f"{base_path}/scope_shared/verify/verify_all_deploy.py"])
 
@@ -254,10 +257,12 @@ def handle_local(args):
 
     elif args.command == "teardown":
         script = f"{base_path}/teardown.py"
-        logger.step("Shutting down local API and frontend")
-        run_command(["python", f"{base_path}/shutdown_local.py"])
+        scope = getattr(args, "scope", None) or "all"
+        if scope in ("nonkube", "all"):
+            logger.step("Shutting down local API and frontend")
+            run_command(["python", f"{base_path}/shutdown_local.py"])
         with logger.Heartbeat("Local teardown"):
-            run_command(["python", script])
+            run_command(["python", script, "--scope", scope])
         logger.step("Verifying teardown...")
         run_command(["python", f"{base_path}/scope_shared/verify/verify_all_teardown.py"])
 
@@ -285,7 +290,7 @@ def main():
     )
     
     # Passthrough arguments (common across providers)
-    parser.add_argument("--scope", choices=["kube", "nonkube", "all"], help="Scope of operation (deployment targets)")
+    parser.add_argument("--scope", choices=["kube", "nonkube", "all"], help="Scope of operation (deployment targets). For local: default all.")
     parser.add_argument("--env", default=os.getenv("FRU_ENV", "dev"), help="Environment (dev, prod, etc.)")
     parser.add_argument(
         "--cloud-region",

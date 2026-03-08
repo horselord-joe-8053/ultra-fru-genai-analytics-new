@@ -78,6 +78,14 @@ spec:
               name: app-credentials
               key: GOOGLE_AI_API_KEY
               optional: true
+{% else %}
+        {# local: OPENAI + optional CLAUDE for agent #}
+        - name: CLAUDE_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: app-credentials
+              key: CLAUDE_API_KEY
+              optional: true
 {% endif %}
         - name: LOG_LEVEL
           value: "INFO"
@@ -119,6 +127,12 @@ spec:
           value: "{{ CLAUDE_MODEL }}"
         - name: GOOGLE_MODEL
           value: "{{ GOOGLE_MODEL }}"
+{% else %}
+        {# local: use CLAUDE_API_KEY if set, else OPENAI #}
+        - name: GCP_LLM_PROVIDER
+          value: "{{ GCP_LLM_PROVIDER | default('claude') }}"
+        - name: LLM_PROVIDER
+          value: "{{ GCP_LLM_PROVIDER | default('claude') }}"
 {% endif %}
         - name: ENABLE_ANALYTICS_SCHEDULER
           value: "{{ ENABLE_ANALYTICS_SCHEDULER }}"

@@ -15,6 +15,11 @@ import os
 import sys
 import time
 
+# Allow running as script without PYTHONPATH
+_verify_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+if _verify_root not in sys.path:
+    sys.path.insert(0, _verify_root)
+
 # Force immediate output so orchestrator subprocess doesn't appear stuck
 print("verify_all_deploy: starting...", flush=True)
 
