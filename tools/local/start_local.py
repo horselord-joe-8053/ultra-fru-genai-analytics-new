@@ -7,6 +7,7 @@ Usage:
 
 Called by: orchestrator.py deploy --provider local --start-local
 """
+import argparse
 import os
 import socket
 import subprocess
@@ -35,6 +36,13 @@ def _port_free(port: int) -> bool:
             return True
         except OSError:
             return False
+
+
+def _api_port_for_scope(scope: str) -> int:
+    """API port: nonkube=5001 (container), kube=30080 (NodePort)."""
+    if scope == "kube":
+        return 30080
+    return 5001
 
 
 def _find_api_port() -> int:
@@ -69,31 +77,40 @@ def _wait_for_api(base_url: str, timeout_sec: int = 60) -> bool:
 
 
 def main() -> int:
-    logger.step("Starting local API and frontend")
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--scope", choices=["kube", "nonkube", "all"], default="all")
+    ap.add_argument("--skip-api", action="store_true", help="API in container/k8s; start frontend only")
+    ap.add_argument("--api-port", type=int, help="API port for frontend proxy (default: 5001 nonkube, 30080 kube)")
+    args = ap.parse_args()
+
+    skip_api = args.skip_api or args.scope in ("kube", "nonkube", "all")
+    api_port = args.api_port or _api_port_for_scope(args.scope)
+
+    logger.step("Starting local frontend" + ("" if skip_api else " and API"))
     os.makedirs(MEMO_DIR, exist_ok=True)
 
-    api_port = _find_api_port()
     base_url = os.environ.get("LOCAL_API_URL") or f"http://localhost:{api_port}"
 
     env = os.environ.copy()
-    env["PORT"] = str(api_port)
     env["PYTHONPATH"] = os.path.join(PROJECT_ROOT, "core_app")
-    # Frontend Vite proxy must target same port
     env["LOCAL_API_PORT"] = str(api_port)
     env["VITE_API_PORT"] = str(api_port)
 
-    # Start API (Flask)
-    api_proc = subprocess.Popen(
-        [sys.executable, "-m", "backend.api.app"],
-        cwd=PROJECT_ROOT,
-        env=env,
-        stdout=open(os.path.join(MEMO_DIR, ".fru_local_api.log"), "w"),
-        stderr=subprocess.STDOUT,
-        start_new_session=True,
-    )
-    logger.info(f"API started (PID {api_proc.pid}, port {api_port})")
+    pids_to_write = []
+    if not skip_api:
+        env["PORT"] = str(api_port)
+        api_proc = subprocess.Popen(
+            [sys.executable, "-m", "backend.api.app"],
+            cwd=PROJECT_ROOT,
+            env=env,
+            stdout=open(os.path.join(MEMO_DIR, ".fru_local_api.log"), "w"),
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+        pids_to_write.append(api_proc.pid)
+        logger.info(f"API started (PID {api_proc.pid}, port {api_port})")
 
-    # Start frontend (Vite) - inherits LOCAL_API_PORT/VITE_API_PORT for proxy
+    # Start frontend (Vite) - inherits VITE_API_PORT for proxy
     frontend_proc = subprocess.Popen(
         ["npm", "run", "dev"],
         cwd=os.path.join(PROJECT_ROOT, "core_app", "frontend"),
@@ -103,10 +120,11 @@ def main() -> int:
         start_new_session=True,
     )
     logger.info(f"Frontend started (PID {frontend_proc.pid}, port {FRONTEND_PORT})")
+    pids_to_write.append(frontend_proc.pid)
 
-    pids_to_write = [api_proc.pid, frontend_proc.pid]
     scheduler_proc = None
-    if os.environ.get("ENABLE_ANALYTICS_SCHEDULER", "").lower() in ("true", "1", "yes"):
+    # Scheduler only for nonkube (kube has CronJob)
+    if args.scope in ("nonkube", "all") and os.environ.get("ENABLE_ANALYTICS_SCHEDULER", "").lower() in ("true", "1", "yes"):
         scheduler_proc = subprocess.Popen(
             [sys.executable, os.path.join(PROJECT_ROOT, "tools", "local", "scheduler_local.py")],
             cwd=PROJECT_ROOT,

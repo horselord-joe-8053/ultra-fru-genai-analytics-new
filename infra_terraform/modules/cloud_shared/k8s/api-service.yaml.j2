@@ -1,4 +1,4 @@
-# LoadBalancer Service. Rendered for AWS (NLB/ELB) or GCP (GKE) via kube_apply.
+# LoadBalancer Service. Rendered for AWS (NLB/ELB), GCP (GKE), or local (Docker Desktop) via kube_apply.
 apiVersion: v1
 kind: Service
 metadata:
@@ -19,4 +19,7 @@ spec:
     - protocol: TCP
       port: 80
       targetPort: 5001
-  type: LoadBalancer
+{% if cloud_provider == "local" %}
+      nodePort: 30080
+{% endif %}
+  type: {{ "NodePort" if cloud_provider == "local" else "LoadBalancer" }}

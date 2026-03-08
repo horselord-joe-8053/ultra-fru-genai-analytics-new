@@ -1,0 +1,33 @@
+# Local nonkube: API container (mirrors Cloud Run). Uses postgres from docker-compose.local.yml.
+# Prerequisite: docker compose -f docker-compose.local.yml -p fru_local up -d
+# Usage: docker compose -f tools/local/docker/docker-compose.nonkube.yml -p fru_local up -d
+services:
+  api:
+    image: fru-api:local
+    container_name: fru-api-nonkube
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: ${PGPASSWORD}
+      PGDATABASE: ${PGDATABASE:-fru_db}
+      PORT: "5001"
+      CLOUD_PROVIDER: local
+      DEPLOY_SCOPE: nonkube
+      DELTA_TABLE_PATH: file:///tmp/delta/fru_sales
+      ENABLE_ANALYTICS_SCHEDULER: ${ENABLE_ANALYTICS_SCHEDULER:-true}
+      ANALYTICS_SCHEDULER_INTERVAL_SECONDS: ${ANALYTICS_SCHEDULER_INTERVAL_SECONDS:-180}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      CLAUDE_API_KEY: ${CLAUDE_API_KEY:-}
+      LOG_LEVEL: INFO
+      ALLOWED_ORIGINS: "*"
+    ports:
+      - "5001:5001"
+    volumes:
+      - fru_delta:/tmp/delta
+
+volumes:
+  fru_delta: {}

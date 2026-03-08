@@ -427,6 +427,23 @@ def main():
             post_destroy_durable_orphans(args.env, region, stats=stats)
         except Exception as e:
             logger.warning(f"Post-destroy durable orphans: {e}")
+        # Remove local Docker cache images used by this provider (same names as build_and_push leaves)
+        try:
+            from tools.aws.scope_shared.core import resource_names
+            app_repo = resource_names.ecr_repo_app(args.env, region)
+            spark_repo = resource_names.ecr_repo_spark(args.env, region)
+            app_tag = os.getenv("APP_IMAGE_TAG", "latest")
+            spark_tag = os.getenv("SPARK_IMAGE_TAG", "latest")
+            refs = [f"{app_repo}:latest", f"{spark_repo}:latest"]
+            if app_tag != "latest":
+                refs.append(f"{app_repo}:{app_tag}")
+            if spark_tag != "latest":
+                refs.append(f"{spark_repo}:{spark_tag}")
+            for ref in refs:
+                subprocess.run(["docker", "rmi", ref], capture_output=True)
+            logger.info("Removed local Docker cache images for AWS: %s", ", ".join(refs))
+        except Exception as e:
+            logger.warning("Local Docker image cleanup (AWS): %s", e)
 
     stats.print_summary()
     logger.operation_end("Teardown", args.scope, args.env, region, int(time.time() - teardown_start), ok=True)

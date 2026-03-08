@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
 """
-Local deploy: PostgreSQL (Docker) + DB setup + Spark job (Docker).
+Local deploy: PostgreSQL + DB setup + kube/nonkube scopes (mirrors cloud deploy flow).
 
 Usage:
-  python orchestrator.py deploy --provider local
-  python tools/local/deploy.py [--skip-spark]
+  python orchestrator.py deploy --provider local --scope kube
+  python tools/local/deploy.py --scope kube
+  python tools/local/deploy.py --scope nonkube
+  python tools/local/deploy.py --scope all [--skip-spark]
 
-Requires: .env with PGHOST=localhost, PGPASSWORD, PGDATABASE, OPENAI_API_KEY, etc.
-After deploy: run API (PORT=5001) and frontend (npm run dev) manually.
+Scopes:
+  kube:    Docker Desktop Kubernetes (API + CronJob in k8s)
+  nonkube: Docker Compose API + scheduler_local (Spark via docker run)
+  all:     nonkube first, then kube (like AWS/GCP)
+
+Requires: .env, Docker Desktop with Kubernetes enabled for scope=kube.
 """
 import argparse
 import os
@@ -15,13 +21,20 @@ import subprocess
 import sys
 import time
 
+# Allow running as script without PYTHONPATH (e.g. python tools/local/deploy.py)
+_here = os.path.abspath(os.path.dirname(__file__))
+_project_root = os.path.abspath(os.path.join(_here, "..", ".."))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
+
 from tools.cloud_shared.env import load_dotenv
 from tools.cloud_shared.logging import logger
 
 load_dotenv()
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-COMPOSE_FILE = "tools/local/docker/docker-compose.local.yml"
+COMPOSE_LOCAL = "tools/local/docker/docker-compose.local.yml"
+COMPOSE_NONKUBE = "tools/local/docker/docker-compose.nonkube.yml"
 COMPOSE_PROJECT = "fru_local"
 
 
@@ -32,17 +45,15 @@ def _run(cmd: list[str], cwd: str | None = None, env: dict | None = None) -> int
     return r.returncode
 
 
-def _docker_compose(*args: str) -> int:
+def _docker_compose(*args: str, files: tuple[str, ...] | None = None) -> int:
+    f = files or (COMPOSE_LOCAL,)
     return _run(
-        ["docker", "compose", "-f", COMPOSE_FILE, "-p", COMPOSE_PROJECT] + list(args),
+        ["docker", "compose"] + [x for ff in f for x in ("-f", ff)] + ["-p", COMPOSE_PROJECT] + list(args),
         cwd=PROJECT_ROOT,
     )
 
 
 def _wait_for_postgres(timeout_sec: int = 60) -> bool:
-    host = os.environ.get("PGHOST", "localhost")
-    port = os.environ.get("PGPORT", "5432")
-    db = os.environ.get("PGDATABASE", "fru_db")
     pw = os.environ.get("PGPASSWORD", "")
     if not pw:
         logger.error("PGPASSWORD required")
@@ -52,7 +63,7 @@ def _wait_for_postgres(timeout_sec: int = 60) -> bool:
         r = subprocess.run(
             [
                 "docker", "exec", "fru-postgres",
-                "pg_isready", "-U", "postgres", "-d", db,
+                "pg_isready", "-U", "postgres", "-d", os.environ.get("PGDATABASE", "fru_db"),
             ],
             capture_output=True,
         )
@@ -64,42 +75,19 @@ def _wait_for_postgres(timeout_sec: int = 60) -> bool:
     return False
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--skip-spark", action="store_true", help="Skip Spark build and job (e.g. when disk full)")
-    args = ap.parse_args()
-
-    logger.step("Local deploy: PostgreSQL + DB setup + Spark")
-
-    # 1. Start PostgreSQL
-    logger.info("Starting PostgreSQL (Docker)...")
-    if _docker_compose("up", "-d") != 0:
-        logger.error("Failed to start PostgreSQL")
+def _build_images(skip_spark: bool) -> int:
+    """Build fru-api:local and fru-spark:local."""
+    logger.step("Building API image (fru-api:local)...")
+    r = subprocess.run(
+        ["docker", "build", "-q", "-f", "core_app/Dockerfile", "-t", "fru-api:local", "core_app"],
+        cwd=PROJECT_ROOT,
+    )
+    if r.returncode != 0:
+        logger.error("API image build failed")
         return 1
 
-    if not _wait_for_postgres():
-        return 1
-
-    # 2. DB setup (schema + load_raw + load_embeddings)
-    logger.step("Running DB setup (schema, fru_sales_raw, embeddings)...")
-    os.environ["PGHOST"] = "localhost"
-    csv_path = os.path.join(PROJECT_ROOT, "core_app", "data", "raw", "fridge_sales_with_rating.csv")
-    if not os.path.exists(csv_path):
-        logger.error(f"CSV not found: {csv_path}")
-        return 1
-
-    r = _run([
-        sys.executable, "tools/gcp/scope_shared/deploy/setup_database.py",
-        "--env-only", "--force-refresh-data",
-    ])
-    if r != 0:
-        logger.error("DB setup failed")
-        return 1
-
-    # 3. Build Spark image and run job (optional; skip if --skip-spark or disk full)
-    if not args.skip_spark:
-        logger.step("Building Spark image...")
-        # --platform linux/amd64: avoid "exec format error" on ARM Mac (apache/spark entrypoint is amd64)
+    if not skip_spark:
+        logger.step("Building Spark image (fru-spark:local)...")
         r = subprocess.run(
             [
                 "docker", "build", "-q",
@@ -113,41 +101,89 @@ def main() -> int:
         if r.returncode != 0:
             logger.error("Spark image build failed")
             return 1
-        logger.step("Running Spark analytics job...")
-        pw = os.environ.get("PGPASSWORD", "")
-        if not pw:
-            logger.error("PGPASSWORD required for Spark job")
-            return 1
-        # --user root: Docker volume /tmp/delta is root-owned; Spark (USER 1001) cannot write. Run as root.
-        spark_cmd = [
-            "docker", "run", "--rm",
-            "--user", "root",
+    return 0
+
+
+def _run_bootstrap_spark() -> int:
+    """One-off Spark bootstrap (for nonkube; kube uses Job)."""
+    pw = os.environ.get("PGPASSWORD", "")
+    if not pw:
+        logger.error("PGPASSWORD required")
+        return 1
+    r = subprocess.run(
+        [
+            "docker", "run", "--rm", "--user", "root",
             "--network", f"{COMPOSE_PROJECT}_default",
-            "-e", "PGHOST=postgres",
-            "-e", "PGPORT=5432",
-            "-e", "PGUSER=postgres",
-            "-e", f"PGPASSWORD={pw}",
-            "-e", f"PGDATABASE={os.environ.get('PGDATABASE', 'fru_db')}",
-            "-e", "DELTA_TABLE_PATH=file:///tmp/delta/fru_sales",
-            "-v", "fru_delta:/tmp/delta",
+            "-e", "PGHOST=postgres", "-e", "PGPORT=5432", "-e", "PGUSER=postgres",
+            "-e", f"PGPASSWORD={pw}", "-e", f"PGDATABASE={os.environ.get('PGDATABASE', 'fru_db')}",
+            "-e", "DELTA_TABLE_PATH=file:///tmp/delta/fru_sales", "-v", "fru_delta:/tmp/delta",
             "fru-spark:local",
             "/opt/spark/bin/spark-submit",
             "--packages", "io.delta:delta-spark_2.12:3.1.0",
             "--conf", "spark.driver.extraJavaOptions=-Duser.home=/tmp",
             "--conf", "spark.executor.extraJavaOptions=-Duser.home=/tmp",
             "/opt/fru/jobs/run_analytics.py",
-        ]
-        r = subprocess.run(spark_cmd, cwd=PROJECT_ROOT)
-        if r.returncode != 0:
-            logger.error("Spark job failed")
-            return 1
-    else:
-        logger.info("Skipping Spark (--skip-spark)")
+        ],
+        cwd=PROJECT_ROOT,
+    )
+    return 0 if r.returncode == 0 else 1
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--scope", choices=["kube", "nonkube", "all"], default="all",
+                    help="Deploy scope (default: all)")
+    ap.add_argument("--skip-spark", action="store_true", help="Skip Spark build/bootstrap")
+    args = ap.parse_args()
+
+    logger.step(f"Local deploy: scope={args.scope}")
+
+    # 1. Start PostgreSQL
+    logger.info("Starting PostgreSQL...")
+    if _docker_compose("up", "-d", files=(COMPOSE_LOCAL,)) != 0:
+        logger.error("Failed to start PostgreSQL")
+        return 1
+
+    if not _wait_for_postgres():
+        return 1
+
+    # 2. DB setup
+    logger.step("Running DB setup (schema, fru_sales_raw, embeddings)...")
+    os.environ["PGHOST"] = "localhost"
+    csv_path = os.path.join(PROJECT_ROOT, "core_app", "data", "raw", "fridge_sales_with_rating.csv")
+    if not os.path.exists(csv_path):
+        logger.error(f"CSV not found: {csv_path}")
+        return 1
+
+    if _run([sys.executable, "tools/gcp/scope_shared/deploy/setup_database.py", "--env-only", "--force-refresh-data"]) != 0:
+        logger.error("DB setup failed")
+        return 1
+
+    # 3. Build images
+    if _build_images(args.skip_spark) != 0:
+        return 1
+
+    scopes = ["nonkube", "kube"] if args.scope == "all" else [args.scope]
+
+    for scope in scopes:
+        if scope == "nonkube":
+            logger.step("Deploying local nonkube (API container + Spark bootstrap)")
+            from tools.local.nonkube.deploy_nonkube import run_deploy_nonkube
+            if run_deploy_nonkube(skip_spark=args.skip_spark) != 0:
+                return 1
+        elif scope == "kube":
+            logger.step("Deploying local kube (Docker Desktop Kubernetes)")
+            if _run([sys.executable, "tools/local/kube/kube_apply.py", "--phase", "bootstrap"]) != 0:
+                return 1
+            if not args.skip_spark:
+                if _run([sys.executable, "tools/local/kube/kube_apply.py", "--phase", "schedule"]) != 0:
+                    return 1
 
     logger.success("Local deploy complete")
-    logger.info("Next (from project root):")
-    logger.info("  API:      PORT=5001 PYTHONPATH=core_app python -m backend.api.app")
-    logger.info("  Frontend: cd core_app/frontend && npm run dev")
+    if "nonkube" in scopes:
+        logger.info("Nonkube API: http://localhost:5001")
+    if "kube" in scopes:
+        logger.info("Kube API: http://localhost:30080 (NodePort) or kubectl get svc -n fru-kube")
     return 0
 
 

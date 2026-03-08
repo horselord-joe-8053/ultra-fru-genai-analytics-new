@@ -161,6 +161,30 @@ def main():
             with stats.timed("Tofu destroy", stack.split("/")[-1]):
                 terra(destroy_cmd + destroy_vars, cwd=stack_path, check=False)
 
+    # When durable is included, remove local Docker cache images used by this provider
+    if args.scope == "all" and (args.incl_dura or args.incl_dura_all):
+        try:
+            import subprocess
+            from tools.gcp.scope_shared.core.resource_names import (
+                artifact_registry_repo_app,
+                artifact_registry_repo_spark,
+            )
+            app_repo = artifact_registry_repo_app(args.env)
+            spark_repo = artifact_registry_repo_spark(args.env)
+            kube_proxy_repo = f"fru-kube-proxy-img-gcp-{args.env}"
+            app_tag = os.getenv("APP_IMAGE_TAG", "latest")
+            refs = [f"{app_repo}:latest", f"{spark_repo}:latest", f"{kube_proxy_repo}:latest"]
+            if app_tag != "latest":
+                refs.extend([f"{app_repo}:{app_tag}", f"{kube_proxy_repo}:{app_tag}"])
+            spark_tag = os.getenv("SPARK_IMAGE_TAG", "latest")
+            if spark_tag != "latest":
+                refs.append(f"{spark_repo}:{spark_tag}")
+            for ref in refs:
+                subprocess.run(["docker", "rmi", ref], capture_output=True)
+            logger.info("Removed local Docker cache images for GCP: %s", ", ".join(refs))
+        except Exception as e:
+            logger.warning("Local Docker image cleanup (GCP): %s", e)
+
     stats.print_summary()
     logger.success("Teardown complete.")
 
