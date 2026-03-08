@@ -7,6 +7,10 @@ After apply: runs analytics bootstrap (one-off run_analytics) so /analytics has 
 import os
 from typing import TYPE_CHECKING
 
+from tools.cloud_shared.analytics_schedule import (
+    get_required_analytics_scheduler_interval_seconds,
+    seconds_to_cron,
+)
 from tools.cloud_shared.logging import logger
 from tools.gcp.scope_shared.core.backend import resolve_state_bucket, gcs_delta_bucket
 from tools.gcp.scope_shared.core.resource_names import (
@@ -37,6 +41,9 @@ def run_deploy_nonkube(
     repo_app = artifact_registry_repo_app(env)
     repo_spark = artifact_registry_repo_spark(env)
 
+    # Fail-fast: require ANALYTICS_SCHEDULER_INTERVAL_SECONDS (single source of truth for Cloud Scheduler)
+    interval_sec = get_required_analytics_scheduler_interval_seconds()
+
     # Fail-fast: require real Artifact Registry images. No placeholder to avoid hiding config errors.
     if not gcp_proj:
         raise ValueError("GCP_PROJECT_ID required for app/spark image resolution")
@@ -59,6 +66,8 @@ def run_deploy_nonkube(
         f"-var=delta_bucket_fallback={delta_bucket}",
         f"-var=llm_provider={llm_provider}",
         f"-var=claude_model={claude_model}",
+        f"-var=spark_schedule_expression={seconds_to_cron(interval_sec)}",
+        f"-var=analytics_scheduler_interval_seconds={interval_sec}",
     ]
     # Always pass app_image_tags so /version works. Use "latest" when empty (skip-build or first deploy).
     plan_vars.append(f"-var=app_image_tags={img_tags or 'latest'}")

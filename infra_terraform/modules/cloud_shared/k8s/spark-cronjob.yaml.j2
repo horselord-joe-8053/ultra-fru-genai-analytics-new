@@ -1,11 +1,11 @@
-# Periodic Spark analytics. Schedule: */5 * * * *
+# Periodic Spark analytics. Schedule from ANALYTICS_SCHEDULER_INTERVAL_SECONDS (.env)
 apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: fru-analytics-periodic-kube
   namespace: fru-kube
 spec:
-  schedule: "*/5 * * * *"
+  schedule: "{{ SCHEDULE_CRON }}"
   jobTemplate:
     spec:
       template:

@@ -15,6 +15,7 @@ import time
 
 import requests
 
+from tools.cloud_shared.analytics_schedule import get_required_analytics_scheduler_interval_seconds
 from tools.cloud_shared.env import load_dotenv
 from tools.cloud_shared.logging import logger
 
@@ -116,7 +117,8 @@ def main() -> int:
         )
         if scheduler_proc:
             pids_to_write.append(scheduler_proc.pid)
-            logger.info(f"Analytics scheduler started (PID {scheduler_proc.pid}, interval={os.environ.get('ANALYTICS_SCHEDULER_INTERVAL_SECONDS', '180')}s)")
+            interval = get_required_analytics_scheduler_interval_seconds()
+            logger.info(f"Analytics scheduler started (PID {scheduler_proc.pid}, interval={interval}s)")
 
     with open(PID_FILE, "w") as f:
         f.write("\n".join(str(p) for p in pids_to_write) + "\n")
