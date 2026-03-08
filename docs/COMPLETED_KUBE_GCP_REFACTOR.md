@@ -76,7 +76,7 @@ User → Cloud CDN (global forwarding rule IP)
   - `db-credentials`: PGPASSWORD from durable `db_password_plain_secret_id`
   - `app-credentials`: OPENAI_API_KEY, CLAUDE_API_KEY, GOOGLE_AI_API_KEY from durable outputs
 - **Images:** From nondurable `artifact_registry_app_url`, `artifact_registry_spark_url` + `:latest`
-- **Delta:** `gs://{bucket}/delta/fru_sales`; bootstrap uses `run_analytics.py`, cronjob uses `periodic.py`
+- **Delta:** `gs://{bucket}/delta/fru_sales`; bootstrap and CronJob both use `run_analytics.py`
 - **Kubeconfig:** Uses `gke_kubeconfig.py` before kubectl
 - **Idempotency:** Skips bootstrap Job if `fru-analytics-bootstrap-kube` already has `status.succeeded >= 1` (unless `--force`)
 

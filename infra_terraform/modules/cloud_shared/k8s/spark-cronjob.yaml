@@ -15,7 +15,7 @@ spec:
           containers:
           - name: spark
             image: ${SPARK_IMAGE}
-            command: ["/opt/spark/bin/spark-submit", "--conf", "spark.driver.extraJavaOptions=-Duser.home=/tmp", "--conf", "spark.executor.extraJavaOptions=-Duser.home=/tmp", "--packages", "io.delta:delta-spark_2.12:3.1.0,org.apache.hadoop:hadoop-aws:3.3.4", "/opt/fru/jobs/periodic.py"]
+            command: ["/opt/spark/bin/spark-submit", "--conf", "spark.driver.extraJavaOptions=-Duser.home=/tmp", "--conf", "spark.executor.extraJavaOptions=-Duser.home=/tmp", "--packages", "io.delta:delta-spark_2.12:3.1.0,org.apache.hadoop:hadoop-aws:3.3.4", "/opt/fru/jobs/run_analytics.py"]
             env:
             - name: SPARK_EXTRA_CONF
               value: "spark.fru.delta_root=${DELTA_ROOT}"

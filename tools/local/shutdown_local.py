@@ -16,14 +16,15 @@ import time
 from tools.cloud_shared.logging import logger
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-PID_FILE = os.path.join(PROJECT_ROOT, ".fru_local.pids")
+MEMO_DIR = os.path.join(PROJECT_ROOT, "tools", "local", "memo")
+PID_FILE = os.path.join(MEMO_DIR, ".fru_local.pids")
 
 
 def main() -> int:
     logger.step("Shutting down local API and frontend")
 
     if not os.path.exists(PID_FILE):
-        logger.info("No .fru_local.pids found; nothing to shut down")
+        logger.info("No PID file found; nothing to shut down")
         return 0
 
     pids = []

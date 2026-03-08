@@ -465,6 +465,10 @@ def get_analytics():
                     result["total_records"] = 0
                 if result.get("total_revenue") is None:
                     result["total_revenue"] = 0.0
+
+                # Analytics run interval from .env (required; no fallback)
+                interval_sec = get_required_int_env("ANALYTICS_SCHEDULER_INTERVAL_SECONDS", "Analytics scheduler interval in seconds")
+                result["analytics_run_interval_minutes"] = max(1, interval_sec // 60)
                 
                 # Limit arrays to query_limit before returning
                 # This ensures API returns only what frontend needs, even if DB has more
@@ -481,9 +485,12 @@ def get_analytics():
         finally:
             return_db_conn(conn)
             
-    except (ValueError, Psycopg2Error) as e:
-        # ValueError: required env (PGHOST, etc.) not set; Psycopg2Error: connection failed
-        app.logger.warning(f"[{request_id}] Analytics unavailable: {e}")
+    except ValueError as e:
+        # ValueError: required env not set (e.g. ANALYTICS_SCHEDULER_INTERVAL_SECONDS)
+        app.logger.warning(f"[{request_id}] Analytics config error: {e}")
+        return jsonify({"error": str(e), "request_id": request_id}), 500
+    except Psycopg2Error as e:
+        app.logger.warning(f"[{request_id}] Analytics DB error: {e}")
         return jsonify({
             "error": "Analytics requires a database. Database not configured or unreachable.",
             "request_id": request_id

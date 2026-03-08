@@ -1,6 +1,6 @@
 """
 Run batch analytics on Delta table and save to PostgreSQL batch_analytics.
-Used by both bootstrap (one-off) and periodic (scheduled) jobs.
+Used by bootstrap (one-off), CronJob/EventBridge (scheduled), and local scheduler.
 Reads raw data from fru_sales_raw (PostgreSQL) via psycopg2; creates/refreshes Delta from it.
 """
 from pyspark.sql import SparkSession

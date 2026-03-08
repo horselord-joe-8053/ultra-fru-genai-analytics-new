@@ -332,7 +332,7 @@ resource "aws_ecs_task_definition" "spark" {
     name        = "spark"
     image       = var.spark_image
     essential   = true
-    command     = ["/opt/spark/bin/spark-submit", "--packages", "io.delta:delta-spark_2.12:3.1.0,org.apache.hadoop:hadoop-aws:3.3.4", "/opt/fru/jobs/periodic.py"]
+    command     = ["/opt/spark/bin/spark-submit", "--packages", "io.delta:delta-spark_2.12:3.1.0,org.apache.hadoop:hadoop-aws:3.3.4", "/opt/fru/jobs/run_analytics.py"]
     environment = local.spark_env
     secrets     = local.spark_secrets
     logConfiguration = {
