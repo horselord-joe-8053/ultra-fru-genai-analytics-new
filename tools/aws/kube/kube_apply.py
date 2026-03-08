@@ -13,6 +13,10 @@ This tool:
 - applies Job/CronJob manifests
 """
 import argparse, base64, json, os, subprocess, time
+from tools.cloud_shared.analytics_schedule import (
+    get_required_analytics_scheduler_interval_seconds,
+    seconds_to_cron,
+)
 from tools.cloud_shared.env import load_dotenv, require
 from tools.cloud_shared.k8s_j2_render import render
 from tools.aws.scope_shared.core.backend import resolve_region
@@ -201,6 +205,7 @@ data:
 
         # Deploy API (always run - idempotent)
         try:
+            interval_sec = get_required_analytics_scheduler_interval_seconds()
             delta_table_path = args.delta_table_path or f"s3a://{delta_bucket}/delta/fru_sales"
             api_subs = {
                 "cloud_provider": "aws",
@@ -221,7 +226,7 @@ data:
                 "AWS_BEDROCK_INFERENCE_PROFILE_ID": args.bedrock_inference_profile_id or os.getenv("AWS_BEDROCK_INFERENCE_PROFILE_ID", ""),
                 "AWS_BEDROCK_MODEL_ID": args.bedrock_model_id or os.getenv("AWS_BEDROCK_MODEL_ID", "anthropic.claude-3-5-haiku-20241022-v1:0"),
                 "ENABLE_ANALYTICS_SCHEDULER": os.getenv("ENABLE_ANALYTICS_SCHEDULER", "true"),
-                "ANALYTICS_SCHEDULER_INTERVAL_SECONDS": os.getenv("ANALYTICS_SCHEDULER_INTERVAL_SECONDS", "180"),
+                "ANALYTICS_SCHEDULER_INTERVAL_SECONDS": str(interval_sec),
             }
             txt = render("api-deployment", api_subs)
             kubectl(["apply","-f","-"], input_text=txt)
@@ -237,12 +242,14 @@ data:
             print("WARN: API manifests not found, skipping API deployment.")
     else:
         # Schedule phase: apply CronJob. Requires aws-credentials secret from bootstrap for S3 access.
+        interval_sec = get_required_analytics_scheduler_interval_seconds()
         delta_table_path = args.delta_table_path or f"s3a://{delta_bucket}/delta/fru_sales"
         subs = {
             "cloud_provider": "aws",
             "SPARK_IMAGE": spark_image,
             "DELTA_ROOT": delta_root,
             "DELTA_TABLE_PATH": delta_table_path,
+            "SCHEDULE_CRON": seconds_to_cron(interval_sec),
             "PGHOST": args.pg_host or "localhost",
             "PGPORT": args.pg_port,
             "PGDATABASE": args.pg_database,

@@ -5,6 +5,7 @@ Called by deploy.py when scope is nonkube or all (nonkube first when scope=all).
 """
 import os
 
+from tools.cloud_shared.analytics_schedule import get_required_analytics_scheduler_interval_seconds
 from tools.cloud_shared.logging import logger
 from tools.aws.scope_shared.core.terra_init import init_stack
 from tools.aws.scope_shared.core.terra_var_handling import get_base_vars
@@ -39,6 +40,9 @@ def run_deploy_nonkube(
     scope_label = scope_for("infra_terraform/live_deploy/aws/nonkube")
     if stats:
         stats.set_scope(scope_label)
+
+    # Fail-fast: require ANALYTICS_SCHEDULER_INTERVAL_SECONDS (single source of truth for EventBridge schedule)
+    get_required_analytics_scheduler_interval_seconds()
 
     def _timed(component: str, identifier: str, fn):
         if stats:

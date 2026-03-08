@@ -8,12 +8,17 @@ Cloud uses CronJob/EventBridge/Cloud Scheduler instead.
 Usage:
   ENABLE_ANALYTICS_SCHEDULER=true python tools/local/scheduler_local.py
 
-Requires: ANALYTICS_SCHEDULER_INTERVAL_SECONDS in .env
+Requires: ANALYTICS_SCHEDULER_INTERVAL_SECONDS in .env (no default; fail-fast if missing)
 """
 import os
 import subprocess
 import sys
 import time
+
+from tools.cloud_shared.analytics_schedule import get_required_analytics_scheduler_interval_seconds
+from tools.cloud_shared.env import load_dotenv
+
+load_dotenv()
 
 # Project root (parent of tools)
 _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -52,9 +57,7 @@ def _run_analytics_job() -> int:
 def main() -> int:
     if os.environ.get("ENABLE_ANALYTICS_SCHEDULER", "").lower() not in ("true", "1", "yes"):
         return 0
-    interval_sec = int(os.environ.get("ANALYTICS_SCHEDULER_INTERVAL_SECONDS", "180"))
-    if interval_sec < 60:
-        interval_sec = 60
+    interval_sec = get_required_analytics_scheduler_interval_seconds()
     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Scheduler started (interval={interval_sec}s)", flush=True)
     run_num = 0
     while True:

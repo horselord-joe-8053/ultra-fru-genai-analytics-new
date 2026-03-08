@@ -14,6 +14,10 @@ import os
 import subprocess
 import sys
 
+from tools.cloud_shared.analytics_schedule import (
+    get_required_analytics_scheduler_interval_seconds,
+    seconds_to_cron,
+)
 from tools.cloud_shared.env import load_dotenv
 from tools.cloud_shared.k8s_j2_render import render
 from tools.gcp.scope_shared.core.backend import resolve_region
@@ -204,6 +208,7 @@ data:
             _kubectl(["delete", "job", JOB_BOOTSTRAP, "--ignore-not-found", "-n", K8S_NAMESPACE])
             _kubectl(["apply", "-f", "-"], input_text=txt)
 
+        interval_sec = get_required_analytics_scheduler_interval_seconds()
         api_subs = {
             "cloud_provider": "gcp",
             "APP_IMAGE": app_image,
@@ -223,18 +228,20 @@ data:
             "CLAUDE_MODEL": args.claude_model,
             "GOOGLE_MODEL": args.google_model,
             "ENABLE_ANALYTICS_SCHEDULER": "true",
-            "ANALYTICS_SCHEDULER_INTERVAL_SECONDS": "180",
+            "ANALYTICS_SCHEDULER_INTERVAL_SECONDS": str(interval_sec),
             "CONTAINER_IMAGE_TAGS": os.getenv("CONTAINER_IMAGE_TAGS", ""),
         }
         _kubectl(["apply", "-f", "-"], input_text=render("api-deployment", api_subs))
         _kubectl(["apply", "-f", "-"], input_text=render("api-service", {"cloud_provider": "gcp"}))
 
     else:
+        interval_sec = get_required_analytics_scheduler_interval_seconds()
         subs = {
             "cloud_provider": "gcp",
             "SPARK_IMAGE": spark_image,
             "DELTA_ROOT": delta_root,
             "DELTA_TABLE_PATH": delta_table_path,
+            "SCHEDULE_CRON": seconds_to_cron(interval_sec),
             "PGHOST": pg_host,
             "PGPORT": args.pg_port,
             "PGDATABASE": args.pg_database,

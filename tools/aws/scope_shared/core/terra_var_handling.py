@@ -1,7 +1,8 @@
-
 import os
-from tools.cloud_shared.env import require
+
 from tools.aws.scope_shared.core import resource_names
+from tools.cloud_shared.analytics_schedule import seconds_to_eventbridge_rate
+from tools.cloud_shared.env import require
 
 # Map .env keys to Terraform variable names.
 # Resource names (delta_bucket, ecs_cluster_name, etc.) are built via resource_names.py
@@ -57,6 +58,18 @@ def get_base_vars(env: str, region: str | None = None):
         val = os.getenv(env_key)
         if val:
             set_tf(tf_key, val)
+
+    # Derive spark_schedule_expression from ANALYTICS_SCHEDULER_INTERVAL_SECONDS when set
+    # (deploy_nonkube requires it before apply; MAP above sets analytics_scheduler_interval_seconds)
+    val = os.getenv("ANALYTICS_SCHEDULER_INTERVAL_SECONDS")
+    if val:
+        try:
+            n = int(val)
+            if n >= 60:
+                set_tf("analytics_scheduler_interval_seconds", n)
+                set_tf("spark_schedule_expression", seconds_to_eventbridge_rate(n))
+        except ValueError:
+            pass
 
     # CRITICAL: Ensure aws_region is explicitly set
     if not os.getenv("TF_VAR_aws_region"):
