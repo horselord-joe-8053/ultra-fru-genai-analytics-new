@@ -37,7 +37,10 @@ def get_ports_for_scope(scope: str) -> LocalScopePorts:
     """
     Return api_port and frontend_port for the given scope.
     scope: "kube" | "nonkube" | "all"
-    For "all", returns nonkube ports (single frontend when starting after deploy all).
+    NOTE: "all" is NOT valid here. Callers that want both kube and nonkube must
+    expand "all" into the explicit list ["nonkube", "kube"] and call this
+    helper separately for each scope. This fail-fast is intentional so that
+    port selection for each scope stays explicit and debuggable.
     """
     import yaml
 
@@ -45,8 +48,10 @@ def get_ports_for_scope(scope: str) -> LocalScopePorts:
     with open(path) as f:
         data = yaml.safe_load(f) or {}
 
-    if scope == "all":
-        scope = "nonkube"
+    if scope not in ("kube", "nonkube"):
+        raise ValueError(
+            f"Scope '{scope}' invalid for get_ports_for_scope; use 'kube' or 'nonkube'"
+        )
     block = data.get(scope)
     if not block:
         raise KeyError(

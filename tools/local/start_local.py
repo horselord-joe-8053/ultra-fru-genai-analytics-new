@@ -38,23 +38,6 @@ def _port_free(port: int) -> bool:
             return False
 
 
-def _find_api_port() -> int:
-    """Use LOCAL_API_PORT if set and free; else try 5001, 5002, ..."""
-    explicit = os.environ.get("LOCAL_API_PORT")
-    if explicit:
-        try:
-            p = int(explicit)
-            if _port_free(p):
-                return p
-            logger.warning(f"Port {p} (LOCAL_API_PORT) in use; trying alternatives")
-        except ValueError:
-            pass
-    for port in range(5001, 5015):
-        if _port_free(port):
-            return port
-    raise RuntimeError("No free port in 5001-5014")
-
-
 def _wait_for_api(base_url: str, timeout_sec: int = 60) -> bool:
     """Poll /health until API responds or timeout."""
     start = time.time()
@@ -76,62 +59,84 @@ def main() -> int:
     ap.add_argument("--api-port", type=int, help="API port for frontend proxy (default: 5001 nonkube, 30080 kube)")
     args = ap.parse_args()
 
-    skip_api = args.skip_api or args.scope in ("kube", "nonkube", "all")
-    ports = get_ports_for_scope(args.scope)
-    api_port = args.api_port or ports["api_port"]
-    frontend_port = ports["frontend_port"]
+    # For local deploys, API is expected to be running in Docker/k8s already.
+    # start_local.py is responsible for starting the frontend(s) and (for nonkube)
+    # the scheduler. We intentionally fail-fast if an unexpected scope is used.
+    if args.scope == "all":
+        scopes = ["nonkube", "kube"]
+    else:
+        scopes = [args.scope]
 
-    logger.step("Starting local frontend" + ("" if skip_api else " and API"))
+    if args.api_port and len(scopes) > 1:
+        logger.warning("--api-port is ignored when scope=all (multiple scopes).")
+
+    logger.step(f"Starting local frontend(s) for scope(s): {', '.join(scopes)}")
     os.makedirs(MEMO_DIR, exist_ok=True)
-
-    base_url = os.environ.get("LOCAL_API_URL") or f"http://localhost:{api_port}"
-
-    env = os.environ.copy()
-    env["PYTHONPATH"] = os.path.join(PROJECT_ROOT, "core_app")
-    env["LOCAL_API_PORT"] = str(api_port)
-    env["VITE_API_PORT"] = str(api_port)
+    base_env = os.environ.copy()
+    base_env["PYTHONPATH"] = os.path.join(PROJECT_ROOT, "core_app")
 
     pids_to_write = []
-    if not skip_api:
-        env["PORT"] = str(api_port)
-        api_proc = subprocess.Popen(
-            [sys.executable, "-m", "backend.api.app"],
-            cwd=PROJECT_ROOT,
+    api_port = None
+    frontend_port = None
+
+    for scope in scopes:
+        # Fail-fast: scope must be one of the explicit values we understand.
+        if scope not in ("kube", "nonkube"):
+            raise ValueError(
+                f"Scope '{scope}' invalid for start_local; use 'kube', 'nonkube', or 'all'"
+            )
+
+        ports = get_ports_for_scope(scope)
+        scope_api_port = ports["api_port"]
+        scope_frontend_port = ports["frontend_port"]
+
+        # Optional per-scope overrides for API port exposed to the frontend.
+        # VITE_* vars are special: they are injected into the browser bundle
+        # (import.meta.env). start_local.py is the single place that sets them.
+        override_key = "VITE_API_PORT_KUBE" if scope == "kube" else "VITE_API_PORT_NONKUBE"
+        override = os.environ.get(override_key)
+
+        env = base_env.copy()
+        env["VITE_API_PORT"] = override or str(scope_api_port)
+
+        logger.info(
+            f"[LOCAL] Scope={scope}: api_port={scope_api_port}, "
+            f"frontend_port={scope_frontend_port}, VITE_API_PORT={env['VITE_API_PORT']}"
+        )
+
+        # Start frontend (Vite) - port from config; proxy target from VITE_API_PORT
+        frontend_proc = subprocess.Popen(
+            ["npm", "run", "dev", "--", "--port", str(scope_frontend_port)],
+            cwd=os.path.join(PROJECT_ROOT, "core_app", "frontend"),
             env=env,
-            stdout=open(os.path.join(MEMO_DIR, ".fru_local_api.log"), "w"),
+            stdout=open(os.path.join(MEMO_DIR, f".fru_local_frontend_{scope}.log"), "w"),
             stderr=subprocess.STDOUT,
             start_new_session=True,
         )
-        pids_to_write.append(api_proc.pid)
-        logger.info(f"API started (PID {api_proc.pid}, port {api_port})")
-
-    # Start frontend (Vite) - port from config; proxy target from VITE_API_PORT
-    frontend_proc = subprocess.Popen(
-        ["npm", "run", "dev", "--", "--port", str(frontend_port)],
-        cwd=os.path.join(PROJECT_ROOT, "core_app", "frontend"),
-        env=env,
-        stdout=open(os.path.join(MEMO_DIR, ".fru_local_frontend.log"), "w"),
-        stderr=subprocess.STDOUT,
-        start_new_session=True,
-    )
-    logger.info(f"Frontend started (PID {frontend_proc.pid}, port {frontend_port})")
-    pids_to_write.append(frontend_proc.pid)
-
-    scheduler_proc = None
-    # Scheduler only for nonkube (kube has CronJob)
-    if args.scope in ("nonkube", "all") and os.environ.get("ENABLE_ANALYTICS_SCHEDULER", "").lower() in ("true", "1", "yes"):
-        scheduler_proc = subprocess.Popen(
-            [sys.executable, os.path.join(PROJECT_ROOT, "tools", "local", "scheduler_local.py")],
-            cwd=PROJECT_ROOT,
-            env=env,
-            stdout=open(os.path.join(MEMO_DIR, ".fru_local_scheduler.log"), "a"),
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
+        logger.info(
+            f"Frontend started (scope={scope}, PID {frontend_proc.pid}, port {scope_frontend_port})"
         )
-        if scheduler_proc:
-            pids_to_write.append(scheduler_proc.pid)
-            interval = get_required_analytics_scheduler_interval_seconds()
-            logger.info(f"Analytics scheduler started (PID {scheduler_proc.pid}, interval={interval}s)")
+        pids_to_write.append(frontend_proc.pid)
+
+        # Scheduler only for nonkube (kube has CronJob)
+        if scope == "nonkube" and os.environ.get("ENABLE_ANALYTICS_SCHEDULER", "").lower() in ("true", "1", "yes"):
+            scheduler_proc = subprocess.Popen(
+                [sys.executable, os.path.join(PROJECT_ROOT, "tools", "local", "scheduler_local.py")],
+                cwd=PROJECT_ROOT,
+                env=env,
+                stdout=open(os.path.join(MEMO_DIR, ".fru_local_scheduler.log"), "a"),
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+            if scheduler_proc:
+                pids_to_write.append(scheduler_proc.pid)
+                interval = get_required_analytics_scheduler_interval_seconds()
+                logger.info(f"Analytics scheduler started (PID {scheduler_proc.pid}, interval={interval}s)")
+
+        # For memo/logging we keep track of the last scope's ports; for scope=all this
+        # will be kube, which is fine for informational logging.
+        api_port = scope_api_port
+        frontend_port = scope_frontend_port
 
     with open(PID_FILE, "w") as f:
         f.write("\n".join(str(p) for p in pids_to_write) + "\n")
@@ -142,13 +147,18 @@ def main() -> int:
     with open(os.path.join(MEMO_DIR, ".fru_local_scope"), "w") as f:
         f.write(args.scope)
 
-    logger.info("Waiting for API to be ready...")
+    # For local orchestrator flows we assume API is already running (container/k8s).
+    # We still probe /health on the chosen api_port so failures show up early.
+    base_url = os.environ.get("LOCAL_API_URL") or f"http://localhost:{api_port}"
+    logger.info(f"Waiting for API to be ready at {base_url}...")
     if not _wait_for_api(base_url):
         logger.error("API did not become ready in time")
         return 1
 
     logger.success("Local API and frontend started")
-    logger.info(f"API: http://localhost:{api_port}  Frontend: http://localhost:{frontend_port} (scope={args.scope})")
+    logger.info(
+        f"API: http://localhost:{api_port}  Frontend: http://localhost:{frontend_port} (scope={args.scope})"
+    )
     logger.info("Shutdown: python orchestrator.py deploy --provider local --shutdown-local (or teardown)")
     return 0
 

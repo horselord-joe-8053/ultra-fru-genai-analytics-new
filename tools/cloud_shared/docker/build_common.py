@@ -38,16 +38,18 @@ def _run_docker_streaming(
     step_num: int,
     total_steps: int,
     is_build: bool,
+    cwd: str | None = None,
 ) -> subprocess.CompletedProcess:
     """Run docker with streaming output, layer progress, heartbeat, timeout."""
     desc = f"{step_name} ({step_num}/{total_steps})"
     logger.step(f"{desc}...")
     timeout = BUILD_STEP_TIMEOUT_SEC if BUILD_STEP_TIMEOUT_SEC > 0 else None
     env = {**os.environ, "PYTHONUNBUFFERED": "1"}
+    run_cwd = cwd or os.getcwd()
 
     proc = subprocess.Popen(
         cmd,
-        cwd=os.getcwd(),
+        cwd=run_cwd,
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -107,10 +109,12 @@ def _run_docker_streaming(
     return subprocess.CompletedProcess(cmd, proc.returncode)
 
 
-def run_docker_with_progress(cmd: list, step_name: str, step_num: int, total_steps: int):
+def run_docker_with_progress(
+    cmd: list, step_name: str, step_num: int, total_steps: int, cwd: str | None = None
+):
     """Run docker command with streaming output, layer progress, heartbeat, timeout."""
     is_build = "build" in cmd
-    proc = _run_docker_streaming(cmd, step_name, step_num, total_steps, is_build)
+    proc = _run_docker_streaming(cmd, step_name, step_num, total_steps, is_build, cwd=cwd)
     if proc.returncode != 0:
         raise subprocess.CalledProcessError(proc.returncode, cmd)
     logger.success(f"{step_name} done")
