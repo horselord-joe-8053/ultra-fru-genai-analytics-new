@@ -1,6 +1,15 @@
 #!/usr/bin/env python3
 """
-Shutdown local API and frontend. Reads PIDs from .fru_local.pids (written by start_local).
+Shutdown local API and frontend.
+
+Default: kill **all** relevant local processes (Vite dev servers and host
+backend.api.app instances) associated with this repo, plus any PIDs recorded in
+.fru_local.pids. This is defensive so that port assignments from
+config/local/local_deploy_config.yaml remain stable and we don't keep orphaned
+dev servers around.
+
+Use --kill-last-only to limit shutdown to the last stack started via
+start_local.py (PIDs from .fru_local.pids), matching the original behavior.
 
 Usage:
   python tools/local/shutdown_local.py
@@ -12,6 +21,7 @@ import os
 import signal
 import sys
 import time
+import subprocess
 
 from tools.cloud_shared.logging import logger
 
@@ -20,43 +30,82 @@ MEMO_DIR = os.path.join(PROJECT_ROOT, "tools", "local", "memo")
 PID_FILE = os.path.join(MEMO_DIR, ".fru_local.pids")
 
 
-def main() -> int:
-    logger.step("Shutting down local API and frontend")
-
+def _collect_pids_from_file() -> list[int]:
+    """Read last-started PIDs from .fru_local.pids (may be empty)."""
     if not os.path.exists(PID_FILE):
-        logger.info("No PID file found; nothing to shut down")
-        return 0
-
-    pids = []
+        return []
+    pids: list[int] = []
     with open(PID_FILE) as f:
         for line in f:
             line = line.strip()
             if line and line.isdigit():
                 pids.append(int(line))
-
     try:
         os.remove(PID_FILE)
     except OSError:
         pass
+    return pids
+
+def _collect_extra_pids() -> list[int]:
+    """
+    Find additional Vite/backend dev processes for this repo.
+
+    We match:
+      - node .../core_app/frontend/node_modules/.bin/vite
+      - python -m backend.api.app
+    with PROJECT_ROOT in the ps line, so we don't touch unrelated projects.
+    """
+    try:
+        out = subprocess.check_output(["ps", "aux"], text=True)
+    except Exception:
+        return []
+    extra: list[int] = []
+    for line in out.splitlines()[1:]:
+        if PROJECT_ROOT not in line:
+            continue
+        if "core_app/frontend/node_modules/.bin/vite" not in line and " -m backend.api.app" not in line:
+            continue
+        parts = line.split()
+        if len(parts) > 1 and parts[1].isdigit():
+            extra.append(int(parts[1]))
+    return extra
+
+
+def main() -> int:
+    import argparse
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument(
+        "--kill-last-only",
+        action="store_true",
+        help="Only kill processes recorded in .fru_local.pids (legacy behavior)",
+    )
+    args = ap.parse_args()
+
+    logger.step("Shutting down local API and frontend")
+
+    pids = _collect_pids_from_file()
+    if not args.kill_last_only:
+        extra = _collect_extra_pids()
+        # Merge and dedupe
+        pids = sorted(set(pids + extra))
 
     def _term(pid: int) -> bool:
         try:
-            if hasattr(os, "killpg"):
-                os.killpg(pid, signal.SIGTERM)
-            else:
-                os.kill(pid, signal.SIGTERM)
+            os.kill(pid, signal.SIGTERM)
             return True
         except (ProcessLookupError, OSError):
             return False
 
     def _kill(pid: int) -> None:
         try:
-            if hasattr(os, "killpg"):
-                os.killpg(pid, signal.SIGKILL)
-            else:
-                os.kill(pid, signal.SIGKILL)
+            os.kill(pid, signal.SIGKILL)
         except (ProcessLookupError, OSError):
             pass
+
+    if not pids:
+        logger.info("No matching local frontend/backend processes found; nothing to shut down")
+        return 0
 
     killed = 0
     for pid in pids:

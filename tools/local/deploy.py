@@ -29,6 +29,7 @@ if _project_root not in sys.path:
 
 from tools.cloud_shared.env import load_dotenv
 from tools.cloud_shared.logging import logger
+from tools.cloud_shared.docker.build_common import run_docker_with_progress
 from tools.cloud_shared.docker.build_context_hash import (
     LOCAL_DEFAULT_REGION,
     compute_build_context_hash,
@@ -85,30 +86,35 @@ def _wait_for_postgres(timeout_sec: int = 60) -> bool:
 
 
 def _build_images(skip_spark: bool, no_cache: bool = False) -> int:
-    """Build fru-api:local and fru-spark:local."""
-    build_args = ["docker", "build", "-q", "-f", "core_app/Dockerfile", "-t", "fru-api:local"]
+    """Build fru-api:local and fru-spark:local. Uses --progress=plain for streaming log output."""
+    total = 2 if not skip_spark else 1
+    app_cmd = ["docker", "build", "--progress=plain", "-f", "core_app/Dockerfile", "-t", "fru-api:local"]
     if no_cache:
-        build_args.insert(2, "--no-cache")
-    build_args.extend(["core_app"])
-    logger.step("Building API image (fru-api:local)" + (" (--no-cache)" if no_cache else "") + "...")
-    r = subprocess.run(build_args, cwd=PROJECT_ROOT)
-    if r.returncode != 0:
+        app_cmd.insert(2, "--no-cache")
+    app_cmd.append("core_app")
+    try:
+        run_docker_with_progress(
+            app_cmd, "Building API image (fru-api:local)", 1, total, cwd=PROJECT_ROOT
+        )
+    except subprocess.CalledProcessError:
         logger.error("API image build failed")
         return 1
 
     if not skip_spark:
-        spark_args = [
-            "docker", "build", "-q",
+        spark_cmd = [
+            "docker", "build", "--progress=plain",
             "--platform", "linux/amd64",
             "-f", "core_app/analytics/docker/Dockerfile",
             "-t", "fru-spark:local",
             "core_app",
         ]
         if no_cache:
-            spark_args.insert(2, "--no-cache")
-        logger.step("Building Spark image (fru-spark:local)" + (" (--no-cache)" if no_cache else "") + "...")
-        r = subprocess.run(spark_args, cwd=PROJECT_ROOT)
-        if r.returncode != 0:
+            spark_cmd.insert(2, "--no-cache")
+        try:
+            run_docker_with_progress(
+                spark_cmd, "Building Spark image (fru-spark:local)", 2, total, cwd=PROJECT_ROOT
+            )
+        except subprocess.CalledProcessError:
             logger.error("Spark image build failed")
             return 1
     return 0

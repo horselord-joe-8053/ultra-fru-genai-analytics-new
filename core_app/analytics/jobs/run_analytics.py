@@ -26,18 +26,36 @@ def _to_spark_path(path: str) -> str:
 
 
 def _read_raw_from_postgres():
-    """Read fru_sales_raw from PostgreSQL via psycopg2. Returns list of dicts with uppercase keys."""
+    """Read fru_sales_raw from PostgreSQL via psycopg2. Returns list of dicts with uppercase keys.
+    Retries connection a few times to tolerate Docker network / postgres startup delay."""
+    import time
     import psycopg2
     from psycopg2.extras import RealDictCursor
 
-    conn = psycopg2.connect(
-        host=os.environ.get("PGHOST", ""),
-        port=int(os.environ.get("PGPORT", "5432")),
-        user=os.environ.get("PGUSER", "postgres"),
-        password=os.environ.get("PGPASSWORD", ""),
-        dbname=os.environ.get("PGDATABASE", "fru_db"),
-        connect_timeout=10,
-    )
+    host = os.environ.get("PGHOST", "")
+    port = int(os.environ.get("PGPORT", "5432"))
+    user = os.environ.get("PGUSER", "postgres")
+    password = os.environ.get("PGPASSWORD", "")
+    dbname = os.environ.get("PGDATABASE", "fru_db")
+    last_err = None
+    for attempt in range(1, 6):
+        try:
+            conn = psycopg2.connect(
+                host=host,
+                port=port,
+                user=user,
+                password=password,
+                dbname=dbname,
+                connect_timeout=30,
+            )
+            break
+        except Exception as e:
+            last_err = e
+            if attempt < 5:
+                print(f"PostgreSQL connection attempt {attempt}/5 failed: {e}. Retrying in 5s...")
+                time.sleep(5)
+            else:
+                raise
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
