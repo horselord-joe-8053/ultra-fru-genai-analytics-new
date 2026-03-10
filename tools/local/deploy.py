@@ -27,7 +27,7 @@ _project_root = os.path.abspath(os.path.join(_here, "..", ".."))
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
-from tools.cloud_shared.env import load_dotenv
+from tools.cloud_shared.env import load_dotenv, require
 from tools.cloud_shared.logging import logger
 from tools.cloud_shared.docker.build_common import run_docker_with_progress
 from tools.cloud_shared.docker.build_context_hash import (
@@ -56,11 +56,18 @@ def _run(cmd: list[str], cwd: str | None = None, env: dict | None = None) -> int
 
 
 def _docker_compose(*args: str, files: tuple[str, ...] | None = None) -> int:
+    """Wrapper around docker compose with logging and timing."""
     f = files or (COMPOSE_LOCAL,)
-    return _run(
-        ["docker", "compose"] + [x for ff in f for x in ("-f", ff)] + ["-p", COMPOSE_PROJECT] + list(args),
-        cwd=PROJECT_ROOT,
-    )
+    cmd = ["docker", "compose"] + [x for ff in f for x in ("-f", ff)] + ["-p", COMPOSE_PROJECT] + list(args)
+    logger.info(f"[local-deploy] Running docker compose: {' '.join(cmd)}")
+    start = time.time()
+    rc = _run(cmd, cwd=PROJECT_ROOT)
+    elapsed = time.time() - start
+    if rc == 0:
+        logger.info(f"[local-deploy] docker compose finished OK in {elapsed:.1f}s")
+    else:
+        logger.error(f"[local-deploy] docker compose failed (exit {rc}) after {elapsed:.1f}s")
+    return rc
 
 
 def _wait_for_postgres(timeout_sec: int = 60) -> bool:
@@ -126,6 +133,9 @@ def _run_bootstrap_spark() -> int:
     if not pw:
         logger.error("PGPASSWORD required")
         return 1
+    delta_pkg = require("DELTA_LAKE_PACKAGE")
+    storage_pkg = require("DELTA_STORAGE_PACKAGE")
+    packages = f"{delta_pkg},{storage_pkg}"
     r = subprocess.run(
         [
             "docker", "run", "--rm", "--user", "root",
@@ -135,7 +145,7 @@ def _run_bootstrap_spark() -> int:
             "-e", "DELTA_TABLE_PATH=file:///tmp/delta/fru_sales", "-v", "fru_delta:/tmp/delta",
             "fru-spark:local",
             "/opt/spark/bin/spark-submit",
-            "--packages", "io.delta:delta-spark_2.12:3.1.0",
+            "--packages", packages,
             "--conf", "spark.driver.extraJavaOptions=-Duser.home=/tmp",
             "--conf", "spark.executor.extraJavaOptions=-Duser.home=/tmp",
             "/opt/fru/jobs/run_analytics.py",

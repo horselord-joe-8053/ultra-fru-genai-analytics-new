@@ -104,7 +104,7 @@ module "spark_job" {
 
   command = [
     "/opt/spark/bin/spark-submit",
-    "--packages", "io.delta:delta-spark_2.12:3.1.0,org.apache.hadoop:hadoop-aws:3.3.4",
+    "--packages", "io.delta:delta-spark_2.13:4.0.0,io.delta:delta-storage:4.0.0,org.apache.hadoop:hadoop-aws:3.3.4",
     "--jars", "/opt/fru/jars/gcs-connector-hadoop3-2.2.7-shaded.jar",
     "/opt/fru/jobs/run_analytics.py"
   ]

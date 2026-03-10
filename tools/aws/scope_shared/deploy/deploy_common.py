@@ -167,7 +167,7 @@ def run_ecs_bootstrap(env: str, region: str | None = None, force: bool = False) 
             "name": "spark",
             "command": [
                 "/opt/spark/bin/spark-submit",
-                "--packages", "io.delta:delta-spark_2.12:3.1.0,org.apache.hadoop:hadoop-aws:3.3.4",
+                "--packages", "io.delta:delta-spark_2.13:4.0.0,io.delta:delta-storage:4.0.0,org.apache.hadoop:hadoop-aws:3.3.4",
                 "/opt/fru/jobs/run_analytics.py",
             ],
         }]

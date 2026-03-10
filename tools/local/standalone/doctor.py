@@ -8,6 +8,7 @@ Usage:
 import os
 import subprocess
 import sys
+import time
 
 # Allow importing from project root (core_app, tools)
 _here = os.path.abspath(os.path.dirname(__file__))
@@ -59,34 +60,55 @@ def _check_claude_model() -> list[str]:
 def main() -> int:
     logger.step("Local doctor (preflight)")
 
-    errors = []
+    errors: list[str] = []
 
-    # Docker
+    # 1. Docker availability
+    t0 = time.time()
+    logger.info("[doctor] Checking Docker daemon (docker info)...")
     r = subprocess.run(["docker", "info"], capture_output=True)
+    dt = time.time() - t0
     if r.returncode != 0:
         errors.append("Docker not running or not installed")
+        logger.error(f"[doctor] Docker check failed (elapsed {dt:.1f}s)")
+    else:
+        logger.info(f"[doctor] Docker check OK (elapsed {dt:.1f}s)")
 
-    # Required env
+    # 2. Required env vars
+    logger.info("[doctor] Checking required env vars (PGPASSWORD, OPENAI_API_KEY)...")
     for var in ["PGPASSWORD", "OPENAI_API_KEY"]:
         if not os.environ.get(var):
             errors.append(f"{var} not set (check .env)")
+            logger.error(f"[doctor] {var} missing")
+    if not any(v for v in ("PGPASSWORD", "OPENAI_API_KEY") if not os.environ.get(v)):
+        logger.info("[doctor] Required env vars present")
 
-    # CLAUDE_MODEL required when CLAUDE_API_KEY set; validate model via API
-    errors.extend(_check_claude_model())
+    # 3. Claude model / API (if CLAUDE_API_KEY present)
+    logger.info("[doctor] Checking CLAUDE_MODEL/Claude API (if configured)...")
+    t1 = time.time()
+    claude_errs = _check_claude_model()
+    errors.extend(claude_errs)
+    dt1 = time.time() - t1
+    if claude_errs:
+        logger.error(f"[doctor] Claude check failed (elapsed {dt1:.1f}s)")
+    else:
+        logger.info(f"[doctor] Claude check OK/Skipped (elapsed {dt1:.1f}s)")
 
-    # Optional but recommended if no Claude
+    # 4. Optional LLM keys hint
     if not os.environ.get("CLAUDE_API_KEY") and not os.environ.get("GOOGLE_AI_API_KEY"):
         logger.warning("No CLAUDE_API_KEY or GOOGLE_AI_API_KEY; set CLOUD_PROVIDER=local and CLAUDE_API_KEY for /query")
 
-    # CSV exists
+    # 5. CSV presence
+    logger.info("[doctor] Checking local CSV for DB seed...")
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
     csv_path = os.path.join(project_root, "core_app", "data", "raw", "fridge_sales_with_rating.csv")
     if not os.path.exists(csv_path):
         errors.append(f"CSV not found: {csv_path}")
+        logger.error(f"[doctor] CSV not found: {csv_path}")
+    else:
+        logger.info(f"[doctor] CSV present: {csv_path}")
 
     if errors:
-        for e in errors:
-            logger.error(e)
+        logger.error("[doctor] Preflight FAILED; see errors above.")
         return 1
 
     logger.success("Preflight OK")

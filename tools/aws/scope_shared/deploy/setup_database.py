@@ -152,7 +152,8 @@ def load_data(env: str, cluster_arn: str, secret_arn: str, db_name: str, force: 
     env_vars["PGDATABASE"] = db_name
     env_vars["FRU_CSV_PATH"] = csv_path
     env_vars["FRU_FORCE_REFRESH_DATA"] = "true" if force else "false"
-    env_vars.setdefault("OPENAI_EMBED_MODEL", "text-embedding-3-small")
+    from tools.cloud_shared.env import require
+    env_vars.setdefault("OPENAI_EMBED_MODEL", require("OPENAI_EMBED_MODEL"))
     # ETL imports backend.* - need core_app on PYTHONPATH
     core_app = os.path.join(get_repo_root(), "core_app")
     env_vars["PYTHONPATH"] = core_app + (os.pathsep + env_vars.get("PYTHONPATH", "")) if env_vars.get("PYTHONPATH") else core_app

@@ -201,11 +201,15 @@ data:
         if not args.force and _check_k8s_bootstrap_succeeded(args.env, region):
             print(f"[KUBE BOOTSTRAP] Skip: Job {JOB_BOOTSTRAP} already succeeded (idempotent)")
         else:
+            delta_lake_pkg = require("DELTA_LAKE_PACKAGE")
+            delta_storage_pkg = require("DELTA_STORAGE_PACKAGE")
             subs = {
                 "cloud_provider": "gcp",
                 "SPARK_IMAGE": spark_image,
                 "DELTA_ROOT": delta_root,
                 "DELTA_TABLE_PATH": delta_table_path,
+                "DELTA_LAKE_PACKAGE": delta_lake_pkg,
+                "DELTA_STORAGE_PACKAGE": delta_storage_pkg,
                 "PGHOST": pg_host,
                 "PGPORT": args.pg_port,
                 "PGDATABASE": args.pg_database,
@@ -217,6 +221,7 @@ data:
             _kubectl(["apply", "-f", "-"], input_text=txt)
 
         interval_sec = get_required_analytics_scheduler_interval_seconds()
+        delta_lake_pkg = require("DELTA_LAKE_PACKAGE")
         api_subs = {
             "cloud_provider": "gcp",
             "APP_IMAGE": app_image,
@@ -230,7 +235,7 @@ data:
             "ALLOWED_ORIGINS": "*",
             "CLOUD_REGION": region,
             "DELTA_TABLE_PATH": delta_table_path,
-            "DELTA_LAKE_PACKAGE": "io.delta:delta-spark_2.12:3.1.0",
+            "DELTA_LAKE_PACKAGE": delta_lake_pkg,
             "SPARK_HOME": "/opt/spark",
             "GCP_LLM_PROVIDER": args.gcp_llm_provider,
             "CLAUDE_MODEL": args.claude_model,
