@@ -91,9 +91,15 @@ def verify_api_endpoints(
             err_msg = parse_sse_error_message(r.text) or "Agent-based query processing is disabled"
             real_reason = _fetch_agent_init_error(base_url)
 
-            if use_agent_disabled_by_config and not real_reason:
-                # Agent is intentionally off (USE_AGENT_QUERY=false) – deployment is healthy,
-                # just without agent-based query enabled.
+            # If API explicitly reports "disabled by configuration" we treat this as healthy
+            # regardless of the verifier's own USE_AGENT_QUERY env. This covers cases where
+            # containers are configured with USE_AGENT_QUERY=false even if the local verify
+            # process still has it unset/true.
+            explicitly_disabled = "disabled by configuration" in err_msg.lower()
+
+            if (use_agent_disabled_by_config or explicitly_disabled) and not real_reason:
+                # Agent is intentionally off – deployment is healthy, just without
+                # agent-based query enabled.
                 return True
 
             # Otherwise this is an internal agent bootstrap/init error. Prefer the structured

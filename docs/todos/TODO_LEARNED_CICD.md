@@ -168,14 +168,14 @@ git push origin v1.3.0
 ```
 
 With CI wired as in this doc and `TODO_ORCHESTRATOR_ENV.md`:
-- **Tag `staging/v1.3.0`** triggers a **staging deploy** job.
-- **Tag `v1.3.0`** triggers a **prod deploy** job (typically with manual approval in GitHub Environments).
+- **Tag `staging/v1.3.0`** triggers a **staging deploy** job using `orchestrator.py deploy --env staging`.
+- **Tag `v1.3.0`** triggers a **prod deploy** job using `orchestrator.py deploy --env prod` (typically with manual approval in GitHub Environments).
 
 This keeps the story clean:
 - Developers work on **feature branches** and merge to `main`.
 - **Tags** on `main` decide when that merged commit is promoted to **staging** and then to **prod**.
 
-### 3.3.1. Example timeline with two developers
+### 3.3.1. Example timeline with two developers (Dev A, Dev B)
 
 <table>
 <tr style="background:#1565c0;color:white">
@@ -239,32 +239,135 @@ This example shows:
 
 ---
 
-## 4. Feature flags in CI/CD
+### 3.4. Multiple supported versions (release branches)
+
+If you ever need to support **multiple product versions in parallel** (e.g. `3.4`, `3.3`, `3.2`), you can extend the model from the CI/CD best-practices chat:
+
+- Keep **trunk-based dev** on `main` as the source of truth for the next/current version.
+- Create **versioned release branches** only for supported lines:
+
+```text
+main            # next/current version
+ ├─ tag v3.4.0
+ ├─ release/3.4   # bugfixes for 3.4.x
+ ├─ release/3.3   # bugfixes for 3.3.x
+ └─ release/3.2   # security fixes only
+```
+
+Typical workflow:
+- New work lands in `main`.
+- When you cut a release, tag `vX.Y.Z` on `main`, and (optionally) branch `release/X.Y` from that commit.
+- Fixes are:
+  - Implemented on `main` first when feasible.
+  - **Backported** (cherry-picked) into the relevant `release/X.Y` branches that still need the fix.
+- CI/CD rules:
+  - Tag patterns like `staging/v3.4.1` and `v3.4.1` can be associated with **either** `main` or `release/3.4`, depending on which line you’re shipping.
+
+Key point: **environment branches (`dev`, `staging`, `prod`) are still avoided**; instead you use:
+- `main` + short-lived feature branches.
+- A small number of long-lived **release branches** (`release/X.Y`) for multiple supported versions.
+- Tags and CI/CD (see below) to promote specific commits from those branches through dev/staging/prod.
+
+---
+
+## 4. GitHub Actions examples for tag-based deploys
+
+Below is a concrete `github/workflows/deploy.yml` that reacts to **staging** and **prod** tags and calls `orchestrator.py` appropriately.
+
+```yaml
+name: Deploy via orchestrator
+
+on:
+  push:
+    tags:
+      - 'staging/v*'   # e.g. staging/v1.3.0
+      - 'v*'           # e.g. v1.3.0
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    # Derive environment name from tag:
+    #   staging/v1.3.0 -> env=staging
+    #   v1.3.0        -> env=prod
+    env:
+      RAW_TAG: ${{ github.ref_name }}
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Compute environment from tag
+        id: env
+        run: |
+          TAG=\"$RAW_TAG\"
+          if [[ \"$TAG\" == staging/* ]]; then
+            ENV_NAME=\"staging\"
+          else
+            ENV_NAME=\"prod\"
+          fi
+          echo \"env_name=$ENV_NAME\" >> \"$GITHUB_OUTPUT\"
+          echo \"Using ENV_NAME=$ENV_NAME for tag=$TAG\"
+
+      - name: Deploy via orchestrator
+        env:
+          FRU_ENV: ${{ steps.env.outputs.env_name }}
+          CLOUD_REGION: us-central1
+          # These are examples; configure per GitHub Environment:
+          GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.GCP_SA_KEY }}
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+        run: |
+          python orchestrator.py deploy \
+            --provider gcp \
+            --scope all \
+            --env \"${{ steps.env.outputs.env_name }}\" \
+            --cloud-region \"${CLOUD_REGION}\"
+```
+
+**Notes:**
+- The workflow triggers whenever someone runs the tag commands in §3.3:
+  - `git push origin staging/v1.3.0` → deploy job with `FRU_ENV=staging`.
+  - `git push origin v1.3.0` → deploy job with `FRU_ENV=prod`.
+- Secrets (`GCP_SA_KEY`, `GCP_PROJECT_ID`, etc.) should be scoped per GitHub **Environment** (dev/staging/prod) so staging/prod use different credentials.
+
+---
+
+## 5. Feature flags in CI/CD
 
 Drawing on the ideas from [TBD CI/CD Feature Flags](https://chatgpt.com/s/t_69afbcbd0a5081919108f8a021c9e13f) and adapting them to this repo.
 
-### 4.1. Why feature flags?
+### 5.1. Why feature flags?
 
 <table>
-<tr style="background:#1565c0;color:white">
+<tr style=\"background:#1565c0;color:white\">
 <th>Goal</th>
 <th>How feature flags help</th>
 </tr>
 <tr>
-<td style="background:#e3f2fd"><strong>① Decouple deploy from release</strong></td>
-<td style="background:#e8f5e9">• Deploy code dark (flag off) to dev/staging/prod<br>• Turn flag on gradually, without redeploying containers<br>• Roll back by flipping flag off instead of rolling back images</td>
+<td style=\"background:#e3f2fd\"><strong>① Decouple deploy from release</strong></td>
+<td style=\"background:#e8f5e9\">• Deploy code dark (flag off) to dev/staging/prod<br>• Turn flag on gradually, without redeploying containers<br>• Roll back by flipping flag off instead of rolling back images</td>
 </tr>
 <tr>
-<td style="background:#e3f2fd"><strong>② Safer experiments</strong></td>
-<td style="background:#fff3e0">• Route a % of traffic through new analytics flow<br>• Compare metrics (latency, error rate) with old path<br>• Kill switch for problematic experiments</td>
+<td style=\"background:#e3f2fd\"><strong>② Safer experiments</strong></td>
+<td style=\"background:#fff3e0\">• Route a % of traffic through new analytics flow<br>• Compare metrics (latency, error rate) with old path<br>• Kill switch for problematic experiments</td>
 </tr>
 <tr>
-<td style="background:#e3f2fd"><strong>③ Env-specific behavior</strong></td>
-<td style="background:#e8f5e9">• Enable new LLM/provider only in dev/staging first<br>• Keep prod on conservative settings until ready<br>• Use flags to gate heavy batch jobs or schedulers</td>
+<td style=\"background:#e3f2fd\"><strong>③ Env-specific behavior</strong></td>
+<td style=\"background:#e8f5e9\">• Enable new LLM/provider only in dev/staging first<br>• Keep prod on conservative settings until ready<br>• Use flags to gate heavy batch jobs or schedulers</td>
 </tr>
 </table>
 
-### 4.2. Where flags fit in this repo
+### 5.2. Where flags fit in this repo
 
 - **Backend:** flags checked in `core_app/backend` (e.g. when deciding which agent or query path to use).
 - **Config:** values provided via env vars from Terraform/Tofu:
@@ -274,37 +377,9 @@ Drawing on the ideas from [TBD CI/CD Feature Flags](https://chatgpt.com/s/t_69af
   - Dev/staging workflows set them on via env or config maps.
   - Prod `v*` release starts with them off; separate “enable feature” workflow can flip them on gradually.
 
-### 4.3. Simple feature-flag rollout diagram
-
-```mermaid
-graph TD
-  A[Deploy v1-3-0 flag off] --> B[Enable flag in dev]
-  B --> C[Verify in dev tests and smoke]
-  C --> D[Enable flag in staging]
-  D --> E[Verify in staging]
-  E --> F[Enable flag in prod small slice]
-  F --> G[Monitor metrics]
-  G --> H{Healthy?}
-  H -->|Yes| I[Roll out to 100%]
-  H -->|No| J[Turn flag off and investigate]
-
-  style A fill:#e3f2fd,stroke:#1976d2,stroke-width:1px,font-size:9px
-  style B fill:#e8f5e9,stroke:#2e7d32,stroke-width:1px,font-size:9px
-  style C fill:#e8f5e9,stroke:#2e7d32,stroke-width:1px,font-size:9px
-  style D fill:#ede7f6,stroke:#5e35b1,stroke-width:1px,font-size:9px
-  style E fill:#ede7f6,stroke:#5e35b1,stroke-width:1px,font-size:9px
-  style F fill:#ffebee,stroke:#c62828,stroke-width:1px,font-size:9px
-  style G fill:#fff3e0,stroke:#e65100,stroke-width:1px,font-size:9px
-  style H fill:#fff8e1,stroke:#ff8f00,stroke-width:1px,font-size:9px
-  style I fill:#e8f5e9,stroke:#2e7d32,stroke-width:1px,font-size:9px
-  style J fill:#ffebee,stroke:#c62828,stroke-width:1px,font-size:9px
-```
-
-Flags are a **behavioral layer on top of the env / tag model** described earlier: tags decide *what* code is running; flags decide *which paths* are active at runtime.
-
 ---
 
-## 5. How this doc relates to the others
+## 6. How this doc relates to the others
 
 - **`TODO_UNIT_TEST_CICD.md`**
   - Deep dive on **what** to test and where to start in this repo.
