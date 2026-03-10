@@ -148,14 +148,10 @@ def main() -> int:
         f.write(args.scope)
 
     # For local orchestrator flows we assume API is already running (container/k8s).
-    # We still probe /health on the chosen api_port so failures show up early.
+    # We no longer block here; readiness is verified by the dedicated verify scripts.
     base_url = os.environ.get("LOCAL_API_URL") or f"http://localhost:{api_port}"
-    logger.info(f"Waiting for API to be ready at {base_url}...")
-    if not _wait_for_api(base_url):
-        logger.error("API did not become ready in time")
-        return 1
-
-    logger.success("Local API and frontend started")
+    logger.info(f"Local frontends started; API expected at {base_url} (readiness verified separately).")
+    logger.success("Local API and frontend startup sequence completed")
     logger.info(
         f"API: http://localhost:{api_port}  Frontend: http://localhost:{frontend_port} (scope={args.scope})"
     )

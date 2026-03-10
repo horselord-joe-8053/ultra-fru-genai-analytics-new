@@ -49,9 +49,11 @@ class SemanticSearchTool(BaseTool):
     
     def _embed_text(self, text: str) -> List[float]:
         """Generate embedding for text using OpenAI."""
+        from core_app.backend.env_utils.cloud_shared.model_config import get_required_env
+        model = get_required_env("OPENAI_EMBED_MODEL", "OpenAI embedding model (e.g., text-embedding-3-small)")
         try:
             response = self.openai_client.embeddings.create(
-                model="text-embedding-3-small",
+                model=model,
                 input=text
             )
             return response.data[0].embedding

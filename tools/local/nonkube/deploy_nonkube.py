@@ -8,7 +8,7 @@ import subprocess
 import sys
 
 from tools.cloud_shared.analytics_schedule import get_required_analytics_scheduler_interval_seconds
-from tools.cloud_shared.env import load_dotenv
+from tools.cloud_shared.env import load_dotenv, require
 from tools.cloud_shared.logging import logger
 
 load_dotenv()
@@ -54,6 +54,9 @@ def run_deploy_nonkube(skip_spark: bool = False) -> int:
         if not pw:
             logger.error("PGPASSWORD required")
             return 1
+        delta_pkg = require("DELTA_LAKE_PACKAGE")
+        storage_pkg = require("DELTA_STORAGE_PACKAGE")
+        packages = f"{delta_pkg},{storage_pkg}"
         spark_cmd = [
             "docker", "run", "--rm",
             "--user", "root",
@@ -67,7 +70,7 @@ def run_deploy_nonkube(skip_spark: bool = False) -> int:
             "-v", "fru_delta:/tmp/delta",
             "fru-spark:local",
             "/opt/spark/bin/spark-submit",
-            "--packages", "io.delta:delta-spark_2.12:3.1.0",
+            "--packages", packages,
             "--conf", "spark.driver.extraJavaOptions=-Duser.home=/tmp",
             "--conf", "spark.executor.extraJavaOptions=-Duser.home=/tmp",
             "/opt/fru/jobs/run_analytics.py",

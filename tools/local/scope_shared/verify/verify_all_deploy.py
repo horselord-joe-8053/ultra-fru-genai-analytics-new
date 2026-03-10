@@ -47,75 +47,95 @@ def main() -> int:
 
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
     memo_dir = get_memo_dir()
-    scope = args.scope
-    if not scope:
+    scope_arg = args.scope
+    if not scope_arg:
         scope_file = os.path.join(memo_dir, ".fru_local_scope")
         if os.path.exists(scope_file):
             with open(scope_file) as f:
-                scope = f.read().strip() or "nonkube"
+                scope_arg = f.read().strip() or "nonkube"
         else:
-            scope = "nonkube"
-    ports = get_ports_for_scope(scope)
-    base_url = os.environ.get("LOCAL_API_URL") or f"http://localhost:{ports['api_port']}"
-    if not base_url.startswith("http"):
-        base_url = f"http://{base_url}"
-    frontend_url = os.environ.get("LOCAL_FRONTEND_URL") or f"http://localhost:{ports['frontend_port']}"
-    frontend_url = frontend_url.rstrip("/")
+            scope_arg = "nonkube"
+
+    # Expand "all" into explicit scopes to keep ports logic simple and consistent.
+    if scope_arg == "all":
+        scopes = ["nonkube", "kube"]
+    else:
+        scopes = [scope_arg]
 
     total_rec = get_total_rec_from_csv()
     verify_start = time.time()
+    env = os.getenv("FRU_ENV", "dev")
 
-    logger.operation_start("Verify", "local", os.getenv("FRU_ENV", "dev"), "local")
-    logger.step(f"Full Verification Interface (local, scope={scope}, total_rec from CSV: {total_rec})")
-    logger.phase_start(1, 2, "Endpoints (local)")
+    logger.operation_start("Verify", "local", env, "local")
+    all_ok = True
+    all_rows: list[VerifyRow] = []
 
-    ok, rows = verify_api_endpoints(
-        base_url=base_url,
-        total_rec=total_rec,
-        scope="local",
-        provider="local",
-        skip_frontend=True,
-    )
+    for scope in scopes:
+        ports = get_ports_for_scope(scope)
+        base_url = os.environ.get("LOCAL_API_URL") or f"http://localhost:{ports['api_port']}"
+        if not base_url.startswith("http"):
+            base_url = f"http://{base_url}"
+        frontend_url = os.environ.get("LOCAL_FRONTEND_URL") or f"http://localhost:{ports['frontend_port']}"
+        frontend_url = frontend_url.rstrip("/")
 
-    # Frontend (local): port from config for this scope
-    frontend_notes = frontend_url
-    try:
-        r = requests.get(frontend_url + "/", timeout=10)
-        frontend_ok = r.status_code == 200 and "<html" in (r.text or "").lower()
+        logger.step(f"Full Verification Interface (local, scope={scope}, total_rec from CSV: {total_rec})")
+        logger.phase_start(1, 2, f"Endpoints (local, scope={scope})")
+
+        ok, rows = verify_api_endpoints(
+            base_url=base_url,
+            total_rec=total_rec,
+            scope="local",
+            provider="local",
+            skip_frontend=True,
+        )
+
+        # Frontend (local) for this scope
+        frontend_notes = frontend_url
+        try:
+            r = requests.get(frontend_url + "/", timeout=10)
+            frontend_ok = r.status_code == 200 and "<html" in (r.text or "").lower()
+            if not frontend_ok:
+                frontend_notes = f"HTTP {r.status_code}"
+        except Exception as ex:
+            frontend_ok = False
+            frontend_notes = str(ex)
+            logger.warning(f"Frontend (local, scope={scope}) check failed: {ex}")
+        rows.append(
+            VerifyRow(
+                provider="local",
+                scope=f"local-{scope}",
+                endpoint="Frontend (local)",
+                ok=frontend_ok,
+                notes=frontend_notes,
+            )
+        )
         if not frontend_ok:
-            frontend_notes = f"HTTP {r.status_code}"
-    except Exception as ex:
-        frontend_ok = False
-        frontend_notes = str(ex)
-        logger.warning(f"Frontend (local) check failed: {ex}")
-    rows.append(VerifyRow(provider="local", scope="local", endpoint="Frontend (local)", ok=frontend_ok, notes=frontend_notes))
-    if not frontend_ok:
-        ok = False
+            ok = False
 
-    if not ok:
-        logger.error("[VERIFICATION FAILED] API endpoints are not responding correctly")
-        print_verify_summary(rows, os.getenv("FRU_ENV", "dev"), total_rec)
-        logger.operation_end("Verify", "local", os.getenv("FRU_ENV", "dev"), "local", int(time.time() - verify_start), ok=False)
-        sys.exit(1)
+        if not ok:
+            logger.error(f"[VERIFICATION FAILED] API endpoints are not responding correctly for scope={scope}")
 
-    logger.phase_end(1, 2, "Endpoints (local)", int(time.time() - verify_start))
+        logger.phase_end(1, 2, f"Endpoints (local, scope={scope})", int(time.time() - verify_start))
+        all_ok = all_ok and ok
+        all_rows.extend(rows)
 
-    # LLM client (optional for local; same as AWS/GCP)
+    # LLM client (single shared check, not per-scope)
     phase_start = time.time()
     logger.phase_start(2, 2, "LLM client")
     llm_ok, llm_rows = verify_llm_client()
-    rows.extend(llm_rows)
+    all_rows.extend(llm_rows)
     logger.phase_end(2, 2, "LLM client", int(time.time() - phase_start))
+    all_ok = all_ok and llm_ok
 
-    if not llm_ok:
-        logger.error("[VERIFICATION FAILED] LLM client failed")
-        print_verify_summary(rows, os.getenv("FRU_ENV", "dev"), total_rec)
-        logger.operation_end("Verify", "local", os.getenv("FRU_ENV", "dev"), "local", int(time.time() - verify_start), ok=False)
+    if not all_ok:
+        logger.error("[VERIFICATION FAILED] One or more scopes/LLM checks failed")
+        print_verify_summary(all_rows, env, total_rec)
+        logger.operation_end("Verify", "local", env, "local", int(time.time() - verify_start), ok=False)
         sys.exit(1)
 
-    print_verify_summary(rows, os.getenv("FRU_ENV", "dev"), total_rec)
+    print_verify_summary(all_rows, env, total_rec)
     verify_dur = int(time.time() - verify_start)
-    logger.operation_end("Verify", "local", os.getenv("FRU_ENV", "dev"), "local", verify_dur, ok=True)
+    logger.operation_end("Verify", "local", env, "local", verify_dur, ok=True)
     logger.success("FULL VERIFICATION: SUCCESS")
     return 0
 

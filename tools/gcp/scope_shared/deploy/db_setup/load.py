@@ -111,7 +111,8 @@ def load_embeddings(
     """
     from tools.cloud_shared.logging.logger import info, success, error, step
 
-    openai_model = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small")
+    from tools.cloud_shared.env import require
+    openai_model = os.getenv("OPENAI_EMBED_MODEL") or require("OPENAI_EMBED_MODEL")
 
     # Idempotency: skip if data exists and not force
     if not force:

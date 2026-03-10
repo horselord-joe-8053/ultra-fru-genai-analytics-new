@@ -96,7 +96,7 @@ def main():
     ap.add_argument("--openai-secret-arn", default="", help="AWS Secrets Manager ARN for openai_api_key")
     ap.add_argument("--aws-region", default="", help="Region for pods (CLOUD_REGION)")
     ap.add_argument("--delta-table-path", default="", help="DELTA_TABLE_PATH (s3a://bucket/delta/fru_sales)")
-    ap.add_argument("--delta-lake-package", default="io.delta:delta-spark_2.13:4.0.0", help="DELTA_LAKE_PACKAGE")
+    ap.add_argument("--delta-lake-package", default=None, help="DELTA_LAKE_PACKAGE")
     ap.add_argument("--bedrock-inference-profile-id", default="", help="AWS_BEDROCK_INFERENCE_PROFILE_ID")
     ap.add_argument("--bedrock-model-id", default="", help="AWS_BEDROCK_MODEL_ID from .env (required if no inference profile)")
     ap.add_argument("--force", action="store_true", help="Force bootstrap even if already succeeded (e.g. after CSV upload)")
@@ -197,11 +197,17 @@ data:
             print(f"[KUBE BOOTSTRAP] Skip: Job {JOB_BOOTSTRAP} already succeeded (idempotent)")
         else:
             delta_table_path = args.delta_table_path or f"s3a://{delta_bucket}/delta/fru_sales"
+            delta_lake_pkg = args.delta_lake_package or require("DELTA_LAKE_PACKAGE")
+            delta_storage_pkg = require("DELTA_STORAGE_PACKAGE")
+            hadoop_pkg = require("HADOOP_PACKAGE")
             subs = {
                 "cloud_provider": "aws",
                 "SPARK_IMAGE": spark_image,
                 "DELTA_ROOT": delta_root,
                 "DELTA_TABLE_PATH": delta_table_path,
+                "DELTA_LAKE_PACKAGE": delta_lake_pkg,
+                "DELTA_STORAGE_PACKAGE": delta_storage_pkg,
+                "HADOOP_PACKAGE": hadoop_pkg,
                 "PGHOST": args.pg_host or "localhost",
                 "PGPORT": args.pg_port,
                 "PGDATABASE": args.pg_database,
@@ -255,11 +261,17 @@ data:
         # Schedule phase: apply CronJob. Requires aws-credentials secret from bootstrap for S3 access.
         interval_sec = get_required_analytics_scheduler_interval_seconds()
         delta_table_path = args.delta_table_path or f"s3a://{delta_bucket}/delta/fru_sales"
+        delta_lake_pkg = args.delta_lake_package or require("DELTA_LAKE_PACKAGE")
+        delta_storage_pkg = require("DELTA_STORAGE_PACKAGE")
+        hadoop_pkg = require("HADOOP_PACKAGE")
         subs = {
             "cloud_provider": "aws",
             "SPARK_IMAGE": spark_image,
             "DELTA_ROOT": delta_root,
             "DELTA_TABLE_PATH": delta_table_path,
+            "DELTA_LAKE_PACKAGE": delta_lake_pkg,
+            "DELTA_STORAGE_PACKAGE": delta_storage_pkg,
+            "HADOOP_PACKAGE": hadoop_pkg,
             "SCHEDULE_CRON": seconds_to_cron(interval_sec),
             "PGHOST": args.pg_host or "localhost",
             "PGPORT": args.pg_port,

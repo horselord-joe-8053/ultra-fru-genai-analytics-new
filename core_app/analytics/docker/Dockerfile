@@ -1,5 +1,5 @@
 
-FROM apache/spark:3.5.1
+FROM spark:4.0.1-scala2.13-java21-python3-ubuntu
 # Content-based build skip: hash of build context, passed as --build-arg by build_and_push_images.py.
 ARG BUILD_CONTEXT_HASH
 LABEL build_context_hash=${BUILD_CONTEXT_HASH}

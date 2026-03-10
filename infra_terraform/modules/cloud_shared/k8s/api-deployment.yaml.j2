@@ -92,7 +92,7 @@ spec:
         - name: ALLOWED_ORIGINS
           value: "{{ ALLOWED_ORIGINS }}"
         - name: OPENAI_EMBED_MODEL
-          value: "text-embedding-3-small"
+          value: "{{ OPENAI_EMBED_MODEL }}"
         - name: USE_AGENT_QUERY
           value: "true"
         - name: DEPLOY_SCOPE
@@ -128,11 +128,15 @@ spec:
         - name: GOOGLE_MODEL
           value: "{{ GOOGLE_MODEL }}"
 {% else %}
-        {# local: use CLAUDE_API_KEY if set, else OPENAI #}
+        {# local: use CLAUDE_API_KEY if set, else OPENAI. Models still come from env/SoT. #}
         - name: GCP_LLM_PROVIDER
           value: "{{ GCP_LLM_PROVIDER | default('claude') }}"
         - name: LLM_PROVIDER
           value: "{{ GCP_LLM_PROVIDER | default('claude') }}"
+        - name: CLAUDE_MODEL
+          value: "{{ CLAUDE_MODEL }}"
+        - name: GOOGLE_MODEL
+          value: "{{ GOOGLE_MODEL }}"
 {% endif %}
         - name: ENABLE_ANALYTICS_SCHEDULER
           value: "{{ ENABLE_ANALYTICS_SCHEDULER }}"

@@ -81,16 +81,27 @@ def verify_api_endpoints(
     def check_query_stream(r, url: str = ""):
         if r.status_code != 200:
             return False
-        if "Agent-based query processing is disabled" in r.text:
-            if use_agent_disabled_by_config:
-                return True
-            # Get real reason from API /version (agent_init_error) so we don't mask the cause
+
+        # Special-case the "agent disabled" SSE error. The backend currently uses a single
+        # phrase for both "disabled by config" and "failed to initialize", so we unwrap
+        # those here into:
+        #   - feature disabled by configuration (treat as OK), vs
+        #   - agent init failure (treat as non-retriable backend error).
+        if "Agent-based query processing is disabled" in (r.text or ""):
             err_msg = parse_sse_error_message(r.text) or "Agent-based query processing is disabled"
             real_reason = _fetch_agent_init_error(base_url)
+
+            if use_agent_disabled_by_config and not real_reason:
+                # Agent is intentionally off (USE_AGENT_QUERY=false) – deployment is healthy,
+                # just without agent-based query enabled.
+                return True
+
+            # Otherwise this is an internal agent bootstrap/init error. Prefer the structured
+            # reason from /version.agent_init_error so verify and logs point at the real cause.
             if real_reason:
-                logger.error(f"Agent disabled — real reason from API: {real_reason}")
+                logger.error(f"Agent query init error from API: {real_reason}")
                 err_msg = real_reason
-            raise RuntimeError(f"QueryStream agent disabled (non-retriable): {err_msg} at {url}")
+            raise RuntimeError(f"QueryStream agent init failed (non-retriable): {err_msg} at {url}")
         if "exc_info" in r.text and "unexpected keyword argument" in r.text:
             raise RuntimeError(f"QueryStream returned AgentLogger exc_info error (non-retriable; needs redeploy) at {url}")
         err_msg = parse_sse_error_message(r.text)

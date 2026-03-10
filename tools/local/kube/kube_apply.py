@@ -112,6 +112,8 @@ data:
 """
         _kubectl(["apply", "-f", "-"], input_text=app_secret_yml)
 
+        delta_lake_pkg = os.environ.get("DELTA_LAKE_PACKAGE")
+        delta_storage_pkg = os.environ.get("DELTA_STORAGE_PACKAGE")
         subs = {
             "cloud_provider": "local",
             "SPARK_IMAGE": args.spark_image,
@@ -144,7 +146,7 @@ data:
             "ALLOWED_ORIGINS": "*",
             "CLOUD_REGION": os.environ.get("CLOUD_REGION", "local"),
             "DELTA_TABLE_PATH": delta_table_path,
-            "DELTA_LAKE_PACKAGE": os.environ.get("DELTA_LAKE_PACKAGE", "io.delta:delta-spark_2.12:3.1.0"),
+            "DELTA_LAKE_PACKAGE": delta_lake_pkg,
             "SPARK_HOME": "/opt/spark",
             "GCP_LLM_PROVIDER": os.environ.get("GCP_LLM_PROVIDER", "claude"),
             "CLAUDE_MODEL": require_claude_model(),
@@ -170,6 +172,8 @@ data:
 
     else:
         interval_sec = get_required_analytics_scheduler_interval_seconds()
+        delta_lake_pkg = os.environ.get("DELTA_LAKE_PACKAGE")
+        delta_storage_pkg = os.environ.get("DELTA_STORAGE_PACKAGE")
         subs = {
             "cloud_provider": "local",
             "SPARK_IMAGE": args.spark_image,

@@ -1054,10 +1054,20 @@ def query_stream():
         def run_agent():
             """Run agent in background thread."""
             try:
-                if not USE_AGENT_QUERY or query_agent is None:
-                    msg = "Agent-based query processing is disabled"
+                if not USE_AGENT_QUERY:
+                    # Feature explicitly disabled via configuration; surface this clearly so
+                    # UI and verify can distinguish it from real backend failures.
+                    msg = "Agent-based query processing is disabled by configuration (USE_AGENT_QUERY=false)"
+                    event_queue.put(("error", {"message": msg}))
+                    return
+
+                if query_agent is None:
+                    # Agent failed to initialize or is otherwise unavailable. Prefer the
+                    # captured init error, if any, so callers see the real root cause.
                     if _agent_init_error:
-                        msg += f": {_agent_init_error}"
+                        msg = f"Agent-based query processing failed to initialize: {_agent_init_error}"
+                    else:
+                        msg = "Agent-based query processing is unavailable (agent not initialized)"
                     event_queue.put(("error", {"message": msg}))
                     return
                 
