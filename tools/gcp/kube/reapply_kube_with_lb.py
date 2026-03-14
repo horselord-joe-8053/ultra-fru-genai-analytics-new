@@ -16,7 +16,7 @@ import sys
 import time
 
 from tools.cloud_shared.logging import logger
-from tools.gcp.provider_config_handler import get_gke_location, get_initial_node_count
+from tools.gcp.provider_config_handler import get_gke_location, get_kube_compute_config
 from tools.gcp.scope_shared.core.backend import resolve_state_bucket
 from tools.gcp.scope_shared.core.resource_names import gke_cluster
 from tools.gcp.scope_shared.deploy.deploy_common import apply_stack
@@ -117,7 +117,7 @@ def main():
         f"-var=gcp_region={region}", f"-var=gcp_project_id={gcp_proj}",
         f"-var=gke_cluster_name={gke_cluster(env, region, zone=zone)}",
         f"-var=gke_location={gke_location}",
-        f"-var=initial_node_count={get_initial_node_count(region)}",
+        f"-var=initial_node_count={get_kube_compute_config(region)['min_node_count']}",
         f"-var=gke_deletion_protection=false",
         f"-var=tf_state_bucket={bucket}", f"-var=tf_state_prefix={prefix}",
         f"-var=ingress_hostname={hostname}",

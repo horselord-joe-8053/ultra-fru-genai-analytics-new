@@ -46,7 +46,8 @@ module "eks" {
   aws_region     = var.aws_region
   subnet_ids     = data.terraform_remote_state.shared_durable.outputs.private_subnet_ids
   instance_types = var.eks_instance_types
-  desired_size   = var.eks_desired_nodes
+  min_size       = var.eks_min_node_count
+  max_size       = var.eks_max_node_count
   tags           = module.tags.common_tags
 }
 

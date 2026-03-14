@@ -149,7 +149,7 @@ resource "aws_cloudfront_distribution" "frontend" {
   }
 
   ordered_cache_behavior {
-    path_pattern     = "/analytics"
+    path_pattern     = "/analytics*"
     allowed_methods  = ["GET", "HEAD", "OPTIONS"]
     cached_methods   = ["GET", "HEAD"]
     target_origin_id = local.use_api ? local.api_origin_id : local.s3_origin_id

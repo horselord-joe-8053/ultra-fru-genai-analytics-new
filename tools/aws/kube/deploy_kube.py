@@ -12,8 +12,11 @@ _repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..",
 if _repo_root not in sys.path:
     sys.path.insert(0, _repo_root)
 
+import json
+
 from tools.cloud_shared.env import get_int_env
 from tools.cloud_shared.logging import logger
+from tools.aws.provider_config_handler import get_kube_compute_config
 from tools.aws.scope_shared.core.terra_init import init_stack
 from tools.aws.scope_shared.core.terra_var_handling import get_base_vars
 from tools.aws.scope_shared.import_preexist.kube import run_import_kube
@@ -95,6 +98,12 @@ def run_deploy_kube(
     Deploy kube stack: EKS apply, kube_apply bootstrap+schedule, LB wiring, frontend.
     Idempotent and safe to re-run.
     """
+    # Set EKS compute vars from config (min/max node count, instance types)
+    kube_cfg = get_kube_compute_config(region)
+    os.environ["TF_VAR_eks_min_node_count"] = str(kube_cfg["min_node_count"])
+    os.environ["TF_VAR_eks_max_node_count"] = str(kube_cfg["max_node_count"])
+    os.environ["TF_VAR_eks_instance_types"] = json.dumps(kube_cfg["node_instance_types"])
+
     scope_label = scope_for("infra_terraform/live_deploy/aws/kube")
     if stats:
         stats.set_scope(scope_label)

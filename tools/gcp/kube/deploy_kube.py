@@ -11,7 +11,7 @@ import time
 from typing import TYPE_CHECKING
 
 from tools.cloud_shared.logging import logger
-from tools.gcp.provider_config_handler import get_gke_location, get_initial_node_count
+from tools.gcp.provider_config_handler import get_gke_location, get_kube_compute_config
 from tools.gcp.scope_shared.core.backend import resolve_state_bucket
 from tools.gcp.scope_shared.core.resource_names import gke_cluster
 from tools.gcp.scope_shared.deploy.deploy_common import run_deploy_stack, apply_stack
@@ -118,7 +118,7 @@ def run_deploy_kube(
     bucket = resolve_state_bucket(region)
     gke_location = get_gke_location(region)
     zone = gke_location if gke_location != region else None
-    initial_node_count = get_initial_node_count(region)
+    initial_node_count = get_kube_compute_config(region)["min_node_count"]
 
     if args.apply and getattr(args, "gke_disable_deletion_protection", False) and zone:
         _run_gke_deletion_protection_migration(repo_root, env, region, prefix, gcp_proj, bucket)

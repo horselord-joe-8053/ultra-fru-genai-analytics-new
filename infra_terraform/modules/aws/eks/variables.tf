@@ -9,9 +9,13 @@ variable "instance_types" {
   type    = list(string)
   default = ["t3.small"]
 }
-variable "desired_size" {
-  type    = number
-  default = 1
+variable "min_size" {
+  type        = number
+  description = "EKS node group minimum size"
+}
+variable "max_size" {
+  type        = number
+  description = "EKS node group maximum size"
 }
 variable "tags" {
   type    = map(string)

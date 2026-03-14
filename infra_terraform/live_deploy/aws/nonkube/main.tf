@@ -55,8 +55,13 @@ module "ecs" {
   public_subnet_ids  = data.terraform_remote_state.shared_durable.outputs.public_subnet_ids
   private_subnet_ids = data.terraform_remote_state.shared_durable.outputs.private_subnet_ids
 
-  app_image     = var.app_image
-  desired_count = var.desired_count
+  app_image            = var.app_image
+  min_instance_count   = var.min_instance_count
+  max_instance_count   = var.max_instance_count
+  api_task_cpu         = var.api_task_cpu
+  api_task_memory      = var.api_task_memory
+  spark_task_cpu       = var.spark_task_cpu
+  spark_task_memory    = var.spark_task_memory
 
   env_vars = merge({
     DEPLOY_SCOPE                          = "nonkube"

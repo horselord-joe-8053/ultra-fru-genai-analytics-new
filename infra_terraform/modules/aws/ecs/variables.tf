@@ -49,9 +49,29 @@ variable "secret_arns" {
   default = {}
 }
 
-variable "desired_count" {
-  type    = number
-  default = 1
+variable "min_instance_count" {
+  type        = number
+  description = "ECS API service minimum instance count"
+}
+variable "max_instance_count" {
+  type        = number
+  description = "ECS API service maximum instance count"
+}
+variable "api_task_cpu" {
+  type        = number
+  description = "API task CPU units (1024 = 1 vCPU)"
+}
+variable "api_task_memory" {
+  type        = number
+  description = "API task memory in MB"
+}
+variable "spark_task_cpu" {
+  type        = number
+  description = "Spark task CPU units"
+}
+variable "spark_task_memory" {
+  type        = number
+  description = "Spark task memory in MB"
 }
 
 # Spark schedule

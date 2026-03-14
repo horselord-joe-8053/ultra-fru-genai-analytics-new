@@ -169,8 +169,8 @@ resource "aws_ecs_task_definition" "api" {
   family                   = "${var.name}-${var.env}-api"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
-  cpu                      = "512"
-  memory                   = "1024"
+  cpu                      = tostring(var.api_task_cpu)
+  memory                   = tostring(var.api_task_memory)
   execution_role_arn       = aws_iam_role.exec.arn
   task_role_arn            = aws_iam_role.task.arn
 
@@ -204,7 +204,7 @@ resource "aws_ecs_service" "api" {
   name            = "${var.name}-${var.env}-api-svc"
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.api.arn
-  desired_count   = var.desired_count
+  desired_count   = var.min_instance_count
   launch_type     = "FARGATE"
 
   network_configuration {
@@ -221,6 +221,14 @@ resource "aws_ecs_service" "api" {
 
   depends_on = [aws_lb_listener.http]
   tags       = var.tags
+}
+
+resource "aws_appautoscaling_target" "api" {
+  max_capacity       = var.max_instance_count
+  min_capacity       = var.min_instance_count
+  resource_id        = "service/${aws_ecs_cluster.main.name}/${aws_ecs_service.api.name}"
+  scalable_dimension = "ecs:service:DesiredCount"
+  service_namespace  = "ecs"
 }
 
 # ---- Spark schedule (EventBridge -> ECS RunTask) ----
@@ -332,8 +340,8 @@ resource "aws_ecs_task_definition" "spark" {
   family                   = "${var.name}-${var.env}-spark"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
-  cpu                      = "512"
-  memory                   = "1024"
+  cpu                      = tostring(var.spark_task_cpu)
+  memory                   = tostring(var.spark_task_memory)
   execution_role_arn       = aws_iam_role.spark_task_exec.arn
   task_role_arn            = aws_iam_role.spark_task.arn
   container_definitions = jsonencode([{

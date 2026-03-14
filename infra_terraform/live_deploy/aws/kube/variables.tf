@@ -8,9 +8,11 @@ variable "eks_instance_types" {
   type    = list(string)
   default = ["t3.small"]
 }
-variable "eks_desired_nodes" {
-  type    = number
-  default = 1
+variable "eks_min_node_count" {
+  type = number
+}
+variable "eks_max_node_count" {
+  type = number
 }
 
 variable "tf_state_bucket" { type = string }

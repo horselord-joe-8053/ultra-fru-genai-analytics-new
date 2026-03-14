@@ -1421,7 +1421,7 @@ The browser was serving a **cached** response for `GET /analytics` instead of fe
 
 ### 28.3 Distinction from War Story 42
 
-War Story 42 covers **CloudFront** (CDN edge) cache for frontend assets (index.html, JS). This war story is about the **browser's** HTTP cache for an API response. Different layer, different fix.
+War Story 42 covers **CloudFront** (CDN edge) cache for the `/analytics` API route — when routing changes mid-deploy, the edge can serve cached HTML instead of JSON. This war story is about the **browser's** HTTP cache for an API response. Different layer, different fix.
 
 ### 28.4 Workaround (Immediate)
 
@@ -2121,5 +2121,96 @@ On detection, deploy prints a full investigation including **node conditions** (
 ### 41.11 Takeaway
 
 For EKS kube with Spark CronJobs: (1) use `concurrencyPolicy: Forbid` and `ttlSecondsAfterFinished` to prevent accumulation; (2) if nodes go NotReady in **any region** (us-east-1, us-east-2, etc.), follow the recovery playbook in order — **including terminating the node and waiting for ASG replacement**; (3) re-enable CronJob only after deploy applies the fixes and cluster recovers. See [EKS_NODE_KUBELET_CRONJOB.md](../learned/cloud_shared/EKS_NODE_KUBELET_CRONJOB.md) for full reference.
+
+---
+
+## 42. Batch Analytics "Backend API not reachable": CloudFront Edge Cache for /analytics After Two-Phase Deploy
+
+**creation:** `<260315>`
+**last_updated:** `<260315>`
+
+**keywords:** CloudFront, /analytics, edge cache, two-phase deploy, kube, API origin, invalidation, Batch Analytics
+**difficulty:** 5
+**significance:** 7
+
+### 42.1 Context
+
+After a two-phase kube deploy (EKS apply → kube_apply → poll NLB hostname → second Terraform apply to wire CloudFront API origin), the **query** UI worked (chat, `/query`), but the **Batch Analytics** panel showed "Backend API not reachable. CloudFront may not be routing /analytics to the backend." The frontend received HTML instead of JSON.
+
+### 42.2 Architecture: Two-Phase Kube Deploy
+
+The kube deploy uses two Terraform applies because the NLB hostname is not known until after the LoadBalancer Service is provisioned:
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '9px' }, 'flowchart': { 'nodeSpacing': 15, 'rankSpacing': 20 }}}%%
+graph TD
+  A[Phase 1: tofu apply\ningress_hostname=null] --> B[CloudFront created\nwith S3 origin only]
+  B --> C[kube_apply:\nNLB provisioned]
+  C --> D[Poll for LB hostname]
+  D --> E[Phase 2: tofu apply\ningress_hostname=NLB]
+  E --> F[CloudFront updated:\nAPI origin added]
+
+  B --> G["/analytics → S3\n404 → index.html"]
+  F --> H["/analytics → API\nJSON response"]
+
+  style A fill:#e3f2fd,stroke:#1976d2,stroke-width:1px,font-size:9px
+  style B fill:#fff3e0,stroke:#e65100,stroke-width:1px,font-size:9px
+  style C fill:#e8f5e9,stroke:#2e7d32,stroke-width:1px,font-size:9px
+  style D fill:#fff8e1,stroke:#ff8f00,stroke-width:1px,font-size:9px
+  style E fill:#e3f2fd,stroke:#1976d2,stroke-width:1px,font-size:9px
+  style F fill:#e8f5e9,stroke:#2e7d32,stroke-width:1px,font-size:9px
+  style G fill:#ffebee,stroke:#c62828,stroke-width:1px,font-size:9px
+  style H fill:#e8f5e9,stroke:#2e7d32,stroke-width:1px,font-size:9px
+```
+
+### 42.3 Root Cause: CloudFront Edge Cache
+
+| Phase | CloudFront state | Request to /analytics | Response |
+|:------|:-----------------|:---------------------|:---------|
+| <span style="background:#e3f2fd;padding:1px 3px">**Phase 1**</span> | S3 origin only; API origin not yet added | Path matches ordered behavior → target = S3 | S3 returns 404 (no object) → CloudFront custom_error_response returns index.html |
+| <span style="background:#e3f2fd;padding:1px 3px">**Phase 2**</span> | API origin added; cache behaviors updated | Path matches ordered behavior → target = API | API returns JSON |
+| <span style="background:#ffebee;padding:2px 4px">**Problem**</span> | Edge cache populated before Phase 2 | Cache hit at edge | CloudFront serves **cached** index.html from Phase 1 |
+
+**Key insight:** CloudFront cached the 404→index.html response at the edge during Phase 1. When Phase 2 updated the distribution to route `/analytics` to the API, the **edge cache was not invalidated**. Existing cached entries for `/analytics` continued to serve HTML until the cache expired or was invalidated.
+
+### 42.4 Why /query Worked but /analytics Did Not
+
+| Path | Likely cached? | Observed |
+|:-----|:---------------|:---------|
+| <span style="background:#e3f2fd;padding:1px 3px">**/query**</span> | Possibly not hit before Phase 2, or invalidated by frontend deploy | <span style="background:#c8e6c9;padding:2px 4px">✓</span> Works |
+| <span style="background:#ffebee;padding:2px 4px">**/analytics**</span> | Hit during Phase 1 (Batch Analytics panel loads on mount) | <span style="background:#ffcdd2;padding:2px 4px">⚠</span> Returns HTML |
+
+The Batch Analytics panel fetches `/analytics` on mount. If the user opened the app before Phase 2 completed, or if CloudFront had cached the response from a prior request, the edge served the cached HTML.
+
+### 42.5 Distinction from War Story 28
+
+| War Story | Cache layer | Symptom | Fix |
+|:----------|:------------|:--------|:----|
+| <span style="background:#e3f2fd;padding:1px 3px">**28**</span> | <span style="background:#fff3e0;padding:1px 3px">Browser</span> HTTP cache | Stale data; API returns correct when hit directly | `Cache-Control: no-store` on API response |
+| <span style="background:#e3f2fd;padding:1px 3px">**42**</span> | <span style="background:#fff3e0;padding:1px 3px">CloudFront</span> edge cache | HTML instead of JSON; routing config changed mid-deploy | Invalidate `/analytics` after Phase 2 |
+
+### 42.6 Resolution
+
+**1. Immediate fix:** Invalidate CloudFront cache for `/analytics`:
+
+```bash
+./tmp/backup_tf_state/invalidate_kube_analytics.sh
+```
+
+Or manually:
+
+```bash
+aws cloudfront create-invalidation --distribution-id E1KS33G9TRMTS9 --paths "/analytics" "/analytics/*"
+```
+
+Wait 1–2 minutes for edge propagation, then retry Batch Analytics.
+
+**2. Path pattern hardening:** Changed `path_pattern` from `/analytics` to `/analytics*` in `infra_terraform/modules/aws/primitives/cloudfront/main.tf` so subpaths (e.g. `/analytics/status`) are also routed to the API. Requires re-apply to take effect.
+
+**3. Script:** `tmp/backup_tf_state/invalidate_kube_analytics.sh` sources `.env` and runs the invalidation. Use when Batch Analytics shows "Backend API not reachable" but `/query` works.
+
+### 42.7 Takeaway
+
+When CloudFront routing changes after a deploy (e.g. two-phase kube deploy adding the API origin), **invalidate** any paths that were previously served from a different origin. Otherwise the edge cache can serve stale content (e.g. index.html from S3) until TTL expires. For API paths like `/analytics`, run `create-invalidation` after the second apply, or add invalidation to the deploy pipeline. See [AWS_LEARNED_CLOUDFRONT.md](../learned/aws/AWS_LEARNED_CLOUDFRONT.md) for cache behavior and path routing.
 
 ---

@@ -27,10 +27,12 @@ variable "spark_schedule_expression" {
   default = "rate(1 hour)"
 }
 
-variable "desired_count" {
-  type    = number
-  default = 1
-}
+variable "min_instance_count" { type = number }
+variable "max_instance_count" { type = number }
+variable "api_task_cpu" { type = number }
+variable "api_task_memory" { type = number }
+variable "spark_task_cpu" { type = number }
+variable "spark_task_memory" { type = number }
 
 # Env map (non-sensitive)
 variable "log_level" {

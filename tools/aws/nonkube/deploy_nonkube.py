@@ -5,6 +5,7 @@ Called by deploy.py when scope is nonkube or all (nonkube first when scope=all).
 """
 import os
 
+from tools.aws.provider_config_handler import get_nonkube_compute_config
 from tools.cloud_shared.analytics_schedule import get_required_analytics_scheduler_interval_seconds
 from tools.cloud_shared.logging import logger
 from tools.aws.scope_shared.core.terra_init import init_stack
@@ -37,6 +38,16 @@ def run_deploy_nonkube(
     Deploy nonkube stack: ECS apply, frontend, ECS bootstrap.
     Idempotent and safe to re-run.
     """
+    # Set ECS compute vars from config (min/max, task cpu/memory)
+    cfg = get_nonkube_compute_config(region)
+    tasks = cfg["tasks"]
+    os.environ["TF_VAR_min_instance_count"] = str(cfg["min_instance_count"])
+    os.environ["TF_VAR_max_instance_count"] = str(cfg["max_instance_count"])
+    os.environ["TF_VAR_api_task_cpu"] = str(tasks["api"]["cpu"])
+    os.environ["TF_VAR_api_task_memory"] = str(tasks["api"]["memory"])
+    os.environ["TF_VAR_spark_task_cpu"] = str(tasks["spark"]["cpu"])
+    os.environ["TF_VAR_spark_task_memory"] = str(tasks["spark"]["memory"])
+
     scope_label = scope_for("infra_terraform/live_deploy/aws/nonkube")
     if stats:
         stats.set_scope(scope_label)

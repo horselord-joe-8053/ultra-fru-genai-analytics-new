@@ -77,13 +77,14 @@ def _destroy_vars_for_stack(stack: str, env: str, region: str) -> list[str]:
         ]
     if "kube" in stack and "scope_shared" not in stack:
         from tools.gcp.scope_shared.core.resource_names import gke_cluster
-        from tools.gcp.provider_config_handler import get_gke_location, get_initial_node_count
+        from tools.gcp.provider_config_handler import get_gke_location, get_kube_compute_config
         gke_location = get_gke_location(region)
         zone = gke_location if gke_location != region else None
+        kube_cfg = get_kube_compute_config(region)
         return base + [
             f"-var=gke_cluster_name={gke_cluster(env, region, zone=zone)}",
             f"-var=gke_location={gke_location}",
-            f"-var=initial_node_count={get_initial_node_count(region)}",
+            f"-var=initial_node_count={kube_cfg['min_node_count']}",
             f"-var=gke_deletion_protection=false",
             f"-var=tf_state_bucket={bucket}",
             f"-var=tf_state_prefix={prefix}",

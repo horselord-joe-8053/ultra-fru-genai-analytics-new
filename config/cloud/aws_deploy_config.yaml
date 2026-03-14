@@ -1,78 +1,63 @@
 # =============================================================================
-# AWS Deploy Config: Region-Specific Zone and Placement Settings
+# AWS Deploy Config: Scope-Based, Bounded, Single Source of Truth
 # =============================================================================
 #
 # PURPOSE:
-#   This file is the single source of truth for AWS region/zone configuration.
-#   The orchestrator passes --region (e.g. us-east-1); the config handler looks
-#   up that region below and returns the settings. Terraform uses these values
-#   for VPC subnets, EKS node placement, and Aurora.
+#   Single source of truth for AWS region/zone, compute, and database config.
+#   Hierarchy: scope (scope_default | kube | nonkube) → region (regional_default | us-east-1 | ...)
 #
 # HOW IT WORKS:
-#   - "default" block: Applied to all regions unless a region block overrides.
-#   - Region blocks (us-east-1, us-west-2, etc.): Region-specific overrides.
-#   - Handler merges: region block overrides default; missing keys fall back.
-#
-# AWS CONCEPTS (for readers new to AWS):
-#   - Region: A geographic area (e.g. us-east-1 = N. Virginia, us-west-2 = Oregon).
-#   - Availability Zone (AZ): A data center within a region. Each region has
-#     multiple AZs (e.g. us-east-1a, us-east-1b). AZs are isolated for fault
-#     tolerance.
-#   - VPC: Virtual Private Cloud. Your network. Subnets live inside it.
-#   - Subnet: A segment of the VPC. Each subnet is in exactly one AZ.
-#   - EKS: Managed Kubernetes. Nodes run in subnets; subnets determine which AZs.
-#   - Aurora: Managed PostgreSQL. multi_az=true spreads across 2+ AZs for HA.
+#   - scope_default: Network + database for durable stack (VPC, Aurora).
+#   - kube: EKS compute (min/max node count, instance types).
+#   - nonkube: ECS compute (min/max instance count, task cpu/memory).
+#   - regional_default: Shared values; region blocks override only what differs.
 #
 # =============================================================================
 
-default:
-  # ---------------------------------------------------------------------------
-  # Compute (EKS node group)
-  # ---------------------------------------------------------------------------
-  # 1. desired_nodes: EKS worker node count. Currently NOT wired—Terraform uses
-  #    default (1). Future: deploy_kube.py will read via get_compute_config(region).
-  # 2. node_instance_type: EC2 type for nodes (e.g. t3.small, t3.medium). Per-region
-  #    because not all instance types exist in all regions. Future: wire to Terraform.
-  # 3. Why config (not .env): Region-specific; instance availability varies by region.
-  # See docs/learned/cloud_shared/BACKEND_SCALING_KUBE_MULTI_CLOUD.md.
-  compute:
-    desired_nodes: 1
-    node_instance_type: t3.small
+scope_default:
+  regional_default:
+    network:
+      public_subnet_cidrs: ["10.0.1.0/24", "10.0.2.0/24"]
+      private_subnet_cidrs: ["10.0.101.0/24", "10.0.102.0/24"]
+    database:
+      multi_az: false
 
-  # Aurora: false = single AZ (cheaper, dev); true = multi-AZ failover (production).
-  database:
-    multi_az: false
+  us-east-1:
+    network:
+      azs: [us-east-1a, us-east-1b]
+  us-east-2:
+    network:
+      azs: [us-east-2a, us-east-2b]
+  us-west-2:
+    network:
+      azs: [us-west-2a, us-west-2b]
 
-# -----------------------------------------------------------------------------
-# us-east-1 (N. Virginia) - Common default region
-# Baseline: 2 AZs matches previous workflow (durable_azs_for_region).
-# -----------------------------------------------------------------------------
-us-east-1:
-  network:
-    # AZs for VPC subnets. Each AZ gets one public and one private subnet.
-    # EKS nodes are placed in these subnets, so they run in these AZs.
-    # 2 AZs = basic redundancy; 1 AZ = minimal (dev, lower cost).
-    azs: [us-east-1a, us-east-1b]
+kube:
+  # min=2: Fix CronJob resource exhaustion. 1× t3.small (2GB) overloaded by Spark+fru-api+LB
+  # → memory pressure → node unreachable. 2 nodes spread load. See EKS_NODE_KUBELET_CRONJOB.md
+  regional_default:
+    compute:
+      min_node_count: 2
+      max_node_count: 2
+      node_instance_types: [t3.small]
+  us-east-1:
+    compute:
+      min_node_count: 2
+      max_node_count: 2
+  us-east-2:
+    compute:
+      min_node_count: 2
+      max_node_count: 2
 
-    # CIDR blocks for subnets. Length must match azs (one per AZ).
-    # Public: for load balancers, NAT. Private: for EKS nodes, Aurora.
-    public_subnet_cidrs: ["10.0.1.0/24", "10.0.2.0/24"]
-    private_subnet_cidrs: ["10.0.101.0/24", "10.0.102.0/24"]
-
-# -----------------------------------------------------------------------------
-# us-east-2 (Ohio) - Example second region
-# -----------------------------------------------------------------------------
-us-east-2:
-  network:
-    azs: [us-east-2a, us-east-2b]
-    public_subnet_cidrs: ["10.0.1.0/24", "10.0.2.0/24"]
-    private_subnet_cidrs: ["10.0.101.0/24", "10.0.102.0/24"]
-
-# -----------------------------------------------------------------------------
-# us-west-2 (Oregon) - Example west coast region
-# -----------------------------------------------------------------------------
-us-west-2:
-  network:
-    azs: [us-west-2a, us-west-2b]
-    public_subnet_cidrs: ["10.0.1.0/24", "10.0.2.0/24"]
-    private_subnet_cidrs: ["10.0.101.0/24", "10.0.102.0/24"]
+nonkube:
+  regional_default:
+    compute:
+      min_instance_count: 1
+      max_instance_count: 2
+      tasks:
+        api:
+          cpu: 512
+          memory: 1024
+        spark:
+          cpu: 512
+          memory: 1024
