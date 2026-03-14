@@ -48,3 +48,12 @@ def require_bedrock_model_id() -> str:
 def get_bedrock_inference_profile_id() -> str:
     """Return AWS_BEDROCK_INFERENCE_PROFILE_ID from .env (may be empty)."""
     return (os.environ.get("AWS_BEDROCK_INFERENCE_PROFILE_ID") or "").strip()
+
+
+def get_bedrock_region() -> str:
+    """Return Bedrock API region. Prefer AWS_BEDROCK_REGION (us-east-1 for most models); fallback to CLOUD_REGION."""
+    return (
+        (os.environ.get("AWS_BEDROCK_REGION") or "").strip()
+        or (os.environ.get("CLOUD_REGION") or "").strip()
+        or "us-east-1"
+    )

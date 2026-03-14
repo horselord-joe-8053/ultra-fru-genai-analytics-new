@@ -38,15 +38,28 @@ def apply_stack_with_plan(
     plan_file: str = "tfplan",
     target_first: str | None = None,
 ) -> None:
-    """Apply using existing tfplan (run plan first, then apply tfplan).
-    If target_first is set, apply that resource first to fix destroy-order issues (e.g. backend before NEG)."""
+    """Apply using a saved tfplan.
+
+    Caller is responsible for running `tofu plan -out=<plan_file>` before this helper.
+    If target_first is set, we:
+      1) Run a targeted apply using plan_vars only (no plan file) to fix destroy-order issues.
+      2) Re-plan to refresh <plan_file> against the new state.
+      3) Apply the refreshed plan file.
+
+    This avoids the \"Saved plan is stale\" error that happens if we mutate state
+    after generating a plan and then try to apply the old tfplan."""
     logger.step(f"Applying stack (from {plan_file}): {stack_dir}")
     init_stack(stack_dir, os.environ.get("FRU_ENV", "dev"), region)
     if target_first:
-        # Use vars (not plan file) so we only apply the backend update, not the NEG destroy
         logger.info(f"[APPLY] Targeted apply first: -target={target_first}")
+        # Use vars (not plan file) so we only apply the targeted resource update,
+        # not any broader changes baked into an existing plan.
         terra(["apply", "-auto-approve", f"-target={target_first}"] + plan_vars, cwd=stack_dir, check=False)
-    # Apply the saved plan (or remainder)
+        # After changing state with the targeted apply, generate a fresh plan file so
+        # we never apply a tfplan that was computed against pre-targeted state.
+        logger.info(f"[APPLY] Re-planning after targeted apply to refresh {plan_file}")
+        terra(["plan", f"-out={plan_file}"] + plan_vars, cwd=stack_dir, check=True)
+    # Apply the saved (or freshly regenerated) plan
     terra(["apply", "-auto-approve", plan_file], cwd=stack_dir, check=True)
     logger.success(f"[APPLY OK] {stack_dir}")
 

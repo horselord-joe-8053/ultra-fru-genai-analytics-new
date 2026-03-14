@@ -1689,7 +1689,7 @@ tools/gcp/
 │   └── deploy_nonkube.py
 ├── scope_shared/
 │   ├── core/              # backend.py, terra_runner.py, terra_init.py, phases.py, resource_names.py
-│   ├── deploy/            # bootstrap_state_backend, build_and_push_images, ensure_secrets, setup_database, deploy_common
+│   ├── deploy/            # setup_state_backend, build_and_push_images, ensure_secrets, setup_database, deploy_common
 │   └── verify/            # verify_all_deploy, verify_all_teardown
 └── standalone/
     └── doctor.py
@@ -1701,7 +1701,7 @@ tools/gcp/
 |------|--------|
 | 1 | Create the directory structure (empty files or stubs). |
 | 2 | Implement `scope_shared/core/` first (backend, terra_runner, terra_init)—everything else depends on it. |
-| 3 | Implement `scope_shared/deploy/bootstrap_state_backend.py` (GCS bucket). |
+| 3 | Implement `scope_shared/deploy/setup_state_backend.py` (GCS bucket). |
 | 4 | Implement `scope_shared/deploy/build_and_push_images.py` (Artifact Registry). |
 | 5 | Implement `deploy.py` phases; wire to `run_deploy_stack`, `run_deploy_kube`, `run_deploy_nonkube`. |
 | 6 | Implement `teardown.py` (reverse order of deploy). |
@@ -1848,5 +1848,278 @@ GCP nonkube showed "Build: No Version Info Found," "Agent-based query processing
 ### 38.5 Takeaway
 
 For nonkube with scale-to-zero: (1) call `ensure_agent()` on every agent-dependent endpoint, including `/query/stream`; (2) populate version tags even when skip-build; (3) optionally set `min_instance_count=1` to avoid cold starts. See `docs/learned/cloud_shared/BACKEND_SCALING_NONKUBE_MULTI_CLOUD.md` for full architecture, GCP vs AWS scaling, and best practices.
+
+---
+
+## 39. Terraform Inconsistent State: Durable Has ECS, tofu state rm Fails with ResourceNotFoundException
+
+**creation:** `<260313>`
+**last_updated:** `<260313>`
+
+**keywords:** Terraform, OpenTofu, durable state, cross-stack pollution, tofu state rm, DynamoDB lock table, ResourceNotFoundException, bootstrap
+**difficulty:** 6
+**significance:** 8
+
+### 39.1 Context
+
+Durable state was corrupted (e.g. wrong `tofu init` dir, wrong backend key, or manual state copy) and contained resources that belong to nonkube (ECS, EventBridge). On redeploy, durable apply runs first and plans to **destroy** ECS because it is in durable state but not in durable config. The fix is to run `tofu state rm module.ecs` from the durable stack before redeploying. But `tofu state rm` failed with **`ResourceNotFoundException`** when acquiring the DynamoDB state lock—blocking the fix.
+
+### 39.2 Root Cause
+
+Two intertwined issues:
+
+1. **Cross-stack state pollution:** Durable state had ECS in it; durable config does not. Terraform plans to destroy ECS on every durable apply. Redeploy runs durable first, so ECS gets destroyed again and again. See [TERRA_LEARNED_INCONSISTENT_STATES.md](../learned/terra/TERRA_LEARNED_INCONSISTENT_STATES.md).
+
+2. **DynamoDB lock table missing or wrong region:** The S3 backend uses a DynamoDB table for state locking. When you run `tofu state rm`, Terraform initializes the backend and tries to connect to DynamoDB. If the table does not exist or is in the wrong region, you get `ResourceNotFoundException` **even with `-lock=false`**—the backend connects to DynamoDB during init, before the lock flag is applied. See [TERRA_DYNAMODB_LOCK_TABLE.md](../learned/terra/TERRA_DYNAMODB_LOCK_TABLE.md).
+
+### 39.3 Key Insight
+
+> Fixing corrupted Terraform state with `tofu state rm` can be blocked by a missing DynamoDB lock table. Run bootstrap first to create the table in the deploy region; then `tofu state rm` will succeed.
+
+### 39.4 Resolution
+
+1. **Bootstrap** (creates the lock table in the correct region):
+   ```bash
+   PYTHONPATH=. CLOUD_REGION=us-east-2 FRU_ENV=dev AWS_PROFILE=admin python tools/aws/scope_shared/deploy/setup_state_backend.py
+   ```
+
+2. **Remove wrong resources from durable state:**
+   ```bash
+   cd infra_terraform/live_deploy/aws/scope_shared/durable
+   AWS_PROFILE=admin tofu init -upgrade -reconfigure -backend-config=...
+   AWS_PROFILE=admin tofu state rm module.ecs
+   ```
+
+3. **Redeploy** via orchestrator.
+
+### 39.5 Takeaway
+
+When durable state contains resources that belong to another stack, `tofu state rm` is the fix—but it requires the DynamoDB lock table to exist in the backend region. Bootstrap creates it. For full step-by-step instructions and diagrams, see [TERRA_LEARNED_INCONSISTENT_STATES.md](../learned/terra/TERRA_LEARNED_INCONSISTENT_STATES.md). For lock table details and `-lock=false` behavior, see [TERRA_DYNAMODB_LOCK_TABLE.md](../learned/terra/TERRA_DYNAMODB_LOCK_TABLE.md).
+
+---
+
+## 40. EKS CronJob Overload: Jobs Accumulate, Node Fails, fru-api Pending
+
+**creation:** `<260313>`
+**last_updated:** `<260313>`
+
+**keywords:** EKS, CronJob, concurrencyPolicy, ttlSecondsAfterFinished, Spark, kubelet, NotReady, unreachable, t3.small, fru-api Pending
+**difficulty:** 7
+**significance:** 8
+
+### 40.1 Context
+
+After deploy, **fru-api** pods stayed **Pending** indefinitely. EKS nodes transitioned to **NotReady** with "Kubelet stopped posting node status." Replacement nodes exhibited the same failure within ~3 minutes of boot. EC2 instances appeared healthy; the issue was at the kubelet/application layer.
+
+### 40.2 The Cascade
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '9px' }, 'flowchart': { 'nodeSpacing': 15, 'rankSpacing': 20 }}}%%
+graph TD
+  A[CronJob */5 min\nconcurrencyPolicy: Allow] --> B[New Job every 5 min\noverlaps previous]
+  B --> C[60+ Jobs over ~2 days\nno ttlSecondsAfterFinished]
+  C --> D[5+ Spark pods on t3.small\n2GB RAM node]
+  D --> E[Memory pressure\nOOM / kubelet starvation]
+  E --> F[Kubelet stops\nNode NotReady]
+  F --> G[ASG replaces node]
+  G --> H[New node gets same\nworkload immediately]
+  H --> F
+
+  style A fill:#e3f2fd,stroke:#1976d2,stroke-width:1px,font-size:9px
+  style B fill:#fff3e0,stroke:#e65100,stroke-width:1px,font-size:9px
+  style C fill:#ffebee,stroke:#c62828,stroke-width:1px,font-size:9px
+  style D fill:#ffebee,stroke:#c62828,stroke-width:1px,font-size:9px
+  style E fill:#ffebee,stroke:#c62828,stroke-width:1px,font-size:9px
+  style F fill:#ffebee,stroke:#c62828,stroke-width:1px,font-size:9px
+  style G fill:#fff8e1,stroke:#ff8f00,stroke-width:1px,font-size:9px
+  style H fill:#ffebee,stroke:#c62828,stroke-width:1px,font-size:9px
+```
+
+### 40.3 Root Cause
+
+| Factor | Effect |
+|--------|--------|
+| <span style="background:#e3f2fd;padding:1px 3px">**t3.small**</span> | 2 vCPU, 2GB RAM — minimal headroom for system + workload |
+| <span style="background:#e3f2fd;padding:1px 3px">**concurrencyPolicy: Allow**</span> | Default; new Job every 5 min even if previous still running |
+| <span style="background:#e3f2fd;padding:1px 3px">**No ttlSecondsAfterFinished**</span> | Completed/failed Jobs and pods persist indefinitely |
+| <span style="background:#e3f2fd;padding:1px 3px">**Spark analytics pods**</span> | JVM + driver + local executors; ~512MB–1GB+ per pod, no limits |
+| <span style="background:#e3f2fd;padding:1px 3px">**maxPods=11**</span> | 5+ Spark + 2 fru-api + daemonsets → node at capacity |
+| <span style="background:#e3f2fd;padding:1px 3px">**Memory pressure**</span> | Multiple Spark pods on 2GB node → kubelet stops responding |
+
+### 40.4 Key Insight
+
+> A CronJob creates a **new Job** (and Pod) each time the schedule fires. With `concurrencyPolicy: Allow` and no `ttlSecondsAfterFinished`, Jobs accumulate and overlap. Heavy workloads (Spark) on a small node (t3.small) overload it; kubelet stops; replacement nodes fail the same way.
+
+### 40.5 Takeaway
+
+CronJob is a scheduler, not a singleton. Each schedule tick = one Job. For long-running or memory-heavy jobs, set `concurrencyPolicy: Forbid` and `ttlSecondsAfterFinished` to avoid accumulation and overlap. See War Story 41 for recovery and prevention.
+
+---
+
+## 41. EKS Kube Recovery: CronJob Overload and Node Failure — Playbook and Prevention
+
+**creation:** `<260313>`
+**last_updated:** `<260314>`
+
+**keywords:** EKS, CronJob, recovery, suspend, delete Jobs, force-delete pods, terminate node, ASG replacement, us-east-1, us-east-2, tainted node, concurrencyPolicy, ttlSecondsAfterFinished
+**difficulty:** 6
+**significance:** 8
+
+### 41.1 Context
+
+When fru-api pods are Pending and nodes are NotReady due to CronJob overload (War Story 40), a recovery playbook is needed. The fix has two parts: **immediate recovery** (stop the cascade, free capacity, terminate the bad node, wait for replacement) and **prevention** (manifest changes so it does not recur).
+
+### 41.2 Affected Regions: us-east-2 and us-east-1 — Same Tainted-Node Pattern
+
+<span style="background:#ffebee;padding:2px 6px;border-radius:4px">**Both us-east-2 and us-east-1**</span> suffered the same failure pattern. You must run the full recovery playbook in **each affected region**, including **terminating the NotReady node** and **waiting for ASG replacement**.
+
+| Region | When Observed | Symptoms | Root Cause |
+|--------|---------------|----------|------------|
+| <span style="background:#e3f2fd;padding:1px 3px">**us-east-2**</span> | 2026-03 (War Story 40) | fru-api Pending; node NotReady; "Kubelet stopped posting node status" | CronJob overload → 60+ Jobs → memory pressure → kubelet stops |
+| <span style="background:#e3f2fd;padding:1px 3px">**us-east-1**</span> | 2026-03-14 | fru-api Pending; node NotReady; taint `node.kubernetes.io/unreachable:NoExecute` | Same: stuck Job (175m) + node overload → kubelet unreachable |
+
+**Common outcome:** The node gets tainted with `node.kubernetes.io/unreachable:NoExecute`. Kubernetes evicts pods from it and cannot schedule new pods onto it. The only path to recovery is:
+
+1. Suspend CronJob and delete Jobs (stop the cascade)
+2. Force-delete stuck pods
+3. **Terminate the NotReady EC2 instance** (manual step — Kubernetes/ASG will not auto-replace a "running" instance that is merely unreachable)
+4. **Wait for ASG to launch a replacement node** (~3–4 min)
+5. Re-enable CronJob after cluster recovers
+
+### 41.3 Recovery Flow
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '9px' }, 'flowchart': { 'nodeSpacing': 15, 'rankSpacing': 20 }}}%%
+graph TD
+  A[1. Suspend CronJob] --> B[2. Delete periodic Jobs]
+  B --> C[3. Force-delete stuck\nTerminating pods]
+  C --> D[4. Terminate NotReady\nEC2 instance]
+  D --> E[5. Wait for ASG\nreplacement node]
+  E --> F[6. Verify fru-api\npods Running]
+  F --> G[7. Re-enable CronJob]
+
+  style A fill:#e3f2fd,stroke:#1976d2,stroke-width:1px,font-size:9px
+  style B fill:#e3f2fd,stroke:#1976d2,stroke-width:1px,font-size:9px
+  style C fill:#fff3e0,stroke:#e65100,stroke-width:1px,font-size:9px
+  style D fill:#fff3e0,stroke:#e65100,stroke-width:1px,font-size:9px
+  style E fill:#fff8e1,stroke:#ff8f00,stroke-width:1px,font-size:9px
+  style F fill:#e8f5e9,stroke:#2e7d32,stroke-width:1px,font-size:9px
+  style G fill:#e8f5e9,stroke:#2e7d32,stroke-width:1px,font-size:9px
+```
+
+### 41.4 Recovery Commands
+
+| Step | Command |
+|------|---------|
+| <span style="background:#e3f2fd;padding:1px 3px">**1. Suspend CronJob**</span> | `kubectl patch cronjob fru-analytics-periodic-kube -n fru-kube -p '{"spec":{"suspend":true}}'` |
+| <span style="background:#e3f2fd;padding:1px 3px">**2. Delete periodic Jobs**</span> | `kubectl get jobs -n fru-kube -o name \| grep periodic \| xargs kubectl delete -n fru-kube` (or `--all`; deploy re-runs bootstrap) |
+| <span style="background:#e3f2fd;padding:1px 3px">**3. Force-delete stuck pods**</span> | `kubectl delete pod <pod> -n fru-kube --force --grace-period=0` (for pods stuck Terminating on unreachable nodes) |
+| <span style="background:#e3f2fd;padding:1px 3px">**4. Terminate NotReady node**</span> | `AWS_PROFILE=admin aws ec2 terminate-instances --instance-ids <id> --region <region>` (instance ID: `kubectl get node -o jsonpath='{.items[0].spec.providerID}'` → extract `i-xxx` from end) |
+| <span style="background:#fff8e1;padding:1px 3px">**5. Wait for ASG replacement**</span> | ~3–4 min — see §41.5 below |
+| <span style="background:#e8f5e9;padding:1px 3px">**6. Verify**</span> | `kubectl get nodes` and `kubectl get pods -n fru-kube -l app=fru-api` |
+| <span style="background:#e8f5e9;padding:1px 3px">**7. Re-enable CronJob**</span> | `kubectl patch cronjob fru-analytics-periodic-kube -n fru-kube -p '{"spec":{"suspend":false}}'` |
+
+### 41.5 ASG Replacement: What It Is and How It Works
+
+<span style="background:#e3f2fd;padding:2px 6px;border-radius:4px">**What is an ASG?**</span> An **Auto Scaling Group** (ASG) is an AWS construct that maintains a desired number of EC2 instances for your EKS worker node group. When you create an EKS managed node group, AWS creates an ASG behind it.
+
+<span style="background:#e3f2fd;padding:2px 6px;border-radius:4px">**Why must we terminate the node manually?**</span> When the kubelet stops responding, the EC2 instance is still "running" from AWS's perspective. The ASG does **not** automatically replace instances that are merely unreachable or NotReady — it only replaces instances that are **terminated**, **stopped**, or fail health checks (if you configure them). So we must run `aws ec2 terminate-instances` ourselves.
+
+<span style="background:#fff8e1;padding:2px 6px;border-radius:4px">**What happens after we terminate?**</span> The ASG detects that the desired count (e.g. 1) is greater than the current healthy count (0). It launches a **new EC2 instance** from the same launch template, joins it to the EKS cluster, and Kubernetes can schedule pods onto it.
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '10px' }}}%%
+sequenceDiagram
+    participant You
+    participant AWS as AWS EC2
+    participant ASG as Auto Scaling Group
+    participant EKS as EKS Control Plane
+    participant NewNode as New EC2 Node
+
+    You->>AWS: aws ec2 terminate-instances --instance-ids i-xxx
+    AWS->>AWS: Instance enters shutting-down
+    ASG->>ASG: Detects instance count < desired
+    ASG->>AWS: Launch new instance (same template)
+    AWS->>NewNode: New EC2 instance boots
+    NewNode->>EKS: Node registers with cluster
+    EKS->>EKS: Node becomes Ready
+    Note over You,NewNode: ~3–4 minutes total
+    You->>EKS: kubectl get nodes (new node Ready)
+```
+
+| Phase | Duration | What Happens |
+|-------|----------|--------------|
+| <span style="background:#ffebee;padding:1px 3px">**1. Terminate**</span> | Immediate | You run `aws ec2 terminate-instances`. Instance state: `shutting-down` → `terminated`. |
+| <span style="background:#fff3e0;padding:1px 3px">**2. ASG detects shortfall**</span> | ~30–60 s | ASG compares desired vs. current capacity; decides to launch a replacement. |
+| <span style="background:#fff8e1;padding:1px 3px">**3. New instance launch**</span> | ~1–2 min | EC2 instance boots from launch template; joins VPC, gets private IP. |
+| <span style="background:#e8f5e9;padding:1px 3px">**4. EKS node registration**</span> | ~1–2 min | EKS bootstrap (kubelet, containerd) runs; node registers with control plane; status becomes `Ready`. |
+| <span style="background:#e3f2fd;padding:1px 3px">**Total**</span> | **~3–4 min** | New node Ready; fru-api pods can schedule. |
+
+<span style="background:#e8f5e9;padding:2px 6px;border-radius:4px">**How to monitor:**</span> Run `kubectl get nodes -w` in one terminal. You will see the old node eventually disappear (or show `NotReady,SchedulingDisabled`) and a new node appear with `Ready`. Alternatively, `kubectl get nodes` every 60 seconds until a Ready node appears.
+
+### 41.6 Prevention: Manifest Changes
+
+| Change | Purpose |
+|--------|---------|
+| <span style="background:#e3f2fd;padding:1px 3px">**concurrencyPolicy: Forbid**</span> | Only one Job at a time; skip new run if previous still running |
+| <span style="background:#e3f2fd;padding:1px 3px">**ttlSecondsAfterFinished: 240**</span> | Auto-delete Job and pods 4 min after completion |
+| <span style="background:#e3f2fd;padding:1px 3px">**Optional: desired_size=2 or t3.medium**</span> | More headroom for overlapping workloads |
+
+Applied in `infra_terraform/modules/cloud_shared/k8s/spark-cronjob.yaml.j2`:
+
+```yaml
+spec:
+  schedule: "{{ SCHEDULE_CRON }}"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 240
+```
+
+### 41.7 Scope: CronJobs vs EventBridge vs GCP
+
+The wasteful-resource problem and TTL apply differently across schedulers and providers:
+
+| Scheduler | Provider | Overlap? | TTL? | Failure mode |
+|-----------|----------|----------|------|--------------|
+| <span style="background:#e3f2fd;padding:1px 3px">**K8s CronJob**</span> | AWS EKS, GCP GKE | Yes (default `concurrencyPolicy: Allow`) | `ttlSecondsAfterFinished: 240` — Jobs and pods auto-deleted 4 min after completion | Shared node → pods accumulate → node overload → kubelet stops |
+| <span style="background:#e3f2fd;padding:1px 3px">**EventBridge → ECS**</span> | AWS nonkube | Yes — each schedule tick starts a new task even if previous still running | No — EventBridge has no TTL; each invocation is a separate ECS task | Isolated Fargate tasks — no shared node; no node crash (but overlapping runs waste $) |
+| <span style="background:#e3f2fd;padding:1px 3px">**Cloud Scheduler → Cloud Run Job**</span> | GCP nonkube | Each execution is independent | N/A — Cloud Run Job executions don't accumulate like K8s Jobs | Different semantics; no K8s-style TTL needed |
+
+**Kube vs nonkube (AWS):** The node failure happened on kube because all CronJob pods share a single node (t3.small). Nonkube uses ECS Fargate — each Spark task runs in its own Fargate instance, so there is no shared node to overload. EventBridge can still start overlapping tasks (wasteful in $ and redundant writes), but it does not crash a node.
+
+**EventBridge TTL:** EventBridge does not provide TTL for scheduled ECS tasks. Each trigger creates a task; when the task completes, ECS retains it in "stopped" state for a while, but there is no configurable per-task TTL. The concept differs from Kubernetes: ECS has no persistent "Job" object that accumulates like K8s Jobs.
+
+**GCP:** GCP kube (GKE) uses the same CronJob manifest (`spark-cronjob.yaml.j2`), so it gets `concurrencyPolicy: Forbid` and `ttlSecondsAfterFinished: 240`. GCP nonkube uses Cloud Scheduler → Cloud Run Job; executions are independent and do not pile up the same way, so no equivalent TTL is required.
+
+### 41.8 Key Insight
+
+> Recovery requires stopping the cascade (suspend CronJob, delete Jobs) before replacing the node. Otherwise the new node receives the same overload and fails again. You must **terminate the NotReady EC2 instance** and **wait for ASG replacement** — both us-east-2 and us-east-1 required this. Re-enable CronJob only after the cluster recovers and fru-api pods are Running.
+
+### 41.9 Deploy-Trigger Hypothesis: Why Every Deploy Causes Unreachable
+
+<span style="background:#ffebee;padding:2px 6px;border-radius:4px">**Do not blindly replace the node.**</span> Something causes the node to become unreachable. Evidence suggests the **deploy itself** triggers it:
+
+| Deploy Phase | Concurrent Load on 1× t3.small (2GB) |
+|--------------|--------------------------------------|
+| helm upgrade LB controller | 2 old (Terminating) + 2 new (Starting) ≈ 600MB spike |
+| kube_apply + rollout restart fru-api | 2 old (Terminating) + 2 new (Starting) ≈ 1GB |
+| CronJob Spark (if schedule fired) | 1 Spark pod ≈ 512MB–1GB |
+| **Total** | **2.3GB+ on 2GB node → OOM → kubelet stops** |
+
+See [EKS_NODE_KUBELET_CRONJOB.md](../learned/cloud_shared/EKS_NODE_KUBELET_CRONJOB.md) §4 for diagnostic commands (run **before** terminating) and mitigation options (suspend CronJob before deploy, scale to 2 nodes, t3.medium).
+
+### 41.10 Deploy Fail-Fast and Investigation (us-east-1, us-east-2, 2026-03)
+
+When fru-api or aws-load-balancer-controller pods stay Pending due to node unreachable/taint, deploy now **fail-fasts after ~90s** instead of waiting the full timeout. `k8s_deploy_helpers.py` detects:
+
+- Scheduler events: "0/N nodes available" or "untolerated taint(s)"
+- Node status: NotReady or `node.kubernetes.io/unreachable` taint
+
+On detection, deploy prints a full investigation including **node conditions** (when did it transition?), **cluster events** (OOMKilled?), and **EC2 console output** hint. Same pattern in <span style="background:#e3f2fd;padding:1px 3px">**us-east-1**</span> and <span style="background:#e3f2fd;padding:1px 3px">**us-east-2**</span>. Run diagnostics (EKS_NODE_KUBELET_CRONJOB.md §4) **before** terminating. Follow recovery playbook in §41.4 and §41.5.
+
+### 41.11 Takeaway
+
+For EKS kube with Spark CronJobs: (1) use `concurrencyPolicy: Forbid` and `ttlSecondsAfterFinished` to prevent accumulation; (2) if nodes go NotReady in **any region** (us-east-1, us-east-2, etc.), follow the recovery playbook in order — **including terminating the node and waiting for ASG replacement**; (3) re-enable CronJob only after deploy applies the fixes and cluster recovers. See [EKS_NODE_KUBELET_CRONJOB.md](../learned/cloud_shared/EKS_NODE_KUBELET_CRONJOB.md) for full reference.
 
 ---

@@ -145,11 +145,18 @@ resource "aws_iam_role_policy" "task_bedrock" {
   role = aws_iam_role.task.id
   policy = jsonencode({
     Version   = "2012-10-17"
-    Statement = [{
-      Effect   = "Allow"
-      Action   = ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]
-      Resource = ["*"]
-    }]
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]
+        Resource = ["*"]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["aws-marketplace:ViewSubscriptions", "aws-marketplace:Subscribe"]
+        Resource = ["*"]
+      }
+    ]
   })
 }
 
@@ -278,7 +285,7 @@ resource "aws_iam_role_policy" "spark_task_s3" {
     Version = "2012-10-17"
     Statement = [{
       Effect = "Allow"
-      Action = ["s3:GetObject", "s3:PutObject", "s3:ListBucket"]
+      Action = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket"]
       Resource = [
         "arn:aws:s3:::${var.delta_bucket}",
         "arn:aws:s3:::${var.delta_bucket}/*"
@@ -305,6 +312,7 @@ locals {
   spark_env = concat(
     [
       { name = "CLOUD_PROVIDER", value = "aws" },
+      { name = "DEPLOY_SCOPE", value = "nonkube" },
       { name = "SPARK_EXTRA_CONF", value = "spark.fru.delta_root=s3a://${var.delta_bucket}/delta" },
       { name = "DELTA_TABLE_PATH", value = "s3a://${var.delta_bucket}/delta/fru_sales" }
     ],

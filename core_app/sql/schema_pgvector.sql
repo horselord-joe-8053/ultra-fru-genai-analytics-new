@@ -57,6 +57,9 @@ CREATE TABLE IF NOT EXISTS batch_analytics (
     total_revenue NUMERIC
 );
 
+-- deploy_scope: which scheduler wrote this row (kube, nonkube). Added for UI "Updated X ago by Nonkube".
+ALTER TABLE batch_analytics ADD COLUMN IF NOT EXISTS deploy_scope TEXT;
+
 CREATE INDEX IF NOT EXISTS batch_analytics_created_at_idx
 ON batch_analytics(created_at DESC);
 

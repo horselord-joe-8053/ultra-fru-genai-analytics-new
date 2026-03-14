@@ -76,6 +76,7 @@ module "ecs" {
     CONTAINER_IMAGE_TAGS                 = var.app_image_tags
     AWS_BEDROCK_INFERENCE_PROFILE_ID     = var.bedrock_inference_profile_id
     AWS_BEDROCK_MODEL_ID                 = var.bedrock_model_id
+    AWS_BEDROCK_REGION                   = var.bedrock_region
   }, try(data.terraform_remote_state.shared_durable.outputs.aurora_endpoint, "") != "" ? {
     PGHOST     = data.terraform_remote_state.shared_durable.outputs.aurora_endpoint
     PGPORT     = tostring(data.terraform_remote_state.shared_durable.outputs.aurora_port)

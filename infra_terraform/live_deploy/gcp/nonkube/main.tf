@@ -111,6 +111,7 @@ module "spark_job" {
 
   env_vars = merge({
     CLOUD_PROVIDER    = "gcp"
+    DEPLOY_SCOPE      = "nonkube"
     SPARK_EXTRA_CONF  = "spark.fru.delta_root=gs://${local.delta_bucket}/delta"
     DELTA_TABLE_PATH  = "gs://${local.delta_bucket}/delta/fru_sales"
   }, local.cloud_sql_connection)

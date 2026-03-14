@@ -13,19 +13,19 @@ Use --force-build when code changed. See docs/learned/cloud_shared/DEPLOY_BUILD_
 
 Key behaviors aligned with the legacy repo:
 - Uses `.env` env-map (names follow legacy)
-- ECS bootstrap runs a one-off `run-task` reusing the ECS service network configuration (subnets + SGs)
+- ECS analytics bootstrap: one-off `run-task` (first non-periodic run) reusing the ECS service network configuration (subnets + SGs)
 - Recurring Spark schedule uses EventBridge->ECS RunTask (Terraform-managed), while the API container can still run a safety-net scheduler
 - Secrets are stored in Secrets Manager (containers created by TF; values set by tools/aws/ensure_secrets.py)
 
 Flow:
 1) doctor
-2) bootstrap backend (S3 bucket; optional DDB table if configured)
+2) setup state backend (S3 bucket; optional DDB table if configured)
 3) apply shared durable (VPC + Secrets containers)
 4) apply shared nondurable (buckets + ECR)
 5) ensure secrets values
 6) build & push images
 7) apply kube/nonkube stack
-8) bootstrap analytics once:
+8) run analytics bootstrap once (first non-periodic run):
    - kube: applies k8s Job then CronJob
    - nonkube: runs ECS one-off task override against the service task def
 
@@ -47,65 +47,75 @@ from tools.cloud_shared.stats import DeployStats, scope_for
 from tools.aws.scope_shared.deploy.deploy_common import tofu_output_json
 from tools.aws.kube.deploy_kube import run_deploy_kube
 from tools.aws.nonkube.deploy_nonkube import run_deploy_nonkube
-from tools.aws.scope_shared.deploy.bootstrap_helpers import K8S_NAMESPACE
+from tools.aws.scope_shared.deploy.k8s_deploy_helpers import K8S_NAMESPACE
 
 load_dotenv()
 
 
-def _print_success_url(env: str, region: str, scope: str) -> None:
-    """Print deployment success and frontend URL."""
+def _get_scope_url(scope: str, env: str, region: str) -> tuple[str, str | None] | None:
+    """Return (frontend_url, alb_dns) for a scope, or None if not found."""
     try:
-        logger.info("Retrieving frontend URL...")
-        if scope in ("kube", "all"):
+        if scope == "kube":
             stack_out = tofu_output_json("infra_terraform/live_deploy/aws/kube", env, region)
             cf_domain = stack_out.get("cloudfront_domain_name", {}).get("value")
             if cf_domain:
-                frontend_url = f"https://{cf_domain}"
-                _log_success(frontend_url)
-                return
-            # Fallback: LB hostname (uses region validation to avoid wrong-region LB)
-            # Ensure kubectl context points at target region (avoids "fru-api-svc not found" when querying wrong cluster)
+                return (f"https://{cf_domain}", None)
             subprocess.run(
                 [sys.executable, "tools/aws/kube/eks_kubeconfig.py", "--env", env, "--region", region],
                 check=False,
                 env={**os.environ, "CLOUD_REGION": region},
             )
             from tools.aws.kube.deploy_kube import _try_get_lb_hostname
-            lb_host = ""
-            for attempt in range(12):
+            for _ in range(12):
                 lb_host = _try_get_lb_hostname(env, region)
                 if lb_host:
-                    break
-                if attempt < 11:
-                    time.sleep(10)
-            if lb_host:
-                _log_success(f"http://{lb_host}")
-                return
-
-        if scope in ("nonkube", "all"):
+                    return (f"http://{lb_host}", None)
+                time.sleep(10)
+            return None
+        if scope == "nonkube":
             stack_out = tofu_output_json("infra_terraform/live_deploy/aws/nonkube", env, region)
             cf_domain = stack_out.get("cloudfront_domain_name", {}).get("value")
             alb_dns = stack_out.get("alb_dns_name", {}).get("value")
             if cf_domain:
-                frontend_url = f"https://{cf_domain}"
-                _log_success(frontend_url, alb_dns=alb_dns)
-                return
+                return (f"https://{cf_domain}", alb_dns)
             if alb_dns:
-                _log_success(f"http://{alb_dns}")
+                return (f"http://{alb_dns}", None)
+    except Exception:
+        pass
+    return None
+
+
+def _print_success_url(env: str, region: str, scope: str) -> None:
+    """Print deployment success and frontend URL(s). For scope=all, prints both nonkube and kube."""
+    try:
+        logger.info("Retrieving frontend URL(s)...")
+        entries: list[tuple[str, str, str | None]] = []  # (scope, url, alb_dns)
+        scopes_to_show = ["nonkube", "kube"] if scope == "all" else [scope]
+        for s in scopes_to_show:
+            result = _get_scope_url(s, env, region)
+            if result:
+                entries.append((s, result[0], result[1]))
+        if entries:
+            _log_success(entries)
     except Exception as e:
         logger.warning(f"Could not retrieve frontend URL: {e}")
 
 
-def _log_success(frontend_url: str, alb_dns: str | None = None) -> None:
+def _log_success(entries: list[tuple[str, str, str | None]] | tuple[str, str | None]) -> None:
+    """Log deployment success. entries: [(scope, url, alb_dns), ...] or legacy (url, alb_dns)."""
+    if isinstance(entries, tuple):
+        entries = [("", entries[0], entries[1])]
     logger.success(f"\n{'='*70}")
     logger.success("✓ DEPLOYMENT COMPLETE - READY FOR TESTING")
     logger.success(f"{'='*70}")
-    logger.success(f"\n🌐 CloudFront URL: {frontend_url}")
-    logger.success(f"   Health Check: {frontend_url}/health")
-    logger.success(f"   API Version: {frontend_url}/version")
-    logger.success(f"\n   Open in browser: {frontend_url}")
-    if alb_dns:
-        logger.success(f"   (Direct ALB: http://{alb_dns})")
+    for scope, frontend_url, alb_dns in entries:
+        scope_label = f"{scope}: " if scope else ""
+        logger.success(f"\n{scope_label}🌐 CloudFront URL: {frontend_url}")
+        logger.success(f"   Health Check: {frontend_url}/health")
+        logger.success(f"   API Version: {frontend_url}/version")
+        if alb_dns:
+            logger.success(f"   (Direct ALB: http://{alb_dns})")
+    logger.success(f"\n   Open in browser: {entries[0][1]}" + (f" | {entries[1][1]}" if len(entries) > 1 else ""))
     logger.success(f"{'='*70}\n")
 
 
@@ -225,9 +235,9 @@ def main():
         # Phase 2: Backend
         tracker.start_phase(2)
         logger.step(f"[2/{len(phases)}] Bootstrapping state backend...")
-        with stats.timed("Backend", "bootstrap_state_backend"):
-            subprocess.run(["python", "tools/aws/scope_shared/deploy/bootstrap_state_backend.py"], check=True)
-        logger.success("Backend bootstrapped")
+        with stats.timed("Backend", "setup_state_backend"):
+            subprocess.run(["python", "tools/aws/scope_shared/deploy/setup_state_backend.py"], check=True)
+        logger.success("State backend ready")
         tracker.end_phase(2)
 
         # Phase 3a: Durable-with-cooloff (Secrets Manager only). Applied first so durable

@@ -670,7 +670,7 @@ This section maps **all** places that need cloud-provider-specific code: `tools/
 | **kube/** | `deploy_kube.py`, `kube_apply.py`, `eks_kubeconfig.py`, `kube_pre_destroy.py` | — | `deploy_kube.py`, `kube_apply.py`, `gke_kubeconfig.py`, `kube_pre_destroy.py` |
 | **nonkube/** | `deploy_nonkube.py`, `ecs_spark_schedule.py` | — | `deploy_nonkube.py` (Cloud Run Jobs + Cloud Scheduler) |
 | **scope_shared/core/** | `backend.py` (S3/DynamoDB state), `terra_runner.py`, `terra_init.py`, `terra_var_handling.py` | — | `backend.py` (GCS state), `terra_runner.py`, etc. |
-| **scope_shared/deploy/** | `build_and_push_images.py` (ECR), `setup_database.py` (Aurora), `ensure_secrets.py` (Secrets Manager), `bootstrap_state_backend.py` (S3) | — | Artifact Registry, Cloud SQL, Secret Manager, GCS state backend |
+| **scope_shared/deploy/** | `build_and_push_images.py` (ECR), `setup_database.py` (Aurora), `ensure_secrets.py` (Secrets Manager), `setup_state_backend.py` (S3) | — | Artifact Registry, Cloud SQL, Secret Manager, GCS state backend |
 | **scope_shared/verify/** | `verify_all_deploy.py` | — | Same |
 | **standalone/** | `doctor.py` | — | `doctor.py` (gcloud, GCP_PROJECT_ID, creds) |
 

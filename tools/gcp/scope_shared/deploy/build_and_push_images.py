@@ -264,10 +264,25 @@ def main():
     )
     if spark_tag != "latest":
         sh(["docker", "tag", f"{spark_repo_name}:latest", f"{spark_image_url}:latest"])
-        run_docker_with_progress(
-            ["docker", "push", f"{spark_image_url}:latest"],
-            "Pushing spark image (latest)", step + 1, 6,
-        )
+        try:
+            run_docker_with_progress(
+                ["docker", "push", f"{spark_image_url}:latest"],
+                "Pushing spark image (latest)", step + 1, 6,
+            )
+        except subprocess.CalledProcessError as e:
+            msg = str(e)
+            # On some Docker / Artifact Registry combinations, pushing a manifest
+            # tagged as :latest can fail with "does not provide any platform" even
+            # though the versioned tag push succeeded. :latest is a convenience
+            # alias; deploy uses SPARK_IMAGE_TAG, so treat this as non-fatal.
+            if "does not provide any platform" in msg:
+                logger.warning(
+                    "[BUILD] Ignoring non-fatal spark :latest push error "
+                    "(image manifest without platform info). "
+                    "Deploy will use the versioned SPARK_IMAGE_TAG instead."
+                )
+            else:
+                raise
         step += 1
     # kube-proxy: GCP kube Cloud Run proxy (HTTPS + *.run.app)
     sh(["docker", "tag", f"{kube_proxy_repo_name}:{app_tag}", f"{kube_proxy_image_url}:{app_tag}"])

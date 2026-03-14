@@ -118,6 +118,8 @@ spec:
           value: "{{ AWS_BEDROCK_INFERENCE_PROFILE_ID }}"
         - name: AWS_BEDROCK_MODEL_ID
           value: "{{ AWS_BEDROCK_MODEL_ID }}"
+        - name: AWS_BEDROCK_REGION
+          value: "{{ AWS_BEDROCK_REGION | default('us-east-1') }}"
 {% elif cloud_provider == "gcp" %}
         - name: GCP_LLM_PROVIDER
           value: "{{ GCP_LLM_PROVIDER }}"

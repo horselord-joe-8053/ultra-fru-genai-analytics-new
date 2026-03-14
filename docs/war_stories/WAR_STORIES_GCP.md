@@ -187,7 +187,7 @@ AWS Terraform state uses **S3 + DynamoDB**: S3 stores the state file; DynamoDB p
 
 ### 4.4 Takeaway
 
-(1) `tools/gcp/scope_shared/deploy/bootstrap_state_backend.py` creates only the GCS bucket. (2) `backend_config()` in `terra_init.py` must pass `backend="gcs"` and `bucket`, `prefix`—no `dynamodb_table`. (3) State key format: `{prefix}/{env}/{region}/{stack_id}.tfstate` (e.g. `gcp-shared-durable.tfstate`).
+(1) `tools/gcp/scope_shared/deploy/setup_state_backend.py` creates only the GCS bucket. (2) `backend_config()` in `terra_init.py` must pass `backend="gcs"` and `bucket`, `prefix`—no `dynamodb_table`. (3) State key format: `{prefix}/{env}/{region}/{stack_id}.tfstate` (e.g. `gcp-shared-durable.tfstate`).
 
 ---
 
@@ -371,5 +371,56 @@ flowchart TB
 ### 8.7 Takeaway
 
 (1) Pre-destroy in `durable_pre_destroy.py` uses `gcloud compute networks peerings delete` instead of tofu targeted destroy. (2) Treat "there is no peering" / "not found" as success (idempotent when peering already deleted manually). (3) Always run `tofu state rm google_service_networking_connection.default` after deleting via gcloud so full destroy doesn't attempt Service Networking API delete. (4) Reference: `tools/gcp/scope_shared/teardown/durable_pre_destroy.py` and Terraform provider issue [#19908](https://github.com/hashicorp/terraform-provider-google/issues/19908).
+
+---
+
+## 9. Smart DB Loading Strategy: Verify-Only Fallback Instead of Fail-Fast
+
+**creation:** 260312  
+**last_updated:** 260312  
+
+**keywords:** Cloud Run Job, db-setup, schema + load, verify-only, fail-fast, recovery path, idempotent deploy  
+**difficulty:** 5  
+**significance:** 7  
+
+### 9.1 Context
+
+On GCP, database setup (schema + CSV load + OpenAI embeddings into `fru_sales_embeddings`) runs inside a **Cloud Run Job** (private-IP Cloud SQL). The job can fail for many reasons: timeout (e.g. 900s poll limit), missing env in the container (e.g. `OPENAI_EMBED_MODEL`), transient API errors, or image/config bugs. If we **fail-fast** on the first exception, we abort the entire deploy. That is correct when the DB is genuinely broken or never initialized—but it is wasteful when the failure is transient or late (e.g. job timed out *after* successfully loading data, or a previous deploy already populated the DB).
+
+### 9.2 The Tension
+
+General orchestration wisdom (see WAR_STORIES_CLOUD_SHARED) says: *check exit codes, exit 1 on failure, do not report success when a critical step failed.* So one might expect: “schema job failed → exit 1 immediately.” The nuance here is that “schema job failed” does not always mean “DB is unusable.” The job is **asynchronous** and **long-running**; we only observe success or failure after the fact. A timeout or a late exception (e.g. after schema and CSV load but during embeddings) can leave the DB in a good state. Failing the deploy then forces a full rerun or manual intervention even when a cheap check would show the DB is already OK.
+
+### 9.3 Smart Strategy: Verify-Only Fallback
+
+We intentionally **do not** abort on the first exception. When the full schema+load job fails:
+
+1. **Log the failure** (we do not hide it).
+2. **Run a verify-only job**: a separate, lightweight Cloud Run Job execution with `FRU_VERIFY_ONLY=true` that only connects to the DB and runs `SELECT COUNT(*) FROM fru_sales_embeddings`, then emits `FRU_EMBEDDINGS_COUNT=N` for parsing.
+3. **If the count matches the expected value** (e.g. 200 rows from the reference CSV), treat the DB as already initialized and **continue the deploy**.
+4. **If the count is wrong or verify-only fails**, then re-raise and fail the deploy.
+
+So we fail-fast on *“DB is definitely not OK”* (verify-only fails or wrong count), but we avoid failing the deploy when *“full job failed but DB is actually fine”* (e.g. timeout after load, or previous run already populated the DB).
+
+### 9.4 Justification
+
+| Goal | How verify-only fallback helps |
+|------|--------------------------------|
+| **Avoid false deploy failures** | Timeouts or late container exits after successful load would otherwise abort the deploy even though the DB has correct data. |
+| **Idempotent / retry-friendly** | A retry or a later deploy can succeed without re-running the full heavy job if the DB was already initialized. |
+| **Cheap recovery check** | Verify-only is one SELECT COUNT and a short-lived container; cost and time are small compared to re-running the full schema+load+embeddings job. |
+| **Still fail when DB is bad** | If the DB was never set up or is partial (wrong count), verify-only returns False and we raise; we do not report success when the DB is unusable. |
+
+This is a **recovery path**, not a way to hide errors: the first failure is always logged, and we only continue when a second, explicit check (verify-only) confirms the DB state.
+
+### 9.5 Where It Lives
+
+- **Call site:** `tools/gcp/scope_shared/deploy/setup_database.py` — after `run_and_verify()` raises, we catch, log, then call `run_verify_only()`; on True we return successfully, otherwise we re-raise.
+- **Implementation:** `tools/gcp/scope_shared/deploy/db_setup/cloud_job.py` — `run_verify_only()` creates/updates the job with `FRU_VERIFY_ONLY=true`, executes it, parses logs for `FRU_EMBEDDINGS_COUNT`, and returns True iff count matches expected.
+- **Container:** Same db-setup image; `run_schema_and_load.py` branches on `FRU_VERIFY_ONLY` to skip schema/load and only run the count query.
+
+### 9.6 Takeaway
+
+(1) For long-running, async jobs that mutate shared state (e.g. DB), consider a **lightweight verification step** when the job “fails”—so you can distinguish “state is bad” from “job failed but state may still be good” (e.g. timeout after success). (2) Document this as a deliberate **recovery path** so future maintainers do not “fix” it by making the flow fail-fast and remove verify-only. (3) Keep the first failure visible in logs; only continue when the verification step explicitly confirms the desired state. (4) Reference: `tools/gcp/scope_shared/deploy/db_setup/cloud_job.py` (`run_verify_only` docstring) and `setup_database.py` (catch + verify-only blocks).
 
 ---

@@ -12,7 +12,7 @@ print("verify_all_deploy: starting...", flush=True)
 
 from tools.cloud_shared.env import load_dotenv, EnvVarNotFound
 load_dotenv()
-from tools.gcp.scope_shared.deploy.bootstrap_state_backend import load_gcp_env
+from tools.gcp.scope_shared.deploy.setup_state_backend import load_gcp_env
 load_gcp_env()  # Fix multi-line GOOGLE_APPLICATION_CREDENTIALS_JSON for tofu subprocess
 
 from tools.cloud_shared.logging import logger

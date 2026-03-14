@@ -28,7 +28,7 @@
 **Files to edit:**
 - `.env` — Remove or comment out `CLOUDWATCH_LOG_GROUP=/fru/dev/spark`
 - `.env.example` — Remove or comment out
-- `tools/aws/scope_shared/deploy/bootstrap_helpers.py` — Line ~35: change
+- `tools/aws/scope_shared/deploy/k8s_deploy_helpers.py` — Line ~35: change
   ```python
   lg = log_group or os.getenv("CLOUDWATCH_LOG_GROUP") or resource_names.log_group_spark(env, region)
   ```
@@ -79,7 +79,7 @@ def k8s_namespace() -> str:
 
 | File | Change |
 |------|--------|
-| `tools/aws/scope_shared/deploy/bootstrap_helpers.py` | Replace `K8S_NAMESPACE = "fru-kube"` with import and use `resource_names.k8s_namespace()` (or cloud_shared). Update all references. |
+| `tools/aws/scope_shared/deploy/k8s_deploy_helpers.py` | Replace `K8S_NAMESPACE = "fru-kube"` with import and use `resource_names.k8s_namespace()` (or cloud_shared). Update all references. |
 | `tools/aws/kube/kube_apply.py` | Import `k8s_namespace` from resource_names; use instead of `K8S_NAMESPACE` |
 | `tools/aws/kube/kube_pre_destroy.py` | Same |
 | `tools/aws/kube/deploy_kube.py` | Same |
@@ -220,8 +220,8 @@ After each phase:
 
 | Phase | Files |
 |-------|-------|
-| 1 | `.env`, `.env.example`, `bootstrap_helpers.py` |
-| 2 | `.env`, `bootstrap_helpers.py`, `kube_apply.py`, `kube_pre_destroy.py`, `deploy_kube.py`, `verify_all_teardown.py` (AWS+GCP), `verify_all_deploy.py`, `deploy.py`, `resource_names.py` (AWS+GCP) |
+| 1 | `.env`, `.env.example`, `k8s_deploy_helpers.py` |
+| 2 | `.env`, `k8s_deploy_helpers.py`, `kube_apply.py`, `kube_pre_destroy.py`, `deploy_kube.py`, `verify_all_teardown.py` (AWS+GCP), `verify_all_deploy.py`, `deploy.py`, `resource_names.py` (AWS+GCP) |
 | 3 | `.env`, `resource_names.py` (AWS+GCP), durable `variables.tf` (AWS+GCP), `terra_var_handling.py`, `deploy.py` (GCP), `kube_apply.py`, `deploy_kube.py`, `setup_database.py`, `verify_db_password.py` |
 | 4 | `.env`, `resource_names.py` (AWS+GCP), nonkube `variables.tf` + `main.tf` (AWS+GCP), `ecs/main.tf`, `terra_var_handling.py`, `deploy.py` (GCP), `kube_apply.py`, `deploy_kube.py`, `deploy_common.py` |
 
@@ -230,7 +230,7 @@ After each phase:
 ## Rollback
 
 If issues arise:
-- Phase 1: Re-add `CLOUDWATCH_LOG_GROUP`, `EKS_CLUSTER_NAME`, `ECS_CLUSTER_NAME` to `.env`; revert `bootstrap_helpers.py`
-- Phase 2: Re-add `K8S_NAMESPACE=fru-kube`; revert `bootstrap_helpers` and callers to use constant
+- Phase 1: Re-add `CLOUDWATCH_LOG_GROUP`, `EKS_CLUSTER_NAME`, `ECS_CLUSTER_NAME` to `.env`; revert `k8s_deploy_helpers.py`
+- Phase 2: Re-add `K8S_NAMESPACE=fru-kube`; revert `k8s_deploy_helpers` and callers to use constant
 - Phase 3: Remove `-var=aurora_database_name` / `-var=cloud_sql_database_name` from deploy; Terraform defaults remain `fru_db`
 - Phase 4: Remove `-var=delta_table_name`; revert Terraform to hardcoded `fru_sales`

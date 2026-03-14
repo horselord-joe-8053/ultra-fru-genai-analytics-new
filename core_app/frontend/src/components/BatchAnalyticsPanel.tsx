@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 interface BatchAnalyticsData {
   id: number;
   last_updated_at: string;
+  updated_by_scope?: string | null;
   analytics_run_interval_minutes?: number;
   sales_by_brand: Array<{
     brand: string;
@@ -219,6 +220,9 @@ const BatchAnalyticsPanel: React.FC<BatchAnalyticsPanelProps> = ({ onToggle, isV
         {data.last_updated_at && (
           <p className="text-xs text-gray-400 mt-1">
             Updated {formatRelativeTime(data.last_updated_at)}
+            {data.updated_by_scope && (
+              <> by {data.updated_by_scope}</>
+            )}
           </p>
         )}
         {data.analytics_run_interval_minutes != null && (

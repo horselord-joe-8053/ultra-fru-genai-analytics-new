@@ -50,6 +50,8 @@ spec:
 {% endif %}
         - name: CLOUD_REGION
           value: "{{ CLOUD_REGION }}"
+        - name: DEPLOY_SCOPE
+          value: "kube"
 {% if cloud_provider == "local" %}
         volumeMounts:
         - name: delta

@@ -12,12 +12,12 @@ never managed:
    /aws/ecs/containerinsights/{cluster}/performance when Container Insights is
    enabled. ECS does not delete it when the cluster is destroyed.
 
-3. State bucket: Created by bootstrap_state_backend.py (not Terraform). Holds
+3. State bucket: Created by setup_state_backend.py (not Terraform). Holds
    Terraform state; cannot be destroyed while teardown runs. After all stacks
-   are gone, we empty and delete it. Next deploy will recreate via bootstrap.
+   are gone, we empty and delete it. Next deploy will recreate via setup_state_backend.
 
 4. DynamoDB lock table (optional): If TF_LOCK_TABLE_COMPONENT or TF_LOCK_TABLE_PREFIX
-   is set, we delete the lock table for the region. Next deploy recreates it via bootstrap.
+   is set, we delete the lock table for the region. Next deploy recreates it via setup_state_backend.
 
 All operations are idempotent (ignore ResourceNotFoundException, NoSuchBucket).
 """

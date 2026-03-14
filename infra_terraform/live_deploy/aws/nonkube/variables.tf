@@ -73,6 +73,11 @@ variable "bedrock_model_id" {
   type    = string
   default = "anthropic.claude-3-5-haiku-20241022-v1:0"
 }
+variable "bedrock_region" {
+  type        = string
+  default     = "us-east-1"
+  description = "Bedrock API region (models live here; may differ from aws_region). Default us-east-1 for Anthropic models."
+}
 
 variable "tf_state_bucket" { type = string }
 variable "tf_state_bucket_region" { type = string }

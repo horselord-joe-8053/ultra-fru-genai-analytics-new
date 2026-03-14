@@ -350,16 +350,32 @@ def main():
         step += 1
     sh(["docker", "tag", f"{spark_repo_name}:{spark_tag}", f"{spark_repo_url}:{spark_tag}"])
     run_docker_with_progress(
-        ["docker","push",f"{spark_repo_url}:{spark_tag}"],
+        ["docker", "push", f"{spark_repo_url}:{spark_tag}"],
         "Pushing spark image", step, total_steps,
     )
     step += 1
     if spark_tag != "latest":
         sh(["docker", "tag", f"{spark_repo_name}:latest", f"{spark_repo_url}:latest"])
-        run_docker_with_progress(
-            ["docker","push",f"{spark_repo_url}:latest"],
-            "Pushing spark image (latest)", step, total_steps,
-        )
+        try:
+            run_docker_with_progress(
+                ["docker", "push", f"{spark_repo_url}:latest"],
+                "Pushing spark image (latest)", step, total_steps,
+            )
+        except subprocess.CalledProcessError as e:
+            msg = str(e)
+            # On some Docker / ECR combinations, pushing an existing manifest
+            # tagged as :latest can fail with a "does not provide any platform"
+            # message even though the versioned tag push succeeded. This tag is
+            # only a convenience alias, so we treat that specific error as a
+            # non-fatal warning and continue with deploy.
+            if "does not provide any platform" in msg:
+                logger.warning(
+                    "[BUILD] Ignoring non-fatal spark :latest push error "
+                    "(image manifest without platform info). "
+                    "Deploy will use the versioned SPARK_IMAGE_TAG instead."
+                )
+            else:
+                raise
 
     # Store build-context hashes to S3 so deploy can skip build on future runs
     # when compute_build_context_hash() matches. Path: build-metadata/{env}/*.json

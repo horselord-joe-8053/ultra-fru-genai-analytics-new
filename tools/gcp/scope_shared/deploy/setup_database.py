@@ -143,6 +143,9 @@ def main():
                 sys.exit(1)
         except Exception as e:
             logger.warning(f"Database setup failed: {e}")
+            # Smart DB loading strategy: do not fail-fast. Run verify-only to see if the DB
+            # was already initialized (e.g. previous run succeeded, or this run timed out
+            # after load completed). Only fail deploy if verify-only shows wrong/missing data.
             logger.info("Checking if DB is already initialized (verify-only)...")
             if run_verify_only(args.env, region):
                 logger.success("Database already initialized; continuing")
@@ -204,6 +207,7 @@ def main():
             sys.exit(1)
     except Exception as e:
         logger.warning(f"Database setup failed: {e}")
+        # Smart DB loading strategy: do not fail-fast; run verify-only (see cloud_job.run_verify_only).
         logger.info("Checking if DB is already initialized (verify-only)...")
         if run_verify_only(args.env, region):
             logger.success("Database already initialized; continuing")

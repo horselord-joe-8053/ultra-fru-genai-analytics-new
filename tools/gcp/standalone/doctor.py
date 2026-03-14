@@ -45,7 +45,7 @@ def has(exe: str) -> bool:
 
 
 def docker_daemon_available() -> bool:
-    """Return True if Docker daemon is running and reachable."""
+    """Return True if Docker daemon is running and reachable. Used by deploy build phase."""
     try:
         subprocess.check_output(["docker", "info"], stderr=subprocess.DEVNULL, text=True, timeout=5)
         return True
@@ -88,8 +88,8 @@ def main():
         raise SystemExit("Missing required executable: docker")
     if not args.skip_docker and not docker_daemon_available():
         raise SystemExit(
-            "Docker daemon is not running. Start Docker Desktop, or run with --skip-docker "
-            "(and --skip-build when deploying, if images already exist in Artifact Registry)."
+            "Docker daemon is not running. Start Docker Desktop, or run with --skip-docker --skip-build "
+            "when images already exist in Artifact Registry."
         )
 
     # GKE/kubectl: gke-gcloud-auth-plugin required for kubectl to authenticate with GKE

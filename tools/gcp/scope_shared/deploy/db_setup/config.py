@@ -92,6 +92,7 @@ def get_job_config(env: str, region: str, project_id: str | None = None, force: 
         "PGDATABASE": db_name,
         "FRU_CSV_PATH": "/app/data/fridge_sales_with_rating.csv",
         "FRU_FORCE_REFRESH_DATA": "true" if force else "false",
+        "OPENAI_EMBED_MODEL": os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small"),
     }
 
     secret_ids = {

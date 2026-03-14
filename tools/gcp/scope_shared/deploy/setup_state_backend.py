@@ -1,7 +1,9 @@
 """
-Bootstrap the GCS remote state backend (reference: tools/aws/scope_shared/deploy/bootstrap_state_backend.py).
+Set up the GCS remote state backend for Terraform/OpenTofu.
+
 Creates the GCS state bucket if missing (versioning enabled).
 Uses google-cloud-storage Python client (no gsutil required).
+Reference: tools/aws/scope_shared/deploy/setup_state_backend.py (AWS S3 equivalent).
 
 WHY OUTSIDE TERRAFORM: Chicken-and-egg—Terraform needs a backend before `tofu init`, so this
 bucket must exist first. Created via GCS client before any Terraform runs. Never destroyed by

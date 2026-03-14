@@ -90,10 +90,10 @@ def get_bedrock_client():
     Get AWS Bedrock client (for backward compatibility).
     Deprecated for agent path: use create_llm_client() instead.
     """
-    from backend.utils.env_helpers import get_required_env
+    from backend.env_utils.cloud_shared.model_config import get_bedrock_region
     import boto3
 
-    region = get_required_env("CLOUD_REGION", "Cloud region for Bedrock API")
+    region = get_bedrock_region()
     profile = os.environ.get("AWS_PROFILE", "")
     if profile:
         session = boto3.Session(profile_name=profile)

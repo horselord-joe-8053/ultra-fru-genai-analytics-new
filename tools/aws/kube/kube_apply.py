@@ -24,7 +24,7 @@ from tools.cloud_shared.analytics_schedule import (
 from tools.cloud_shared.env import load_dotenv, require
 from tools.cloud_shared.k8s_j2_render import render
 from tools.aws.scope_shared.core.backend import resolve_region
-from tools.aws.scope_shared.deploy.bootstrap_helpers import check_k8s_bootstrap_job_succeeded, JOB_BOOTSTRAP, K8S_NAMESPACE
+from tools.aws.scope_shared.deploy.k8s_deploy_helpers import check_k8s_bootstrap_job_succeeded, JOB_BOOTSTRAP, K8S_NAMESPACE
 
 load_dotenv()
 
@@ -242,6 +242,7 @@ data:
                 "SPARK_HOME": "/opt/spark",
                 "AWS_BEDROCK_INFERENCE_PROFILE_ID": args.bedrock_inference_profile_id or os.getenv("AWS_BEDROCK_INFERENCE_PROFILE_ID", ""),
                 "AWS_BEDROCK_MODEL_ID": args.bedrock_model_id or os.getenv("AWS_BEDROCK_MODEL_ID", ""),
+                "AWS_BEDROCK_REGION": os.getenv("AWS_BEDROCK_REGION", "us-east-1").strip(),
                 "ENABLE_ANALYTICS_SCHEDULER": os.getenv("ENABLE_ANALYTICS_SCHEDULER", "true"),
                 "ANALYTICS_SCHEDULER_INTERVAL_SECONDS": str(interval_sec),
             }

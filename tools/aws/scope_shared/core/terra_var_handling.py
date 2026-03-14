@@ -23,6 +23,7 @@ MAP = {
     "DELTA_LAKE_PACKAGE": "delta_lake_package",
     "AWS_BEDROCK_INFERENCE_PROFILE_ID": "bedrock_inference_profile_id",
     "AWS_BEDROCK_MODEL_ID": "bedrock_model_id",
+    "AWS_BEDROCK_REGION": "bedrock_region",
 }
 
 def get_base_vars(env: str, region: str | None = None):

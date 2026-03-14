@@ -218,8 +218,22 @@ def _parse_count_from_logs(log_text: str) -> int | None:
 def run_verify_only(env: str, region: str) -> bool:
     """
     Run a verify-only job (SELECT COUNT) to check if DB is already initialized.
-    Fast path when full setup failed (e.g. timeout) but DB may have been set up previously.
-    Returns True if count matches expected.
+
+    Used as a recovery path when the full schema+load Cloud Run Job fails: instead of
+    failing the deploy immediately, we run this lightweight job to see if the DB already
+    has the expected row count (e.g. from a previous successful run or from a run that
+    completed the load but then timed out or exited late). If the count matches, we
+    treat the DB as usable and let the deploy continue; otherwise we fail.
+
+    Rationale (smart DB loading strategy):
+    - Full job can fail for transient reasons (timeout, missing env in container,
+      one-off API error) even when the DB was already populated in a prior deploy.
+    - Failing fast on the first exception would force a full redeploy or manual
+      intervention when a simple "is the DB already OK?" check would suffice.
+    - Verify-only is cheap (one SELECT COUNT, short-lived container) and avoids
+      unnecessary deploy failures when the only goal was "DB has correct data."
+
+    Returns True if fru_sales_embeddings row count matches expected; False otherwise.
     """
     expected = _get_expected_count()
     logger.info(f"Verify-only: checking if fru_sales_embeddings has {expected} rows")

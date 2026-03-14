@@ -19,7 +19,7 @@ import subprocess
 
 from tools.cloud_shared.env import load_dotenv
 from tools.aws.scope_shared.core.backend import resolve_region
-from tools.aws.scope_shared.deploy.bootstrap_helpers import k8s_rollout_restart_api, wait_for_fru_api_ready
+from tools.aws.scope_shared.deploy.k8s_deploy_helpers import k8s_rollout_restart_api, wait_for_fru_api_ready
 from tools.cloud_shared.logging import logger
 
 load_dotenv()

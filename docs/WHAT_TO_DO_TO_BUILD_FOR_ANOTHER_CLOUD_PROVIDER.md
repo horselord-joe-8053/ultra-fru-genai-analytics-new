@@ -171,7 +171,7 @@ tools/{provider}/
 │   │   ├── phases.py
 │   │   └── resource_names.py
 │   ├── deploy/
-│   │   ├── bootstrap_state_backend.py
+│   │   ├── setup_state_backend.py
 │   │   ├── build_and_push_images.py
 │   │   ├── ensure_secrets.py
 │   │   ├── setup_database.py
@@ -196,7 +196,7 @@ tools/{provider}/
    - `phases.py`: `deploy_phases()`, `teardown_phases()` (can reuse from cloud_shared if extracted)
    - `resource_names.py`: Cluster name, registry repo, log names
 
-4. **scope_shared/deploy/bootstrap_state_backend.py** — Create state bucket (or equivalent) if missing.
+4. **scope_shared/deploy/setup_state_backend.py** — Create state bucket (or equivalent) if missing.
 
 5. **scope_shared/deploy/build_and_push_images.py** — Push Docker images to provider's registry.
 
@@ -378,7 +378,7 @@ After each phase, validate before moving on.
 - [ ] `tools/{provider}/provider_config_handler.py` exists and loads config
 - [ ] `tools/cloud_shared/ensure_secrets.py` has `{provider}` branch (or deploy uses provider-specific ensure_secrets)
 - [ ] `doctor.py` passes
-- [ ] `bootstrap_state_backend` creates state bucket
+- [ ] `setup_state_backend` creates state bucket
 - [ ] `deploy.py --scope kube --env dev` (or nonkube) runs without error (may fail at Terraform if Phase 4/5 not done)
 - [ ] `teardown.py` runs in reverse order
 

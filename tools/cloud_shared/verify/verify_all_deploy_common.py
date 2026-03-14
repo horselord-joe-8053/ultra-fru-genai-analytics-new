@@ -54,23 +54,30 @@ def run_verify_all_deploy(
     logger.operation_start("Verify", scope, env, region)
     logger.step(f"Full Verification Interface (env: {env}, region: {region}, total_rec from CSV: {total_rec})")
 
+    # Fetch URLs and print manual hint at start (one block for scope=all)
+    scope_urls: dict[str, str] = {}
     for s in scopes_to_verify:
-        phase_idx += 1
-        phase_start_time = time.time()
-        logger.phase_start(phase_idx, total_phases, verify_phases[phase_idx - 1])
-
         stack_dir = _stack_dir_for_scope(provider, s)
         logger.info(f"Fetching {s} tofu outputs (tofu init + output, ~30-60s)...")
         sys.stdout.flush()
         stack_out = get_tofu_output_fn(stack_dir, env)
         base_url = extract_base_url(s, stack_out)
-
         if not base_url and s == "kube" and kube_fallback_fn:
             base_url = kube_fallback_fn(env, region)
-
         if base_url:
             if not base_url.startswith("http"):
                 base_url = f"https://{base_url}"
+            scope_urls[s] = base_url
+            label = f"Verifying {s}:"
+            logger.info(f"{label:<22} 🌐 CloudFront URL: {base_url}")
+
+    for s in scopes_to_verify:
+        phase_idx += 1
+        phase_start_time = time.time()
+        logger.phase_start(phase_idx, total_phases, verify_phases[phase_idx - 1])
+
+        base_url = scope_urls.get(s)
+        if base_url:
             ok, rows = verify_api_endpoints(base_url, total_rec, scope=s, provider=provider)
             all_rows.extend(rows)
             if not ok:

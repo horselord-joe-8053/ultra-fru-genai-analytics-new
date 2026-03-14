@@ -10,7 +10,7 @@ from tools.cloud_shared.env import load_dotenv, EnvVarNotFound
 from tools.cloud_shared.logging import logger
 from tools.cloud_shared.verify.verify_all_teardown_common import run_verify_all_teardown
 from tools.aws.scope_shared.core.backend import resolve_region
-from tools.aws.scope_shared.deploy.bootstrap_helpers import K8S_NAMESPACE
+from tools.aws.scope_shared.deploy.k8s_deploy_helpers import K8S_NAMESPACE
 from tools.cloud_shared.verify.verify_kubectl import verify_kubectl_namespace_gone
 
 load_dotenv()

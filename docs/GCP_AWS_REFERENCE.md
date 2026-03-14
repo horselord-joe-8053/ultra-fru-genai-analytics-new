@@ -114,7 +114,7 @@
 
 | GCP | AWS | Notes |
 |-----|-----|-------|
-| `gcp/.../deploy/bootstrap_state_backend.py` | `aws/.../deploy/bootstrap_state_backend.py` | GCS bucket ↔ S3 bucket for state |
+| `gcp/.../deploy/setup_state_backend.py` | `aws/.../deploy/setup_state_backend.py` | GCS bucket ↔ S3 bucket for state |
 | — | `aws/.../deploy/build_and_push_images.py` | GCP: Artifact Registry |
 | — | `aws/.../deploy/setup_database.py` | GCP: Cloud SQL setup |
 | — | `aws/.../deploy/ensure_secrets.py` | GCP: Secret Manager values |

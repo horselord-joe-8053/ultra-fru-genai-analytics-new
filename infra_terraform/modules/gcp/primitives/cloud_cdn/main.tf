@@ -120,7 +120,7 @@ resource "google_compute_url_map" "frontend" {
       default_service = google_compute_backend_bucket.frontend.id
 
       path_rule {
-        paths   = ["/query", "/query/*", "/analytics", "/analytics/*", "/version", "/health"]
+        paths   = ["/query", "/query/*", "/analytics", "/analytics/*", "/rawdata", "/rawdata/*", "/version", "/health"]
         service = local.api_backend_id
       }
     }

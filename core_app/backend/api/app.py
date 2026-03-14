@@ -423,6 +423,7 @@ def get_analytics():
                     SELECT 
                         id,
                         created_at,
+                        deploy_scope,
                         sales_by_brand,
                         store_performance,
                         feedback_analysis,
@@ -480,6 +481,9 @@ def get_analytics():
                 # Analytics run interval from .env (required; no fallback)
                 interval_sec = get_required_int_env("ANALYTICS_SCHEDULER_INTERVAL_SECONDS", "Analytics scheduler interval in seconds")
                 result["analytics_run_interval_minutes"] = max(1, interval_sec // 60)
+
+                # deploy_scope: which scheduler wrote this row (kube, nonkube). Old rows may have NULL.
+                result["updated_by_scope"] = result.get("deploy_scope") or None
                 
                 # Limit arrays to query_limit before returning
                 # This ensures API returns only what frontend needs, even if DB has more

@@ -9,6 +9,18 @@ import os
 import json
 from typing import Dict, Any, Optional
 
+try:
+    from analytics_logger import info as log_info, success as log_success, warning as log_warning, error as log_error
+except ImportError:
+    def _log(level: str):
+        def _f(msg: str):
+            print(f"[{level}] {msg}", flush=True)
+        return _f
+    log_info = _log("INFO")
+    log_success = _log("SUCCESS")
+    log_warning = _log("WARNING")
+    log_error = _log("ERROR")
+
 
 def save_analytics_to_db(
     sales_by_brand: list,
@@ -18,6 +30,7 @@ def save_analytics_to_db(
     price_stats: Dict[str, Any],
     total_records: int,
     total_revenue: float,
+    deploy_scope: Optional[str] = None,
     db_config: Optional[Dict[str, Any]] = None
 ) -> bool:
     """
@@ -33,19 +46,20 @@ def save_analytics_to_db(
             "dbname": os.environ.get("PGDATABASE", "fru_db"),
         }
     if not db_config.get("host") or not db_config.get("password"):
-        print("✗ PGHOST and PGPASSWORD required for save_analytics_to_db; skipping")
+        log_warning("PGHOST and PGPASSWORD required for save_analytics_to_db; skipping")
         return False
 
     try:
         import psycopg2
         conn = psycopg2.connect(**db_config)
         cur = conn.cursor()
+        scope_val = deploy_scope or os.environ.get("DEPLOY_SCOPE", "")
         cur.execute(
             """
             INSERT INTO batch_analytics
             (sales_by_brand, store_performance, feedback_analysis, top_models,
-             price_stats, total_records, total_revenue)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+             price_stats, total_records, total_revenue, deploy_scope)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 json.dumps(sales_by_brand),
@@ -55,15 +69,16 @@ def save_analytics_to_db(
                 json.dumps(price_stats),
                 total_records,
                 total_revenue,
+                scope_val or None,
             ),
         )
         conn.commit()
         cur.close()
         conn.close()
-        print("✓ Analytics saved to database")
+        log_success("Analytics saved to database")
         return True
     except Exception as e:
-        print(f"✗ Error saving analytics to database: {e}")
+        log_error(f"Error saving analytics to database: {e}")
         return False
 
 

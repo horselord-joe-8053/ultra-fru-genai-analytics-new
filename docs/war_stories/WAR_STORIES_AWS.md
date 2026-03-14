@@ -590,7 +590,53 @@ This appears during Phase 2 (Deploy infrastructure layer) after a preempt or tea
 
 During Delta table creation (Phase 5), Spark failed with `NumberFormatException: For input string: "60s"` and later `"30s"`. Hadoop/S3A expects **numeric** values (e.g. milliseconds or seconds) for time-related config; Spark or Hadoop defaults were supplying duration **strings** like `"30s"` / `"60s"`, which the S3A client cannot parse.
 
-### 12.2 Why It Worked Before and Resurfaced
+### 12.2 Where "60s" / "24h" Come From (Confirmed)
+
+The duration strings are **not in our codebase**. They come from **Apache Hadoop's bundled defaults** in dependency JARs.
+
+From Hadoop's `core-default.xml` (hadoop-common-project/hadoop-common/src/main/resources/):
+
+```xml
+<property>
+  <name>fs.s3a.connection.establish.timeout</name>
+  <value>30s</value>
+  ...
+</property>
+<property>
+  <name>fs.s3a.threads.keepalivetime</name>
+  <value>60s</value>
+  ...
+</property>
+<property>
+  <name>fs.s3a.multipart.purge.age</name>
+  <value>24h</value>
+  ...
+</property>
+```
+
+When Spark loads the S3A filesystem, these defaults are applied. Delta Lake's LogStore (and S3A multipart purge code) then parses them with code that expects numeric values (e.g. `Configuration.getLong()`), causing `NumberFormatException`. The `purge.age` is in seconds; `24h` = 86400.
+
+### 12.3 Ecosystem Inconsistency (Not "S3A vs Core")
+
+This is not that the S3A module "doesn't fit" Hadoop core. Rather:
+
+- **Producers of config:** Hadoop evolved (HADOOP-18915, HADOOP-19097) to support duration strings like `"60s"` in defaults; some code uses `Configuration.getDuration()` to parse them.
+- **Consumers of config:** Other code (Delta Lake's LogStore, or older S3A paths) still uses `getLong()` / `Integer.parseInt()` and expects numeric strings.
+
+The mismatch is **inconsistent adoption** of the new config format across the Hadoop ecosystem and Delta Lake, not a design flaw between S3A and core.
+
+### 12.4 AWS-Only; GCP Unaffected
+
+| Aspect | AWS | GCP |
+|--------|-----|-----|
+| Storage scheme | `s3a://` | `gs://` |
+| Filesystem impl | `S3AFileSystem` (hadoop-aws) | `GoogleHadoopFileSystem` (gcs-connector) |
+| Config prefix | `fs.s3a.*` | `fs.gs.*` |
+| Source of "60s" | Hadoop `fs.s3a.*` defaults | Not used |
+
+GCP uses the GCS connector and `gs://` URIs. The `fs.s3a.*` properties are never loaded. The numeric overrides are only needed for the AWS path.
+
+### 12.5 Why It Worked Before and Resurfaced
 
 - **Before refactor:** Data-lake setup used `EXECUTION_METHOD=ecs_task` and called **run-spark-job-aws.sh**. That script gets S3A config from the **Python** helper `get_s3a_spark_config()` (in `spark_jobs/utils/spark_config.py`), which sets **all** time-related params to **numeric** values (e.g. `connection.establish.timeout=5000`, `threads.keepalivetime=60`). So the ECS path never hit duration-string defaults.
 
@@ -598,17 +644,27 @@ During Delta table creation (Phase 5), Spark failed with `NumberFormatException:
 
 So the bug was **fixed once** in the Python single source of truth, but a **new code path** (Docker ECR) duplicated config in shell and lost those overrides.
 
-### 12.3 Resolution
+### 12.6 Resolution Options (We Chose Option 1)
 
-1. **Single source of truth:** `run-spark-job-docker-ecr.sh` now gets full S3A config from **Python** `get_s3a_spark_config()`, then overrides only the credentials provider to `DefaultAWSCredentialsProviderChain` for local Docker. All time-related params (and any future ones) stay numeric and come from one place.
+1. **Config helper (chosen):** Centralize numeric overrides in `core_app/analytics/jobs/utils/spark_s3a_config.py` with a clear docstring. Single source of truth; documented rationale. Standard workaround until upstream fixes it.
 
-2. **Fallback:** If the Python helper is unavailable, the script falls back to an inline config that includes **numeric** overrides for `connection.establish.timeout`, `threads.keepalivetime`, and `connection.timeout`.
+2. **Hadoop config file:** Add `core-site.xml` or `s3a-site.xml` in the Spark image with numeric values. More "Hadoop-native" but another file to maintain.
 
-3. **Other call sites:** `temp_delta_oneoff_fix.sh` was updated with the same numeric overrides. Any script that builds S3A config without calling the Python helper must use numeric values for every time/interval parameter (see `spark_config.py` docstring).
+3. **Env vars:** Expose `SPARK_S3A_CONNECTION_TIMEOUT_MS` etc. Configurable but more surface area for misconfiguration.
 
-4. **Documentation:** `spark_config.get_s3a_spark_config()` docstring now states that all time/interval values must be numeric; Hadoop rejects duration strings.
+4. **Upstream fix:** Delta Lake (or Hadoop) could use `Configuration.getDuration()` for these configs. File an issue; remove our override when fixed.
 
-### 12.4 Takeaway
+### 12.7 Current Resolution
+
+- **Single source of truth:** `core_app/analytics/jobs/utils/spark_s3a_config.get_s3a_numeric_overrides()` yields `(key, value)` pairs. `run_analytics.py` applies them when `CLOUD_PROVIDER` is AWS.
+
+- **Overrides applied:** `connection.establish.timeout` (5000 ms), `connection.timeout` (60000 ms), `threads.keepalivetime` (60 s), `multipart.purge.age` (86400 s). Add more as new duration-string defaults surface in CloudWatch.
+
+- **Fallback:** If the helper is not importable, `run_analytics.py` falls back to inline numeric values.
+
+- **Documentation:** `spark_s3a_config.py` docstring explains the Hadoop/Delta parsing mismatch, links to this war story, and states that GCP is unaffected.
+
+### 12.8 Takeaway
 
 When you introduce a **new code path** that does the same job as an existing one (e.g. Docker ECR vs ECS for Delta), reuse the **same** source of config (e.g. Python helper) instead of reimplementing a minimal version. Reimplementing leads to drift (e.g. missing numeric overrides) and resurfacing of bugs that were already fixed elsewhere. For S3A/Hadoop, **all** time-related config must be numeric (no `"30s"` / `"60s"`); keep that in one place and reference it everywhere.
 
@@ -1321,7 +1377,7 @@ After deploying the kube stack, users saw 502 Bad Gateway on `/version`, `/analy
 - **api-service.yaml:** `service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing`
 - **kube/main.tf:** Tag public subnets with `kubernetes.io/role/elb` and `kubernetes.io/cluster/<name>` so the controller can place internet-facing NLBs there.
 - **api-deployment.yaml:** Increased probe `timeoutSeconds`, `initialDelaySeconds`, `periodSeconds` so pods aren't killed by transient slowness.
-- **deploy.py:** Added `wait_for_fru_api_ready()` after bootstrap—fail the deploy if pods don't become ready within timeout.
+- **deploy.py:** Added `wait_for_fru_api_ready()` after kube deploy—fail the deploy if pods don't become ready within timeout.
 
 ### 25.5 Takeaway
 
@@ -2467,6 +2523,39 @@ ECR allows the same repo name in different regions. We use regionless names (`fr
 ### 42.6 Takeaway
 
 For multi-region Docker deploys: (1) Use regionless repo names so one local reference works everywhere. (2) Remove only ECR registry compound tags after push, not images. (3) Use content-based build skip so unchanged code skips build. (4) Push-only fills empty ECR in new regions without rebuild. Result: build once, deploy to N regions with one build and N-1 push-only steps. See `docs/learned/cloud_shared/DEPLOY_BUILD_DOCKER.md`.
+
+---
+
+## 43. First-Deploy Kube: NLB Hostname Not Ready — Extend Poll, Fail-Fast
+
+**creation:** `<260314>`
+**last_updated:** `<260314>`
+
+**keywords:** EKS, kube deploy, us-east-1, first deploy, NLB hostname, CloudFront API origin, poll timeout, fail-fast
+**difficulty:** 6
+**significance:** 8
+
+### 43.1 Context
+
+First deploy to us-east-1 completed successfully. Nonkube worked (query stream, analytics, version). Kube showed "Backend API not reachable" and "CloudFront may not be routing /analytics to the backend" — `/version`, `/analytics`, `/query/stream` returned `X-Cache: Error from Cloudfront`. Verification failed overall even though nonkube passed.
+
+### 43.2 Root Cause
+
+Kube deploy uses a two-phase apply (War Story 17, 36): (1) first tofu apply with `ingress_hostname=null` → CloudFront has no API origin, API paths route to S3; (2) after kube_apply, poll for LB hostname, then second apply with `ingress_hostname=<hostname>` to wire CloudFront to the NLB.
+
+On **first deploy**, the NLB is created by the AWS Load Balancer Controller asynchronously. The LB hostname can take **5–10+ minutes** to appear in `kubectl get svc fru-api-svc`. The deploy only polls for **3 min** (18 attempts × 10s). If the NLB isn't ready in time, we skip the second apply and log: "LoadBalancer hostname not available; CloudFront API routes may not work until re-applied manually."
+
+Result: CloudFront for kube has no API origin. All API paths (`/query`, `/analytics`, `/version`) route to S3 → 403/404 → CloudFront returns "Error from Cloudfront".
+
+### 43.3 Resolution
+
+- **Extend poll:** 60 attempts × 20s ≈ 20 min (matches GCP reapply script timeout).
+- **Fail-fast:** If no hostname after 20 min, raise `SystemExit` instead of warning. Deploy fails; user re-runs deploy (NLB may be ready by then).
+- No separate reapply script; deploy handles it.
+
+### 43.4 Takeaway
+
+On first deploy, NLB can take 5–10+ min. Extend the poll to 20 min and fail-fast so we never leave kube in a half-wired state. See War Stories 17, 36.
 
 ---
 

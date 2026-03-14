@@ -20,6 +20,24 @@ except ImportError:
     save_analytics_to_db = None
     verify_saved_total_records = None
 
+try:
+    from spark_s3a_config import get_s3a_numeric_overrides
+except ImportError:
+    get_s3a_numeric_overrides = None
+
+try:
+    from analytics_logger import info as log_info, success as log_success, warning as log_warning, error as log_error, step as log_step
+except ImportError:
+    def _log(level: str):
+        def _f(msg: str):
+            print(f"[{level}] {msg}", flush=True)
+        return _f
+    log_info = _log("INFO")
+    log_success = _log("SUCCESS")
+    log_warning = _log("WARNING")
+    log_error = _log("ERROR")
+    log_step = _log("STEP")
+
 
 def _to_spark_path(path: str) -> str:
     return path.replace("s3://", "s3a://", 1) if path.startswith("s3://") else path
@@ -52,7 +70,7 @@ def _read_raw_from_postgres():
         except Exception as e:
             last_err = e
             if attempt < 5:
-                print(f"PostgreSQL connection attempt {attempt}/5 failed: {e}. Retrying in 5s...")
+                log_warning(f"PostgreSQL connection attempt {attempt}/5 failed: {e}. Retrying in 5s...")
                 time.sleep(5)
             else:
                 raise
@@ -97,7 +115,7 @@ def _ensure_fru_sales_exists(spark: SparkSession, delta_path: str) -> str:
             "Ensure these are set in the CronJob/ECS task environment."
         )
 
-    print("Reading fru_sales_raw from PostgreSQL...")
+    log_info("Reading fru_sales_raw from PostgreSQL...")
     rows = _read_raw_from_postgres()
     if len(rows) < 10:
         raise RuntimeError(
@@ -109,11 +127,12 @@ def _ensure_fru_sales_exists(spark: SparkSession, delta_path: str) -> str:
     if "ID" in df.columns:
         df = df.withColumnRenamed("ID", "id")
     df.write.format("delta").mode("overwrite").save(path)
-    print(f"✓ Created fru_sales from fru_sales_raw ({len(rows)} rows) at {path}")
+    log_success(f"Created fru_sales from fru_sales_raw ({len(rows)} rows) at {path}")
     return path
 
 
 def main(delta_path: str = None, output_dir: str = None):
+    log_step("FRU Batch Analytics START")
     delta_path = delta_path or os.environ.get("DELTA_TABLE_PATH", "")
     if not delta_path:
         extra = os.environ.get("SPARK_EXTRA_CONF", "")
@@ -136,22 +155,27 @@ def main(delta_path: str = None, output_dir: str = None):
         builder = builder.config("spark.hadoop.fs.gs.impl", "com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem")
         builder = builder.config("spark.hadoop.fs.AbstractFileSystem.gs.impl", "com.google.cloud.hadoop.fs.gcs.GoogleHadoopFS")
     else:
-        # S3 access: ECS Fargate uses container metadata (no EC2 instance metadata)
+        # AWS S3: ECS Fargate uses container metadata (no EC2 instance metadata).
+        # Apply S3A numeric overrides: Hadoop core-default.xml uses "60s"/"30s" duration strings,
+        # but Delta Lake's LogStore expects numeric values → NumberFormatException without overrides.
+        # Single source of truth: spark_s3a_config.get_s3a_numeric_overrides(). See WAR_STORIES_AWS.md §12.
         aws_region = os.environ.get("CLOUD_REGION") or "us-east-1"
         builder = builder.config("spark.hadoop.fs.s3a.endpoint.region", aws_region)
         builder = builder.config(
             "spark.hadoop.fs.s3a.aws.credentials.provider",
             "com.amazonaws.auth.ContainerCredentialsProvider,com.amazonaws.auth.DefaultAWSCredentialsProviderChain",
         )
+        if get_s3a_numeric_overrides:
+            for key, val in get_s3a_numeric_overrides():
+                builder = builder.config(key, val)
     spark = builder.getOrCreate()
 
     path = _ensure_fru_sales_exists(spark, delta_path)
     df = spark.read.format("delta").load(path)
 
-    print("=" * 80)
-    print("FRU Batch Analytics Report")
-    print("=" * 80)
-    print(f"\nTotal records: {df.count()}")
+    log_step("FRU Batch Analytics")
+    total_records_count = df.count()
+    log_info(f"Total records: {total_records_count}")
 
     # Handle missing columns gracefully
     cols = [c.upper() for c in df.columns]
@@ -223,7 +247,7 @@ def main(delta_path: str = None, output_dir: str = None):
         max("PRICE").alias("max_price")
     ).collect()[0]
 
-    total_records = df.count()
+    total_records = total_records_count
     total_revenue = float(df.agg(sum("PRICE").alias("total")).collect()[0]["total"] or 0.0)
 
     sales_by_brand_list = [
@@ -273,7 +297,9 @@ def main(delta_path: str = None, output_dir: str = None):
         "max_price": float(price_stats_row["max_price"]) if price_stats_row["max_price"] else 0.0,
     }
 
+    log_info("Saving analytics to database...")
     if save_analytics_to_db:
+        deploy_scope = os.environ.get("DEPLOY_SCOPE", "")
         ok = save_analytics_to_db(
             sales_by_brand=sales_by_brand_list,
             store_performance=store_performance_list,
@@ -282,14 +308,15 @@ def main(delta_path: str = None, output_dir: str = None):
             price_stats=price_stats_dict,
             total_records=total_records,
             total_revenue=total_revenue,
+            deploy_scope=deploy_scope or None,
         )
         # ETL self-check: assert DB save matches computed total (replaces log-based verification)
         if ok and verify_saved_total_records:
             verify_saved_total_records(total_records)
     else:
-        print("Warning: save_analytics_to_db not available")
+        log_warning("save_analytics_to_db not available; skipping DB write")
 
-    print("fru bootstrap success")
+    log_success("fru bootstrap success")
     spark.stop()
 
 

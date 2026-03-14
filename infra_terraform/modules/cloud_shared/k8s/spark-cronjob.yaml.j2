@@ -6,8 +6,10 @@ metadata:
   namespace: fru-kube
 spec:
   schedule: "{{ SCHEDULE_CRON }}"
+  concurrencyPolicy: Forbid
   jobTemplate:
     spec:
+      ttlSecondsAfterFinished: 240
       template:
         spec:
           containers:
@@ -59,6 +61,8 @@ spec:
 {% endif %}
             - name: CLOUD_REGION
               value: "{{ CLOUD_REGION }}"
+            - name: DEPLOY_SCOPE
+              value: "kube"
 {% if cloud_provider == "local" %}
             volumeMounts:
             - name: delta

@@ -168,6 +168,27 @@ resource "aws_cloudfront_distribution" "frontend" {
     compress               = true
   }
 
+  # Data Management tab: /rawdata CRUD
+  ordered_cache_behavior {
+    path_pattern     = "/rawdata*"
+    allowed_methods  = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
+    cached_methods   = ["GET", "HEAD"]
+    target_origin_id = local.use_api ? local.api_origin_id : local.s3_origin_id
+
+    forwarded_values {
+      query_string = true
+      cookies {
+        forward = "all"
+      }
+    }
+
+    viewer_protocol_policy = "redirect-to-https"
+    min_ttl                = 0
+    default_ttl            = 0
+    max_ttl                = 0
+    compress               = true
+  }
+
   ordered_cache_behavior {
     path_pattern     = "/query/stream"
     allowed_methods  = ["GET", "HEAD", "OPTIONS"]

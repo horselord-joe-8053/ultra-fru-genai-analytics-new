@@ -5,13 +5,38 @@ Used by run_schema_and_load.py (container) and setup_database.py (host).
 Uses os.getenv() only – no backend.utils.env_helpers (container has no core_app).
 
 Flow: load_raw_from_csv (CSV → fru_sales_raw) then load_embeddings (fru_sales_raw → fru_sales_embeddings).
+
+Container-safe: when run inside the GCP db-setup image, tools/ is not in the image;
+we use minimal local stubs for require() and logging so the same code runs on host and in Cloud Run.
 """
 import os
+import sys
 import time
 
 import pandas as pd
 from openai import OpenAI
 from psycopg2.extras import RealDictCursor
+
+# Use shared tools when available (host); in container (Cloud Run job) tools/ is not in the image
+try:
+    from tools.cloud_shared.logging.logger import info, success, error, step
+    from tools.cloud_shared.env import require
+except ImportError:
+    def _log(prefix: str, file=sys.stdout):
+        def out(msg: str):
+            print(f"{prefix} {msg}", file=file, flush=True)
+        return out
+    info = _log("[INFO]")
+    success = _log("[SUCCESS]")
+    step = _log("==>")
+    error = _log("[ERROR]", file=sys.stderr)
+
+    def require(name: str) -> str:
+        v = os.getenv(name)
+        if not v:
+            raise RuntimeError(f"Required env var '{name}' is not set.")
+        return v
+
 
 REQUIRED_COLUMNS = [
     "ID", "CUSTOMER_ID", "BRAND", "FRIDGE_MODEL", "CAPACITY_LITERS", "PRICE",
@@ -29,8 +54,6 @@ def load_raw_from_csv(
     Load CSV into fru_sales_raw. Idempotent: skips if data exists and not force.
     Returns row count.
     """
-    from tools.cloud_shared.logging.logger import info, success, error, step
-
     if not force:
         with conn.cursor() as cur:
             cur.execute("SELECT COUNT(*) FROM fru_sales_raw;")
@@ -109,9 +132,6 @@ def load_embeddings(
     When csv_path is None, reads from fru_sales_raw. When csv_path is given, reads from CSV (legacy).
     Returns row count. Idempotent: skips if data exists and not force.
     """
-    from tools.cloud_shared.logging.logger import info, success, error, step
-
-    from tools.cloud_shared.env import require
     openai_model = os.getenv("OPENAI_EMBED_MODEL") or require("OPENAI_EMBED_MODEL")
 
     # Idempotency: skip if data exists and not force

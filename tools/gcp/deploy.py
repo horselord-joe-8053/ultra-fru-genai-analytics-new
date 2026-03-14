@@ -8,7 +8,7 @@ Usage:
 
 Flow:
 1) doctor
-2) bootstrap backend (GCS bucket)
+2) setup state backend (GCS bucket)
 3) apply shared durable_with_cooloff (secrets)
 4) ensure secrets values (must run before durable: db_setup job needs secret versions)
 5) apply shared durable (VPC, Cloud SQL, db_setup job)
@@ -122,10 +122,10 @@ def main():
     # Phase 2: Bootstrap
     tracker.start_phase(2)
     logger.step(f"[2/{len(phases)}] Bootstrapping state backend...")
-    with stats.timed("Backend", "bootstrap_state_backend"):
-        from tools.gcp.scope_shared.deploy.bootstrap_state_backend import main as bootstrap_main
-        bootstrap_main()
-    logger.success("Backend bootstrapped")
+    with stats.timed("Backend", "setup_state_backend"):
+        from tools.gcp.scope_shared.deploy.setup_state_backend import main as setup_main
+        setup_main()
+    logger.success("State backend ready")
     tracker.end_phase(2)
 
     prefix = os.getenv("PROJ_PREFIX", "").strip() or os.getenv("FRU_PREFIX", "fru")
@@ -235,6 +235,14 @@ def main():
                 if build_skipped:
                     logger.success("Build skipped (content hash match)")
                 else:
+                    # Fail-fast on Docker when about to build (fallback when --skip-doctor was used).
+                    from tools.gcp.standalone.doctor import docker_daemon_available
+                    if not docker_daemon_available():
+                        logger.error(
+                            "Docker daemon is not running. Start Docker Desktop, or use --skip-build "
+                            "if images already exist in Artifact Registry."
+                        )
+                        sys.exit(1)
                     if getattr(args, "force_build", False):
                         logger.info("Will start building images because --force-build was set.")
                     else:
@@ -324,7 +332,7 @@ def main():
     deploy_dur = int(time.time() - deploy_start)
     stats.print_summary()
     logger.operation_end("Deploy", args.scope, args.env, region, deploy_dur, ok=True)
-    logger.success("Deploy phases (bootstrap + plan) complete.")
+    logger.success("Deploy phases (setup + plan) complete.")
 
 
 if __name__ == "__main__":

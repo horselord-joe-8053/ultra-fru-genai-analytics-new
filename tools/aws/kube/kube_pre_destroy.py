@@ -12,7 +12,7 @@ import os
 import subprocess
 from typing import TYPE_CHECKING
 
-from tools.aws.scope_shared.deploy.bootstrap_helpers import (
+from tools.aws.scope_shared.deploy.k8s_deploy_helpers import (
     CRONJOB_PERIODIC,
     JOB_BOOTSTRAP,
     K8S_NAMESPACE,

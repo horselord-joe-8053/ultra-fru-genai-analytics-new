@@ -18,6 +18,7 @@ import time
 import urllib.request
 
 from tools.cloud_shared.env import load_dotenv
+from tools.aws.scope_shared.deploy.k8s_deploy_helpers import wait_for_aws_load_balancer_controller_ready
 from tools.aws.scope_shared.core import resource_names
 from tools.aws.scope_shared.core.backend import resolve_region
 
@@ -151,15 +152,8 @@ def main():
     run(helm_args, env=env)
 
     # 5. Wait for controller pods (webhook needs them before fru-api-svc apply)
-    print("Waiting for controller pods (up to 5 min)...")
-    result = run(
-        ["kubectl", "wait", "--for=condition=available", "--timeout=300s", "deployment/aws-load-balancer-controller", "-n", "kube-system"],
-        env=env,
-        check=False,
-    )
-    if result.returncode != 0:
-        print("WARNING: Controller not ready within 5 min. kube_apply will retry api-service when webhook is up.")
-
+    # Periodic pod status, fail-fast on CrashLoopBackOff, describe+logs on timeout.
+    wait_for_aws_load_balancer_controller_ready(args.env, timeout_seconds=300, region=region)
     run(["kubectl", "get", "deployment", "-n", "kube-system", "aws-load-balancer-controller"], env=env)
     print("Done. The controller will reconcile fru-api-svc and create an NLB.")
 

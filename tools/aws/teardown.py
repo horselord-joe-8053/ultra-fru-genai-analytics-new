@@ -26,7 +26,7 @@ before durable (blocks VPC delete). See docs/war_stories/WAR_STORIES_AWS.md ##23
 
 Post-destroy (--incl-dura): After all stacks destroyed, removes durable orphans:
 RDS log group, ECS Container Insights log group, state bucket, lock table. Next
-deploy recreates bucket/table via bootstrap_state_backend.
+deploy recreates bucket/table via setup_state_backend.
 """
 import argparse
 import json

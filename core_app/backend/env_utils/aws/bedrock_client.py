@@ -6,8 +6,11 @@ Works in both ECS and EKS containers (uses IAM role or AWS credentials).
 Applicable environment: [aws {ecs | eks}]
 """
 from backend.env_utils.cloud_shared.interfaces.llm_client import LLMClient
-from backend.env_utils.cloud_shared.model_config import get_bedrock_inference_profile_id, require_bedrock_model_id
-from backend.utils.env_helpers import get_required_env
+from backend.env_utils.cloud_shared.model_config import (
+    get_bedrock_inference_profile_id,
+    get_bedrock_region,
+    require_bedrock_model_id,
+)
 import boto3
 import os
 import logging
@@ -22,7 +25,7 @@ class AWSBedrockClient(LLMClient):
     """AWS Bedrock client (AWS production)."""
     
     def __init__(self):
-        region = get_required_env("CLOUD_REGION", "Cloud region for Bedrock API")
+        region = get_bedrock_region()
         profile = os.environ.get("AWS_PROFILE", "")
         
         if profile:

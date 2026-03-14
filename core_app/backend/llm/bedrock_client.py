@@ -17,7 +17,8 @@ import logging
 import boto3
 import warnings
 from botocore.exceptions import ClientError, BotoCoreError
-from backend.utils.env_helpers import get_required_env
+
+from backend.env_utils.cloud_shared.model_config import get_bedrock_region
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +55,7 @@ def get_bedrock_client():
     - If AWS_PROFILE is not set or empty, uses IAM role (for ECS/EKS production)
     - In production (ECS/EKS), ECS task execution role provides Bedrock access via IAM
     """
-    region = get_required_env("CLOUD_REGION", "Cloud region for Bedrock API")
+    region = get_bedrock_region()
     profile = os.environ.get("AWS_PROFILE", "")  # Empty string if not set (use IAM role)
     
     try:
@@ -177,10 +178,10 @@ def claude_complete(system_prompt, user_message, model_id=None, max_tokens=2000)
     # If inference profile ID is set, use it as the modelId parameter
     if inference_profile_id:
         invoke_params["modelId"] = inference_profile_id
-        logger.info(f"Using Bedrock inference profile (as modelId): {inference_profile_id} in region: {get_required_env('CLOUD_REGION')}")
+        logger.info(f"Using Bedrock inference profile (as modelId): {inference_profile_id} in region: {get_bedrock_region()}")
     else:
         invoke_params["modelId"] = model_id
-        logger.info(f"Using Bedrock model ID: {model_id} in region: {get_required_env('CLOUD_REGION')}")
+        logger.info(f"Using Bedrock model ID: {model_id} in region: {get_bedrock_region()}")
 
     try:
         response = client.invoke_model(**invoke_params)
