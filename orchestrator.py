@@ -57,8 +57,9 @@ def run_command(cmd, cwd=None, force_no_timeout: bool = False):
         # Pass through the current environment with the virtualenv active
         env = os.environ.copy()
         
-        # Ensure the project root (where orchestrator.py lives) is in PYTHONPATH
-        project_root = os.getcwd()
+        # Project root = where orchestrator.py lives (stable regardless of cwd)
+        project_root = os.path.dirname(os.path.abspath(__file__))
+        env["REPO_ROOT"] = project_root
         env["PYTHONPATH"] = f"{project_root}:{env.get('PYTHONPATH', '')}"
         
         # Single shared OpenTofu data dir (providers, etc.) for all stacks; absolute path

@@ -2214,3 +2214,96 @@ Wait 1–2 minutes for edge propagation, then retry Batch Analytics.
 When CloudFront routing changes after a deploy (e.g. two-phase kube deploy adding the API origin), **invalidate** any paths that were previously served from a different origin. Otherwise the edge cache can serve stale content (e.g. index.html from S3) until TTL expires. For API paths like `/analytics`, run `create-invalidation` after the second apply, or add invalidation to the deploy pipeline. See [AWS_LEARNED_CLOUDFRONT.md](../learned/aws/AWS_LEARNED_CLOUDFRONT.md) for cache behavior and path routing.
 
 ---
+
+## 43. EKS Nodes NotReady After Deploy: No Wait for min_node_count Before helm/kube_apply
+
+**creation:** `<260315>`
+**keywords:** EKS, deploy, min_node_count, wait_for_kube_nodes_ready, t3.small, NotReady, kubelet stopped
+**difficulty:** 6
+**significance:** 8
+
+### 43.1 Context
+
+us-east-2 kube deploy ran with CronJob fixes deployed (Forbid, ttlSecondsAfterFinished) and `min_node_count: 2`. Both nodes transitioned to NotReady with "Kubelet stopped posting node status" during or shortly after deploy. The CronJob accumulation hypothesis did not apply — so what caused it?
+
+### 43.2 Investigation
+
+| Check | Result |
+|-------|--------|
+| CloudFront config | Correct — API origin wired, `/analytics*` routes to ALB |
+| CronJob manifest | `concurrencyPolicy: Forbid`, `ttlSecondsAfterFinished: 240` ✓ |
+| Config YAML | `min_node_count: 2` for us-east-2 ✓ |
+| Node launch times | Node 1: 16:50 UTC; Node 2: 00:31 UTC (16h earlier) |
+| Deploy flow | tofu apply → CronJob suspend → helm → kube_apply → rollout restart |
+
+**Root cause:** The deploy does **not** wait for `min_node_count` Ready nodes after tofu apply. Terraform updates the ASG desired capacity, but new nodes take 2–5 min to boot and register. The deploy immediately runs helm upgrade and kube_apply — all pods schedule on the **single Ready node** (or the first to become Ready). That node gets overloaded → memory pressure → kubelet stops → node unreachable.
+
+### 43.3 Deploy Order Gap
+
+```
+tofu apply (min_node_count=2)  →  ASG scales; new node launching (async)
+       ↓
+CronJob suspend  →  helm upgrade  →  kube_apply  →  rollout restart
+       ↓
+All pods schedule on 1 Ready node  →  2.3GB+ on 2GB  →  OOM  →  kubelet stops
+```
+
+Even with `min_node_count: 2`, if the second node is still booting, the scheduler has only one Ready node. The fix: **wait for min_node_count Ready nodes** before helm/kube_apply.
+
+### 43.4 Fix Applied
+
+- **`tools/cloud_shared/deploy/wait_for_capacity.py`** — `wait_for_kube_nodes_ready(min_count, ...)` polls `kubectl get nodes` until at least `min_count` nodes have `Ready=True`.
+- **`tools/aws/kube/deploy_kube.py`** — After tofu apply, before Phase 9.4 (CronJob suspend), call `wait_for_kube_nodes_ready(min_nodes)` when `plan_clean` is false.
+- Env vars: `KUBE_NODE_WAIT_TIMEOUT_SEC` (default 600), `KUBE_NODE_WAIT_INTERVAL_SEC` (default 15).
+
+### 43.5 Takeaway
+
+When tofu apply changes node count (scale-up or fresh cluster), **wait for those nodes to be Ready** before running helm, kube_apply, or rollout restart. Otherwise the first Ready node receives all workload and can OOM. See [TODO_REFACTOR_RESOURCE_CHECK.md](../TODO_REFACTOR_RESOURCE_CHECK.md) for the full refactor plan (kube + nonkube).
+
+---
+
+## 44. Nonkube Deploy "Module not installed": Cwd-Dependent Path Resolution and Why the Bug Was Latent
+
+**creation:** `<260315>`
+**keywords:** nonkube, deploy, orchestrator, REPO_ROOT, tofu init, import_preexist, path resolution, cwd, latent bug
+**difficulty:** 6
+**significance:** 8
+
+### 44.1 Context
+
+`scope=all` deploy failed at the nonkube import phase with 7 import failures. Error: *"This module's local cache directory ../../../../modules/cloud_shared/primitives/tags could not be read. Run tofu init to install all modules."* Kube deploy succeeded; the failure was specific to nonkube.
+
+### 44.2 Root Cause
+
+Path resolution depended on the current working directory:
+
+1. **`tools/aws/scope_shared/import_preexist/_common.py`** — `_resolve_stack_dir()` used `root = os.environ.get("REPO_ROOT") or os.getcwd()`. When `REPO_ROOT` was unset, relative paths were resolved from `cwd`.
+2. **`tools/aws/scope_shared/core/terra_init.py`** — `init_stack()` passed `cwd=stack_dir` (e.g. `"infra_terraform/live_deploy/aws/nonkube"`) to `run_with_retry`. If the process `cwd` was not the project root, tofu could not find modules.
+
+When `cwd` was wrong (e.g. `infra_terraform/live_deploy/aws/nonkube`), `stack_dir` resolved to a non-existent path and tofu failed with "Module not installed".
+
+### 44.3 Why the Bug Was Latent
+
+| Factor | Effect |
+|--------|--------|
+| **Import often skipped** | When `plan_shows_no_changes` is true (state clean), the import phase is skipped. In us-east-1 with existing state, import rarely ran. |
+| **New region** | us-east-2 as a new region meant empty/dirty state → plan showed changes → import ran → bug manifested. |
+| **Convention** | Docs say "Usage (from project root)". Running from project root kept `cwd` correct, so the bug stayed hidden. |
+| **Import phase is relatively new** | `run_import_nonkube` was added in the deployment-optimizations refactor. Before that, nonkube deploy had no import phase. |
+
+The bug required both (a) import actually running, and (b) wrong `cwd`. Either condition alone avoided it.
+
+### 44.4 Fix Applied
+
+1. **`orchestrator.py`** — Set `env["REPO_ROOT"] = project_root` in `run_command()`, where `project_root = os.path.dirname(os.path.abspath(__file__))`. Ensures path resolution is cwd-independent for all subprocesses.
+2. **`tools/aws/scope_shared/core/terra_init.py`** — Added `_resolve_stack_dir()` to resolve `stack_dir` to an absolute path using `REPO_ROOT`, and pass that absolute path as `cwd` to tofu.
+
+### 44.5 Key Insight
+
+> Never rely on `os.getcwd()` for resolving project-relative paths. Use `REPO_ROOT` (or equivalent) set by the top-level entry point. Subprocesses inherit env but not a guaranteed cwd; scripts may be invoked from any directory (IDE, CI, wrapper scripts).
+
+### 44.6 Takeaway
+
+(1) Set `REPO_ROOT` in the orchestrator (or main entry point) so all child processes resolve paths consistently. (2) Resolve stack dirs to absolute paths before passing them as `cwd` to tofu/subprocess. (3) Latent bugs often hide behind conditional execution (import skip) and convention (run from project root); new regions or different invocation patterns can expose them.
+
+---

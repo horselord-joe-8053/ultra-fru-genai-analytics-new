@@ -38,6 +38,7 @@ from tools.aws.scope_shared.deploy.k8s_deploy_helpers import (
     verify_api_db_connected,
     k8s_rollout_restart_api,
 )
+from tools.cloud_shared.deploy.wait_for_capacity import wait_for_kube_nodes_ready
 
 
 def _try_get_lb_hostname(env: str, region: str) -> str:
@@ -117,6 +118,16 @@ def run_deploy_kube(
 
     # Phase 8.5: Import pre-existing resources (state/reality reconciliation)
     # DEPLOYMENT_OPTIMIZATION §2.3: Skip import and apply when plan shows no changes (state clean).
+    # Run eks_kubeconfig BEFORE _try_get_lb_hostname so kubectl targets the correct region's cluster.
+    # Otherwise (e.g. deploying to us-east-2 with context still on us-east-1) we get empty hostname,
+    # first apply runs without ingress_hostname, CloudFront removes API origin → "Backend API not reachable".
+    subprocess.run(
+        [sys.executable, "tools/aws/kube/eks_kubeconfig.py", "--env", env, "--region", region],
+        check=False,
+        env={**os.environ, "CLOUD_REGION": region},
+        timeout=30,
+    )
+
     kube_stack = "infra_terraform/live_deploy/aws/kube"
     hostname_before_first_apply = _try_get_lb_hostname(env, region)
     if hostname_before_first_apply:
@@ -164,6 +175,16 @@ def run_deploy_kube(
         apply_stack(kube_stack, env, extra_vars, region)
 
     _timed("Tofu apply", "infra_terraform/live_deploy/aws/kube", _apply_eks)
+
+    # Phase 9.3: Wait for min_node_count Ready nodes before helm/kube_apply.
+    # Prevents overload: tofu apply scales ASG async; if we run helm+rollout immediately,
+    # all pods schedule on the single Ready node → memory pressure → kubelet stops.
+    # See docs/TODO_REFACTOR_RESOURCE_CHECK.md, EKS_NODE_KUBELET_CRONJOB.md.
+    if not plan_clean:
+        min_nodes = kube_cfg["min_node_count"]
+        logger.step(f"Waiting for {min_nodes} Ready node(s) before helm/kube_apply...")
+        wait_for_kube_nodes_ready(min_count=min_nodes, region=region)
+        logger.success(f"At least {min_nodes} node(s) Ready")
 
     # Phase 9.4: Suspend CronJob before disruptive phases (helm upgrade, rollout restart)
     # Reduces memory spike on t3.small; re-enabled after fru-api ready. See War Story 41, EKS_NODE_KUBELET_CRONJOB §4.
@@ -303,6 +324,25 @@ def run_deploy_kube(
 
         _timed("Tofu apply (ingress)", "infra_terraform/live_deploy/aws/kube (ingress_hostname)", _reapply_kube)
         logger.success("CloudFront API origin wired to K8s LoadBalancer")
+
+        # Invalidate /analytics to clear any cached S3 HTML (War Story 42: edge cache served HTML before API origin wired)
+        try:
+            stack_out = tofu_output_json("infra_terraform/live_deploy/aws/kube", env, region)
+            cf_dist_id = stack_out.get("cloudfront_distribution_id", {}).get("value")
+            if cf_dist_id:
+                subprocess.run(
+                    [
+                        "aws", "cloudfront", "create-invalidation",
+                        "--distribution-id", cf_dist_id,
+                        "--paths", "/analytics", "/analytics/*",
+                    ],
+                    capture_output=True,
+                    timeout=30,
+                    env={**os.environ, "CLOUD_REGION": region},
+                )
+                logger.info("[CloudFront] Invalidated /analytics to clear cached HTML")
+        except Exception as e:
+            logger.warning(f"[CloudFront] Could not invalidate /analytics: {e}")
     elif hostname_to_use and hostname_to_use == hostname_before_first_apply:
         logger.success("CloudFront API origin already wired (hostname unchanged)")
     elif not hostname_to_use:
