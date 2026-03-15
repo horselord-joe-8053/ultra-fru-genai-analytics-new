@@ -84,6 +84,20 @@ Instead of hardcoding `desired_size=1` or scattering compute values across Terra
 
 For the t3.small exhaustion case, the fix is **`min_node_count: 2`** — two nodes spread the load (fru-api, LB controller, Spark CronJob) so no single node is overloaded.
 
+### 2.3 Part C: Soft Pod Anti-Affinity (2026-03)
+
+**Scope:** <span style="background:#e3f2fd;padding:2px 4px">**kube only**</span> (EKS/GKE). Nonkube uses ECS Fargate — each task runs in its own instance; there is no shared node, so pod anti-affinity does not apply.
+
+**Discovery:** Even with `min_node_count: 2` and workload spread, one node can still fail. Observed: both fru-api replicas, 2× aws-load-balancer-controller, 2× coredns, and the Spark CronJob pod landed on the same node → memory pressure → kubelet stopped → node NotReady and tainted.
+
+**Enhancement:** Add soft pod anti-affinity so the scheduler *prefers* to:
+- Spread fru-api replicas across nodes (1 per node)
+- Schedule Spark CronJob on a node without fru-api
+
+Applied in `api-deployment.yaml.j2` and `spark-cronjob.yaml.j2` using `preferredDuringSchedulingIgnoredDuringExecution` (soft). With 2 nodes, hard anti-affinity would leave Spark Pending when both nodes have fru-api; soft allows scheduling when needed.
+
+**No guarantee:** Anti-affinity improves placement but does not guarantee node stability. With 2× t3.small (2GB each), Spark + fru-api + system pods can still overload a node if the scheduler must colocate (e.g. during recovery, rolling updates, or when one node is NotReady). For stronger guarantees: use 3+ nodes, larger instance types (t3.medium), or memory limits/requests on pods.
+
 ---
 
 ## 3. YAML Config Structure
@@ -187,7 +201,18 @@ graph TD
 <tr><td style="background:#e8f5e9">Source</td><td>Scattered in Terraform vars, live config</td><td><code>config/cloud/aws_deploy_config.yaml</code> kube.regional_default</td></tr>
 </table>
 
-### 5.2 Inline Comment in Config
+### 5.2 Soft Pod Anti-Affinity (api-deployment, spark-cronjob) — Kube Only
+
+In addition to `min_node_count: 2`, we use **soft pod anti-affinity** to improve spread on **kube** (EKS/GKE). Nonkube (ECS Fargate) does not use shared nodes, so anti-affinity is not applicable.
+
+| Manifest | Anti-affinity rule |
+|:---------|:-------------------|
+| fru-api | Prefer not to schedule 2 fru-api pods on the same node |
+| Spark CronJob | Prefer to schedule on a node without fru-api |
+
+Uses `preferredDuringSchedulingIgnoredDuringExecution` (soft) so pods still schedule when no ideal node exists. See §2.3 for the discovery and caveat.
+
+### 5.3 Inline Comment in Config
 
 The AWS config documents the rationale:
 
@@ -215,7 +240,7 @@ The resource-exhaustion problem applies differently across schedulers:
 <tr><td style="background:#e8f5e9"><span style="background:#e3f2fd;padding:1px 3px"><strong>Cloud Scheduler → Cloud Run Job</strong></span></td><td>GCP nonkube</td><td>Independent</td><td>N/A</td><td>Different semantics; no K8s-style TTL</td></tr>
 </table>
 
-**Kube vs nonkube (AWS):** Node failure happened on kube because all CronJob pods share a single node (t3.small). Nonkube uses ECS Fargate — each Spark task runs in its own Fargate instance, so there is no shared node to overload.
+**Kube vs nonkube (AWS):** Node failure happened on kube because all CronJob pods share a single node (t3.small). Nonkube uses ECS Fargate — each Spark task runs in its own Fargate instance, so there is no shared node to overload. Anti-affinity (§2.3, §5.2) is a **kube-only** mitigation; nonkube does not need it.
 
 ---
 
@@ -246,5 +271,17 @@ Handlers use `_require(cfg, path, key)` for fail-fast; no silent defaults for co
 ## 8. References
 
 - [EKS_NODE_KUBELET_CRONJOB.md](./EKS_NODE_KUBELET_CRONJOB.md) — Symptoms, recovery playbook, diagnostic commands
-- [WAR_STORIES_CLOUD_SHARED.md](../war_stories/WAR_STORIES_CLOUD_SHARED.md) §40–41 — CronJob overload cascade, recovery, prevention
+- [WAR_STORIES_CLOUD_SHARED.md](../war_stories/WAR_STORIES_CLOUD_SHARED.md) §40–41 — CronJob overload cascade, recovery, prevention; §44 — nonkube REPO_ROOT path fix
 - [TODO_REFACTOR_YAML.md](../../TODO_REFACTOR_YAML.md) — Full refactor plan and wiring verification
+
+---
+
+## 9. Caveat: No Guarantee of Node Stability (Kube)
+
+Even with `min_node_count: 2`, soft anti-affinity, and CronJob fixes (Forbid, ttlSecondsAfterFinished), **there is no guarantee that nodes will always remain stable** on 2× t3.small. *(This applies to kube only; nonkube ECS Fargate has no shared-node overload risk.)*
+
+- The scheduler may still colocate fru-api and Spark when both nodes already have fru-api (2 replicas → 1 per node; Spark must pick one).
+- During rolling updates, node replacement, or recovery, temporary colocation can overload a node.
+- Soft anti-affinity is a preference, not a requirement; the scheduler can ignore it when necessary.
+
+For stronger guarantees: increase to 3+ nodes, use larger instance types (e.g. t3.medium), or add memory requests/limits so the scheduler can avoid overcommit.

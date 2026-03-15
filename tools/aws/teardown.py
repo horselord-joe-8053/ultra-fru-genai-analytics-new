@@ -37,7 +37,7 @@ import time
 
 from tools.cloud_shared.logging import logger
 from tools.cloud_shared.env import load_dotenv, EnvVarNotFound
-from tools.aws.scope_shared.core.backend import resolve_region
+from tools.aws.scope_shared.core.backend import resolve_region, resolve_state_bucket
 from tools.aws.provider_config_handler import get_azs, get_subnet_cidrs
 from tools.cloud_shared.stats import TeardownStats, scope_for
 from tools.aws.scope_shared.core.phases import PhaseTracker, teardown_phases
@@ -59,6 +59,23 @@ load_dotenv()
 
 # Heartbeat interval for long-running tofu init/destroy. Default 10s so feedback appears sooner than deploy's 30s.
 TEARDOWN_HEARTBEAT_INTERVAL_SEC = int(os.getenv("TEARDOWN_HEARTBEAT_INTERVAL_SEC", "10"))
+# Optional timeout for tofu destroy (seconds). 0 or unset = no timeout. Use to avoid indefinite hangs (e.g. 7200 = 2h).
+TEARDOWN_DESTROY_TIMEOUT_SEC = int(os.getenv("TEARDOWN_DESTROY_TIMEOUT_SEC", "0"))
+
+
+def _state_bucket_exists(region: str | None) -> bool:
+    """Return True if the Terraform state bucket exists. False when deleted by a previous teardown."""
+    try:
+        bucket = resolve_state_bucket(region or resolve_region(None))
+        out = subprocess.run(
+            ["aws", "s3api", "head-bucket", "--bucket", bucket],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        return out.returncode == 0
+    except Exception:
+        return False
 
 
 def _durable_has_outputs(env: str, region: str | None) -> bool:
@@ -93,8 +110,12 @@ ORDER = {
 }
 DURABLE_STACK = "infra_terraform/live_deploy/aws/scope_shared/durable"
 DURABLE_COOLOFF_STACK = "infra_terraform/live_deploy/aws/scope_shared/durable_with_cooloff"
+NONDUrable_STACK = "infra_terraform/live_deploy/aws/scope_shared/nondurable"
 NONKUBE_STACK = "infra_terraform/live_deploy/aws/nonkube"
 KUBE_STACK = "infra_terraform/live_deploy/aws/kube"
+
+# Stacks that require the state bucket to exist (nondurable, durable, durable_with_cooloff)
+STACKS_REQUIRING_STATE_BUCKET = (NONDUrable_STACK, DURABLE_STACK, DURABLE_COOLOFF_STACK)
 
 # Stacks that have CloudFront frontend (require pre-destroy before tofu destroy)
 STACKS_WITH_CLOUDFRONT = tuple(ORDER["nonkube"] + ORDER["kube"])
@@ -287,6 +308,7 @@ def destroy_stack(stack_dir: str, env: str, region: str | None = None, stats: Te
             description=description,
             heartbeat_interval_sec=TEARDOWN_HEARTBEAT_INTERVAL_SEC,
             stream_output=True,  # Stream tofu destroy so user sees per-resource progress
+            timeout_sec=TEARDOWN_DESTROY_TIMEOUT_SEC if TEARDOWN_DESTROY_TIMEOUT_SEC > 0 else None,
         )
 
     if stats:
@@ -384,6 +406,18 @@ def main():
                 )
                 tracker.end_phase(phase_idx)
                 continue
+        # When state bucket was deleted by a previous teardown (post_destroy_durable_orphans),
+        # we cannot init nondurable/durable stacks. Skip them—resources are already gone.
+        if s in STACKS_REQUIRING_STATE_BUCKET and not _state_bucket_exists(region):
+            B = "\033[1m"
+            R = "\033[0m"
+            stack_name = "nondurable" if s == NONDUrable_STACK else ("durable" if s == DURABLE_STACK else "durable_with_cooloff")
+            logger.info(
+                f"{B}SKIP {stack_name}:{R} State bucket does not exist (deleted by previous teardown). "
+                f"{B}Action:{R} Skipping—nothing to tear down."
+            )
+            tracker.end_phase(phase_idx)
+            continue
         # Pre-destroy steps use scope "pre-destroy"
         stats.set_scope("pre-destroy")
         if s in ORDER["nonkube"]:
@@ -402,12 +436,32 @@ def main():
             logger.info("Reconciling nonkube state (import before destroy)...")
             init_stack(s, args.env, region)
             get_base_vars(args.env, region)
+            # Nonkube stack requires compute vars (min/max instance, task cpu/memory) from config.
+            # Without these, tofu import and destroy prompt for input and hang.
+            deploy_region = region or resolve_region(None)
+            from tools.aws.provider_config_handler import get_nonkube_compute_config
+            cfg = get_nonkube_compute_config(deploy_region)
+            tasks = cfg["tasks"]
+            os.environ["TF_VAR_min_instance_count"] = str(cfg["min_instance_count"])
+            os.environ["TF_VAR_max_instance_count"] = str(cfg["max_instance_count"])
+            os.environ["TF_VAR_api_task_cpu"] = str(tasks["api"]["cpu"])
+            os.environ["TF_VAR_api_task_memory"] = str(tasks["api"]["memory"])
+            os.environ["TF_VAR_spark_task_cpu"] = str(tasks["spark"]["cpu"])
+            os.environ["TF_VAR_spark_task_memory"] = str(tasks["spark"]["memory"])
             from tools.aws.scope_shared.core import resource_names
             run_import_nonkube(s, args.env, region, prefix=resource_names.get_proj_prefix())
         elif s == KUBE_STACK:
             logger.info("Reconciling kube state (import before destroy)...")
             init_stack(s, args.env, region)
             get_base_vars(args.env, region)
+            # Kube stack requires EKS compute vars (min/max node count, instance types) from config.
+            # Without these, tofu import and destroy prompt for input and hang.
+            deploy_region = region or resolve_region(None)
+            from tools.aws.provider_config_handler import get_kube_compute_config
+            kube_cfg = get_kube_compute_config(deploy_region)
+            os.environ["TF_VAR_eks_min_node_count"] = str(kube_cfg["min_node_count"])
+            os.environ["TF_VAR_eks_max_node_count"] = str(kube_cfg["max_node_count"])
+            os.environ["TF_VAR_eks_instance_types"] = json.dumps(kube_cfg["node_instance_types"])
             from tools.aws.scope_shared.core import resource_names
             run_import_kube(s, args.env, region, prefix=resource_names.get_proj_prefix(), eks_cluster_name=resource_names.eks_cluster(args.env, region))
         # Tofu destroy uses stack scope (nonkube, kube, shared-nondurable)
@@ -441,9 +495,9 @@ def main():
                 refs.append(f"{spark_repo}:{spark_tag}")
             for ref in refs:
                 subprocess.run(["docker", "rmi", ref], capture_output=True)
-            logger.info("Removed local Docker cache images for AWS: %s", ", ".join(refs))
+            logger.info(f"Removed local Docker cache images for AWS: {', '.join(refs)}")
         except Exception as e:
-            logger.warning("Local Docker image cleanup (AWS): %s", e)
+            logger.warning(f"Local Docker image cleanup (AWS): {e}")
 
     stats.print_summary()
     logger.operation_end("Teardown", args.scope, args.env, region, int(time.time() - teardown_start), ok=True)

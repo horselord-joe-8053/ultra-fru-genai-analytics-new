@@ -23,18 +23,25 @@ def run_with_retry(
     config_path: Optional[str] = None,
     heartbeat_interval_sec: Optional[int] = None,
     stream_output: bool = False,
+    timeout_sec: Optional[int] = None,
 ) -> subprocess.CompletedProcess:
     """
     Run command with retry on configurable retriable errors.
     Non-retriable patterns fail immediately. Retriable patterns trigger wait + retry.
     If stream_output=True, streams child stdout/stderr for fine-grained progress (e.g. tofu destroy).
+    If timeout_sec is set (and > 0), kills the process after that many seconds.
     """
     cfg = config or get_retry_config(config_path)
 
     def _run():
         if stream_output:
             return run_with_heartbeat_stream_capture(
-                cmd, cwd=cwd, env=env, description=description, interval_sec=heartbeat_interval_sec
+                cmd,
+                cwd=cwd,
+                env=env,
+                description=description,
+                interval_sec=heartbeat_interval_sec,
+                timeout_sec=timeout_sec,
             )
         return run_with_heartbeat(
             cmd, cwd=cwd, env=env, description=description, interval_sec=heartbeat_interval_sec

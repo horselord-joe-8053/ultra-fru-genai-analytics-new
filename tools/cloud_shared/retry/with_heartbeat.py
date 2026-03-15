@@ -113,16 +113,23 @@ def run_with_heartbeat_stream_capture(
     env: dict,
     description: str,
     interval_sec: Optional[int] = None,
+    timeout_sec: Optional[int] = None,
 ) -> subprocess.CompletedProcess:
     """
     Run command with heartbeat while streaming stdout/stderr. Also captures output for retry
     pattern matching. Use for tofu destroy so user sees per-resource progress (e.g.
     "module.frontend.aws_s3_bucket.frontend: Destroying...") while still supporting retry.
+
+    If timeout_sec is set, the process is killed after that many seconds. On timeout,
+    returns CompletedProcess with returncode=-9 (SIGKILL) and stderr includes timeout message.
     """
     import sys
 
     interval = interval_sec or DEFAULT_HEARTBEAT_INTERVAL_SEC
+    effective_timeout = timeout_sec if timeout_sec and timeout_sec > 0 else None
     logger.info(f"[run] cwd={cwd} :: {' '.join(shlex.quote(x) for x in cmd)}")
+    if effective_timeout:
+        logger.info(f"[run] timeout={effective_timeout}s (TEARDOWN_DESTROY_TIMEOUT_SEC)")
     elapsed_ref = [0]
     stop = threading.Event()
     captured_out: list[str] = []
@@ -134,7 +141,10 @@ def run_with_heartbeat_stream_capture(
                 return
             elapsed_ref[0] += 1
             if elapsed_ref[0] % interval == 0 and elapsed_ref[0] > 0:
-                logger.info(f"[heartbeat] {description} (elapsed: {elapsed_ref[0]}s)")
+                msg = f"[heartbeat] {description} (elapsed: {elapsed_ref[0]}s)"
+                if effective_timeout:
+                    msg += f" [timeout: {effective_timeout}s]"
+                logger.info(msg)
 
     def read_stream(pipe, lines: list, stream):
         for line in iter(pipe.readline, ""):
@@ -161,12 +171,27 @@ def run_with_heartbeat_stream_capture(
     t_stdout.start()
     t_stderr.start()
     try:
-        proc.wait()
+        proc.wait(timeout=effective_timeout)
+    except subprocess.TimeoutExpired:
+        logger.error(
+            f"Process timed out after {effective_timeout}s. Killing tofu destroy. "
+            f"Set TEARDOWN_DESTROY_TIMEOUT_SEC=0 to disable (or increase for longer runs)."
+        )
+        proc.kill()
+        proc.wait(timeout=10)
+        out_text = "".join(captured_out)
+        err_text = "".join(captured_err)
+        err_text += f"\n[TEARDOWN] Process killed after {effective_timeout}s (TEARDOWN_DESTROY_TIMEOUT_SEC)."
+        stop.set()
+        t_heartbeat.join(timeout=2)
         t_stdout.join(timeout=1)
         t_stderr.join(timeout=1)
+        return subprocess.CompletedProcess(proc.args, -9, stdout=out_text, stderr=err_text)
     finally:
         stop.set()
         t_heartbeat.join(timeout=2)
+        t_stdout.join(timeout=1)
+        t_stderr.join(timeout=1)
 
     out_text = "".join(captured_out)
     err_text = "".join(captured_err)

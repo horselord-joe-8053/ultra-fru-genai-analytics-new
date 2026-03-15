@@ -1,6 +1,8 @@
 """
 K8s deploy helpers for EKS.
 
+- cronjob_is_suspended, cronjob_suspend_if_needed, cronjob_unsuspend_if_needed: CronJob suspend state
+  (real-time kubectl) and conditional suspend/unsuspend. Used during deploy to reduce memory spike.
 - check_k8s_bootstrap_job_succeeded: Check if analytics bootstrap Job (first non-periodic run) already succeeded.
 - wait_for_fru_api_ready, wait_for_aws_load_balancer_controller_ready: Wait for deployments with periodic pod
   status, CrashLoopBackOff fail-fast, and describe+logs on timeout. Also fail-fast when pods Pending due to
@@ -22,6 +24,67 @@ load_dotenv()
 JOB_BOOTSTRAP = "fru-analytics-bootstrap-kube"
 CRONJOB_PERIODIC = "fru-analytics-periodic-kube"
 K8S_NAMESPACE = "fru-kube"
+
+
+def _cronjob_env(region: str) -> dict:
+    """Env for kubectl targeting the correct cluster (CLOUD_REGION used by eks_kubeconfig)."""
+    return {**os.environ, "CLOUD_REGION": region}
+
+
+def cronjob_is_suspended(region: str) -> bool:
+    """
+    Return True if the analytics CronJob is suspended (real-time state from cluster).
+    Uses kubectl get -o jsonpath to read spec.suspend. Returns False on error or if unset.
+    """
+    try:
+        out = subprocess.run(
+            ["kubectl", "get", "cronjob", CRONJOB_PERIODIC, "-n", K8S_NAMESPACE,
+             "-o", "jsonpath={.spec.suspend}"],
+            capture_output=True, text=True, timeout=10,
+            env=_cronjob_env(region),
+        )
+        return (out.stdout or "").strip().lower() == "true"
+    except Exception:
+        return False
+
+
+def cronjob_suspend_if_needed(region: str) -> bool:
+    """
+    Suspend the analytics CronJob only if it is not already suspended.
+    Returns True if a suspend patch was applied, False if already suspended or on error.
+    """
+    if cronjob_is_suspended(region):
+        return False
+    try:
+        subprocess.run(
+            ["kubectl", "patch", "cronjob", CRONJOB_PERIODIC, "-n", K8S_NAMESPACE,
+             "-p", '{"spec":{"suspend":true}}'],
+            capture_output=True, timeout=10,
+            env=_cronjob_env(region),
+        )
+        return True
+    except Exception:
+        return False
+
+
+def cronjob_unsuspend_if_needed(region: str) -> bool:
+    """
+    Unsuspend the analytics CronJob only if it is currently suspended.
+    Returns True if an unsuspend patch was applied, False if already unsuspended or on error.
+    Fixes case where CronJob was left suspended by a prior failed deploy (War Story 41).
+    """
+    if not cronjob_is_suspended(region):
+        return False
+    try:
+        subprocess.run(
+            ["kubectl", "patch", "cronjob", CRONJOB_PERIODIC, "-n", K8S_NAMESPACE,
+             "-p", '{"spec":{"suspend":false}}'],
+            capture_output=True, timeout=10,
+            env=_cronjob_env(region),
+        )
+        return True
+    except Exception:
+        return False
 
 
 def check_k8s_bootstrap_job_succeeded(env: str) -> bool:

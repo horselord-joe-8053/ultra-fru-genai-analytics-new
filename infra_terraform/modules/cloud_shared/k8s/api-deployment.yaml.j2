@@ -14,6 +14,15 @@ spec:
       labels:
         app: fru-api
     spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app: fru-api
+              topologyKey: kubernetes.io/hostname
       containers:
       - name: api
         image: {{ APP_IMAGE }}

@@ -33,6 +33,8 @@ from tools.aws.scope_shared.deploy.deploy_frontend import (
 )
 from tools.aws.scope_shared.deploy.k8s_deploy_helpers import (
     K8S_NAMESPACE,
+    cronjob_suspend_if_needed,
+    cronjob_unsuspend_if_needed,
     wait_for_dns_resolvable,
     wait_for_fru_api_ready,
     verify_api_db_connected,
@@ -188,25 +190,8 @@ def run_deploy_kube(
 
     # Phase 9.4: Suspend CronJob before disruptive phases (helm upgrade, rollout restart)
     # Reduces memory spike on t3.small; re-enabled after fru-api ready. See War Story 41, EKS_NODE_KUBELET_CRONJOB §4.
-    _cronjob_was_suspended = False
-    try:
-        out = subprocess.run(
-            ["kubectl", "get", "cronjob", "fru-analytics-periodic-kube", "-n", K8S_NAMESPACE,
-             "-o", "jsonpath={.spec.suspend}"],
-            capture_output=True, text=True, timeout=10,
-            env={**os.environ, "CLOUD_REGION": region},
-        )
-        if out.returncode == 0 and out.stdout.strip() != "true":
-            subprocess.run(
-                ["kubectl", "patch", "cronjob", "fru-analytics-periodic-kube", "-n", K8S_NAMESPACE,
-                 "-p", '{"spec":{"suspend":true}}'],
-                capture_output=True, timeout=10,
-                env={**os.environ, "CLOUD_REGION": region},
-            )
-            _cronjob_was_suspended = True
-            logger.info("[Kube] CronJob suspended before helm/rollout (deploy-trigger mitigation)")
-    except Exception:
-        pass
+    if cronjob_suspend_if_needed(region):
+        logger.info("[Kube] CronJob suspended before helm/rollout (deploy-trigger mitigation)")
 
     # Phase 9.5: Install AWS Load Balancer Controller (NLB track only; skip when --elb)
     if not getattr(args, "elb", False):
@@ -277,17 +262,8 @@ def run_deploy_kube(
     wait_for_fru_api_ready(env, timeout_seconds=600, check_interval_seconds=15, region=region)
     logger.success("fru-api pods ready")
 
-    if _cronjob_was_suspended:
-        try:
-            subprocess.run(
-                ["kubectl", "patch", "cronjob", "fru-analytics-periodic-kube", "-n", K8S_NAMESPACE,
-                 "-p", '{"spec":{"suspend":false}}'],
-                capture_output=True, timeout=10,
-                env={**os.environ, "CLOUD_REGION": region},
-            )
-            logger.info("[Kube] CronJob re-enabled after deploy")
-        except Exception:
-            pass
+    if cronjob_unsuspend_if_needed(region):
+        logger.info("[Kube] CronJob re-enabled after deploy")
 
     # Wire K8s LoadBalancer into CloudFront API origin
     # DEPLOYMENT_OPTIMIZATION §2.2: Second apply when (a) we got hostname from poll (didn't have before first apply),
