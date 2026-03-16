@@ -17,6 +17,7 @@ Pre-destroy:
 """
 import argparse
 import os
+import subprocess
 import sys
 
 # Project root for core_app imports (model_config)
@@ -30,6 +31,22 @@ from tools.gcp.scope_shared.core.backend import resolve_region, resolve_state_bu
 from tools.cloud_shared.logging import logger
 
 load_dotenv()
+
+
+def _state_bucket_exists(region: str | None) -> bool:
+    """Return True if the GCS state bucket exists. False when deleted by a previous teardown."""
+    try:
+        bucket = resolve_state_bucket(region or resolve_region(None))
+        out = subprocess.run(
+            ["gcloud", "storage", "buckets", "describe", f"gs://{bucket}"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        return out.returncode == 0
+    except Exception:
+        return False
+
 
 ORDER = {
     "kube": ["infra_terraform/live_deploy/gcp/kube"],
@@ -131,6 +148,14 @@ def main():
         stack_path = os.path.join(repo_root, stack)
         if not os.path.isdir(stack_path):
             continue
+        # When state bucket was deleted by a previous teardown, we cannot init. Skip—resources are already gone.
+        if not _state_bucket_exists(region):
+            stack_name = stack.split("/")[-1]
+            logger.info(
+                f"SKIP {stack_name}: State bucket does not exist (deleted by previous teardown). "
+                "Skipping—nothing to tear down."
+            )
+            continue
         # Pre-destroy kube: remove CronJob, Job, LoadBalancer svc, namespace before tofu destroy.
         # Match kube stack only (not nonkube, which contains "kube" as substring).
         if "scope_shared" not in stack and "kube" in stack and "nonkube" not in stack:
@@ -187,9 +212,9 @@ def main():
                 refs.append(f"{spark_repo}:{spark_tag}")
             for ref in refs:
                 subprocess.run(["docker", "rmi", ref], capture_output=True)
-            logger.info("Removed local Docker cache images for GCP: %s", ", ".join(refs))
+            logger.info(f"Removed local Docker cache images for GCP: {', '.join(refs)}")
         except Exception as e:
-            logger.warning("Local Docker image cleanup (GCP): %s", e)
+            logger.warning(f"Local Docker image cleanup (GCP): {e}")
 
     stats.print_summary()
     logger.success("Teardown complete.")

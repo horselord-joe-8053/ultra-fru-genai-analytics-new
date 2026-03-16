@@ -1,27 +1,19 @@
 """
-Post-destroy cleanup for durable stack (full teardown with --incl-dura).
+Post-destroy cleanup for durable stack (teardown with --incl-dura or --incl-dura-all).
 
-Runs after all stacks are destroyed. Removes AWS-created orphans that Terraform
-never managed:
+Two functions, called separately by the teardown orchestrator:
 
-1. RDS log group: AWS creates /aws/rds/cluster/{cluster}/postgresql when Aurora
-   has enabled_cloudwatch_logs_exports. RDS does not delete it when the cluster
-   is destroyed.
+1. post_destroy_durable_log_groups: RDS and ECS CloudWatch log groups.
+   Called when durable is destroyed (--incl-dura or --incl-dura-all).
+   AWS creates these as side effects; Terraform never manages them.
 
-2. ECS Container Insights log group: AWS creates
-   /aws/ecs/containerinsights/{cluster}/performance when Container Insights is
-   enabled. ECS does not delete it when the cluster is destroyed.
-
-3. State bucket: Created by setup_state_backend.py (not Terraform). Holds
-   Terraform state; cannot be destroyed while teardown runs. After all stacks
-   are gone, we empty and delete it. Next deploy will recreate via setup_state_backend.
-
-4. DynamoDB lock table (optional): If TF_LOCK_TABLE_COMPONENT or TF_LOCK_TABLE_PREFIX
-   is set, we delete the lock table for the region. Next deploy recreates it via setup_state_backend.
+2. post_destroy_state_backend: State bucket and DynamoDB lock table.
+   Called only when durable_with_cooloff is also destroyed (--incl-dura-all).
+   When --incl-dura only, secrets remain and their state lives in the bucket;
+   we keep the bucket to preserve that state for re-deploy.
 
 All operations are idempotent (ignore ResourceNotFoundException, NoSuchBucket).
 """
-import os
 import subprocess
 from typing import TYPE_CHECKING
 
@@ -29,35 +21,30 @@ if TYPE_CHECKING:
     from tools.cloud_shared.stats import TeardownStats
 
 
-def post_destroy_durable_orphans(
+def _timed(stats: "TeardownStats | None", component: str, identifier: str, fn):
+    if stats:
+        with stats.timed(component, identifier):
+            fn()
+    else:
+        fn()
+
+
+def post_destroy_durable_log_groups(
     env: str,
     region: str,
     stats: "TeardownStats | None" = None,
 ) -> None:
     """
-    Remove orphaned resources after durable (and all) stacks are destroyed.
+    Remove RDS and ECS CloudWatch log groups orphaned when durable is destroyed.
 
-    Call only when --incl-dura and scope=all. Runs after the teardown loop.
+    Call when --incl-dura or --incl-dura-all and scope=all.
     """
     from tools.cloud_shared.logging import logger
-    from tools.aws.scope_shared.core.backend import (
-        resolve_state_bucket,
-        resolve_state_lock_table,
-    )
     from tools.aws.scope_shared.core import resource_names
 
     proj = resource_names.get_proj_prefix()
+    logger.step("Post-destroy: removing durable log groups (RDS, ECS)...")
 
-    def _timed(component: str, identifier: str, fn):
-        if stats:
-            with stats.timed(component, identifier):
-                fn()
-        else:
-            fn()
-
-    logger.step("Post-destroy: removing durable orphans (log groups, state bucket, lock table)...")
-
-    # 1. RDS log group: /aws/rds/cluster/{proj}-{env}-aurora-cluster/postgresql
     def _delete_rds_log_group():
         name = resource_names.rds_log_group(env)
         r = subprocess.run(
@@ -73,9 +60,8 @@ def post_destroy_durable_orphans(
         else:
             logger.warning(f"Could not delete RDS log group {name}: {r.stderr or r.stdout}")
 
-    _timed("RDS log group", f"{proj}-{env}-aurora-cluster/postgresql", _delete_rds_log_group)
+    _timed(stats, "RDS log group", f"{proj}-{env}-aurora-cluster/postgresql", _delete_rds_log_group)
 
-    # 2. ECS Container Insights log group: /aws/ecs/containerinsights/{proj}-{env}-cluster/performance
     def _delete_ecs_log_group():
         name = resource_names.ecs_container_insights_log_group(env)
         r = subprocess.run(
@@ -91,10 +77,28 @@ def post_destroy_durable_orphans(
         else:
             logger.warning(f"Could not delete ECS log group {name}: {r.stderr or r.stdout}")
 
-    _timed("ECS log group", f"{proj}-{env}-cluster/performance", _delete_ecs_log_group)
+    _timed(stats, "ECS log group", f"{proj}-{env}-cluster/performance", _delete_ecs_log_group)
+    logger.success("Post-destroy: durable log groups removed.")
 
-    # 3. State bucket: empty (all versions + delete markers) then delete
-    # Versioned buckets: aws s3 rb --force does not remove old versions; use boto3.
+
+def post_destroy_state_backend(
+    env: str,
+    region: str,
+    stats: "TeardownStats | None" = None,
+) -> None:
+    """
+    Remove state bucket and lock table. Call only when durable_with_cooloff was
+    destroyed (--incl-dura-all). When --incl-dura only, secrets remain and their
+    state lives in the bucket; we keep it for re-deploy.
+    """
+    from tools.cloud_shared.logging import logger
+    from tools.aws.scope_shared.core.backend import (
+        resolve_state_bucket,
+        resolve_state_lock_table,
+    )
+
+    logger.step("Post-destroy: removing state backend (bucket, lock table)...")
+
     def _delete_state_bucket():
         try:
             bucket = resolve_state_bucket(region)
@@ -127,28 +131,38 @@ def post_destroy_durable_orphans(
         except Exception as e:
             logger.warning(f"Could not delete state bucket {bucket}: {e}")
 
-    _timed("State bucket", region, _delete_state_bucket)
-
-    # 4. DynamoDB lock table (if used)
-    def _delete_lock_table():
-        table = resolve_state_lock_table(region)
-        if not table:
-            return
-        r = subprocess.run(
-            ["aws", "dynamodb", "delete-table", "--table-name", table, "--region", region],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        if r.returncode == 0:
-            logger.info(f"Deleted lock table: {table}")
-        elif "ResourceNotFoundException" in (r.stderr or ""):
-            logger.info(f"Lock table already gone: {table}")
-        else:
-            logger.warning(f"Could not delete lock table {table}: {r.stderr or r.stdout}")
+    _timed(stats, "State bucket", region, _delete_state_bucket)
 
     table = resolve_state_lock_table(region)
     if table:
-        _timed("Lock table", table, _delete_lock_table)
+        def _delete_lock_table():
+            r = subprocess.run(
+                ["aws", "dynamodb", "delete-table", "--table-name", table, "--region", region],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if r.returncode == 0:
+                logger.info(f"Deleted lock table: {table}")
+            elif "ResourceNotFoundException" in (r.stderr or ""):
+                logger.info(f"Lock table already gone: {table}")
+            else:
+                logger.warning(f"Could not delete lock table {table}: {r.stderr or r.stdout}")
 
-    logger.success("Post-destroy: durable orphans removed.")
+        _timed(stats, "Lock table", table, _delete_lock_table)
+
+    logger.success("Post-destroy: state backend removed.")
+
+
+def post_destroy_durable_orphans(
+    env: str,
+    region: str,
+    stats: "TeardownStats | None" = None,
+) -> None:
+    """
+    Legacy: runs both log groups and state backend. Prefer calling
+    post_destroy_durable_log_groups and post_destroy_state_backend directly
+    so the orchestrator can choose when to delete the state backend.
+    """
+    post_destroy_durable_log_groups(env, region, stats)
+    post_destroy_state_backend(env, region, stats)

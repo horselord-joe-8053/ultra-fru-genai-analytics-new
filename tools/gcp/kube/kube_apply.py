@@ -22,14 +22,12 @@ from tools.cloud_shared.analytics_schedule import (
     get_required_analytics_scheduler_interval_seconds,
     seconds_to_cron,
 )
-from tools.cloud_shared.env import load_dotenv
+from tools.cloud_shared.env import load_dotenv, require
+from tools.cloud_shared.k8s_deploy_helpers import JOB_BOOTSTRAP, K8S_NAMESPACE, check_k8s_bootstrap_job_succeeded
 from tools.cloud_shared.k8s_j2_render import render
 from tools.gcp.scope_shared.core.backend import resolve_region
 
 load_dotenv()
-
-K8S_NAMESPACE = "fru-kube"
-JOB_BOOTSTRAP = "fru-analytics-bootstrap-kube"
 
 
 def _kubectl(args: list, input_text: str | None = None) -> None:
@@ -42,6 +40,7 @@ def _fetch_gcp_secret(secret_id: str, project: str) -> str:
     """Fetch secret value from GCP Secret Manager."""
     if not secret_id:
         return ""
+    timeout = int(os.getenv("GCP_SECRET_FETCH_TIMEOUT", "60"))
     out = subprocess.check_output(
         [
             "gcloud", "secrets", "versions", "access", "latest",
@@ -49,30 +48,9 @@ def _fetch_gcp_secret(secret_id: str, project: str) -> str:
             "--project", project,
         ],
         text=True,
-        timeout=15,
+        timeout=timeout,
     )
     return (out or "").strip()
-
-
-def _check_k8s_bootstrap_succeeded(env: str, region: str) -> bool:
-    """Check if Job fru-analytics-bootstrap-kube has status.succeeded >= 1."""
-    subprocess.run(
-        ["python", "tools/gcp/kube/gke_kubeconfig.py", "--env", env, "--region", region],
-        check=False,
-        env={**os.environ, "CLOUD_REGION": region},
-    )
-    try:
-        out = subprocess.check_output(
-            [
-                "kubectl", "get", "job", JOB_BOOTSTRAP, "-n", K8S_NAMESPACE,
-                "-o", "jsonpath={.status.succeeded}",
-            ],
-            text=True,
-            timeout=10,
-        )
-        return out.strip() and int(out.strip()) >= 1
-    except Exception:
-        return False
 
 
 def main():
@@ -198,7 +176,7 @@ data:
 {data_lines}
 """)
 
-        if not args.force and _check_k8s_bootstrap_succeeded(args.env, region):
+        if not args.force and check_k8s_bootstrap_job_succeeded(args.env, region, "gcp"):
             print(f"[KUBE BOOTSTRAP] Skip: Job {JOB_BOOTSTRAP} already succeeded (idempotent)")
         else:
             delta_lake_pkg = require("DELTA_LAKE_PACKAGE")

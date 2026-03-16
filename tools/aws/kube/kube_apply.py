@@ -193,7 +193,7 @@ data:
         else:
             print("WARN: AWS_ADMIN_ACCESS_KEY_ID/SECRET or AWS_BEDROCK_* not set; agent Bedrock calls may fail")
 
-        if not args.force and check_k8s_bootstrap_job_succeeded(args.env):
+        if not args.force and check_k8s_bootstrap_job_succeeded(args.env, region):
             print(f"[KUBE BOOTSTRAP] Skip: Job {JOB_BOOTSTRAP} already succeeded (idempotent)")
         else:
             delta_table_path = args.delta_table_path or f"s3a://{delta_bucket}/delta/fru_sales"

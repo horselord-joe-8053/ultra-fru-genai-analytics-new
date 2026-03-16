@@ -4,7 +4,10 @@ kind: Service
 metadata:
   name: fru-api-svc
   namespace: fru-kube
-{% if cloud_provider == "aws" %}
+{% if cloud_provider == "gcp" %}
+  annotations:
+    cloud.google.com/l4-rbs: "enabled"
+{% elif cloud_provider == "aws" %}
   annotations:
     service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
 {% if not use_elb %}

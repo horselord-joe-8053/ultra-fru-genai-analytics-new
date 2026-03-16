@@ -112,14 +112,14 @@ def k8s_pre_destroy_cleanup(
         _run_kubectl(["kubectl", "delete", "namespace", K8S_NAMESPACE, "--ignore-not-found"])
     _timed("Namespace (delete)", K8S_NAMESPACE, _del_ns)
 
-    # 5. Wait for namespace to fully terminate (LoadBalancer release can take 1–2 min)
+    # 5. Wait for namespace to fully terminate (LoadBalancer release can take 2–5 min)
     def _wait_ns():
         cmd = f"kubectl get namespace {K8S_NAMESPACE}"
         logger.info(
             f"Pre-destroy kube: polling `{cmd}` until Terminating completes "
-            "(AWS releasing LB/ENIs, up to 2 min)..."
+            "(AWS releasing LB/ENIs, up to 5 min)..."
         )
-        for attempt in range(24):  # Up to 2 min
+        for attempt in range(60):  # Up to 5 min
             out = subprocess.run(
                 ["kubectl", "get", "namespace", K8S_NAMESPACE],
                 capture_output=True, text=True, check=False, timeout=30,

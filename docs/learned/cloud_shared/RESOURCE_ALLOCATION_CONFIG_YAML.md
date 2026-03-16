@@ -147,8 +147,19 @@ graph TD
 <tr style="background:#1565c0;color:white"><th>Scope</th><th>Purpose</th><th>Consumers</th></tr>
 <tr><td style="background:#e3f2fd"><span style="background:#e3f2fd;padding:1px 3px"><strong>scope_default</strong></span></td><td>Network (VPC, subnets), database (multi_az)</td><td>durable stack, teardown, destroy_durable</td></tr>
 <tr><td style="background:#e8f5e9"><span style="background:#e3f2fd;padding:1px 3px"><strong>kube</strong></span></td><td>EKS/GKE compute: min/max node count, instance types, machine_type, zone</td><td>deploy_kube, teardown, reapply_kube_with_lb</td></tr>
-<tr><td style="background:#e8f5e9"><span style="background:#e3f2fd;padding:1px 3px"><strong>nonkube</strong></span></td><td>ECS/Cloud Run compute: min/max instance count, tasks.api, tasks.spark</td><td>deploy_nonkube</td></tr>
+<tr><td style="background:#e8f5e9"><span style="background:#e3f2fd;padding:1px 3px"><strong>nonkube</strong></span></td><td>ECS/Cloud Run compute: min/max instance count, tasks.api, tasks.spark</td><td>deploy_nonkube, teardown</td></tr>
 </table>
+
+### 3.4 Teardown: Same Config, TF_VAR_* for tofu import/destroy
+
+Teardown must set the same compute vars as deploy before running `tofu import` and `tofu destroy` for nonkube and kube. Without them, tofu prompts for input and hangs (variables have no defaults).
+
+| Stack | TF_VAR_* set from config | Source |
+|:------|:-------------------------|:-------|
+| nonkube | min_instance_count, max_instance_count, api_task_cpu, api_task_memory, spark_task_cpu, spark_task_memory | get_nonkube_compute_config(region) |
+| kube | eks_min_node_count, eks_max_node_count, eks_instance_types | get_kube_compute_config(region) |
+
+See `tools/aws/teardown.py` (import-before-destroy blocks).
 
 ---
 

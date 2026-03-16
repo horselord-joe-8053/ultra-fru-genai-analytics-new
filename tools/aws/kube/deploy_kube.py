@@ -285,7 +285,14 @@ def run_deploy_kube(
     if hostname_to_use:
         wait_for_dns_resolvable(hostname_to_use, timeout_seconds=120, check_interval_sec=5, heartbeat_interval_sec=30)
         # LB target health checks can take 2-5 min; allow more retries
-        verify_api_db_connected(f"http://{hostname_to_use}", timeout_seconds=60, max_retries=12)
+        verify_api_db_connected(
+            f"http://{hostname_to_use}",
+            timeout_seconds=60,
+            max_retries=12,
+            env=env,
+            region=region,
+            provider="aws",
+        )
 
     if need_second_apply:
         logger.step("Re-applying kube stack with LoadBalancer hostname for CloudFront API origin...")

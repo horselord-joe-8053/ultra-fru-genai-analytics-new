@@ -27,6 +27,17 @@ before durable (blocks VPC delete). See docs/war_stories/WAR_STORIES_AWS.md ##23
 Post-destroy (--incl-dura): After all stacks destroyed, removes durable orphans:
 RDS log group, ECS Container Insights log group, state bucket, lock table. Next
 deploy recreates bucket/table via setup_state_backend.
+
+Terraform variable requirements (TF_VAR_*):
+  nonkube and kube stacks have required variables with no defaults. Without them,
+  tofu import and tofu destroy prompt for input and hang. We set these from
+  config before import/destroy:
+  - nonkube: min_instance_count, max_instance_count, api_task_cpu, api_task_memory,
+    spark_task_cpu, spark_task_memory (from get_nonkube_compute_config).
+  - kube: eks_min_node_count, eks_max_node_count, eks_instance_types
+    (from get_kube_compute_config).
+  Config source: config/cloud/aws_deploy_config.yaml (nonkube/kube.compute).
+  See docs/learned/cloud_shared/RESOURCE_ALLOCATION_CONFIG_YAML.md.
 """
 import argparse
 import json
@@ -47,7 +58,10 @@ from tools.aws.kube.kube_pre_destroy import k8s_pre_destroy_cleanup
 from tools.aws.scope_shared.import_preexist.nonkube import run_import_nonkube
 from tools.aws.scope_shared.import_preexist.kube import run_import_kube
 from tools.aws.scope_shared.teardown.cloudfront_pre_destroy import pre_destroy_cloudfront
-from tools.aws.scope_shared.teardown.durable_post_destroy import post_destroy_durable_orphans
+from tools.aws.scope_shared.teardown.durable_post_destroy import (
+    post_destroy_durable_log_groups,
+    post_destroy_state_backend,
+)
 from tools.aws.kube.teardown_orphan_cleanup import (
     remove_orphaned_eks_security_groups,
     remove_orphaned_k8s_elb_security_groups,
@@ -110,12 +124,12 @@ ORDER = {
 }
 DURABLE_STACK = "infra_terraform/live_deploy/aws/scope_shared/durable"
 DURABLE_COOLOFF_STACK = "infra_terraform/live_deploy/aws/scope_shared/durable_with_cooloff"
-NONDUrable_STACK = "infra_terraform/live_deploy/aws/scope_shared/nondurable"
+NONDURABLE_STACK = "infra_terraform/live_deploy/aws/scope_shared/nondurable"
 NONKUBE_STACK = "infra_terraform/live_deploy/aws/nonkube"
 KUBE_STACK = "infra_terraform/live_deploy/aws/kube"
 
 # Stacks that require the state bucket to exist (nondurable, durable, durable_with_cooloff)
-STACKS_REQUIRING_STATE_BUCKET = (NONDUrable_STACK, DURABLE_STACK, DURABLE_COOLOFF_STACK)
+STACKS_REQUIRING_STATE_BUCKET = (NONDURABLE_STACK, DURABLE_STACK, DURABLE_COOLOFF_STACK)
 
 # Stacks that have CloudFront frontend (require pre-destroy before tofu destroy)
 STACKS_WITH_CLOUDFRONT = tuple(ORDER["nonkube"] + ORDER["kube"])
@@ -359,7 +373,16 @@ def main():
             logger.error("--post-destroy-only requires --incl-dura or --incl-dura-all and --scope all")
             sys.exit(1)
         logger.operation_start("Teardown (post-destroy only)", args.scope, args.env, region)
-        post_destroy_durable_orphans(args.env, region, stats=TeardownStats())
+        stats = TeardownStats()
+        try:
+            post_destroy_durable_log_groups(args.env, region, stats=stats)
+        except Exception as e:
+            logger.warning(f"Post-destroy durable log groups: {e}")
+        if args.incl_dura_all:
+            try:
+                post_destroy_state_backend(args.env, region, stats=stats)
+            except Exception as e:
+                logger.warning(f"Post-destroy state backend: {e}")
         logger.operation_end("Teardown (post-destroy only)", args.scope, args.env, region, 0, ok=True)
         logger.success("Done.")
         return
@@ -406,12 +429,12 @@ def main():
                 )
                 tracker.end_phase(phase_idx)
                 continue
-        # When state bucket was deleted by a previous teardown (post_destroy_durable_orphans),
+        # When state bucket was deleted by a previous teardown (post_destroy_state_backend),
         # we cannot init nondurable/durable stacks. Skip them—resources are already gone.
         if s in STACKS_REQUIRING_STATE_BUCKET and not _state_bucket_exists(region):
             B = "\033[1m"
             R = "\033[0m"
-            stack_name = "nondurable" if s == NONDUrable_STACK else ("durable" if s == DURABLE_STACK else "durable_with_cooloff")
+            stack_name = "nondurable" if s == NONDURABLE_STACK else ("durable" if s == DURABLE_STACK else "durable_with_cooloff")
             logger.info(
                 f"{B}SKIP {stack_name}:{R} State bucket does not exist (deleted by previous teardown). "
                 f"{B}Action:{R} Skipping—nothing to tear down."
@@ -474,13 +497,17 @@ def main():
             remove_orphaned_k8s_elb_security_groups(args.env, region, stats=stats)
         tracker.end_phase(phase_idx)
 
-    # Post-destroy: when durable was destroyed, remove orphans (log groups, state bucket, lock table)
+    # Post-destroy: when durable was destroyed, remove orphans
     if (args.incl_dura or args.incl_dura_all) and args.scope == "all":
-        logger.step("Post-destroy: removing durable orphans (full cleanup)...")
         try:
-            post_destroy_durable_orphans(args.env, region, stats=stats)
+            post_destroy_durable_log_groups(args.env, region, stats=stats)
         except Exception as e:
-            logger.warning(f"Post-destroy durable orphans: {e}")
+            logger.warning(f"Post-destroy durable log groups: {e}")
+        if args.incl_dura_all:
+            try:
+                post_destroy_state_backend(args.env, region, stats=stats)
+            except Exception as e:
+                logger.warning(f"Post-destroy state backend: {e}")
         # Remove local Docker cache images used by this provider (same names as build_and_push leaves)
         try:
             from tools.aws.scope_shared.core import resource_names

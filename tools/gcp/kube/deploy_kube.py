@@ -202,6 +202,16 @@ def run_deploy_kube(
     else:
         subprocess.run(kube_apply_args, check=True, cwd=repo_root, env={**os.environ, "CLOUD_REGION": region})
 
+    from tools.cloud_shared.k8s_deploy_helpers import (
+    verify_api_db_connected,
+    verify_api_via_proxy,
+    wait_for_fru_api_ready,
+)
+
+    logger.step("Waiting for fru-api pods to be ready...")
+    wait_for_fru_api_ready(env, region, provider="gcp", timeout_seconds=600, check_interval_seconds=15)
+    logger.success("fru-api pods ready")
+
     subprocess.run([
         sys.executable, "tools/gcp/kube/kube_apply.py", "--env", env, "--region", region, "--phase", "schedule",
         "--spark-image", spark_img, "--delta-bucket", delta_bucket,
@@ -228,8 +238,23 @@ def run_deploy_kube(
             target_first="module.frontend.google_compute_backend_service.api_internet[0]",
         )
         logger.success("Cloud CDN API origin wired to GKE LoadBalancer")
-    elif hostname_to_use and hostname_to_use == hostname_before:
-        logger.success("Cloud CDN API origin already wired (hostname unchanged)")
+
+    if hostname_to_use:
+        verify_api_db_connected(
+            f"http://{hostname_to_use}",
+            timeout_seconds=60,
+            max_retries=12,
+            env=env,
+            region=region,
+            provider="gcp",
+        )
+        # Verify Cloud Run → GKE LB path (symptom: proxy returns 502)
+        kube_out = get_tofu_output_json(
+            "infra_terraform/live_deploy/gcp/kube", env, region, "kube"
+        )
+        proxy_url = (kube_out.get("kube_base_url", {}).get("value") or "").strip()
+        if proxy_url:
+            verify_api_via_proxy(proxy_url, timeout_seconds=30)
     elif not hostname_to_use:
         logger.warning(
             f"LoadBalancer hostname/IP not available after polling. Cloud CDN cannot route /api/* to GKE; "
