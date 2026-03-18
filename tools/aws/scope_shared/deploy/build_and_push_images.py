@@ -144,11 +144,13 @@ def _run_push_only(
     # Store build hash for target region so future content-skip works
     if artifacts_bucket:
         app_hash = compute_build_context_hash("core_app", "Dockerfile")
+        tools_hash = compute_build_context_hash("tools/cloud_shared", "")
+        app_hash_combined = f"{app_hash}_{tools_hash[:12]}" if tools_hash else app_hash
         spark_hash = compute_build_context_hash("core_app", "analytics/docker/Dockerfile")
         app_key = f"build-metadata/{env}/app-build-hash.json"
         spark_key = f"build-metadata/{env}/spark-build-hash.json"
         try:
-            store_build_hash(artifacts_bucket, app_key, target_region, app_hash, "latest")
+            store_build_hash(artifacts_bucket, app_key, target_region, app_hash_combined, "latest")
             store_build_hash(artifacts_bucket, spark_key, target_region, spark_hash, "latest")
             logger.info("[PUSH-ONLY] Stored build hashes for target region")
         except subprocess.CalledProcessError as e:
@@ -303,14 +305,16 @@ def main():
     # on future runs when nothing changed. Captures both committed and uncommitted
     # changes—local edits before commit will trigger rebuild.
     app_hash = compute_build_context_hash("core_app", "Dockerfile")
+    tools_hash = compute_build_context_hash("tools/cloud_shared", "")
+    app_hash_combined = f"{app_hash}_{tools_hash[:12]}" if tools_hash else app_hash
     spark_hash = compute_build_context_hash("core_app", "analytics/docker/Dockerfile")
 
     # Build with local tags only (max 2 per image: build-info + latest). Push tags to ECR.
     # --progress=plain: line-by-line output; avoids silent buffering in Cursor/CI.
     # --build-arg BUILD_CONTEXT_HASH: stored as image label for traceability.
     app_build_cmd = ["docker", "build", "--progress=plain", "--platform", platform,
-         "--build-arg", f"BUILD_CONTEXT_HASH={app_hash}",
-         "-t", f"{app_repo_name}:{app_tag}", "core_app"]
+         "--build-arg", f"BUILD_CONTEXT_HASH={app_hash_combined}",
+         "-t", f"{app_repo_name}:{app_tag}", "-f", "core_app/Dockerfile", "."]
     if args.no_cache:
         app_build_cmd.insert(2, "--no-cache")
         logger.info("[BUILD] App: --no-cache (cache-free)")
@@ -383,9 +387,9 @@ def main():
         app_key = f"build-metadata/{args.env}/app-build-hash.json"
         spark_key = f"build-metadata/{args.env}/spark-build-hash.json"
         try:
-            store_build_hash(artifacts_bucket, app_key, region, app_hash, app_tag)
+            store_build_hash(artifacts_bucket, app_key, region, app_hash_combined, app_tag)
             store_build_hash(artifacts_bucket, spark_key, region, spark_hash, spark_tag)
-            logger.info(f"[BUILD] Stored build-context hashes for content-based skip (app={app_hash[:8]}..., spark={spark_hash[:8]}...)")
+            logger.info(f"[BUILD] Stored build-context hashes for content-based skip (app={app_hash_combined[:8]}..., spark={spark_hash[:8]}...)")
         except subprocess.CalledProcessError as e:
             logger.warning(f"[BUILD] Could not store build hashes to S3 (non-fatal): {e}")
 

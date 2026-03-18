@@ -387,19 +387,16 @@ def main():
             pass  # Already ended phase 8 above
         else:
             logger.step(f"[8/{len(phases)}] Building and pushing images...")
-            # Default SPARK_IMAGE_TAG when not in .env (e.g. commented out)
-            if not os.getenv("SPARK_IMAGE_TAG"):
-                os.environ["SPARK_IMAGE_TAG"] = "latest"
             # When APP_IMAGE_TAG is "latest" or unset, generate version tag and push both
             app_tag = os.getenv("APP_IMAGE_TAG", "latest")
             if app_tag == "latest":
-                from tools.cloud_shared.image_tag import generate_image_tag, get_container_image_tags
+                from tools.cloud_shared.image_tag import generate_image_tag
                 version_tag = generate_image_tag(env)
                 os.environ["APP_IMAGE_TAG"] = version_tag
-                os.environ["CONTAINER_IMAGE_TAGS"] = get_container_image_tags(version_tag)
                 logger.info(f"[BUILD] Generated version tag: {version_tag} (will also push latest)")
-            else:
-                os.environ["CONTAINER_IMAGE_TAGS"] = app_tag
+            # Spark uses same tag as app (Phase 6: push both version_tag and latest for each image)
+            if not os.getenv("SPARK_IMAGE_TAG"):
+                os.environ["SPARK_IMAGE_TAG"] = os.getenv("APP_IMAGE_TAG", "latest")
             build_env = {**os.environ, "CLOUD_REGION": region}
             build_env["PYTHONUNBUFFERED"] = "1"
             build_cmd = ["python", "tools/aws/scope_shared/deploy/build_and_push_images.py", "--env", env, "--region", region]
@@ -414,45 +411,14 @@ def main():
             logger.success("Images built and pushed")
             tracker.end_phase(8)
 
-        # Phase 9: ECR URLs (and for --skip-build / content-skip: query ECR for latest image tags)
+        # Phase 9: ECR URLs (uses get_deploy_image_uris: APP_IMAGE_TAG or resolve from registry)
         tracker.start_phase(9)
         logger.step(f"[9/{len(phases)}] Getting ECR image URLs...")
         snd = tofu_output_json("infra_terraform/live_deploy/aws/scope_shared/nondurable", env, region)
-        app_repo_url = snd["ecr_app_url"]["value"]
-        spark_repo_url = snd["ecr_spark_url"]["value"]
-        if args.skip_build or content_skip:
-            app_image_full = f"{app_repo_url}:latest"
-            spark_image_full = f"{spark_repo_url}:latest"
-            # Query ECR for all tags on the image with tag=latest (for frontend display)
-            repo_name = app_repo_url.split("/")[-1]
-            try:
-                out = subprocess.check_output(
-                    [
-                        "aws", "ecr", "describe-images",
-                        "--repository-name", repo_name,
-                        "--image-ids", "imageTag=latest",
-                        "--region", region,
-                        "--query", "imageDetails[0].imageTags",
-                        "--output", "text",
-                    ],
-                    text=True,
-                    timeout=15,
-                )
-                tags_str = out.strip().replace("\t", ",").replace(" ", ",")
-                # Normalize: "tag1\ttag2" or "tag1 tag2" -> "tag1,tag2"
-                tags_list = [t for t in tags_str.split(",") if t]
-                if tags_list:
-                    os.environ["CONTAINER_IMAGE_TAGS"] = ",".join(tags_list)
-                    logger.info(f"[SKIP-BUILD] App image tags from ECR: {os.environ['CONTAINER_IMAGE_TAGS']}")
-                else:
-                    os.environ["CONTAINER_IMAGE_TAGS"] = "latest"
-            except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
-                logger.error(f"[SKIP-BUILD] Failed to get tags for repo:latest: {e}")
-                logger.error("Ensure a full deploy has run at least once so 'latest' exists in ECR.")
-                raise SystemExit(1)
-        else:
-            spark_image_full = f"{spark_repo_url}:{require('SPARK_IMAGE_TAG')}"
-            app_image_full = f"{app_repo_url}:{require('APP_IMAGE_TAG')}"
+        from tools.cloud_shared.deploy_image_resolver import get_deploy_image_uris
+        app_image_full, spark_image_full = get_deploy_image_uris("aws", env, region)
+        app_tag = app_image_full.split(":")[-1] if ":" in app_image_full else "latest"
+        os.environ["APP_IMAGE_TAG"] = app_tag
         logger.info(f"App image: {app_image_full}")
         logger.info(f"Spark image: {spark_image_full}")
         logger.success("ECR URLs obtained")
@@ -463,21 +429,21 @@ def main():
             phase_idx = 8
             phase_idx += 1
             tracker.start_phase(phase_idx)
-            run_deploy_nonkube(env, region, snd, app_image_full, spark_image_full, args, stats=stats)
+            run_deploy_nonkube(env, region, snd, args, stats=stats)
             tracker.end_phase(phase_idx)
 
             phase_idx += 1
             tracker.start_phase(phase_idx)
-            run_deploy_kube(env, region, snd, app_image_full, spark_image_full, args, stats=stats)
+            run_deploy_kube(env, region, snd, args, stats=stats)
             tracker.end_phase(phase_idx)
         elif scope == "kube":
             tracker.start_phase(9)
-            run_deploy_kube(env, region, snd, app_image_full, spark_image_full, args, stats=stats)
+            run_deploy_kube(env, region, snd, args, stats=stats)
             tracker.end_phase(9)
         else:
             # scope == "nonkube"
             tracker.start_phase(9)
-            run_deploy_nonkube(env, region, snd, app_image_full, spark_image_full, args, stats=stats)
+            run_deploy_nonkube(env, region, snd, args, stats=stats)
             tracker.end_phase(9)
 
         stats.print_summary()

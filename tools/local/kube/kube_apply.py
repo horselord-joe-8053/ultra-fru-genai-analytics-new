@@ -135,7 +135,7 @@ data:
         api_subs = {
             "cloud_provider": "local",
             "APP_IMAGE": args.app_image,
-            "CONTAINER_IMAGE_TAGS": "",
+            "APP_IMAGE_TAG": "local",
             "CONTAINER_TYPE": "local-kube",
             "DEPLOY_SCOPE": "kube",
             "CLOUD_PROVIDER": "local",

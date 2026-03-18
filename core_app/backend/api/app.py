@@ -556,6 +556,42 @@ def _check_credentials_status() -> dict:
     return check_credentials_status()
 
 
+def _version_proxy_info(
+    cloud_provider: str | None,
+    scope: str | None,
+    api_port: int | None,
+    proxy_public_url: str | None = None,
+) -> str | None:
+    """Return proxy mapping as domain:port chain when PROXY_PUBLIC_URL is set. Used by UI."""
+    if not proxy_public_url or not proxy_public_url.strip():
+        return None
+    url = proxy_public_url.strip().rstrip("/")
+    if url.startswith("https://"):
+        host = url[8:].split("/")[0]
+        default_port = 443
+    elif url.startswith("http://"):
+        host = url[7:].split("/")[0]
+        default_port = 80
+    else:
+        host = url.split("/")[0]
+        default_port = 443
+    if ":" in host:
+        domain, port_str = host.rsplit(":", 1)
+        port = int(port_str) if port_str.isdigit() else default_port
+    else:
+        domain, port = host, default_port
+    # Use CONTAINER_LISTEN_PORT for the displayed port (LB → container), not Flask's PORT.
+    # kube: 5001 (containerPort); Cloud Run: 8080 (platform default). Set by deploy.
+    container_port_raw = os.environ.get("CONTAINER_LISTEN_PORT", "").strip()
+    if container_port_raw and container_port_raw.isdigit():
+        api_p = int(container_port_raw)
+    elif api_port is not None:
+        api_p = api_port
+    else:
+        api_p = 5001
+    return f"{domain}:{port} → api:{api_p}"
+
+
 @app.route("/version", methods=["GET"])
 def version():
     """Returns container image version tag(s) as [tag1, tag2, ...].
@@ -567,21 +603,32 @@ def version():
     """
     # Trigger agent init so _agent_init_error is populated (for verify/UI to show real reason)
     ensure_agent()
-    tags_raw = os.environ.get("CONTAINER_IMAGE_TAGS", "").strip()
+    # Prefer explicit APP_IMAGE_TAGS (comma-separated) when set
+    tags_raw = os.environ.get("APP_IMAGE_TAGS", "").strip()
     if tags_raw:
-        # Comma-separated list from deploy (e.g. "fru_dev_20260218_abc123,latest")
         tags = [t.strip() for t in tags_raw.split(",") if t.strip()]
     else:
-        # Fallback: derive from CONTAINER_IMAGE
         container_image = os.environ.get("CONTAINER_IMAGE", "").strip()
-        if container_image and container_image != "unknown" and ":" in container_image:
-            image_tag = container_image.split(":")[-1]
-            tags = [image_tag] if image_tag else []
+        tag = os.environ.get("APP_IMAGE_TAG", "").strip()
+        provider = (os.environ.get("CLOUD_PROVIDER", "") or "local").strip().lower()
+        region = (os.environ.get("CLOUD_REGION", "") or "").strip() or None
+        if container_image and container_image != "unknown" and provider in ("gcp", "aws", "local"):
+            try:
+                from tools.cloud_shared.image_registry_tags import get_image_tags
+                tags = get_image_tags(container_image, provider, region)
+                app.logger.info("[/version] get_image_tags(provider=%s, region=%s) -> %s", provider, region, tags)
+            except Exception as e:
+                app.logger.warning("[/version] get_image_tags failed: %s, fallback to [%s]", e, tag)
+                tags = [tag] if tag else []
+        elif tag:
+            tags = [tag]
         else:
-            tags = []
-    # Last resort: avoid 500 when neither CONTAINER_IMAGE_TAGS nor CONTAINER_IMAGE has a tag
+            if container_image and ":" in container_image:
+                tags = [container_image.split(":")[-1]]
+            else:
+                tags = []
     if not tags:
-        tags = ["latest"]
+        tags = ["unknown"]
 
     scope = os.environ.get("DEPLOY_SCOPE", "").strip() or None
     cloud_provider = os.environ.get("CLOUD_PROVIDER", "").strip() or None
@@ -591,12 +638,17 @@ def version():
     if api_port and api_port.isdigit():
         api_port = int(api_port)
 
+    # Proxy mapping: domain:port chain when PROXY_PUBLIC_URL is set (from deploy)
+    proxy_public_url = os.environ.get("PROXY_PUBLIC_URL", "").strip() or None
+    proxy_info = _version_proxy_info(cloud_provider, scope, api_port, proxy_public_url)
+
     return jsonify({
         "version": tags,
         "scope": scope,
         "cloud_provider": cloud_provider,
         "region": region,
         "api_port": api_port,
+        "proxy_info": proxy_info,
         "agent_enabled": query_agent is not None,
         "agent_init_error": _agent_init_error,
     })

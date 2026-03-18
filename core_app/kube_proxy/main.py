@@ -3,7 +3,7 @@ GCP Kube proxy: single entry point for frontend (GCS) + API (GKE LB).
 
 Cloud Run gives HTTPS + *.run.app domain. This proxy routes:
 - /, /index.html, /assets/*, etc. -> fetch from GCS bucket
-- /query, /analytics, /health, /version -> proxy to GKE LoadBalancer
+- /query, /analytics, /rawdata, /health, /version -> proxy to GKE LoadBalancer
 
 Env vars: GKE_LB_URL, GCS_BUCKET, GCP_PROJECT, PORT
 """
@@ -16,7 +16,7 @@ from google.cloud import storage
 app = Flask(__name__)
 
 # API paths that go to GKE LB (must match cloud_cdn path rules)
-API_PREFIXES = ("/query", "/analytics", "/health", "/version")
+API_PREFIXES = ("/query", "/analytics", "/rawdata", "/health", "/version")
 _raw = os.environ.get("GKE_LB_URL", "").strip().rstrip("/")
 GKE_LB_URL = _raw if _raw.startswith("http") else f"http://{_raw}" if _raw else ""
 GCS_BUCKET = os.environ.get("GCS_BUCKET", "")

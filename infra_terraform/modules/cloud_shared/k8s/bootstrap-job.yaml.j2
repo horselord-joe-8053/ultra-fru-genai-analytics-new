@@ -13,7 +13,9 @@ spec:
 {% if cloud_provider == "aws" %}
         command: ["/opt/spark/bin/spark-submit", "--packages", "{{ DELTA_LAKE_PACKAGE }},{{ DELTA_STORAGE_PACKAGE }},{{ HADOOP_PACKAGE }}", "/opt/fru/jobs/run_analytics.py"]
 {% elif cloud_provider == "gcp" %}
-        command: ["/opt/spark/bin/spark-submit", "--packages", "{{ DELTA_LAKE_PACKAGE }},{{ DELTA_STORAGE_PACKAGE }}", "--jars", "/opt/fru/jars/gcs-connector-hadoop3-2.2.7-shaded.jar", "/opt/fru/jobs/run_analytics.py"]
+        {# GCP: Use pre-bundled JARs from Spark image (--jars) instead of --packages.
+           Reason: GKE pods may lack egress to Maven; Delta/GCS JARs are baked into the image. #}
+        command: ["/opt/spark/bin/spark-submit", "--jars", "/opt/fru/jars/gcs-connector-hadoop3-2.2.7-shaded.jar,/opt/fru/jars/delta-spark_2.13-4.0.0.jar,/opt/fru/jars/delta-storage-4.0.0.jar", "/opt/fru/jobs/run_analytics.py"]
 {% else %}
         {# local: file:// delta, no cloud storage #}
         command: ["/opt/spark/bin/spark-submit", "--conf", "spark.driver.extraJavaOptions=-Duser.home=/tmp", "--conf", "spark.executor.extraJavaOptions=-Duser.home=/tmp", "--packages", "{{ DELTA_LAKE_PACKAGE }},{{ DELTA_STORAGE_PACKAGE }}", "/opt/fru/jobs/run_analytics.py"]

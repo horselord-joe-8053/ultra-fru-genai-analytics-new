@@ -29,8 +29,6 @@ def run_deploy_nonkube(
     env: str,
     region: str,
     snd: dict,
-    app_image_full: str,
-    spark_image_full: str,
     args,
     stats: DeployStats | None = None,
 ) -> None:
@@ -38,6 +36,11 @@ def run_deploy_nonkube(
     Deploy nonkube stack: ECS apply, frontend, ECS bootstrap.
     Idempotent and safe to re-run.
     """
+    from tools.cloud_shared.deploy_image_resolver import get_deploy_image_uris
+    app_image_full, spark_image_full = get_deploy_image_uris("aws", env, region)
+    app_tag = app_image_full.split(":")[-1] if ":" in app_image_full else "latest"
+    os.environ["APP_IMAGE_TAG"] = app_tag
+
     # Set ECS compute vars from config (min/max, task cpu/memory)
     cfg = get_nonkube_compute_config(region)
     tasks = cfg["tasks"]
@@ -69,9 +72,8 @@ def run_deploy_nonkube(
         "-var", f"app_image={app_image_full}",
         "-var", f"spark_image={spark_image_full}",
     ]
-    img_tags = os.getenv("CONTAINER_IMAGE_TAGS", "")
-    if img_tags:
-        plan_vars += ["-var", f"app_image_tags={img_tags}"]
+    img_tag = os.getenv("APP_IMAGE_TAG", "") or "latest"
+    plan_vars += ["-var", f"app_image_tag={img_tag}"]
 
     plan_clean = False  # set after init
 
@@ -106,9 +108,8 @@ def run_deploy_nonkube(
             "-var", f"app_image={app_image_full}",
             "-var", f"spark_image={spark_image_full}",
         ]
-        img_tags = os.getenv("CONTAINER_IMAGE_TAGS", "")
-        if img_tags:
-            extra += ["-var", f"app_image_tags={img_tags}"]
+        img_tag = os.getenv("APP_IMAGE_TAG", "") or "latest"
+        extra += ["-var", f"app_image_tag={img_tag}"]
         apply_stack_nonkube_with_ecs_import_retry(
             nonkube_stack,
             env,

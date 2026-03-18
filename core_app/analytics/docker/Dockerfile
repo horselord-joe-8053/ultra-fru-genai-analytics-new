@@ -5,12 +5,18 @@ ARG BUILD_CONTEXT_HASH
 LABEL build_context_hash=${BUILD_CONTEXT_HASH}
 USER root
 RUN pip install --no-cache-dir psycopg2-binary
-# Add delta libraries via spark packages at runtime; keep image minimal here.
+# Pre-bundle Delta Lake + GCS connector JARs at build time.
+# Purpose: Avoid runtime Maven/Ivy download via --packages; GKE pods may lack egress to repo1.maven.org.
+# The kube CronJob and bootstrap job use --jars with these paths instead of --packages.
 COPY analytics/jobs /opt/fru/jobs
-# GCS connector (shaded jar avoids Guava conflicts with Spark 3.5)
-RUN mkdir -p /opt/fru/jars && curl -sL -o /opt/fru/jars/gcs-connector-hadoop3-2.2.7-shaded.jar \
-    https://repo1.maven.org/maven2/com/google/cloud/bigdataoss/gcs-connector/hadoop3-2.2.7/gcs-connector-hadoop3-2.2.7-shaded.jar \
-    && chmod 644 /opt/fru/jars/gcs-connector-hadoop3-2.2.7-shaded.jar
+RUN mkdir -p /opt/fru/jars && \
+    curl -sL -o /opt/fru/jars/gcs-connector-hadoop3-2.2.7-shaded.jar \
+        https://repo1.maven.org/maven2/com/google/cloud/bigdataoss/gcs-connector/hadoop3-2.2.7/gcs-connector-hadoop3-2.2.7-shaded.jar && \
+    curl -sL -o /opt/fru/jars/delta-spark_2.13-4.0.0.jar \
+        https://repo1.maven.org/maven2/io/delta/delta-spark_2.13/4.0.0/delta-spark_2.13-4.0.0.jar && \
+    curl -sL -o /opt/fru/jars/delta-storage-4.0.0.jar \
+        https://repo1.maven.org/maven2/io/delta/delta-storage/4.0.0/delta-storage-4.0.0.jar && \
+    chmod 644 /opt/fru/jars/*.jar
 # Set HOME to /tmp to avoid Ivy/Maven cache permission issues (Spark uses ~/.ivy2)
 # Also set Spark-specific Ivy home and user.home property
 ENV HOME=/tmp

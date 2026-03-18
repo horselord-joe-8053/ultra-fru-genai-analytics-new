@@ -87,7 +87,7 @@ module "kube_proxy" {
   service_name      = "${var.prefix}-api-kube-${var.env}-${var.gcp_region}"
   location          = var.gcp_region
   project_id        = var.gcp_project_id
-  image             = "${try(data.terraform_remote_state.shared_nondurable.outputs.artifact_registry_app_url, "")}/kube-proxy:latest"
+  image             = "${try(data.terraform_remote_state.shared_nondurable.outputs.artifact_registry_app_url, "")}/kube-proxy:${var.kube_proxy_image_tag}"
   vpc_connector_id  = null
   env_vars = {
     GKE_LB_URL   = "http://${var.ingress_hostname}"

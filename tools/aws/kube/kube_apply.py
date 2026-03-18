@@ -227,7 +227,7 @@ data:
             api_subs = {
                 "cloud_provider": "aws",
                 "APP_IMAGE": app_image,
-                "CONTAINER_IMAGE_TAGS": os.getenv("CONTAINER_IMAGE_TAGS", ""),
+                "APP_IMAGE_TAG": os.getenv("APP_IMAGE_TAG", ""),
                 "CONTAINER_TYPE": "eks",
                 "DEPLOY_SCOPE": "kube",
                 "CLOUD_PROVIDER": "aws",

@@ -174,24 +174,19 @@ def main():
                 logger.step(f"[8/{len(phases)}] Building and pushing images...")
                 build_env = {**os.environ}
                 # Standardize image tagging: use shared git-based version tag (mirrors AWS).
-                from tools.cloud_shared.image_tag import generate_image_tag, get_container_image_tags
+                from tools.cloud_shared.image_tag import generate_image_tag
 
                 app_tag = (build_env.get("APP_IMAGE_TAG") or "").strip()
                 if not app_tag or app_tag == "latest":
                     version_tag = generate_image_tag(args.env)
                     build_env["APP_IMAGE_TAG"] = version_tag
-                    build_env["CONTAINER_IMAGE_TAGS"] = get_container_image_tags(version_tag)
-                    # Propagate to parent env so later steps (nonkube, kube, kube_apply)
-                    # see the same tags and backend /version is consistent.
                     os.environ["APP_IMAGE_TAG"] = version_tag
-                    os.environ["CONTAINER_IMAGE_TAGS"] = get_container_image_tags(version_tag)
                 else:
-                    build_env["CONTAINER_IMAGE_TAGS"] = app_tag
                     os.environ["APP_IMAGE_TAG"] = app_tag
-                    os.environ["CONTAINER_IMAGE_TAGS"] = app_tag
 
+                # Spark uses same tag as app (Phase 6: SPARK_IMAGE_TAG = APP_IMAGE_TAG)
                 if not (build_env.get("SPARK_IMAGE_TAG") or "").strip():
-                    build_env["SPARK_IMAGE_TAG"] = "latest"
+                    build_env["SPARK_IMAGE_TAG"] = build_env.get("APP_IMAGE_TAG", "latest")
 
                 build_skipped = False
                 if not getattr(args, "force_build", False):
@@ -234,6 +229,17 @@ def main():
 
                 if build_skipped:
                     logger.success("Build skipped (content hash match)")
+                    # Use tag from registry (we never pushed the generated tag)
+                    try:
+                        prev = os.environ.pop("APP_IMAGE_TAG", None)
+                        from tools.cloud_shared.deploy_image_resolver import get_deploy_image_uris
+                        app_full, _ = get_deploy_image_uris("gcp", args.env, region)
+                        resolved_tag = app_full.split(":")[-1] if ":" in app_full else "latest"
+                        os.environ["APP_IMAGE_TAG"] = resolved_tag
+                        logger.info(f"[BUILD-SKIP] APP_IMAGE_TAG from registry: {resolved_tag}")
+                    except Exception as e:
+                        os.environ["APP_IMAGE_TAG"] = "latest"
+                        logger.warning(f"[BUILD-SKIP] Could not resolve tag from registry: {e}. Using 'latest'.")
                 else:
                     # Fail-fast on Docker when about to build (fallback when --skip-doctor was used).
                     from tools.gcp.standalone.doctor import docker_daemon_available
@@ -264,32 +270,17 @@ def main():
                     logger.success("Images built and pushed")
             else:
                 logger.info("Skipping build (--skip-build)")
-                # When skip-build, get CONTAINER_IMAGE_TAGS from Artifact Registry (mirrors AWS ECR logic)
-                if not (os.environ.get("CONTAINER_IMAGE_TAGS") or "").strip():
+                # When skip-build, resolve APP_IMAGE_TAG from Artifact Registry (mirrors AWS ECR logic)
+                if not (os.environ.get("APP_IMAGE_TAG") or "").strip():
                     try:
-                        from tools.gcp.scope_shared.core.resource_names import artifact_registry_repo_app
-                        repo_app = artifact_registry_repo_app(args.env)
-                        app_image = f"{region}-docker.pkg.dev/{gcp_proj}/{repo_app}/app"
-                        out = subprocess.check_output(
-                            ["gcloud", "artifacts", "docker", "images", "list", app_image,
-                             "--include-tags", "--format=json"],
-                            text=True, timeout=15, cwd=repo_root,
-                        )
-                        import json
-                        images = json.loads(out)
-                        tags_list = []
-                        for img in images:
-                            for t in img.get("tags", []) or []:
-                                if t and t not in tags_list:
-                                    tags_list.append(t)
-                        if tags_list:
-                            os.environ["CONTAINER_IMAGE_TAGS"] = ",".join(tags_list[:5])
-                            logger.info(f"[SKIP-BUILD] App image tags from Artifact Registry: {os.environ['CONTAINER_IMAGE_TAGS']}")
-                        else:
-                            os.environ["CONTAINER_IMAGE_TAGS"] = "latest"
+                        from tools.cloud_shared.deploy_image_resolver import get_deploy_image_uris
+                        app_full, _ = get_deploy_image_uris("gcp", args.env, region)
+                        app_tag = app_full.split(":")[-1] if ":" in app_full else "latest"
+                        os.environ["APP_IMAGE_TAG"] = app_tag
+                        logger.info(f"[SKIP-BUILD] APP_IMAGE_TAG from Artifact Registry: {app_tag}")
                     except Exception as e:
-                        logger.warning(f"[SKIP-BUILD] Could not get tags from Artifact Registry: {e}. Using 'latest'.")
-                        os.environ["CONTAINER_IMAGE_TAGS"] = "latest"
+                        logger.warning(f"[SKIP-BUILD] Could not resolve tag from Artifact Registry: {e}. Using 'latest'.")
+                        os.environ["APP_IMAGE_TAG"] = "latest"
             tracker.end_phase(8)
             needs_secrets_build_and_db = False
 

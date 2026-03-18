@@ -53,9 +53,10 @@ variable "spark_home" {
   type    = string
   default = "/opt/spark"
 }
-variable "app_image_tags" {
+variable "app_image_tag" {
   type    = string
   default = ""
+  description = "Image tag for /version endpoint (e.g. fru_dev_20260218_abc123)"
 }
 
 variable "min_instance_count" {

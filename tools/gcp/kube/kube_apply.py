@@ -102,6 +102,9 @@ def main():
     durable = get_tofu_output_json(
         "infra_terraform/live_deploy/gcp/scope_shared/durable", args.env, region, "durable"
     )
+    kube_out = get_tofu_output_json(
+        "infra_terraform/live_deploy/gcp/kube", args.env, region, "kube"
+    )
 
     delta_bucket = args.delta_bucket or nondurable.get("delta_bucket_name", {}).get("value", "")
     if not delta_bucket:
@@ -200,6 +203,7 @@ data:
 
         interval_sec = get_required_analytics_scheduler_interval_seconds()
         delta_lake_pkg = require("DELTA_LAKE_PACKAGE")
+        proxy_public_url = (kube_out.get("kube_base_url", {}).get("value") or "").strip()
         api_subs = {
             "cloud_provider": "gcp",
             "APP_IMAGE": app_image,
@@ -220,7 +224,8 @@ data:
             "GOOGLE_MODEL": args.google_model,
             "ENABLE_ANALYTICS_SCHEDULER": "true",
             "ANALYTICS_SCHEDULER_INTERVAL_SECONDS": str(interval_sec),
-            "CONTAINER_IMAGE_TAGS": os.getenv("CONTAINER_IMAGE_TAGS", ""),
+            "APP_IMAGE_TAG": os.getenv("APP_IMAGE_TAG", ""),
+            "PROXY_PUBLIC_URL": proxy_public_url,
         }
         _kubectl(["apply", "-f", "-"], input_text=render("api-deployment", api_subs))
         _kubectl(["apply", "-f", "-"], input_text=render("api-service", {"cloud_provider": "gcp"}))

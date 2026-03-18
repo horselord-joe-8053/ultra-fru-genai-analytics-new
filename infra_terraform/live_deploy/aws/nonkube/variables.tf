@@ -15,10 +15,10 @@ variable "cloudwatch_log_group_spark" {
 }
 
 variable "app_image" { type = string }
-variable "app_image_tags" {
+variable "app_image_tag" {
   type    = string
   default = ""
-  description = "Comma-separated tags for /version endpoint (e.g. fru_dev_...,latest)"
+  description = "Image tag for /version endpoint (e.g. fru_dev_20260218_abc123)"
 }
 variable "spark_image" { type = string }
 variable "delta_bucket" { type = string }

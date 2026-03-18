@@ -63,8 +63,10 @@ module "cloud_run" {
   image            = var.app_image
   vpc_connector_id = try(data.terraform_remote_state.shared_durable.outputs.vpc_connector_id, null)
 
+  # CONTAINER_LISTEN_PORT: Cloud Run default 8080; used by /version for proxy display (domain:port → api:8080)
   env_vars = merge({
     DEPLOY_SCOPE                          = "nonkube"
+    CONTAINER_LISTEN_PORT                 = "8080"
     CLOUD_PROVIDER                        = "gcp"
     GCP_LLM_PROVIDER                     = var.llm_provider
     LLM_PROVIDER                         = var.llm_provider
@@ -81,7 +83,7 @@ module "cloud_run" {
     SPARK_HOME                           = var.spark_home
     CONTAINER_TYPE                       = "cloud_run"
     CONTAINER_IMAGE                      = var.app_image
-    CONTAINER_IMAGE_TAGS                 = var.app_image_tags
+    APP_IMAGE_TAG                       = var.app_image_tag
   }, local.cloud_sql_connection)
 
   secret_ids             = { for k, v in local.secret_ids : k => v if v != "" }

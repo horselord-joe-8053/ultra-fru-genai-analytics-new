@@ -21,5 +21,11 @@ variable "ingress_hostname" {
   default = null
 }
 
+# kube-proxy image tag (same as app). Use version tag so Cloud Run picks up new image each deploy.
+variable "kube_proxy_image_tag" {
+  type    = string
+  default = "latest"
+}
+
 variable "tf_state_bucket" { type = string }
 variable "tf_state_prefix" { type = string }

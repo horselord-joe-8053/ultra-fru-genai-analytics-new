@@ -93,6 +93,51 @@ def _get_pod_status(env_vars: dict) -> tuple[int, str]:
         return ready, ""
 
 
+def _has_active_imagepullbackoff_pods(env_vars: dict) -> bool:
+    """
+    Return True if any fru-api pod in ImagePullBackOff/ErrImagePull belongs to an
+    *active* ReplicaSet (spec.replicas > 0). Pods from scaled-down ReplicaSets
+    are ignored during rollout.
+    """
+    try:
+        out = subprocess.check_output([
+            "kubectl", "get", "pods", "-n", K8S_NAMESPACE, "-l", "app=fru-api",
+            "-o", "json",
+        ], text=True, timeout=15, env=env_vars)
+        data = json.loads(out)
+        for item in data.get("items", []):
+            status = (item.get("status") or {})
+            for cs in status.get("containerStatuses") or []:
+                state = cs.get("state") or {}
+                waiting = state.get("waiting") or {}
+                reason = (waiting.get("reason") or "").lower()
+                if "imagepull" in reason or "errimagepull" in reason:
+                    break
+            else:
+                continue
+            # Pod has ImagePullBackOff; check if its ReplicaSet is active
+            owner_refs = item.get("metadata", {}).get("ownerReferences") or []
+            for ref in owner_refs:
+                if ref.get("kind") == "ReplicaSet":
+                    rs_name = ref.get("name")
+                    if not rs_name:
+                        continue
+                    rs_out = subprocess.check_output([
+                        "kubectl", "get", "replicaset", rs_name, "-n", K8S_NAMESPACE,
+                        "-o", "jsonpath={.spec.replicas}",
+                    ], text=True, timeout=10, env=env_vars)
+                    try:
+                        replicas = int(rs_out.strip()) if rs_out.strip() else 0
+                        if replicas > 0:
+                            return True  # Active ReplicaSet has ImagePullBackOff
+                    except ValueError:
+                        pass
+                    break
+        return False
+    except Exception:
+        return True  # On error, assume bad (conservative)
+
+
 def _get_failed_scheduling_events(namespace: str, env_vars: dict) -> str:
     """Get recent FailedScheduling events in namespace."""
     try:
@@ -271,10 +316,16 @@ def wait_for_fru_api_ready(
         ready, pod_summary = _get_pod_status(env_vars)
         elapsed = int(time.time() - start)
         # Fail-fast on pod startup failures (symptom detection)
-        bad_statuses = ("CrashLoopBackOff", "Error", "ImagePullBackOff", "ErrImagePull")
-        if any(s in pod_summary for s in bad_statuses):
-            found = [s for s in bad_statuses if s in pod_summary]
+        crash_or_error = ("CrashLoopBackOff", "Error")
+        if any(s in pod_summary for s in crash_or_error):
+            found = [s for s in crash_or_error if s in pod_summary]
             logger.error(f"[Kube] fru-api pods in {found} (fail-fast after {elapsed}s)")
+            logger.error("[Kube] Pod status:\n" + pod_summary)
+            _emit_pod_diagnostics(env_vars)
+            raise SystemExit(1)
+        # ImagePullBackOff: only fail if from *active* ReplicaSet (ignore scaled-down during rollout)
+        if ("ImagePullBackOff" in pod_summary or "ErrImagePull" in pod_summary) and _has_active_imagepullbackoff_pods(env_vars):
+            logger.error(f"[Kube] fru-api pods in ImagePullBackOff (fail-fast after {elapsed}s)")
             logger.error("[Kube] Pod status:\n" + pod_summary)
             _emit_pod_diagnostics(env_vars)
             raise SystemExit(1)

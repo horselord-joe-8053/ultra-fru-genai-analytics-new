@@ -134,6 +134,10 @@ def run_deploy_kube(
     if hostname_before:
         logger.info(f"[Kube] LB hostname known before apply: {hostname_before}; single apply (skip second)")
 
+    from tools.cloud_shared.deploy_image_resolver import get_deploy_image_uris
+    app_img, _ = get_deploy_image_uris("gcp", env, region)
+    kube_proxy_tag = app_img.split(":")[-1] if ":" in app_img else "latest"
+
     plan_vars = [
         f"-var=prefix={prefix}", f"-var=env={env}",
         f"-var=gcp_region={region}", f"-var=gcp_project_id={gcp_proj}",
@@ -142,6 +146,7 @@ def run_deploy_kube(
         f"-var=initial_node_count={initial_node_count}",
         f"-var=gke_deletion_protection=false",
         f"-var=tf_state_bucket={bucket}", f"-var=tf_state_prefix={prefix}",
+        f"-var=kube_proxy_image_tag={kube_proxy_tag}",
     ]
     if hostname_before:
         plan_vars.append(f"-var=ingress_hostname={hostname_before}")
@@ -164,6 +169,10 @@ def run_deploy_kube(
     # kube_apply: bootstrap + schedule
     from tools.gcp.scope_shared.deploy.db_setup.config import get_tofu_output_json
 
+    app_img, spark_img = get_deploy_image_uris("gcp", env, region)
+    app_tag = app_img.split(":")[-1] if ":" in app_img else "latest"
+    os.environ["APP_IMAGE_TAG"] = app_tag
+
     nondurable = get_tofu_output_json(
         "infra_terraform/live_deploy/gcp/scope_shared/nondurable", env, region, "nondurable"
     )
@@ -172,17 +181,6 @@ def run_deploy_kube(
     )
     delta_bucket = nondurable.get("delta_bucket_name", {}).get("value", "")
     pg_host = durable.get("cloud_sql_private_ip", {}).get("value", "localhost")
-    spark_base = (nondurable.get("artifact_registry_spark_url", {}).get("value", "") or "").rstrip("/")
-    app_base = (nondurable.get("artifact_registry_app_url", {}).get("value", "") or "").rstrip("/")
-    if not spark_base or not app_base:
-        raise ValueError(
-            "artifact_registry_spark_url and artifact_registry_app_url required from nondurable. "
-            "Run deploy without --skip-build first, or ensure shared nondurable stack is applied."
-        )
-    app_tag = (os.getenv("APP_IMAGE_TAG") or "").strip() or "latest"
-    spark_tag = (os.getenv("SPARK_IMAGE_TAG") or "").strip() or "latest"
-    spark_img = f"{spark_base}/spark:{spark_tag}"
-    app_img = f"{app_base}/app:{app_tag}"
     delta_table = f"gs://{delta_bucket}/delta/fru_sales"
 
     kube_apply_args = [

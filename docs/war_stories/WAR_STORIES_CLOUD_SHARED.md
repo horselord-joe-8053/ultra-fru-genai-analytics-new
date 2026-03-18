@@ -1098,19 +1098,19 @@ flowchart LR
     subgraph FULL["FULL DEPLOY (no --skip-build)"]
         direction TB
         F1["1. deploy.py: APP_IMAGE_TAG unset? → generate version_tag"]
-        F2["2. Set APP_IMAGE_TAG, CONTAINER_IMAGE_TAGS=tag,latest"]
+        F2["2. Set APP_IMAGE_TAG=version_tag"]
         F3["3. build_and_push_images: Builds, pushes version_tag + latest"]
         F4["4. Uses app_repo:version_tag for K8s/ECS"]
-        F5["5. /version shows CONTAINER_IMAGE_TAGS"]
+        F5["5. /version shows APP_IMAGE_TAG"]
         F1 --> F2 --> F3 --> F4 --> F5
     end
     subgraph SKIP["--skip-build"]
         direction TB
-        S1["1. Skips build; app_image_full = repo:latest"]
-        S2["2. Queries ECR for all tags on image with tag=latest"]
-        S3["3. Sets CONTAINER_IMAGE_TAGS from ECR"]
-        S4["4. Uses repo:latest for K8s/ECS"]
-        S5["5. /version shows tags from ECR"]
+        S1["1. Skips build; get_deploy_image_uris resolves tag from registry"]
+        S2["2. Resolver queries ECR/Artifact Registry for version tag"]
+        S3["3. Sets APP_IMAGE_TAG from registry"]
+        S4["4. Uses resolved tag for K8s/ECS"]
+        S5["5. /version shows APP_IMAGE_TAG from resolver"]
         S6["6. Fails fast if latest not in ECR"]
         S1 --> S2 --> S3 --> S4 --> S5 --> S6
     end
@@ -1145,10 +1145,10 @@ flowchart LR
 
 | Scenario | Image used for deploy | Tags for /version |
 |----------|------------------------|-------------------|
-| Full deploy, APP_IMAGE_TAG unset | `repo:version_tag` | `version_tag,latest` (from build) |
+| Full deploy, APP_IMAGE_TAG unset | `repo:version_tag` | `version_tag` (from build) |
 | Full deploy, APP_IMAGE_TAG=v1 | `repo:v1` | `v1` |
-| Full deploy, APP_IMAGE_TAG=latest | `repo:version_tag` (generated) | `version_tag,latest` |
-| --skip-build | `repo:latest` | From ECR `describe-images` for that image |
+| Full deploy, APP_IMAGE_TAG=latest | `repo:version_tag` (generated) | `version_tag` |
+| --skip-build | Resolved from registry | `APP_IMAGE_TAG` from `get_deploy_image_uris` |
 
 ### 21.7 Takeaway
 
@@ -1821,7 +1821,7 @@ Both Cloud Run and ECS Fargate are serverless container platforms. But their net
 **creation:** `<260306>`
 **last_updated:** `<260306>`
 
-**keywords:** nonkube, Cloud Run, scale-to-zero, cold start, verification, ensure_agent, /query/stream, CONTAINER_IMAGE_TAGS
+**keywords:** nonkube, Cloud Run, scale-to-zero, cold start, verification, ensure_agent, /query/stream, APP_IMAGE_TAG
 **difficulty:** 7
 **significance:** 8
 
@@ -1831,17 +1831,17 @@ GCP nonkube showed "Build: No Version Info Found," "Agent-based query processing
 
 ### 38.2 Root Cause
 
-(1) **Scale-to-zero:** `min_instance_count=0` lets Cloud Run scale to zero. Verification runs right after deploy (warm instances, retries). Hours later, a user hit a cold-started instance. (2) **Lazy agent init:** The UI uses `/query/stream`, which did not call `ensure_agent()` before checking `query_agent is None`. If the background `_run_slow_init()` hadn't finished or had failed, the instance served "Agent disabled" indefinitely. (3) **CONTAINER_IMAGE_TAGS:** With `--skip-build`, GCP deploy never set tags; `/version` returned 500 when empty.
+(1) **Scale-to-zero:** `min_instance_count=0` lets Cloud Run scale to zero. Verification runs right after deploy (warm instances, retries). Hours later, a user hit a cold-started instance. (2) **Lazy agent init:** The UI uses `/query/stream`, which did not call `ensure_agent()` before checking `query_agent is None`. If the background `_run_slow_init()` hadn't finished or had failed, the instance served "Agent disabled" indefinitely. (3) **APP_IMAGE_TAG:** With `--skip-build`, GCP deploy never set tags; `/version` returned 500 when empty.
 
 ### 38.3 Key Insight
 
-> Verification passing ≠ production healthy. Cold-started instances can fail agent init. Ensure the primary UI endpoint (`/query/stream`) calls `ensure_agent()` before the `query_agent is None` check. For GCP skip-build, populate `CONTAINER_IMAGE_TAGS` from Artifact Registry.
+> Verification passing ≠ production healthy. Cold-started instances can fail agent init. Ensure the primary UI endpoint (`/query/stream`) calls `ensure_agent()` before the `query_agent is None` check. For GCP skip-build, populate `APP_IMAGE_TAG` from Artifact Registry via `get_deploy_image_uris`.
 
 ### 38.4 Resolution
 
 - Added `ensure_agent()` to `/query/stream` before the check.
-- GCP deploy: fetch `CONTAINER_IMAGE_TAGS` from Artifact Registry when `--skip-build`.
-- Nonkube Terraform: always pass `app_image_tags` (default `"latest"`).
+- GCP deploy: resolve `APP_IMAGE_TAG` from Artifact Registry when `--skip-build` via `get_deploy_image_uris`.
+- Nonkube Terraform: always pass `app_image_tag` (default `"latest"`).
 - `/version`: fallback to `"latest"` when tags empty.
 - Removed unused `/query-v2`; annotated `/query` as deprecated (UI uses `/query/stream`).
 

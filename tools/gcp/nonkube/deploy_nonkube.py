@@ -5,6 +5,7 @@ Called by deploy.py when scope is nonkube or all (nonkube first when scope=all).
 After apply: runs analytics bootstrap (one-off run_analytics) so /analytics has data immediately.
 """
 import os
+import subprocess
 import sys
 from typing import TYPE_CHECKING
 
@@ -21,8 +22,6 @@ from tools.gcp.scope_shared.core.backend import resolve_state_bucket, gcs_delta_
 from tools.gcp.scope_shared.core.resource_names import (
     cloud_run_service,
     spark_job_name,
-    artifact_registry_repo_app,
-    artifact_registry_repo_spark,
 )
 from tools.gcp.scope_shared.deploy.deploy_common import run_deploy_stack
 
@@ -43,8 +42,6 @@ def run_deploy_nonkube(
     stack_path = os.path.join(repo_root, "infra_terraform/live_deploy/gcp/nonkube")
     bucket = resolve_state_bucket(region)
     delta_bucket = gcs_delta_bucket(env, region)
-    repo_app = artifact_registry_repo_app(env)
-    repo_spark = artifact_registry_repo_spark(env)
 
     # Fail-fast: require ANALYTICS_SCHEDULER_INTERVAL_SECONDS (single source of truth for Cloud Scheduler)
     interval_sec = get_required_analytics_scheduler_interval_seconds()
@@ -52,16 +49,14 @@ def run_deploy_nonkube(
     # Fail-fast: require real Artifact Registry images. No placeholder to avoid hiding config errors.
     if not gcp_proj:
         raise ValueError("GCP_PROJECT_ID required for app/spark image resolution")
-    _app_img = f"{region}-docker.pkg.dev/{gcp_proj}/{repo_app}/app:latest"
-    _spark_img = f"{region}-docker.pkg.dev/{gcp_proj}/{repo_spark}/spark:latest"
-    app_img = os.getenv("TF_VAR_app_image") or _app_img
-    spark_img = os.getenv("TF_VAR_spark_image") or _spark_img
+    from tools.cloud_shared.deploy_image_resolver import get_deploy_image_uris
+    app_img, spark_img = get_deploy_image_uris("gcp", env, region)
 
     llm_provider = os.getenv("GCP_LLM_PROVIDER") or os.getenv("LLM_PROVIDER", "gemini")
     llm_provider = llm_provider.strip().lower()
     from core_app.backend.env_utils.cloud_shared.model_config import require_claude_model
     claude_model = require_claude_model().strip()
-    img_tags = os.getenv("CONTAINER_IMAGE_TAGS", "").strip()
+    img_tag = os.getenv("APP_IMAGE_TAG", "").strip()
     plan_vars = [
         f"-var=prefix={prefix}", f"-var=env={env}",
         f"-var=gcp_region={region}", f"-var=gcp_project_id={gcp_proj}",
@@ -75,8 +70,8 @@ def run_deploy_nonkube(
         f"-var=spark_schedule_expression={seconds_to_cron(interval_sec)}",
         f"-var=analytics_scheduler_interval_seconds={interval_sec}",
     ]
-    # Always pass app_image_tags so /version works. Use "latest" when empty (skip-build or first deploy).
-    plan_vars.append(f"-var=app_image_tags={img_tags or 'latest'}")
+    # Always pass app_image_tag so /version works. Use "latest" when empty (skip-build or first deploy).
+    plan_vars.append(f"-var=app_image_tag={img_tag or 'latest'}")
 
     def _apply():
         logger.info("Applying nonkube stack (Cloud Run + Spark + frontend CDN)...")
@@ -89,6 +84,36 @@ def run_deploy_nonkube(
         ok = _apply()
 
     if ok and args.apply:
+        # Post-apply: Set PROXY_PUBLIC_URL on Cloud Run so /version shows "Proxy: xxx.run.app:443 → api:8080".
+        # Terraform cannot self-reference (cloud_run_url is computed after service creation), so we use gcloud.
+        from tools.gcp.scope_shared.deploy.db_setup.config import get_tofu_output_json
+        try:
+            nonkube_out = get_tofu_output_json(
+                "infra_terraform/live_deploy/gcp/nonkube", env, region, "nonkube"
+            )
+            cloud_run_url = (nonkube_out.get("cloud_run_url", {}).get("value") or "").strip()
+            svc_name = cloud_run_service(env, region)
+            if cloud_run_url and svc_name:
+                logger.step("Updating Cloud Run with PROXY_PUBLIC_URL for proxy display...")
+                subprocess.run(
+                    [
+                        "gcloud", "run", "services", "update", svc_name,
+                        "--update-env-vars", f"PROXY_PUBLIC_URL={cloud_run_url}",
+                        "--region", region,
+                        "--project", gcp_proj,
+                    ],
+                    env=os.environ,
+                    check=True,
+                    cwd=repo_root,
+                )
+                logger.success("PROXY_PUBLIC_URL set on Cloud Run")
+            else:
+                logger.warning("cloud_run_url not in nonkube outputs; proxy display will not show")
+        except subprocess.CalledProcessError as e:
+            logger.warning("Could not update Cloud Run with PROXY_PUBLIC_URL: %s", e)
+        except Exception as e:
+            logger.warning("Could not set PROXY_PUBLIC_URL for nonkube: %s", e)
+
         from tools.gcp.scope_shared.deploy.analytics_bootstrap import run_analytics_bootstrap
         logger.step("Running analytics bootstrap (one-off run_analytics)...")
         if stats:

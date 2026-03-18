@@ -78,7 +78,7 @@ module "ecs" {
     SPARK_HOME                           = var.spark_home
     CONTAINER_TYPE                       = "ecs"
     CONTAINER_IMAGE                      = var.app_image
-    CONTAINER_IMAGE_TAGS                 = var.app_image_tags
+    APP_IMAGE_TAG                       = var.app_image_tag
     AWS_BEDROCK_INFERENCE_PROFILE_ID     = var.bedrock_inference_profile_id
     AWS_BEDROCK_MODEL_ID                 = var.bedrock_model_id
     AWS_BEDROCK_REGION                   = var.bedrock_region

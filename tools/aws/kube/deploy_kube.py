@@ -92,8 +92,6 @@ def run_deploy_kube(
     env: str,
     region: str,
     snd: dict,
-    app_image_full: str,
-    spark_image_full: str,
     args,
     stats: DeployStats | None = None,
 ) -> None:
@@ -101,6 +99,11 @@ def run_deploy_kube(
     Deploy kube stack: EKS apply, kube_apply bootstrap+schedule, LB wiring, frontend.
     Idempotent and safe to re-run.
     """
+    from tools.cloud_shared.deploy_image_resolver import get_deploy_image_uris
+    app_image_full, spark_image_full = get_deploy_image_uris("aws", env, region)
+    app_tag = app_image_full.split(":")[-1] if ":" in app_image_full else "latest"
+    os.environ["APP_IMAGE_TAG"] = app_tag
+
     # Set EKS compute vars from config (min/max node count, instance types)
     kube_cfg = get_kube_compute_config(region)
     os.environ["TF_VAR_eks_min_node_count"] = str(kube_cfg["min_node_count"])

@@ -39,7 +39,7 @@ const Chat: React.FC<ChatProps> = ({ messages, onSend, loading }) => {
   const cloudProvider = versionInfo?.cloud_provider ?? null;
   const region = versionInfo?.region ?? null;
   // Explicit Provider and Scope for local and cloud (always show both when we have any deploy info)
-  const cloudDisplay = cloudProvider ? cloudProvider.charAt(0).toUpperCase() + cloudProvider.slice(1).toLowerCase() : null;
+  const cloudDisplay = cloudProvider ? cloudProvider.toUpperCase() : null;
   const scopeDisplay = scope ?? (cloudDisplay ? "unknown" : null);
   const deployLine =
     [cloudDisplay, scopeDisplay, region].filter(Boolean).length > 0
@@ -47,9 +47,13 @@ const Chat: React.FC<ChatProps> = ({ messages, onSend, loading }) => {
           .filter(Boolean)
           .join(" · ")
       : null;
-  // Prefer VITE_API_PORT (set at dev start); fall back to backend /version api_port so proxy line is never "?"
-  const apiPort = import.meta.env.VITE_API_PORT || (versionInfo?.api_port != null ? String(versionInfo.api_port) : null);
-  const proxyLine = apiPort ? `Proxy: localhost:${window.location.port} → localhost:${apiPort}` : null;
+  // Proxy/routing: use backend proxy_info for cloud (GCP kube, etc.); for local, show localhost proxy
+  const proxyLine = versionInfo?.proxy_info
+    ? versionInfo.proxy_info
+    : (() => {
+        const apiPort = import.meta.env.VITE_API_PORT || (versionInfo?.api_port != null ? String(versionInfo.api_port) : null);
+        return apiPort ? `Proxy: localhost:${window.location.port} → localhost:${apiPort}` : null;
+      })();
 
   return (
     <div className="flex flex-col h-full">

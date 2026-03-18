@@ -62,6 +62,8 @@ def decide_build_skip(
     """
     label = storage_label or {"s3": "S3", "gcs": "GCS", "local": "memo/"}.get(provider, provider)
     app_hash = compute_build_context_hash("core_app", "Dockerfile")
+    tools_hash = compute_build_context_hash("tools/cloud_shared", "")
+    app_hash = f"{app_hash}_{tools_hash[:12]}" if tools_hash else app_hash
     spark_hash = None if skip_spark else compute_build_context_hash("core_app", "analytics/docker/Dockerfile")
     stored_app = get_stored_build_hash(storage_bucket, app_key, provider, region)
     stored_spark = None if skip_spark else get_stored_build_hash(storage_bucket, spark_key, provider, region)

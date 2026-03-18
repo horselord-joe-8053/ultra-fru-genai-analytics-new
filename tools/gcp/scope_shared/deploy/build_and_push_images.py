@@ -186,11 +186,13 @@ def main():
             )
         if delta_bucket:
             app_hash = compute_build_context_hash("core_app", "Dockerfile")
+            tools_hash = compute_build_context_hash("tools/cloud_shared", "")
+            app_hash_combined = f"{app_hash}_{tools_hash[:12]}" if tools_hash else app_hash
             spark_hash = compute_build_context_hash("core_app", "analytics/docker/Dockerfile")
             app_key = f"build-metadata/{args.env}/app-build-hash.json"
             spark_key = f"build-metadata/{args.env}/spark-build-hash.json"
             try:
-                store_build_hash(delta_bucket, app_key, "gcs", app_hash, "latest")
+                store_build_hash(delta_bucket, app_key, "gcs", app_hash_combined, "latest")
                 store_build_hash(delta_bucket, spark_key, "gcs", spark_hash, "latest")
                 logger.info("[PUSH-ONLY] Stored build hashes for target region")
             except subprocess.CalledProcessError as e:
@@ -199,24 +201,20 @@ def main():
 
     app_tag = (os.getenv("APP_IMAGE_TAG") or "").strip() or "latest"
     spark_tag = (os.getenv("SPARK_IMAGE_TAG") or "").strip() or "latest"
-    container_tags_env = (os.getenv("CONTAINER_IMAGE_TAGS") or "").strip()
-    if container_tags_env:
-        container_tags = [t.strip() for t in container_tags_env.split(",") if t.strip()]
-    else:
-        container_tags = [app_tag]
     platform = os.getenv("DOCKER_RUN_REMOTE_PLATFORM", "linux/amd64")
 
     logger.info(f"[BUILD] Platform: {platform}")
     logger.info(f"[BUILD] App tag: {app_tag}")
-    logger.info(f"[BUILD] App container tags: {','.join(container_tags)}")
     logger.info(f"[BUILD] Spark tag: {spark_tag}")
 
     app_hash = compute_build_context_hash("core_app", "Dockerfile")
+    tools_hash = compute_build_context_hash("tools/cloud_shared", "")
+    app_hash_combined = f"{app_hash}_{tools_hash[:12]}" if tools_hash else app_hash
     spark_hash = compute_build_context_hash("core_app", "analytics/docker/Dockerfile")
 
     app_build_cmd = ["docker", "build", "--progress=plain", "--platform", platform,
-         "--build-arg", f"BUILD_CONTEXT_HASH={app_hash}",
-         "-t", f"{app_repo_name}:{app_tag}", "core_app"]
+         "--build-arg", f"BUILD_CONTEXT_HASH={app_hash_combined}",
+         "-t", f"{app_repo_name}:{app_tag}", "-f", "core_app/Dockerfile", "."]
     if args.no_cache:
         app_build_cmd.insert(2, "--no-cache")
         logger.info("[BUILD] App: --no-cache (fresh build)")
@@ -301,9 +299,9 @@ def main():
         app_key = f"build-metadata/{args.env}/app-build-hash.json"
         spark_key = f"build-metadata/{args.env}/spark-build-hash.json"
         try:
-            store_build_hash(delta_bucket, app_key, "gcs", app_hash, app_tag)
+            store_build_hash(delta_bucket, app_key, "gcs", app_hash_combined, app_tag)
             store_build_hash(delta_bucket, spark_key, "gcs", spark_hash, spark_tag)
-            logger.info(f"[BUILD] Stored build-context hashes (app={app_hash[:8]}..., spark={spark_hash[:8]}...)")
+            logger.info(f"[BUILD] Stored build-context hashes (app={app_hash_combined[:8]}..., spark={spark_hash[:8]}...)")
         except subprocess.CalledProcessError as e:
             logger.warning(f"[BUILD] Could not store build hashes to GCS (non-fatal): {e}")
 

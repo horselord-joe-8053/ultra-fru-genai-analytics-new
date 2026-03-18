@@ -61,7 +61,7 @@ flowchart LR
 %%{init: {'theme':'base', 'themeVariables': {'fontSize':'12px', 'primaryColor':'#e1f5fe', 'secondaryColor':'#fff3e0'}}}%%
 flowchart TB
     subgraph RC["Root Causes"]
-        R1["CONTAINER_IMAGE_TAGS empty<br/>(skip-build)"]
+        R1["APP_IMAGE_TAG empty<br/>(skip-build)"]
         R2["/version 500 when tags empty"]
         R3["/query/stream missing ensure_agent()"]
         R4["min_instance_count=0 → cold start"]
@@ -80,7 +80,7 @@ flowchart TB
 
 | Root Cause | Impact | Fix |
 |------------|--------|-----|
-| **CONTAINER_IMAGE_TAGS** empty when `--skip-build` | Cloud Run gets `""` → `/version` 500 | GCP deploy: fetch tags from Artifact Registry; nonkube: pass `app_image_tags` (default `"latest"`) |
+| **APP_IMAGE_TAG** empty when `--skip-build` | Cloud Run gets `""` → `/version` 500 | GCP deploy: resolve via `get_deploy_image_uris`; nonkube: pass `app_image_tag` (default `"latest"`) |
 | **/version** no fallback | 500 when tags empty | Fallback to `CONTAINER_IMAGE` tag or `"latest"` |
 | **/query/stream** never calls `ensure_agent()` | UI hits this endpoint; agent stays `None` on cold start | Call `ensure_agent()` before `query_agent is None` check |
 | **Scale-to-zero** + lazy agent init | Cold instance may receive traffic before `_run_slow_init()` completes; init can fail | `ensure_agent()` on first request; optionally `min_instance_count=1` |
@@ -173,26 +173,27 @@ if USE_AGENT_QUERY and query_agent is None:
     ensure_agent()
 ```
 
-### 5.2 GCP Skip-Build: Populate CONTAINER_IMAGE_TAGS
+### 5.2 GCP Skip-Build: Resolve APP_IMAGE_TAG
 
-When using `--skip-build`, fetch tags from Artifact Registry (mirrors AWS ECR logic):
+When using `--skip-build`, resolve tag from Artifact Registry via `get_deploy_image_uris` (mirrors AWS ECR logic):
 
 ```python
-# tools/gcp/deploy.py - when skip_build and CONTAINER_IMAGE_TAGS empty
-gcloud artifacts docker images list {app_image} --include-tags --format=json
-# Parse tags, set os.environ["CONTAINER_IMAGE_TAGS"]
+# tools/gcp/deploy.py - when skip_build and APP_IMAGE_TAG empty
+from tools.cloud_shared.deploy_image_resolver import get_deploy_image_uris
+app_full, _ = get_deploy_image_uris("gcp", env, region)
+os.environ["APP_IMAGE_TAG"] = app_full.split(":")[-1]
 ```
 
-### 5.3 Nonkube Deploy: Always Pass app_image_tags
+### 5.3 Nonkube Deploy: Always Pass app_image_tag
 
 ```python
 # tools/gcp/nonkube/deploy_nonkube.py
-plan_vars.append(f"-var=app_image_tags={img_tags or 'latest'}")
+plan_vars.append(f"-var=app_image_tag={img_tag or 'latest'}")
 ```
 
 ### 5.4 Version Endpoint Fallback
 
-When `CONTAINER_IMAGE_TAGS` is empty, derive from `CONTAINER_IMAGE` or use `["latest"]` instead of returning 500.
+When `APP_IMAGE_TAG` is empty, derive from `CONTAINER_IMAGE` or use `"unknown"` instead of returning 500.
 
 ### 5.5 Optional: Keep One Instance Warm (GCP)
 

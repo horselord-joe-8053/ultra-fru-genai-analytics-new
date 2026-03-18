@@ -13,6 +13,7 @@ export interface BackendVersionInfo {
   cloud_provider: string | null;
   region: string | null;
   api_port: number | null;
+  proxy_info: string | null;
 }
 
 interface VersionCache {
@@ -21,6 +22,7 @@ interface VersionCache {
   cloud_provider: string | null;
   region: string | null;
   api_port: number | null;
+  proxy_info: string | null;
   timestamp: number;
 }
 
@@ -43,6 +45,8 @@ export async function getBackendVersion(forceRefresh: boolean = false): Promise<
             scope: cache.scope ?? null,
             cloud_provider: cache.cloud_provider ?? null,
             region: cache.region ?? null,
+            api_port: cache.api_port ?? null,
+            proxy_info: cache.proxy_info ?? null,
           };
         }
       }
@@ -64,13 +68,14 @@ export async function getBackendVersion(forceRefresh: boolean = false): Promise<
       try {
         const errorData = await response.json();
         if (errorData.error) {
-          return {
-            version: errorData.error,
-            scope: null,
-            cloud_provider: null,
-            region: null,
-            api_port: null,
-          };
+        return {
+          version: errorData.error,
+          scope: null,
+          cloud_provider: null,
+          region: null,
+          api_port: null,
+          proxy_info: null,
+        };
         }
       } catch (e) {
         // Ignore JSON parse errors
@@ -88,6 +93,7 @@ export async function getBackendVersion(forceRefresh: boolean = false): Promise<
         cloud_provider: null,
         region: null,
         api_port: null,
+        proxy_info: null,
       };
     }
 
@@ -97,12 +103,14 @@ export async function getBackendVersion(forceRefresh: boolean = false): Promise<
       tags.length > 0 ? `[${tags.join(", ")}]` : "Error: No Version Info Found";
 
     const apiPort = data.api_port != null && Number.isInteger(Number(data.api_port)) ? Number(data.api_port) : null;
+    const proxyInfo = typeof data.proxy_info === "string" ? data.proxy_info : null;
     const result: BackendVersionInfo = {
       version: versionDisplay,
       scope: data.scope ?? null,
       cloud_provider: data.cloud_provider ?? null,
       region: data.region ?? null,
       api_port: apiPort,
+      proxy_info: proxyInfo,
     };
 
     // Cache the result
@@ -113,6 +121,7 @@ export async function getBackendVersion(forceRefresh: boolean = false): Promise<
         cloud_provider: result.cloud_provider,
         region: result.region,
         api_port: result.api_port,
+        proxy_info: result.proxy_info,
         timestamp: Date.now(),
       };
       localStorage.setItem(VERSION_CACHE_KEY, JSON.stringify(cache));
@@ -129,6 +138,7 @@ export async function getBackendVersion(forceRefresh: boolean = false): Promise<
       cloud_provider: null,
       region: null,
       api_port: null,
+      proxy_info: null,
     };
   }
 }

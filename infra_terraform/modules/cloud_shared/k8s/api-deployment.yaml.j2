@@ -112,8 +112,15 @@ spec:
           value: "{{ CLOUD_REGION }}"
         - name: CONTAINER_IMAGE
           value: "{{ APP_IMAGE }}"
-        - name: CONTAINER_IMAGE_TAGS
-          value: "{{ CONTAINER_IMAGE_TAGS }}"
+        - name: APP_IMAGE_TAG
+          value: "{{ APP_IMAGE_TAG }}"
+{% if PROXY_PUBLIC_URL is defined and PROXY_PUBLIC_URL %}
+        {# Proxy display: domain:port → api:port. CONTAINER_LISTEN_PORT = LB target (5001 for kube). #}
+        - name: PROXY_PUBLIC_URL
+          value: "{{ PROXY_PUBLIC_URL }}"
+        - name: CONTAINER_LISTEN_PORT
+          value: "5001"
+{% endif %}
         - name: CONTAINER_TYPE
           value: "{{ CONTAINER_TYPE }}"
         - name: DELTA_TABLE_PATH
