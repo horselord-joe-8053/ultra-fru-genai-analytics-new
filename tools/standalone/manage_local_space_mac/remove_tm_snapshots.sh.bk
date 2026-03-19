@@ -1,0 +1,216 @@
+#!/usr/bin/env bash
+# remove_tm_snapshots.sh
+#
+# Delete local Time Machine (APFS) snapshots while keeping the newest N entries.
+#
+# IMPORTANT:
+# - This only deletes *local* snapshots created on the internal disk.
+# - Your remote/backup Time Machine history on the SSD/HDD destination is not directly modified.
+# - This is potentially destructive. Use with care.
+#
+# Usage:
+#   ./remove_tm_snapshots.sh --keep-last <num>
+#
+# Example (keep newest 2 snapshots, delete the rest):
+#   ./remove_tm_snapshots.sh --keep-last 2
+#
+# Notes:
+# - Requires `sudo` for deleting snapshots.
+# - Snapshot dates from: tmutil listlocalsnapshotdates /
+# - Deletions via: tmutil deletelocalsnapshots <snapshot_date>
+#
+# Output: free disk on / before/after, deleted dates, approximate space reclaimed.
+#
+# =============================================================================
+# KNOWN ISSUES / WHAT'S STILL WRONG:
+# =============================================================================
+# 1. thinlocalsnapshots purge amount: Script passes "${THIN_PURGE_GB}G" (e.g. "5G")
+#    but tmutil thinlocalsnapshots expects purge amount in BYTES. Use e.g.:
+#      $(echo "${THIN_PURGE_GB} * 1000000000" | bc)
+#    or $(( THIN_PURGE_GB * 1000000000 )). Current call may fail or be ignored.
+#
+# 2. deletelocalsnapshots fallback: Header once mentioned trying
+#    "tmutil deletelocalsnapshots / <date>" if the date-only form fails.
+#    That fallback was never implemented; only deletelocalsnapshots <date> is tried.
+#
+# 3. Snapshot date order: We assume listlocalsnapshotdates returns oldest-first.
+#    If order differs on some macOS versions, we could delete the wrong (newest) ones.
+#
+# 4. No --dry-run: Would be useful to list what would be deleted without doing it.
+#
+# 5. APFS df delay: sleep 2 may be too short; "space reclaimed" can be stale.
+# =============================================================================
+
+set -euo pipefail
+
+# --- Config (env overrides) ---
+KEEP_LAST_DEFAULT=2
+KEEP_LAST="$KEEP_LAST_DEFAULT"
+THIN_ON_FAIL_DEFAULT=1
+THIN_ON_FAIL="${THIN_ON_FAIL:-$THIN_ON_FAIL_DEFAULT}"
+THIN_PURGE_GB_DEFAULT=5
+THIN_PURGE_GB="${THIN_PURGE_GB:-$THIN_PURGE_GB_DEFAULT}"
+THIN_URGENCY_DEFAULT=2
+THIN_URGENCY="${THIN_URGENCY:-$THIN_URGENCY_DEFAULT}"
+
+deleted_dates=()
+failed_dates=()
+
+# --- Usage ---
+usage() {
+  cat <<'EOF'
+Usage:
+  remove_tm_snapshots.sh --keep-last <num>
+
+Description:
+  Deletes local Time Machine snapshots on internal disk, keeping the newest N snapshot dates.
+EOF
+}
+
+# --- Arg parsing ---
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  usage
+  exit 0
+fi
+
+if [[ "${1:-}" != "--keep-last" ]]; then
+  echo "Error: missing --keep-last <num> argument" >&2
+  usage
+  exit 1
+fi
+
+KEEP_LAST="${2:-$KEEP_LAST_DEFAULT}"
+if ! [[ "$KEEP_LAST" =~ ^[0-9]+$ ]] || [[ "$KEEP_LAST" -lt 1 ]]; then
+  echo "Error: --keep-last must be a positive integer, got: $KEEP_LAST" >&2
+  exit 1
+fi
+
+# --- Helpers ---
+get_avail_kb() {
+  df -k / | awk 'NR==2 {print $4}'
+}
+
+kb_to_gb() {
+  awk -v kb="$1" 'BEGIN { printf "%.2f", kb/1024/1024 }'
+}
+
+ensure_sudo_or_root() {
+  if [[ "$(id -u)" -eq 0 ]]; then
+    return 0
+  fi
+  if sudo -n true >/dev/null 2>&1; then
+    return 0
+  fi
+  echo "ERROR: sudo requires a password, but this run environment can't prompt for it." >&2
+  echo "Run this script in your own Terminal (interactive), or re-run it as root:" >&2
+  echo "  sudo $0 --keep-last $KEEP_LAST" >&2
+  exit 1
+}
+
+delete_snapshot() {
+  local token="$1"
+  # tmutil expects YYYY-MM-DD-HHMMSS; variants like .local fail with "not a valid disk".
+  if sudo tmutil deletelocalsnapshots "$token"; then
+    return 0
+  fi
+  return 1
+}
+
+# --- Load snapshot dates (oldest first per tmutil) ---
+echo "==> Listing local Time Machine snapshot dates..."
+dates=()
+while IFS= read -r d; do
+  if [[ -n "${d:-}" ]] && [[ "$d" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{6}$ ]]; then
+    dates+=("$d")
+  fi
+done < <(tmutil listlocalsnapshotdates / 2>/dev/null || true)
+
+if [[ "${#dates[@]}" -le "$KEEP_LAST" ]]; then
+  echo "Nothing to delete."
+  echo "Found ${#dates[@]} snapshot(s); keep-last is ${KEEP_LAST}."
+  exit 0
+fi
+
+echo "Found ${#dates[@]} local snapshot dates. Will keep the newest ${KEEP_LAST}."
+
+# --- Space before ---
+echo
+echo "==> Space before"
+before_kb="$(get_avail_kb)"
+before_gb="$(kb_to_gb "$before_kb")"
+df -h / | tail -1 || true
+echo "Free (Avail) before: ${before_gb} GB"
+
+# --- Compute and list deletions (oldest first) ---
+echo
+echo "==> Computing deletions (oldest first)..."
+to_delete_count=$(( ${#dates[@]} - KEEP_LAST ))
+delete_dates=()
+for ((i=0; i<to_delete_count; i++)); do
+  delete_dates+=("${dates[$i]}")
+done
+
+echo "Will delete ${to_delete_count} snapshot(s):"
+for d in "${delete_dates[@]}"; do
+  echo "  - $d"
+done
+
+# --- Delete ---
+echo
+echo "==> Deleting snapshots (requires sudo)..."
+ensure_sudo_or_root
+
+for d in "${delete_dates[@]}"; do
+  echo "Deleting snapshot: $d"
+  if delete_snapshot "$d"; then
+    deleted_dates+=("$d")
+    echo "  OK (deleted local snapshot date: $d)"
+  else
+    failed_dates+=("$d")
+    echo "  FAILED to delete local snapshot date: $d"
+  fi
+done
+
+# --- Space after ---
+echo
+echo "==> Space after (wait a moment for APFS to update)..."
+sleep 2
+
+after_kb="$(get_avail_kb)"
+after_gb="$(kb_to_gb "$after_kb")"
+df -h / | tail -1 || true
+echo "Free (Avail) after: ${after_gb} GB"
+
+saved_kb="$(( after_kb - before_kb ))"
+saved_gb="$(kb_to_gb "$saved_kb")"
+
+echo
+echo "==> Approximate space reclaimed on /:"
+echo "  Saved: ${saved_gb} GB (df avail_kb delta)"
+
+# --- Summary ---
+echo
+echo "==> Deletion summary:"
+echo "  Deleted: ${#deleted_dates[@]} snapshot date(s)"
+for d in "${deleted_dates[@]}"; do echo "    - $d"; done
+echo "  Failed: ${#failed_dates[@]} snapshot date(s)"
+for d in "${failed_dates[@]}"; do echo "    - $d"; done
+
+# --- Thinning on failure (NOTE: purge amount format may be wrong; see KNOWN ISSUES) ---
+if [[ "${#failed_dates[@]}" -gt 0 && "$THIN_ON_FAIL" == "1" ]]; then
+  echo
+  echo "==> Deletion failures occurred; attempting thinning to reclaim space up to ${THIN_PURGE_GB}G (urgency ${THIN_URGENCY})..."
+  sudo tmutil thinlocalsnapshots / "${THIN_PURGE_GB}G" "${THIN_URGENCY}" || true
+fi
+
+echo
+echo "==> Remaining local snapshot dates:"
+tmutil listlocalsnapshotdates / 2>/dev/null || true
+
+if [[ "${#deleted_dates[@]}" -eq 0 ]]; then
+  echo
+  echo "==> Result: tmutil could not delete any local snapshot dates."
+  echo "This usually means the snapshots are currently pinned/unremovable or not purgeable."
+  echo "If df free space did not change, you will need to adjust Time Machine settings"
+  echo "(e.g. disable 'Back up to local disk') or wait for Time Machine retention to roll over."
+fi
