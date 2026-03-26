@@ -16,3 +16,9 @@ pandas>=2.0.0
 flask-cors>=4.0.0
 APScheduler>=3.10.0
 anthropic>=0.18.0
+
+# ------------------------------------------------------------------------------
+# ChatGPT share extract (docs/war_stories/chatgpt/playwright/) uses Node.js +
+# Playwright only. No Python packages are required for that flow; see
+# docs/war_stories/chatgpt/playwright/README.md for npm install / brew / Chromium.
+# ------------------------------------------------------------------------------

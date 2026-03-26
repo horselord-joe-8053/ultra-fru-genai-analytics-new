@@ -1,0 +1,14 @@
+{
+  "name": "chatgpt-share-playwright-fetch",
+  "private": true,
+  "type": "module",
+  "description": "Headless Chromium fetch of ChatGPT backend-api/share JSON (Cloudflare-friendly vs raw curl).",
+  "scripts": {
+    "fetch": "node fetch_share.mjs",
+    "extract": "node extract_transcript.mjs",
+    "test": "node fetch_share.mjs \"https://chatgpt.com/share/69c48336-b554-839c-8f93-1ec238001438\""
+  },
+  "devDependencies": {
+    "playwright": "^1.50.0"
+  }
+}

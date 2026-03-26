@@ -109,13 +109,15 @@ This was enough to recover the full CI/CD + feature-flag discussion that the HTM
 ### 1.5 Takeaway
 
 - **Don’t scrape the HTML shell** for ChatGPT shares; the real data is at `backend-api/share/<id>`.
-- The JSON is **tree-structured**, but for most documentation reuse, a simple loop over `mapping.values()` is sufficient.
-- Separating `role` and `content.parts[0]` makes it trivial to rebuild a readable transcript.
+- The JSON is **tree-structured**; for **correct order** and **multimodal** messages, use **`linear_conversation`** and the rules in **`chatgpt/playwright/extract_transcript.mjs`** (a naive `mapping` loop is not enough).
+- **Live fetch** from automation often hits **403** / Cloudflare; the repo’s working path is **Playwright** in **`chatgpt/playwright/`** (see HOWTO).
 - Once extracted, we could:
   - Rephrase and integrate the CI/CD + feature-flag insights into our own docs (`TODO_LEARNED_CICD.md`).
   - Keep our documentation **self-contained**, without relying on the external share remaining live.
 
 This pattern is reusable any time we need to mine a shared ChatGPT conversation for architecture notes, war stories, or reference material.
+
+**HOWTO + tooling:** [chatgpt/HOWTO_EXTRACT_CHATGPT.md](chatgpt/HOWTO_EXTRACT_CHATGPT.md) · [chatgpt/playwright/](chatgpt/playwright/) (`fetch_share.mjs`, `extract_transcript.mjs`)
 
 
 ---
