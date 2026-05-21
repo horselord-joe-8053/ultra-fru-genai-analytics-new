@@ -1,3 +1,5 @@
+# FRU GenAI Analytics — Enterprise Conversational Analytics Platform
+
 <h1 id="fru-readme-title" style="color:#0d47a1;font-size:1.5em;font-weight:700;border-bottom:2px solid #90caf9;padding-bottom:0.25em;margin-top:0">FRU GenAI Analytics — Enterprise Conversational Analytics Platform</h1>
 
 **Fridges R Us (FRU)** is an end-to-end **enterprise conversational analytics assistant** over refrigerator sales data: **structured** fields (brand, store, ratings, dates) plus **unstructured** customer feedback (long complaints and themes). Users ask questions in plain language; the system returns **grounded** answers backed by SQL, vector search, and batch aggregates—not free-form hallucination.
@@ -6,28 +8,35 @@ This repository is the **evolution** of [ultra-fru-genai-analytics](https://gith
 
 ---
 
-<h2 id="document-outline" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">Document outline</h2>
+<h2 id="table-of-contents" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">📋 Table of Contents</h2>
 
-1. [What this project is](#what-this-is) — purpose, lineage, and design headline.
-2. [Golden separation](#golden-separation) — batch vs interactive vs narrative.
-3. [Capabilities](#capabilities) — agent, UI, analytics, multi-cloud ops.
-4. [Architecture at a glance](#architecture) — data paths and runtime diagram.
-5. [Repository layout](#repo-layout) — where code and IaC live.
-6. [Prerequisites](#prerequisites) — tools for local and cloud.
-7. [Configuration](#configuration) — `.env` and YAML config.
-8. [Quick start](#quick-start) — local, AWS, GCP one-liners.
-9. [Deploy and teardown model](#deploy-model) — scopes, phases, orchestrator.
-10. [Deployment matrix](#deploy-matrix) — kube vs nonkube per cloud.
-11. [Data model](#data-model) — structured + unstructured FRU schema.
-12. [Intelligence stack](#intelligence) — embeddings, agent tools, LLM factory.
-13. [Query workflow visualization](#query-viz) — SSE execution log in the UI.
-14. [War stories](#war-stories) — lessons from building this system.
-15. [Documentation map](#docs-map) — deeper reading.
-16. [Related repositories](#related-repos) — lineage and references.
+- [🧠 1. What this project is](#what-this-is)
+- [✨ 2. Golden separation](#golden-separation)
+- [⚡ 3. Capabilities](#capabilities)
+  - [3.1 Conversational agent](#capabilities-agent)
+  - [3.2 Web UI](#capabilities-ui)
+  - [3.3 Operations](#capabilities-ops)
+- [🧩 4. Architecture at a glance](#architecture)
+- [🗂 5. Repository layout](#repo-layout)
+- [🛠 6. Prerequisites](#prerequisites)
+- [⚙️ 7. Configuration](#configuration)
+- [🚀 8. Quick start](#quick-start)
+  - [8.1 Local](#quick-local)
+  - [8.2 AWS](#quick-aws)
+  - [8.3 GCP](#quick-gcp)
+  - [8.4 Teardown](#quick-teardown)
+- [🏗 9. Deploy and teardown model](#deploy-model)
+- [📊 10. Deployment matrix](#deploy-matrix)
+- [🗄 11. Data model](#data-model)
+- [🦾 12. Intelligence stack](#intelligence)
+- [📐 13. Query workflow visualization](#query-viz)
+- [📚 14. War stories](#war-stories)
+- [📖 15. Documentation map](#docs-map)
+- [🔗 16. Related repositories](#related-repos)
 
 ---
 
-<h2 id="what-this-is" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">1. What this project is</h2>
+<h2 id="what-this-is" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">🧠 1. What this project is</h2>
 
 FRU answers questions such as:
 
@@ -43,17 +52,22 @@ The system combines:
 
 Compared to the original [ultra-fru-genai-analytics](https://github.com/horselord-joe-8053/ultra-fru-genai-analytics) prototype, this repo adds:
 
-| Area | Evolution |
-|------|-----------|
-| **UX** | React UI with chat, **execution log** (per-tool SSE stream), and **batch analytics** panel |
-| **Query engine** | Optional **agent** (`USE_AGENT_QUERY`) with `generate_sql`, `execute_sql`, `semantic_search` tools |
-| **Clouds** | First-class **AWS** and **GCP**; shared abstractions in `core_app/backend/env_utils/cloud_shared/` |
-| **Deploy** | **`orchestrator.py`** + `tools/{aws,gcp,local}/` + `infra_terraform/live_deploy/` — repeatable **deploy** and **teardown** |
-| **Topology** | Same app on **EKS / GKE** (kube) or **ECS Fargate / Cloud Run** (nonkube), mirrored **locally** via Compose and Docker Desktop Kubernetes |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white"><th>Area</th><th>Evolution</th></tr>
+</thead>
+<tbody>
+<tr><td style="background:#e3f2fd"><strong>UX</strong></td><td style="background:#e8f5e9">React UI with chat, <strong>execution log</strong> (per-tool SSE stream), and <strong>batch analytics</strong> panel</td></tr>
+<tr><td style="background:#e3f2fd"><strong>Query engine</strong></td><td style="background:#fff3e0">Optional <strong>agent</strong> (<code>USE_AGENT_QUERY</code>) with <code>generate_sql</code>, <code>execute_sql</code>, <code>semantic_search</code> tools</td></tr>
+<tr><td style="background:#e3f2fd"><strong>Clouds</strong></td><td style="background:#e8f5e9">First-class <strong>AWS</strong> and <strong>GCP</strong>; shared abstractions in <code>core_app/backend/env_utils/cloud_shared/</code></td></tr>
+<tr><td style="background:#e3f2fd"><strong>Deploy</strong></td><td style="background:#fff3e0"><code>orchestrator.py</code> + <code>tools/{aws,gcp,local}/</code> + <code>infra_terraform/live_deploy/</code> — repeatable <strong>deploy</strong> and <strong>teardown</strong></td></tr>
+<tr><td style="background:#e3f2fd"><strong>Topology</strong></td><td style="background:#e8f5e9">Same app on <strong>EKS / GKE</strong> (kube) or <strong>ECS Fargate / Cloud Run</strong> (nonkube), mirrored <strong>locally</strong> via Compose and Docker Desktop Kubernetes</td></tr>
+</tbody>
+</table>
 
 ---
 
-<h2 id="golden-separation" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">2. Golden separation</h2>
+<h2 id="golden-separation" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">✨ 2. Golden separation</h2>
 
 > **Spark does batch intelligence.**  
 > **pgvector + SQL do interactive intelligence.**  
@@ -63,7 +77,7 @@ That split keeps cost, latency, and governance under control: heavy work stays i
 
 ---
 
-<h2 id="capabilities" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">3. Capabilities</h2>
+<h2 id="capabilities" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">⚡ 3. Capabilities</h2>
 
 <h3 id="capabilities-agent" style="color:#00695c;font-size:1.05em;font-weight:600;margin-top:0.85em">3.1 Conversational agent</h3>
 
@@ -90,7 +104,7 @@ Entry API: `core_app/backend/api/app.py`.
 
 ---
 
-<h2 id="architecture" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">4. Architecture at a glance</h2>
+<h2 id="architecture" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">🧩 4. Architecture at a glance</h2>
 
 Two **container images** (API + Spark), two **subsystems**, one **PostgreSQL** database per environment/region:
 
@@ -123,7 +137,7 @@ graph TD
 
 ---
 
-<h2 id="repo-layout" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">5. Repository layout</h2>
+<h2 id="repo-layout" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">🗂 5. Repository layout</h2>
 
 ```text
 fru-genai-analytics-new/
@@ -158,7 +172,7 @@ fru-genai-analytics-new/
 
 ---
 
-<h2 id="prerequisites" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">6. Prerequisites</h2>
+<h2 id="prerequisites" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">🛠 6. Prerequisites</h2>
 
 <table>
 <thead>
@@ -179,7 +193,7 @@ fru-genai-analytics-new/
 
 ---
 
-<h2 id="configuration" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">7. Configuration</h2>
+<h2 id="configuration" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">⚙️ 7. Configuration</h2>
 
 1. Copy the env template and edit secrets:
 
@@ -190,21 +204,26 @@ cp .env.example .env
 
 2. Key variables (see `.env.example` for the full list):
 
-| Group | Examples | Purpose |
-|-------|----------|---------|
-| **Database** | `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE` | Aurora / Cloud SQL / local Postgres |
-| **Agent** | `USE_AGENT_QUERY=true` | Enable ReAct agent path |
-| **Embeddings** | `OPENAI_API_KEY`, `OPENAI_EMBED_MODEL` | `text-embedding-3-small` → pgvector |
-| **AWS LLM** | `AWS_BEDROCK_INFERENCE_PROFILE_ID`, `CLOUD_REGION` | Bedrock Claude |
-| **GCP LLM** | `GCP_LLM_PROVIDER`, `GOOGLE_AI_API_KEY` or `CLAUDE_API_KEY` | Gemini or Claude on GCP |
-| **Analytics** | `DELTA_TABLE_PATH`, `ANALYTICS_SCHEDULER_INTERVAL_SECONDS` | Spark + scheduler |
-| **Terraform** | `TF_STATE_BUCKET_COMPONENT`, `FRU_TF_BIN=tofu` | Remote state |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white"><th>Group</th><th>Examples</th><th>Purpose</th></tr>
+</thead>
+<tbody>
+<tr><td style="background:#e3f2fd"><strong>Database</strong></td><td style="background:#e8f5e9"><code>PGHOST</code>, <code>PGPORT</code>, <code>PGUSER</code>, <code>PGPASSWORD</code>, <code>PGDATABASE</code></td><td style="background:#fff3e0">Aurora / Cloud SQL / local Postgres</td></tr>
+<tr><td style="background:#e3f2fd"><strong>Agent</strong></td><td style="background:#e8f5e9"><code>USE_AGENT_QUERY=true</code></td><td style="background:#fff3e0">Enable ReAct agent path</td></tr>
+<tr><td style="background:#e3f2fd"><strong>Embeddings</strong></td><td style="background:#e8f5e9"><code>OPENAI_API_KEY</code>, <code>OPENAI_EMBED_MODEL</code></td><td style="background:#fff3e0"><code>text-embedding-3-small</code> → pgvector</td></tr>
+<tr><td style="background:#e3f2fd"><strong>AWS LLM</strong></td><td style="background:#e8f5e9"><code>AWS_BEDROCK_INFERENCE_PROFILE_ID</code>, <code>CLOUD_REGION</code></td><td style="background:#fff3e0">Bedrock Claude</td></tr>
+<tr><td style="background:#e3f2fd"><strong>GCP LLM</strong></td><td style="background:#e8f5e9"><code>GCP_LLM_PROVIDER</code>, <code>GOOGLE_AI_API_KEY</code> or <code>CLAUDE_API_KEY</code></td><td style="background:#fff3e0">Gemini or Claude on GCP</td></tr>
+<tr><td style="background:#e3f2fd"><strong>Analytics</strong></td><td style="background:#e8f5e9"><code>DELTA_TABLE_PATH</code>, <code>ANALYTICS_SCHEDULER_INTERVAL_SECONDS</code></td><td style="background:#fff3e0">Spark + scheduler</td></tr>
+<tr><td style="background:#e3f2fd"><strong>Terraform</strong></td><td style="background:#e8f5e9"><code>TF_STATE_BUCKET_COMPONENT</code>, <code>FRU_TF_BIN=tofu</code></td><td style="background:#fff3e0">Remote state</td></tr>
+</tbody>
+</table>
 
 3. YAML sizing and ports: `config/local/local_deploy_config.yaml`, `config/cloud/aws_deploy_config.yaml`, `config/cloud/gcp_deploy_config.yaml`.
 
 ---
 
-<h2 id="quick-start" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">8. Quick start</h2>
+<h2 id="quick-start" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">🚀 8. Quick start</h2>
 
 <h3 id="quick-local" style="color:#00695c;font-size:1.05em;font-weight:600;margin-top:0.85em">8.1 Local (no cloud Terraform)</h3>
 
@@ -258,7 +277,7 @@ ALLOW_DURABLE_DESTROY=YES python tools/aws/standalone/destroy_durable.py --env d
 
 ---
 
-<h2 id="deploy-model" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">9. Deploy and teardown model</h2>
+<h2 id="deploy-model" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">🏗 9. Deploy and teardown model</h2>
 
 Deploy is **not** “run Terraform once.” Python scripts enforce **phase order**, secrets, image build, DB bootstrap, and verification—lessons from dozens of war stories (ordering, locks, imports, scale-to-zero).
 
@@ -301,7 +320,7 @@ infra_terraform/live_deploy/gcp/{kube,nonkube}
 
 ---
 
-<h2 id="deploy-matrix" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">10. Deployment matrix</h2>
+<h2 id="deploy-matrix" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">📊 10. Deployment matrix</h2>
 
 **Legend:** <span style="background:#e3f2fd;padding:1px 3px">kube</span> = Kubernetes (EKS/GKE/local k8s). <span style="background:#fff3e0;padding:1px 3px">nonkube</span> = managed containers without cluster ops (ECS/Cloud Run/Compose).
 
@@ -317,7 +336,7 @@ infra_terraform/live_deploy/gcp/{kube,nonkube}
 <tr><td style="background:#e3f2fd"><strong>Database</strong></td><td style="background:#ede7f6">Postgres + pgvector (container)</td><td style="background:#ede7f6">Aurora PostgreSQL</td><td style="background:#ede7f6">Cloud SQL PostgreSQL</td></tr>
 <tr><td style="background:#e3f2fd"><strong>Object store / Delta</strong></td><td style="background:#e8f5e9">local path / MinIO-style</td><td style="background:#e8f5e9">S3</td><td style="background:#e8f5e9">GCS</td></tr>
 <tr><td style="background:#e3f2fd"><strong>State backend</strong></td><td style="background:#fff3e0">n/a</td><td style="background:#e8f5e9">S3 + DynamoDB lock</td><td style="background:#e8f5e9">GCS (no DynamoDB lock)</td></tr>
-<tr><td style="background:#e3f2fd"><strong>Default LLM</strong></td><td style="background:#fff3e0">Claude API</td><td style="background:#e8f5e9">Bedrock</td><td style="background:#e8f5e9">Gemini or Claude (`GCP_LLM_PROVIDER`)</td></tr>
+<tr><td style="background:#e3f2fd"><strong>Default LLM</strong></td><td style="background:#fff3e0">Claude API</td><td style="background:#e8f5e9">Bedrock</td><td style="background:#e8f5e9">Gemini or Claude (<code>GCP_LLM_PROVIDER</code>)</td></tr>
 </tbody>
 </table>
 
@@ -325,15 +344,20 @@ Mapping reference: [docs/GCP_AWS_REFERENCE.md](docs/GCP_AWS_REFERENCE.md). Addin
 
 ---
 
-<h2 id="data-model" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">11. Data model</h2>
+<h2 id="data-model" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">🗄 11. Data model</h2>
 
 Schema: `core_app/sql/schema_pgvector.sql`. Sample CSV: `core_app/data/raw/fridge_sales_with_rating.csv`.
 
-| Table | Role |
-|-------|------|
-| **`fru_sales_raw`** | Editable source rows (UI + `/rawdata` API) |
-| **`fru_sales_embeddings`** | Query plane: structured columns + **`embedding vector(1536)`** + IVFFlat index |
-| **`batch_analytics`** | Spark-written JSON aggregates (`sales_by_brand`, `store_performance`, `feedback_analysis`, …) |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white"><th>Table</th><th>Role</th></tr>
+</thead>
+<tbody>
+<tr><td style="background:#e3f2fd"><code>fru_sales_raw</code></td><td style="background:#e8f5e9">Editable source rows (UI + <code>/rawdata</code> API)</td></tr>
+<tr><td style="background:#e3f2fd"><code>fru_sales_embeddings</code></td><td style="background:#fff3e0">Query plane: structured columns + <strong>embedding vector(1536)</strong> + IVFFlat index</td></tr>
+<tr><td style="background:#e3f2fd"><code>batch_analytics</code></td><td style="background:#e8f5e9">Spark-written JSON aggregates (<code>sales_by_brand</code>, <code>store_performance</code>, <code>feedback_analysis</code>, …)</td></tr>
+</tbody>
+</table>
 
 **Structured:** `brand`, `fridge_model`, `capacity_liters`, `price`, `sales_date`, `store_name`, `feedback_rating`, `feedback_sentiment_category`.
 
@@ -341,20 +365,25 @@ Schema: `core_app/sql/schema_pgvector.sql`. Sample CSV: `core_app/data/raw/fridg
 
 ---
 
-<h2 id="intelligence" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">12. Intelligence stack</h2>
+<h2 id="intelligence" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">🦾 12. Intelligence stack</h2>
 
-| Layer | Implementation |
-|-------|----------------|
-| **Embeddings** | OpenAI `text-embedding-3-small` (all clouds) |
-| **Vector store** | PostgreSQL **pgvector** |
-| **LLM** | `env_utils/cloud_shared/client_factory.py` — `create_llm_client()` selects **aws** (Bedrock), **gcp** (Gemini or Claude), or **local** (Claude) |
-| **Batch** | `core_app/analytics/jobs/run_analytics.py` — Delta → aggregates → `batch_analytics` |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white"><th>Layer</th><th>Implementation</th></tr>
+</thead>
+<tbody>
+<tr><td style="background:#e3f2fd"><strong>Embeddings</strong></td><td style="background:#e8f5e9">OpenAI <code>text-embedding-3-small</code> (all clouds)</td></tr>
+<tr><td style="background:#e3f2fd"><strong>Vector store</strong></td><td style="background:#fff3e0">PostgreSQL <strong>pgvector</strong></td></tr>
+<tr><td style="background:#e3f2fd"><strong>LLM</strong></td><td style="background:#e8f5e9"><code>env_utils/cloud_shared/client_factory.py</code> — <code>create_llm_client()</code> selects <strong>aws</strong> (Bedrock), <strong>gcp</strong> (Gemini or Claude), or <strong>local</strong> (Claude)</td></tr>
+<tr><td style="background:#e3f2fd"><strong>Batch</strong></td><td style="background:#fff3e0"><code>core_app/analytics/jobs/run_analytics.py</code> — Delta → aggregates → <code>batch_analytics</code></td></tr>
+</tbody>
+</table>
 
 The query path does **not** import Bedrock/Gemini directly; it goes through the factory (war story §31).
 
 ---
 
-<h2 id="query-viz" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">13. Query workflow visualization</h2>
+<h2 id="query-viz" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">📐 13. Query workflow visualization</h2>
 
 For transparency and debugging, the UI subscribes to **`GET /query/stream?query=...`** (SSE). Each event corresponds to an agent step—tool name, inputs/outputs, iteration count—rendered in **Execution log** (`ExecutionPanel.tsx`).
 
@@ -362,43 +391,58 @@ Deploy verification uses **HEAD** (not GET) on the stream endpoint so status cod
 
 ---
 
-<h2 id="war-stories" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">14. War stories</h2>
+<h2 id="war-stories" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">📚 14. War stories</h2>
 
 Building multi-cloud **automatic deploy/teardown** surfaced many non-obvious failures (Terraform state, CloudFront caching, SSE validation, scale-to-zero cold starts, GCP secret ordering, EKS CronJob overload, “just copy AWS” anti-patterns). They are documented as **numbered war stories** with context → root cause → insight → resolution → takeaway.
 
-| File | Focus | Stories |
-|------|--------|---------|
-| [WAR_STORIES_CLOUD_SHARED.md](docs/war_stories/WAR_STORIES_CLOUD_SHARED.md) | Multi-cloud factory, deploy phases, Terraform/OpenTofu, K8s layout, SSE, image tags | 44 |
-| [WAR_STORIES_AWS.md](docs/war_stories/WAR_STORIES_AWS.md) | EKS, ECS, CloudFront, Aurora, Bedrock, S3A, teardown orphans | 43 |
-| [WAR_STORIES_GCP.md](docs/war_stories/WAR_STORIES_GCP.md) | GKE, Cloud Run, GCS state, Artifact Registry, Gemini/Claude auth | 9 |
-| [WAR_STORIES_OTHER.md](docs/war_stories/WAR_STORIES_OTHER.md) | ChatGPT share JSON extraction, local Docker disk | 2 |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white"><th>File</th><th>Focus</th><th>Stories</th></tr>
+</thead>
+<tbody>
+<tr><td style="background:#e3f2fd"><a href="docs/war_stories/WAR_STORIES_CLOUD_SHARED.md">WAR_STORIES_CLOUD_SHARED.md</a></td><td style="background:#fff3e0">Multi-cloud factory, deploy phases, Terraform/OpenTofu, K8s layout, SSE, image tags</td><td style="background:#e8f5e9">44</td></tr>
+<tr><td style="background:#e3f2fd"><a href="docs/war_stories/WAR_STORIES_AWS.md">WAR_STORIES_AWS.md</a></td><td style="background:#e8f5e9">EKS, ECS, CloudFront, Aurora, Bedrock, S3A, teardown orphans</td><td style="background:#fff3e0">43</td></tr>
+<tr><td style="background:#e3f2fd"><a href="docs/war_stories/WAR_STORIES_GCP.md">WAR_STORIES_GCP.md</a></td><td style="background:#fff3e0">GKE, Cloud Run, GCS state, Artifact Registry, Gemini/Claude auth</td><td style="background:#e8f5e9">9</td></tr>
+<tr><td style="background:#e3f2fd"><a href="docs/war_stories/WAR_STORIES_OTHER.md">WAR_STORIES_OTHER.md</a></td><td style="background:#e8f5e9">ChatGPT share JSON extraction, local Docker disk</td><td style="background:#fff3e0">2</td></tr>
+</tbody>
+</table>
 
 Index: [docs/war_stories/README.md](docs/war_stories/README.md).
 
 ---
 
-<h2 id="docs-map" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">15. Documentation map</h2>
+<h2 id="docs-map" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">📖 15. Documentation map</h2>
 
-| Topic | Document |
-|-------|----------|
-| **Core app + data flow** | [docs/CORE_APP_STRUCTURE.md](docs/CORE_APP_STRUCTURE.md) |
-| **AWS/GCP architecture diagrams** | [docs/learned/cloud_shared/ARCHITECTURE_AWS_GCP_GENERAL.md](docs/learned/cloud_shared/ARCHITECTURE_AWS_GCP_GENERAL.md) |
-| **Analytics + Delta** | [docs/learned/cloud_shared/ANALYTICS_AND_DATA.md](docs/learned/cloud_shared/ANALYTICS_AND_DATA.md) |
-| **AWS ↔ GCP mapping** | [docs/GCP_AWS_REFERENCE.md](docs/GCP_AWS_REFERENCE.md) |
-| **GCP readiness / refactor** | [docs/REFACTOR_PLAN_GCP_READINESS.md](docs/REFACTOR_PLAN_GCP_READINESS.md) |
-| **Another cloud provider** | [docs/WHAT_TO_DO_TO_BUILD_FOR_ANOTHER_CLOUD_PROVIDER.md](docs/WHAT_TO_DO_TO_BUILD_FOR_ANOTHER_CLOUD_PROVIDER.md) |
-| **Config schema** | [docs/CONFIG_SCHEMA.md](docs/CONFIG_SCHEMA.md) |
-| **Orchestrator** | `orchestrator.py` module docstring |
-
----
-
-<h2 id="related-repos" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">16. Related repositories</h2>
-
-| Repository | Relationship |
-|------------|----------------|
-| [ultra-fru-genai-analytics](https://github.com/horselord-joe-8053/ultra-fru-genai-analytics) | **Lineage** — original FRU prototype (Spark + Delta + pgvector + Bedrock); strong conceptual README and local quickstart patterns. |
-| **This repo** (`ultra-fru-genai-analytics-new`) | **Production-shaped** umbrella: full `core_app`, multi-cloud `tools/` + `infra_terraform/`, agent + UI execution log, war stories. |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white"><th>Topic</th><th>Document</th></tr>
+</thead>
+<tbody>
+<tr><td style="background:#e3f2fd"><strong>Core app + data flow</strong></td><td style="background:#e8f5e9"><a href="docs/CORE_APP_STRUCTURE.md">docs/CORE_APP_STRUCTURE.md</a></td></tr>
+<tr><td style="background:#e3f2fd"><strong>AWS/GCP architecture diagrams</strong></td><td style="background:#fff3e0"><a href="docs/learned/cloud_shared/ARCHITECTURE_AWS_GCP_GENERAL.md">docs/learned/cloud_shared/ARCHITECTURE_AWS_GCP_GENERAL.md</a></td></tr>
+<tr><td style="background:#e3f2fd"><strong>Analytics + Delta</strong></td><td style="background:#e8f5e9"><a href="docs/learned/cloud_shared/ANALYTICS_AND_DATA.md">docs/learned/cloud_shared/ANALYTICS_AND_DATA.md</a></td></tr>
+<tr><td style="background:#e3f2fd"><strong>AWS ↔ GCP mapping</strong></td><td style="background:#fff3e0"><a href="docs/GCP_AWS_REFERENCE.md">docs/GCP_AWS_REFERENCE.md</a></td></tr>
+<tr><td style="background:#e3f2fd"><strong>GCP readiness / refactor</strong></td><td style="background:#e8f5e9"><a href="docs/REFACTOR_PLAN_GCP_READINESS.md">docs/REFACTOR_PLAN_GCP_READINESS.md</a></td></tr>
+<tr><td style="background:#e3f2fd"><strong>Another cloud provider</strong></td><td style="background:#fff3e0"><a href="docs/WHAT_TO_DO_TO_BUILD_FOR_ANOTHER_CLOUD_PROVIDER.md">docs/WHAT_TO_DO_TO_BUILD_FOR_ANOTHER_CLOUD_PROVIDER.md</a></td></tr>
+<tr><td style="background:#e3f2fd"><strong>Config schema</strong></td><td style="background:#e8f5e9"><a href="docs/CONFIG_SCHEMA.md">docs/CONFIG_SCHEMA.md</a></td></tr>
+<tr><td style="background:#e3f2fd"><strong>Orchestrator</strong></td><td style="background:#fff3e0"><code>orchestrator.py</code> module docstring</td></tr>
+</tbody>
+</table>
 
 ---
 
-<p style="margin-top:1.5em;color:#546e7a;font-size:0.95em"><strong>Summary:</strong> FRU is a working enterprise GenAI analytics stack—grounded Q&amp;A over structured and unstructured fridge sales data—with serious investment in <strong>how</strong> it is built, deployed, observed, and torn down across clouds. Start with <a href="#quick-start">Quick start</a>, then dive into <a href="docs/CORE_APP_STRUCTURE.md">CORE_APP_STRUCTURE</a> and the <a href="#war-stories">war stories</a> when something breaks in deploy or query paths.</p>
+<h2 id="related-repos" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">🔗 16. Related repositories</h2>
+
+<table>
+<thead>
+<tr style="background:#1565c0;color:white"><th>Repository</th><th>Relationship</th></tr>
+</thead>
+<tbody>
+<tr><td style="background:#e3f2fd"><a href="https://github.com/horselord-joe-8053/ultra-fru-genai-analytics">ultra-fru-genai-analytics</a></td><td style="background:#e8f5e9"><strong>Lineage</strong> — original FRU prototype (Spark + Delta + pgvector + Bedrock); strong conceptual README and local quickstart patterns.</td></tr>
+<tr><td style="background:#e3f2fd"><strong>This repo</strong> (<code>ultra-fru-genai-analytics-new</code>)</td><td style="background:#fff3e0"><strong>Production-shaped</strong> umbrella: full <code>core_app</code>, multi-cloud <code>tools/</code> + <code>infra_terraform/</code>, agent + UI execution log, war stories.</td></tr>
+</tbody>
+</table>
+
+---
+
+<p style="margin-top:1.5em;color:#546e7a;font-size:0.95em"><strong>Summary:</strong> FRU is a working enterprise GenAI analytics stack—grounded Q&amp;A over structured and unstructured fridge sales data—with serious investment in <strong>how</strong> it is built, deployed, observed, and torn down across clouds. Start with <a href="#quick-start">🚀 8. Quick start</a>, then dive into <a href="docs/CORE_APP_STRUCTURE.md">CORE_APP_STRUCTURE</a> and the <a href="#war-stories">📚 14. War stories</a> when something breaks in deploy or query paths.</p>
