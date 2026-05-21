@@ -93,6 +93,8 @@ This compresses §2–3 of `TODO_UNIT_TEST_CICD.md` into one view.
 
 For the **detailed test planning** (what to test in each module), continue to use `docs/TODO_UNIT_TEST_CICD.md`.
 
+**Local integration (implemented):** After `python orchestrator.py deploy --provider local --scope all`, run `pytest tests/integration -m integration` or `./scripts/run_integration_tests.sh`. Smoke checks use `tools/cloud_shared/verify/verify_api_endpoints` (Health/Version); set `INTEGRATION_FULL_VERIFY=1` for QueryStream/Analytics parity with `orchestrator.py verify --provider local`. Default PR CI still runs unit tests only (`-m "not integration"`). See [tests/README.md](../../tests/README.md).
+
 ---
 
 ## 3. Tags and releases in git

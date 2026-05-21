@@ -1,6 +1,6 @@
 <h1 id="refactor-unit-test-title" style="color:#0d47a1;font-size:1.5em;font-weight:700;border-bottom:2px solid #90caf9;padding-bottom:0.25em;margin-top:0">REFACTOR: Unit test harness and code coverage</h1>
 
-**Status:** Completed (`implref` 2026-05-21). Phases 1–6 done; Phase 7 deferred (integration stub skipped by default).  
+**Status:** Completed (`implref` + `resumimpl` 2026-05-21). Phases 1–7 done; integration tests require local Docker deploy.  
 **Repo:** `fru-genai-analytics-new`  
 **Related:** [docs/todos/TODO_UNIT_TEST.md](../../docs/todos/TODO_UNIT_TEST.md) · [README.md](../../README.md) · `.cursor/rules/implref-resumimpl-refactor-plan-followthrough.mdc`
 
@@ -116,17 +116,14 @@ Target **70–80%** on listed modules; **do not** require coverage on full `tool
 
 ---
 
-<h2 id="phase-7-integration" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">7. Phase — Integration tests (follow-up)</h2>
+<h2 id="phase-7-integration" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">[X] 7. Phase — Integration tests (follow-up)</h2>
 
 Separate from unit PR gate; may run nightly or on `main` only.
 
-- [ ] **`tests/integration/test_query_flow.py`** — local stack or docker-compose: health → optional `/query` with test DB (mark `@pytest.mark.integration`).
-- [ ] **`tests/integration/test_verify_against_local.py`** — run `tools/cloud_shared/verify` helpers against `orchestrator.py deploy --provider local` endpoint (document prerequisite).
-- [ ] Align with **`docs/TODO_LEARNED_CICD.md`** when that pipeline exists.
-
-**Done in implref:** `tests/integration/test_stack_smoke.py` (skipped placeholder only).
-
-All bullets in Phase 7 remain **optional** until product owner prioritizes; unit Phases 1–6 are the merge blocker.
+- [X] **`tests/integration/test_query_flow.py`** — local stack: health, version, `/query/stream`, `/analytics` (`@pytest.mark.integration`; skip if API down).
+- [X] **`tests/integration/test_verify_against_local.py`** — `verify_api_endpoints` smoke (Health/Version) + optional `INTEGRATION_FULL_VERIFY=1` full poll.
+- [X] Align with **`docs/TODO_LEARNED_CICD.md`** — §2 links integration layout; manual workflow `.github/workflows/integration-tests.yml`.
+- [X] **`scripts/run_integration_tests.sh`**, **`tests/integration/conftest.py`**, **`tests/README.md`** prerequisites (orchestrator local deploy).
 
 ---
 

@@ -66,6 +66,7 @@ def verify_api_endpoints(
     heartbeat_interval_sec: int | None = None,
     query_stream_timeout_sec: int | None = None,
     skip_frontend: bool = False,
+    endpoint_names: list[str] | None = None,
 ) -> tuple[bool, list[VerifyRow]]:
     """
     Poll endpoints until all pass or timeout. Returns (ok, rows) for summary table.
@@ -148,6 +149,9 @@ def verify_api_endpoints(
     ]
     if skip_frontend:
         endpoints = [e for e in endpoints if e["name"] != "Frontend"]
+    if endpoint_names is not None:
+        allowed = set(endpoint_names)
+        endpoints = [e for e in endpoints if e["name"] in allowed]
     results = {e["name"]: False for e in endpoints}
     last_status = {e["name"]: None for e in endpoints}
     last_error = {e["name"]: None for e in endpoints}

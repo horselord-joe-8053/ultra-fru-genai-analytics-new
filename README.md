@@ -1,10 +1,8 @@
-# FRU GenAI Analytics — Enterprise Conversational Analytics Platform
-
-<h1 id="fru-readme-title" style="color:#0d47a1;font-size:1.5em;font-weight:700;border-bottom:2px solid #90caf9;padding-bottom:0.25em;margin-top:0">FRU GenAI Analytics — Enterprise Conversational Analytics Platform</h1>
+<h1 id="fru-readme-title" style="color:#0d47a1;font-size:1.5em;font-weight:700;border-bottom:2px solid #90caf9;padding-bottom:0.25em;margin-top:0">FRU GenAI Analytics Evolved (Multi-Cloud Based Enterprise Level AI Data Analytics Assistant)</h1>
 
 **Fridges R Us (FRU)** is an end-to-end **enterprise conversational analytics assistant** over refrigerator sales data: **structured** fields (brand, store, ratings, dates) plus **unstructured** customer feedback (long complaints and themes). Users ask questions in plain language; the system returns **grounded** answers backed by SQL, vector search, and batch aggregates—not free-form hallucination.
 
-This repository is the **evolution** of [ultra-fru-genai-analytics](https://github.com/horselord-joe-8053/ultra-fru-genai-analytics): same domain and data philosophy, extended with **query-workflow visualization** (live LLM tool traces), a **ReAct-style agent**, and a **multi-cloud deploy/teardown** system (**AWS** and **GCP**, **Kubernetes** and **non-Kubernetes**, plus **local** parity) built from **OpenTofu/Terraform IaC** and **Python orchestration**. Getting that automation right was non-trivial; many design decisions are captured in the [war stories](#war-stories) below.
+This repository is the <span style="color:#1565c0;font-weight:600">evolution</span> of [ultra-fru-genai-analytics](https://github.com/horselord-joe-8053/ultra-fru-genai-analytics): same domain and data philosophy, extended with <span style="color:#1565c0;font-weight:600">query-workflow visualization</span> (live LLM tool traces), a <span style="color:#1565c0;font-weight:600">ReAct-style agent</span>, and a <span style="color:#1565c0;font-weight:600">multi-cloud deploy/teardown</span> system (<span style="color:#1565c0;font-weight:600">AWS</span> and <span style="color:#1565c0;font-weight:600">GCP</span>, <span style="color:#1565c0;font-weight:600">Kubernetes</span> and <span style="color:#1565c0;font-weight:600">non-Kubernetes</span>, plus <span style="color:#1565c0;font-weight:600">local</span> parity) built from <span style="color:#1565c0;font-weight:600">OpenTofu/Terraform IaC</span> and <span style="color:#1565c0;font-weight:600">Python orchestration</span>. Getting that automation right was non-trivial; many design decisions are captured in the <a href="#war-stories" style="color:#1565c0;font-weight:600">war stories</a> below.
 
 ---
 
@@ -32,7 +30,10 @@ This repository is the **evolution** of [ultra-fru-genai-analytics](https://gith
 - [📐 13. Query workflow visualization](#query-viz)
 - [📚 14. War stories](#war-stories)
 - [📖 15. Documentation map](#docs-map)
-- [🔗 16. Related repositories](#related-repos)
+- [🧪 16. Testing (unit + integration)](#testing)
+  - [16.1 Unit tests](#unit-tests)
+  - [16.2 Integration tests (Docker)](#integration-tests)
+- [🔗 17. Related repositories](#related-repos)
 
 ---
 
@@ -238,6 +239,13 @@ python orchestrator.py deploy --provider local --scope all
 
 API default: `http://localhost:5001` (from `LOCAL_SERVER_PORT`). Frontend: Vite on ports in `config/local/local_deploy_config.yaml`.
 
+Optional smoke after deploy (requires Docker + running API — see [§16.2 Integration tests](#integration-tests)):
+
+```bash
+pip install -r requirements-dev.txt
+./scripts/run_integration_tests.sh
+```
+
 <h3 id="quick-aws" style="color:#00695c;font-size:1.05em;font-weight:600;margin-top:0.85em">8.2 AWS (recommended full stack)</h3>
 
 ```bash
@@ -426,13 +434,96 @@ Index: [docs/war_stories/README.md](docs/war_stories/README.md).
 <tr><td style="background:#e3f2fd"><strong>Another cloud provider</strong></td><td style="background:#fff3e0"><a href="docs/WHAT_TO_DO_TO_BUILD_FOR_ANOTHER_CLOUD_PROVIDER.md">docs/WHAT_TO_DO_TO_BUILD_FOR_ANOTHER_CLOUD_PROVIDER.md</a></td></tr>
 <tr><td style="background:#e3f2fd"><strong>Config schema</strong></td><td style="background:#e8f5e9"><a href="docs/CONFIG_SCHEMA.md">docs/CONFIG_SCHEMA.md</a></td></tr>
 <tr><td style="background:#e3f2fd"><strong>Orchestrator</strong></td><td style="background:#fff3e0"><code>orchestrator.py</code> module docstring</td></tr>
-<tr><td style="background:#e3f2fd"><strong>Unit tests</strong></td><td style="background:#e8f5e9"><a href="tests/README.md">tests/README.md</a> · <code>pytest -m "not integration"</code></td></tr>
+<tr><td style="background:#e3f2fd"><strong>Testing</strong></td><td style="background:#e8f5e9"><a href="tests/README.md">tests/README.md</a> · unit <code>pytest -m "not integration"</code> · integration <code>./scripts/run_integration_tests.sh</code></td></tr>
 </tbody>
 </table>
 
 ---
 
-<h2 id="related-repos" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">🔗 16. Related repositories</h2>
+<h2 id="testing" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">🧪 16. Testing (unit + integration)</h2>
+
+**pytest** suite for fast refactors: **unit** tests mock DB/LLM/cloud (every PR); **integration** tests hit a live local API after Docker deploy (optional, manual CI).
+
+<table>
+<thead>
+<tr style="background:#1565c0;color:white"><th>Layer</th><th>When</th><th>Command</th><th>Needs Docker / stack</th></tr>
+</thead>
+<tbody>
+<tr><td style="background:#e3f2fd"><strong>Unit</strong></td><td style="background:#e8f5e9">Every PR, local dev</td><td style="background:#e8f5e9"><code>pytest -m "not integration"</code></td><td style="background:#e8f5e9"><span style="background:#c8e6c9;padding:2px 4px">no</span></td></tr>
+<tr><td style="background:#e3f2fd"><strong>Integration</strong></td><td style="background:#fff3e0">After local deploy</td><td style="background:#fff3e0"><code>./scripts/run_integration_tests.sh</code></td><td style="background:#fff3e0"><span style="background:#fff9c4;padding:2px 4px">yes</span></td></tr>
+</tbody>
+</table>
+
+<h3 id="unit-tests" style="color:#00695c;font-size:1.05em;font-weight:600;margin-top:0.85em">16.1 Unit tests</h3>
+
+No AWS/GCP credentials or running Postgres. **~64 tests** under <code>tests/unit/</code> covering Flask helpers/routes (mocked), agents/tools, <code>tools/cloud_shared</code> parsers, and deploy helpers.
+
+<table>
+<thead>
+<tr style="background:#1565c0;color:white"><th>Artifact</th><th>Purpose</th></tr>
+</thead>
+<tbody>
+<tr><td style="background:#e3f2fd"><code>requirements-dev.txt</code>, <code>pytest.ini</code></td><td style="background:#e8f5e9">Dev deps; marker <code>integration</code> excluded by default</td></tr>
+<tr><td style="background:#e3f2fd"><code>tests/conftest.py</code></td><td style="background:#fff3e0">Minimal env before <code>backend.api.app</code> import</td></tr>
+<tr><td style="background:#e3f2fd"><code>.coveragerc</code></td><td style="background:#e8f5e9">Staged <code>fail_under</code> (raise as coverage grows)</td></tr>
+<tr><td style="background:#e3f2fd"><a href=".github/workflows/unit-tests.yml">unit-tests.yml</a></td><td style="background:#fff3e0">CI on push/PR</td></tr>
+</tbody>
+</table>
+
+```bash
+pip install -r requirements-dev.txt
+pytest -m "not integration"
+# optional: pytest -m "not integration" --cov --cov-report=term-missing
+```
+
+If <code>--cov</code> fails, unset <code>PYTEST_DISABLE_PLUGIN_AUTOLOAD</code> (see [tests/README.md](tests/README.md)).
+
+<h3 id="integration-tests" style="color:#00695c;font-size:1.05em;font-weight:600;margin-top:0.85em">16.2 Integration tests (Docker)</h3>
+
+Live HTTP checks against the API started by [§8.1 Local](#quick-local). Tests **skip** when <code>/health</code> is unreachable (safe if Docker is off).
+
+**Prerequisites:** Docker running → <code>python orchestrator.py deploy --provider local --scope all</code> → API at <code>http://localhost:5001</code> (<code>LOCAL_SERVER_PORT</code>).
+
+**Run:**
+
+```bash
+./scripts/run_integration_tests.sh
+# equivalent:
+pytest tests/integration -m integration -v
+```
+
+**What runs (<code>tests/integration/</code>):**
+
+<table>
+<thead>
+<tr style="background:#1565c0;color:white"><th>Module</th><th>Checks</th></tr>
+</thead>
+<tbody>
+<tr><td style="background:#e3f2fd"><code>test_query_flow.py</code></td><td style="background:#e8f5e9"><code>/health</code>, <code>/version</code>, <code>/query/stream</code> (SSE), <code>/analytics</code></td></tr>
+<tr><td style="background:#e3f2fd"><code>test_verify_against_local.py</code></td><td style="background:#fff3e0">Same <code>verify_api_endpoints</code> as <code>orchestrator.py verify --provider local</code> (smoke: Health + Version)</td></tr>
+</tbody>
+</table>
+
+**Optional full verify** (QueryStream + Analytics, needs CSV/ETL loaded):
+
+```bash
+INTEGRATION_FULL_VERIFY=1 ./scripts/run_integration_tests.sh
+```
+
+| Variable | Purpose |
+|----------|---------|
+| `INTEGRATION_API_BASE_URL` | Override API base URL |
+| `INTEGRATION_VERIFY_TIMEOUT_SEC` | Poll timeout for verify helper |
+| `INTEGRATION_QUERY_STREAM_TIMEOUT` | Timeout for <code>/query/stream</code> |
+| `INTEGRATION_TOTAL_REC` | Expected row count if CSV path differs |
+
+**CI:** Unit tests gate every PR. Integration: manual [integration-tests.yml](.github/workflows/integration-tests.yml) (<code>workflow_dispatch</code>) — start the stack on the runner or use a self-hosted runner with deploy already up.
+
+**References:** [tests/README.md](tests/README.md) · [docs/todos/TODO_UNIT_TEST.md](docs/todos/TODO_UNIT_TEST.md) · [REFACTOR_UNIT_TEST_COVERAGE.md](cursor_gen/refactor_plan/completed/REFACTOR_UNIT_TEST_COVERAGE.md) · lineage [ultra-fru-genai-analytics](https://github.com/horselord-joe-8053/ultra-fru-genai-analytics) (<code>scripts/run_unit_tests.sh</code>, <code>module_test_verification/</code>).
+
+---
+
+<h2 id="related-repos" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">🔗 17. Related repositories</h2>
 
 <table>
 <thead>
@@ -446,4 +537,4 @@ Index: [docs/war_stories/README.md](docs/war_stories/README.md).
 
 ---
 
-<p style="margin-top:1.5em;color:#546e7a;font-size:0.95em"><strong>Summary:</strong> FRU is a working enterprise GenAI analytics stack—grounded Q&amp;A over structured and unstructured fridge sales data—with serious investment in <strong>how</strong> it is built, deployed, observed, and torn down across clouds. Start with <a href="#quick-start">🚀 8. Quick start</a>, then dive into <a href="docs/CORE_APP_STRUCTURE.md">CORE_APP_STRUCTURE</a> and the <a href="#war-stories">📚 14. War stories</a> when something breaks in deploy or query paths.</p>
+<p style="margin-top:1.5em;color:#546e7a;font-size:0.95em"><strong>Summary:</strong> FRU is a working enterprise GenAI analytics stack—grounded Q&amp;A over structured and unstructured fridge sales data—with serious investment in <strong>how</strong> it is built, deployed, observed, and torn down across clouds. Start with <a href="#quick-start">🚀 8. Quick start</a>, run <a href="#unit-tests">unit tests</a> on every change and <a href="#integration-tests">integration tests</a> after local deploy, then dive into <a href="docs/CORE_APP_STRUCTURE.md">CORE_APP_STRUCTURE</a> and the <a href="#war-stories">📚 14. War stories</a> when something breaks in deploy or query paths.</p>
