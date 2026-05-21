@@ -1,12 +1,93 @@
-# WAR_STORIES_CLOUD_SHARED
+<h1 id="war-stories-cloud-shared-title" style="color:#0d47a1;font-size:1.5em;font-weight:700;border-bottom:2px solid #90caf9;padding-bottom:0.25em;margin-top:0">WAR_STORIES_CLOUD_SHARED</h1>
 
 A curated list of **non-trivial technical war stories**, capturing real lessons suitable for **senior-level interviews**.
 
-# Cloud-Agnostic / Multi-Cloud War Stories
+**Authoring discipline:** `.cursor/rules/exwar-war-stories-extraction.mdc` and `.cursor/rules/mrkd-markdown-authoring.mdc`.
+
+**Cloud-Agnostic / Multi-Cloud War Stories**
 
 ---
 
-## 1. HTTP Status Code Corruption: Streaming Endpoint Validation with HEAD vs GET
+<h2 id="document-outline" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">Document outline</h2>
+
+1. [Reading guide](#reading-guide) — metadata and subsection labels.
+2. [Story index](#story-index) — quick links to every story.
+
+---
+
+<h2 id="reading-guide" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">Reading guide</h2>
+
+<table>
+<thead>
+<tr style="background:#1565c0;color:white"><th style="padding:8px">Field / label</th><th style="padding:8px">Meaning</th></tr>
+</thead>
+<tbody>
+<tr><td style="background:#e3f2fd;padding:8px"><strong>creation</strong> / <strong>last_updated</strong></td><td style="background:#e8f5e9;padding:8px">When the story was first captured and last revised (<code>&lt;YYMMDD&gt;</code> or <code>&lt;YYMMDD-HHMMSS&gt;</code>).</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px"><strong>keywords</strong></td><td style="background:#e8f5e9;padding:8px">Grep-friendly index into problem area and stack.</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px"><strong>difficulty</strong> / <strong>significance</strong></td><td style="background:#e8f5e9;padding:8px">Relative depth (1–10) and how reusable the lesson is for interviews.</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px"><strong>N.1–N.5</strong></td><td style="background:#e8f5e9;padding:8px">Context → Root Cause → Key Insight → Resolution → Takeaway.</td></tr>
+</tbody>
+</table>
+
+---
+
+<h2 id="story-index" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">Story index</h2>
+
+<table>
+<thead>
+<tr style="background:#1565c0;color:white"><th style="padding:8px">#</th><th style="padding:8px">Title</th><th style="padding:8px">Gist</th></tr>
+</thead>
+<tbody>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">1</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-1">1. HTTP Status Code Corruption: Streaming Endpoint Validation with HEAD vs GET</a></td><td style="padding:8px;background:#fff3e0">HTTP Status Code Corruption: Streaming Endpoint Validation with HEAD vs GET</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">2</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-2">2. Project-Wide venv: One Python, One Place, All Scripts</a></td><td style="padding:8px;background:#e8f5e9">Project-Wide venv: One Python, One Place, All Scripts</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">3</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-3">3. Teardown: Prefer Python for Logic, Shell for Orchestration</a></td><td style="padding:8px;background:#fff3e0">Teardown: Prefer Python for Logic, Shell for Orchestration</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">4</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-4">4. Continuous Feedback and Heartbeat: So Long-Running Scripts Don’t Look Stuck</a></td><td style="padding:8px;background:#e8f5e9">Continuous Feedback and Heartbeat: So Long-Running Scripts Don’t Look Stuck</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">5</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-5">5. Terragrunt Dependency Outputs: Partial State and try()</a></td><td style="padding:8px;background:#fff3e0">Terragrunt Dependency Outputs: Partial State and try()</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">6</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-6">6. Terraform Provider Lock vs Constraint: "does not match configured version constraint ~&gt; 5.0; must use terraform"</a></td><td style="padding:8px;background:#e8f5e9">Terraform Provider Lock vs Constraint: "does not match configured version constraint ~&gt;…</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">7</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-7">7. Preempt Teardown: State Lock Failure and Teardown Reporting Success on Failure</a></td><td style="padding:8px;background:#fff3e0">Preempt Teardown: State Lock Failure and Teardown Reporting Success on Failure</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">8</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-8">8. Import Preexisting Scripts: Before Apply and Before Destroy</a></td><td style="padding:8px;background:#e8f5e9">Import Preexisting Scripts: Before Apply and Before Destroy</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">9</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-9">9. Fixing "The new Subnets are not in the same Vpc as the existing subnet group" — What We Did and Option A vs Option B</a></td><td style="padding:8px;background:#fff3e0">Fixing "The new Subnets are not in the same Vpc as the…</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">10</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-10">10. CONTAINER_IMAGE After Phase 1: Background Job vs Main Shell When Using --skip-build</a></td><td style="padding:8px;background:#e8f5e9">CONTAINER_IMAGE After Phase 1: Background Job vs Main Shell When Using --skip-build</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">11</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-11">11. Shell Scripts "Permission Denied" After a Major Refactor: Git Mode 100755 → 100644</a></td><td style="padding:8px;background:#fff3e0">Shell Scripts "Permission Denied" After a Major Refactor: Git Mode 100755 →…</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">12</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-12">12. Calling Child Shell Scripts: exec vs Run-Then-Exit, and Not Swallowing Output</a></td><td style="padding:8px;background:#e8f5e9">Calling Child Shell Scripts: exec vs Run-Then-Exit, and Not Swallowing Output</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">13</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-13">13. Verification Script Stops With No Feedback: set -e and Command Substitution</a></td><td style="padding:8px;background:#fff3e0">Verification Script Stops With No Feedback: set -e and Command Substitution</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">14</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-14">14. API Validation HTTP 000000: Retry Logic Bailing on Ambiguous Status</a></td><td style="padding:8px;background:#e8f5e9">API Validation HTTP 000000: Retry Logic Bailing on Ambiguous Status</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">15</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-15">15. Breaking the Dependency Deadlock: Mocking Attributes for Multi-Phase Lifecycle</a></td><td style="padding:8px;background:#fff3e0">Breaking the Dependency Deadlock: Mocking Attributes for Multi-Phase Lifecycle</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">16</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-16">16. Kubernetes Manifests: Where Should Cloud-Agnostic Assets Live?</a></td><td style="padding:8px;background:#e8f5e9">Kubernetes Manifests: Where Should Cloud-Agnostic Assets Live?</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">17</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-17">17. AWS vs GCP Primitives: When to Separate Cloud-Specific Modules</a></td><td style="padding:8px;background:#fff3e0">AWS vs GCP Primitives: When to Separate Cloud-Specific Modules</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">18</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-18">18. Terraform: "Backend state config changed" — why it happens and how we fixed it</a></td><td style="padding:8px;background:#e8f5e9">Terraform: "Backend state config changed" — why it happens and how we…</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">19</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-19">19. Live Config vs Modules: Making Deploy Stacks Pure Composition (Gruntwork-Style "Live")</a></td><td style="padding:8px;background:#fff3e0">Live Config vs Modules: Making Deploy Stacks Pure Composition (Gruntwork-Style "Live")</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">20</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-20">20. K8s Pre-Destroy: Why We Keep kubectl Instead of Moving K8s Resources into Terraform</a></td><td style="padding:8px;background:#e8f5e9">K8s Pre-Destroy: Why We Keep kubectl Instead of Moving K8s Resources into…</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">21</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-21">21. Image Version Tags: `latest` vs Version Tag, When Each Is Used, and the load_dotenv Overwrite Bug</a></td><td style="padding:8px;background:#fff3e0">Image Version Tags: `latest` vs Version Tag, When Each Is Used, and…</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">22</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-22">22. Terraform Import Idempotency: "Resource already managed" as Success</a></td><td style="padding:8px;background:#e8f5e9">Terraform Import Idempotency: "Resource already managed" as Success</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">23</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-23">23. Deploy scope=all and Shared Global Resources: Import Idempotency Across Scopes</a></td><td style="padding:8px;background:#fff3e0">Deploy scope=all and Shared Global Resources: Import Idempotency Across Scopes</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">24</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-24">24. OpenTofu vs Terraform: Provider-Agnostic Error Pattern Matching</a></td><td style="padding:8px;background:#e8f5e9">OpenTofu vs Terraform: Provider-Agnostic Error Pattern Matching</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">25</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-25">25. AI-Generated Logic Can Still Have Major Errors — Inverted Condition and Variable Reuse</a></td><td style="padding:8px;background:#fff3e0">AI-Generated Logic Can Still Have Major Errors — Inverted Condition and Variable…</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">26</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-26">26. Import and Apply Skip When Plan Shows No Changes</a></td><td style="padding:8px;background:#e8f5e9">Import and Apply Skip When Plan Shows No Changes</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">27</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-27">27. Content-Based Build Skip: Hash vs Stored Hash</a></td><td style="padding:8px;background:#fff3e0">Content-Based Build Skip: Hash vs Stored Hash</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">28</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-28">28. Analytics Panel Stale Data: Browser HTTP Cache for /analytics API Response</a></td><td style="padding:8px;background:#e8f5e9">Analytics Panel Stale Data: Browser HTTP Cache for /analytics API Response</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">29</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-29">29. Multi-Cloud env_utils Placement: Cohesion Over Top-Level Extraction</a></td><td style="padding:8px;background:#fff3e0">Multi-Cloud env_utils Placement: Cohesion Over Top-Level Extraction</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">30</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-30">30. Multi-Cloud "Just Copy AWS" is a Pipe Dream: Iterate in Small Chunks</a></td><td style="padding:8px;background:#e8f5e9">Multi-Cloud "Just Copy AWS" is a Pipe Dream: Iterate in Small Chunks</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">31</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-31">31. Provider-Driven LLM Factory: One Interface, Multiple Backends</a></td><td style="padding:8px;background:#fff3e0">Provider-Driven LLM Factory: One Interface, Multiple Backends</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">32</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-32">32. env_utils First: Cloud Provider Abstraction Before tools/</a></td><td style="padding:8px;background:#e8f5e9">env_utils First: Cloud Provider Abstraction Before tools/</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">33</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-33">33. GCP_AWS_REFERENCE: Document Every Mapping Before You Code</a></td><td style="padding:8px;background:#fff3e0">GCP_AWS_REFERENCE: Document Every Mapping Before You Code</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">34</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-34">34. tools/ Mirror: Create Exact Structure, Then Fill Gaps</a></td><td style="padding:8px;background:#e8f5e9">tools/ Mirror: Create Exact Structure, Then Fill Gaps</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">35</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-35">35. Terraform State Backend: GCS vs S3, Different Config Required</a></td><td style="padding:8px;background:#fff3e0">Terraform State Backend: GCS vs S3, Different Config Required</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">36</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-36">36. Deploy Phase Order: doctor → bootstrap → durable → nondurable → secrets → build → apply</a></td><td style="padding:8px;background:#e8f5e9">Deploy Phase Order: doctor → bootstrap → durable → nondurable → secrets…</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">37</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-37">37. Cloud Run vs ECS: VPC Connector vs Fargate in VPC</a></td><td style="padding:8px;background:#fff3e0">Cloud Run vs ECS: VPC Connector vs Fargate in VPC</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">38</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-38">38. Nonkube Verification Passed, UI Failed Later: Scale-to-Zero and Lazy Agent Init</a></td><td style="padding:8px;background:#e8f5e9">Nonkube Verification Passed, UI Failed Later: Scale-to-Zero and Lazy Agent Init</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">39</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-39">39. Terraform Inconsistent State: Durable Has ECS, tofu state rm Fails with ResourceNotFoundException</a></td><td style="padding:8px;background:#fff3e0">Terraform Inconsistent State: Durable Has ECS, tofu state rm Fails with ResourceNotFoundException</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">40</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-40">40. EKS CronJob Overload: Jobs Accumulate, Node Fails, fru-api Pending</a></td><td style="padding:8px;background:#e8f5e9">EKS CronJob Overload: Jobs Accumulate, Node Fails, fru-api Pending</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">41</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-41">41. EKS Kube Recovery: CronJob Overload and Node Failure — Playbook and Prevention</a></td><td style="padding:8px;background:#fff3e0">EKS Kube Recovery: CronJob Overload and Node Failure — Playbook and Prevention</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">42</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-42">42. Batch Analytics "Backend API not reachable": CloudFront Edge Cache for /analytics After Two-Phase Deploy</a></td><td style="padding:8px;background:#e8f5e9">Batch Analytics "Backend API not reachable": CloudFront Edge Cache for /analytics After…</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">43</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-43">43. EKS Nodes NotReady After Deploy: No Wait for min_node_count Before helm/kube_apply</a></td><td style="padding:8px;background:#fff3e0">EKS Nodes NotReady After Deploy: No Wait for min_node_count Before helm/kube_apply</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">44</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-44">44. Nonkube Deploy "Module not installed": Cwd-Dependent Path Resolution and Why the Bug Was Latent</a></td><td style="padding:8px;background:#e8f5e9">Nonkube Deploy "Module not installed": Cwd-Dependent Path Resolution and Why the Bug…</td></tr>
+</tbody>
+</table>
+
+---
+
+<h2 id="war-story-1" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">1. HTTP Status Code Corruption: Streaming Endpoint Validation with HEAD vs GET</h2>
 
 **creation:** `<260127-175946>`
 **last_updated:** `<260127-175946>`
@@ -15,11 +96,11 @@ A curated list of **non-trivial technical war stories**, capturing real lessons 
 **difficulty:** 6
 **significance:** 7
 
-### 1.1 Context
+<h3 id="war-story-1-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">1.1 Context</h3>
 
 During automated endpoint validation, the `/query/stream` endpoint (a Server-Sent Events streaming endpoint) consistently returned a corrupted HTTP status code: `HTTP 200000` instead of the expected `HTTP 200`. The validation script used `curl -w "%{http_code}"` with a GET request, which worked fine for regular REST endpoints but failed for streaming endpoints.
 
-### 1.2 Root Cause
+<h3 id="war-story-1-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">1.2 Root Cause</h3>
 
 The `/query/stream` endpoint streams data continuously using Server-Sent Events (SSE). When using `curl -w "%{http_code}"` with a GET request, curl:
 1. Sends the GET request
@@ -29,11 +110,11 @@ The `/query/stream` endpoint streams data continuously using Server-Sent Events 
 
 The problem: The streaming data output mixed with the status code output, resulting in a corrupted value like `200000` (the actual `200` status code followed by streaming data characters that were interpreted as part of the status code).
 
-### 1.3 Key Insight
+<h3 id="war-story-1-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">1.3 Key Insight</h3>
 
 > Streaming endpoints require different validation strategies than regular REST endpoints. GET requests consume the stream, corrupting output parsing. HEAD requests retrieve only headers without consuming the response body.
 
-### 1.4 Resolution
+<h3 id="war-story-1-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">1.4 Resolution</h3>
 
 Changed the validation logic for streaming endpoints from GET to HEAD request:
 - **Before:** `curl -s -o /dev/null -w "%{http_code}" "$endpoint"`
@@ -41,13 +122,13 @@ Changed the validation logic for streaming endpoints from GET to HEAD request:
 
 The `-I` flag (HEAD request) retrieves only the HTTP headers without consuming the response body, allowing clean status code extraction. Added robust extraction logic: `query_stream_status=$(echo "$curl_output" | grep -oE '[0-9]{3}' | head -1 || echo "000")` to handle edge cases.
 
-### 1.5 Takeaway
+<h3 id="war-story-1-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">1.5 Takeaway</h3>
 
 Always use HEAD requests (`curl -I`) for status validation of streaming endpoints. GET requests will consume the stream and corrupt output parsing. For regular REST endpoints, GET is fine, but streaming endpoints (SSE, WebSockets, long-polling) require HEAD requests for validation.
 
 ---
 
-## 2. Project-Wide venv: One Python, One Place, All Scripts
+<h2 id="war-story-2" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">2. Project-Wide venv: One Python, One Place, All Scripts</h2>
 
 **creation:** `<260130>`
 **last_updated:** `<260130>`
@@ -56,19 +137,19 @@ Always use HEAD requests (`curl -I`) for status validation of streaming endpoint
 **difficulty:** 5
 **significance:** 7
 
-### 2.1 Context
+<h3 id="war-story-2-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">2.1 Context</h3>
 
 I already knew the basics of venv: isolate dependencies, avoid polluting the system Python, pin versions in requirements.txt. What I learned in this project was how to apply that consistently when **dozens of shell scripts** invoke Python—teardown helpers, resource removal, Terraform deploy, Spark job runners, schema init, reference checks—and those scripts are run from different entry points (orchestrator, CI, one-offs). Without a single source of truth for "which Python," some scripts used `python3` and others `python`, and CI or a fresh clone might not have boto3 (or the right version) in the environment the script happened to use. That led to "works on my machine" and occasional ImportError or version skew.
 
-### 2.2 Root Cause
+<h3 id="war-story-2-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">2.2 Root Cause</h3>
 
 There was no project-wide contract for "use the project venv if it exists." Scripts that needed Python either hardcoded `python3` or called whatever was first in PATH. The project had a `setup-python.sh` that created a venv and installed from requirements.txt, but nothing guaranteed that the **same** Python was used by every script that ran Python code. So one script might use `./venv/bin/python3` (if the author remembered), another used `python3` (system or pyenv), and dependency consistency was accidental.
 
-### 2.3 Key Insight
+<h3 id="war-story-2-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">2.3 Key Insight</h3>
 
 > venv is not just "create it and activate it in your shell." In a script-heavy repo, you need a single, sourced contract: one variable (e.g. PYTHON_CMD) set once (e.g. by load-env or load-python-env), and every script that runs Python must use that variable. Then "which Python" is decided in one place (venv if present, else python3), and all scripts get the same interpreter and the same installed deps.
 
-### 2.4 Resolution
+<h3 id="war-story-2-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">2.4 Resolution</h3>
 
 - **Single source:** Added `load-python-env.sh`, which sets `PYTHON_CMD` to `$REPO_ROOT/venv/bin/python3` if the project venv exists, else `python3`. That script is sourced at the end of `load-env.sh`, which most run scripts already source. So any script that sources load-env gets a consistent `PYTHON_CMD` without changing each script’s logic.
 - **Use it everywhere:** Replaced direct `python3` / `python` calls in all scripts that run Python (teardown, remove-all-aws-resources, ensure-release-address-policy, find-all-current-aws-resources, init_schema_aws, reference_check_frontend_bucket, delete-recreatable-resources, stop-ecs-services, kubernetes-manifests, terraform deploy, run-spark-job-aws, setup-and-verify for delta-lake) with `"$PYTHON_CMD"` or `"${PYTHON_CMD:-python3}"` so they all use the same interpreter.
@@ -76,13 +157,13 @@ There was no project-wide contract for "use the project venv if it exists." Scri
 
 With that, one Python (the project venv when present) is used consistently across the repo, and boto3/version consistency is guaranteed for all those call sites.
 
-### 2.5 Takeaway
+<h3 id="war-story-2-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">2.5 Takeaway</h3>
 
 In a repo where many shell scripts invoke Python, define one contract: a single sourced script that sets PYTHON_CMD (venv if present, else system python3), and have every script that runs Python use that variable. Run venv creation (e.g. setup-python) in a Phase 0 or equivalent so the venv exists before any dependent script runs. Then venv isn’t just "for interactive use"—it’s the project’s single Python runtime for automation.
 
 ---
 
-## 3. Teardown: Prefer Python for Logic, Shell for Orchestration
+<h2 id="war-story-3" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">3. Teardown: Prefer Python for Logic, Shell for Orchestration</h2>
 
 **creation:** `<260130>`
 **last_updated:** `<260130>`
@@ -91,19 +172,19 @@ In a repo where many shell scripts invoke Python, define one contract: a single 
 **difficulty:** 6
 **significance:** 8
 
-### 3.1 Context
+<h3 id="war-story-3-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">3.1 Context</h3>
 
 The teardown flow (pre-destroy → Terraform destroy → orphan cleanup → local Docker cleanup) was originally implemented largely in shell: stop services, empty S3, run Terraform, then a mix of shell and ad-hoc Python for ECR and orphan cleanup. Adding new behaviors (e.g. per–container-type teardown, consistent feedback, timeouts) made the shell scripts long, hard to test, and brittle—lots of subshells, `aws` CLI parsing, and error handling in bash. We needed a clearer split between "what to run and in what order" (orchestration) and "how to do each step" (logic).
 
-### 3.2 Root Cause
+<h3 id="war-story-3-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">3.2 Root Cause</h3>
 
 Shell is great for sequencing and calling other tools; it is poor for complex control flow, structured data, and APIs. Putting all teardown logic in shell meant: (1) S3/ECR/ECS logic was a mix of `aws` CLI and `jq` or grep, which is fragile; (2) adding heartbeat or timeout required either heavy bash or a separate helper anyway; (3) unit-testing "empty this bucket" or "deregister these task definitions" in shell is impractical. The real need was to keep orchestration in shell (one script that knows the order and passes env/args) and move step logic into something that could use boto3, structured output, and clear functions.
 
-### 3.3 Key Insight
+<h3 id="war-story-3-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">3.3 Key Insight</h3>
 
 > Use Python for anything that talks to AWS APIs, parses structured data, or needs nontrivial logic (retries, timeouts, filtering). Use shell for orchestration: order of steps, env setup, calling Terraform wrappers, and running the Python scripts with the right arguments. That keeps the shell script short and readable and puts the hard parts in testable, reusable Python.
 
-### 3.4 Resolution
+<h3 id="war-story-3-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">3.4 Resolution</h3>
 
 - **sub_proc Python scripts:** Introduced a `sub_proc/` directory under resources_cleanup with Python scripts: `eks_pre_destroy.py`, `ecs_pre_destroy.py`, `shared_pre_destroy.py` (stop services via subprocess to existing shell scripts, empty S3 via boto3), and `cleanup_orphaned.py` (S3, ECR, ECS task definitions, EKS presence check—all boto3). Each script takes clear args (environment, profile, region, container-type where relevant) and does one job.
 - **Shell as thin orchestrator:** The main teardown script (`teardown-resources-all.sh`) only: validates args, sets env, sources helpers, and for each step calls the right sub_proc script or Terraform wrapper. It doesn’t implement "how to empty a bucket" or "how to list ECR images"; it just runs `"$PYTHON_CMD" sub_proc/cleanup_orphaned.py ...` with the right flags.
@@ -111,13 +192,13 @@ Shell is great for sequencing and calling other tools; it is poor for complex co
 
 Benefits: (1) Python steps are testable and reusable; (2) boto3 gives reliable APIs instead of parsing CLI output; (3) new behaviors (e.g. heartbeat, timeout) can be added in one place (helpers) and reused; (4) the orchestrator stays short and easy to read.
 
-### 3.5 Takeaway
+<h3 id="war-story-3-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">3.5 Takeaway</h3>
 
 For teardown (and similar multi-step automation), keep orchestration in shell—order of steps, env, and calling the right tools. Implement step logic (AWS API calls, filtering, retries) in Python with boto3. Expose that logic as small, CLI-invokable scripts (e.g. sub_proc) so the shell script stays thin and the complex parts are testable and maintainable.
 
 ---
 
-## 4. Continuous Feedback and Heartbeat: So Long-Running Scripts Don’t Look Stuck
+<h2 id="war-story-4" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">4. Continuous Feedback and Heartbeat: So Long-Running Scripts Don’t Look Stuck</h2>
 
 **creation:** `<260130>`
 **last_updated:** `<260210>`
@@ -126,19 +207,19 @@ For teardown (and similar multi-step automation), keep orchestration in shell—
 **difficulty:** 6
 **significance:** 7
 
-### 4.1 Context
+<h3 id="war-story-4-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">4.1 Context</h3>
 
 Teardown and brutal-force removal (remove-all-aws-resources) can run for many minutes: Terraform destroy, EKS/ECS/RDS deletion, S3/ECR cleanup. Without feedback, the terminal sits silent for long stretches and users (or CI) assume the process is stuck. We wanted: (1) continuous informative output (what step is running, what succeeded/failed); (2) "heartbeat" output while waiting (e.g. every 60s) so it’s clear the process is still running; (3) optional timeout so a step doesn’t hang forever and the script can exit with a clear message.
 
-### 4.2 Root Cause
+<h3 id="war-story-4-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">4.2 Root Cause</h3>
 
 Initially, teardown just ran subprocesses (pre-destroy, Terraform, cleanup) and printed one line before and one after each step. If a step took 10 minutes, there was no output in between. Similarly, remove-all-aws-resources had internal waits (e.g. "wait for EKS cluster to be deleted") with no periodic message, so the script appeared frozen. There was no shared pattern for "run a command and print a heartbeat every N seconds" or "wait until condition with timeout and heartbeat," and no single place to define a per-step timeout (e.g. for teardown) so users could cap duration.
 
-### 4.3 Key Insight
+<h3 id="war-story-4-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">4.3 Key Insight</h3>
 
 > Long-running automation needs two kinds of feedback: (1) progress lines (what’s running, what completed/failed) so users see continuous activity; (2) heartbeat lines (e.g. "Still running: &lt;description&gt; ... N s elapsed") so during long waits users know the process isn’t stuck. Prefer one helper per language (shell for "run command with heartbeat," Python for "wait until condition with heartbeat") and a single, prominent timeout constant (e.g. per-step) so behavior is predictable and easy to tune.
 
-### 4.4 Resolution
+<h3 id="war-story-4-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">4.4 Resolution</h3>
 
 - **Python helper (long_running_feedback.py):** Added a shared module used by remove-all-aws-resources: `progress(msg)`, `print_status(resource_id, status, detail)`, `log_timeout(component, resource_id, timeout_min)`, and `wait_with_heartbeat(description, check_fn, timeout_sec, interval_sec=60)`. The wait function polls `check_fn()`, prints a heartbeat every `interval_sec` ("... have waited for &lt;description&gt; - N min"), and returns False on timeout. So CloudFront/EKS/ECS/RDS deletion waits now give continuous feedback and a clear timeout.
 - **Shell helper (run-with-heartbeat.sh):** Added `run_with_heartbeat "description" interval_sec [timeout_sec] -- command ...` (runs the command, prints "Still running: description ... N s elapsed" every interval_sec, optionally kills on timeout) and `sleep_with_heartbeat total_sec interval_sec "message"` (sleep with "message - N s remaining" every interval). Teardown sources this and wraps each long step (pre-destroy, Terraform, orphan cleanup) with `_run_with_heartbeat_step`, so each step streams its own output and a heartbeat every 60s (or TEARDOWN_HEARTBEAT_INTERVAL). The optional wait between layers uses `sleep_with_heartbeat` so that pause isn’t silent.
@@ -146,11 +227,11 @@ Initially, teardown just ran subprocesses (pre-destroy, Terraform, cleanup) and 
 
 With this, both teardown and remove-all give continuous feedback and heartbeat during long operations, and teardown can optionally enforce a per-step timeout for a predictable, graceful exit.
 
-### 4.5 Takeaway
+<h3 id="war-story-4-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">4.5 Takeaway</h3>
 
 For long-running scripts: (1) emit progress lines (what’s running, what completed/failed); (2) emit heartbeat lines on a fixed interval ("Still running: … N s elapsed") so waits don’t look stuck; (3) use a shared helper per language (shell: run command + heartbeat [+ timeout]; Python: wait until condition + heartbeat + timeout); (4) put timeout and interval constants at the top of the main script and document which phases have no heartbeat (e.g. initial setup). That keeps users and CI confident the process is alive and makes timeouts explicit and configurable.
 
-### 4.6 Output Buffering: Silent "Hang" When Run Under IDE or CI
+<h3 id="war-story-4-sec-6" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">4.6 Output Buffering: Silent "Hang" When Run Under IDE or CI</h3>
 
 **creation:** `<260210>`
 **last_updated:** `<260210>`
@@ -163,7 +244,7 @@ Deploy's build-and-push phase (Docker build + push) ran for 15+ minutes with no 
 
 ---
 
-## 5. Terragrunt Dependency Outputs: Partial State and try()
+<h2 id="war-story-5" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">5. Terragrunt Dependency Outputs: Partial State and try()</h2>
 
 **creation:** `<260131>`
 **last_updated:** `<260131>`
@@ -172,30 +253,30 @@ Deploy's build-and-push phase (Docker build + push) ran for 15+ minutes with no 
 **difficulty:** 6
 **significance:** 7
 
-### 5.1 Context
+<h3 id="war-story-5-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">5.1 Context</h3>
 
 During dry-runs, the ECS and EKS Terragrunt layers failed with `Error: Unsupported attribute` on lines like `dependency.infrastructure.outputs.vpc_id`—"This object does not have an attribute named 'vpc_id'." The same config worked when the infrastructure layer had been fully applied previously; it failed when state was partial (e.g. only `aurora_database_name` present) or when running `terragrunt refresh` before `plan`. The EKS layer had been fixed earlier with `try()`; the ECS layer had not.
 
-### 5.2 Root Cause
+<h3 id="war-story-5-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">5.2 Root Cause</h3>
 
 Terragrunt resolves dependencies by running the dependency layer and reading its outputs. When the dependency's state is incomplete (e.g. infrastructure was applied in the past but some outputs were removed or state was pruned, or the dependency has never been applied), `terragrunt output` returns only the outputs that exist. Terragrunt then exposes that partial set as `dependency.<name>.outputs`. If the child config references `dependency.infrastructure.outputs.vpc_id` and that key is missing, HCL throws "Unsupported attribute." Similarly, for commands like `refresh`, Terragrunt may run the dependency and get real (partial) outputs instead of using `mock_outputs`, so the child sees missing keys and fails.
 
-### 5.3 Key Insight
+<h3 id="war-story-5-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">5.3 Key Insight</h3>
 
 > When a Terragrunt layer depends on another and that dependency may have partial or empty state (e.g. before first apply, after selective destroy, or during refresh), reference dependency outputs with try(dependency.<name>.outputs.<key>, "fallback") so missing keys don't fail the config. Add "refresh" (and "init", "state") to mock_outputs_allowed_terraform_commands so that when you run refresh/plan without applying the dependency, Terragrunt uses mock outputs instead of partial real ones.
 
-### 5.4 Resolution
+<h3 id="war-story-5-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">5.4 Resolution</h3>
 
 - **ECS dev terragrunt.hcl:** Wrapped every `dependency.infrastructure.outputs.<key>` in `try(..., "fallback")` with sensible mock values (e.g. `try(dependency.infrastructure.outputs.vpc_id, "vpc-xxxxxxxx")`). Added `"refresh"`, `"init"`, `"state"` to `mock_outputs_allowed_terraform_commands` so refresh/plan use mocks when the dependency hasn't been applied.
 - **Consistency:** EKS layers already used try() and broader mock_outputs_allowed_terraform_commands; ECS was updated to match. Frontend-ecs/frontend-eks dependency on app (ECS/EKS) also use try() for `alb_dns_name` and include "refresh" in mock_outputs_allowed_terraform_commands.
 
-### 5.5 Takeaway
+<h3 id="war-story-5-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">5.5 Takeaway</h3>
 
 Design Terragrunt configs for partial dependency state: use try(dependency.*.outputs.<key>, fallback) for every dependency output you read, and allow mock_outputs for init, plan, refresh, and state so dry-runs and first-time runs succeed without applying every dependency first.
 
 ---
 
-## 6. Terraform Provider Lock vs Constraint: "does not match configured version constraint ~> 5.0; must use terraform"
+<h2 id="war-story-6" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">6. Terraform Provider Lock vs Constraint: "does not match configured version constraint ~> 5.0; must use terraform"</h2>
 
 **creation:** `<260130>`
 **last_updated:** `<260130>`
@@ -204,17 +285,17 @@ Design Terragrunt configs for partial dependency state: use try(dependency.*.out
 **difficulty:** 6
 **significance:** 7
 
-### 6.1 Context
+<h3 id="war-story-6-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">6.1 Context</h3>
 
 After adding the shared frontend module and Terragrunt layers (frontend-ecs, frontend-eks), running `terragrunt plan` or `terragrunt apply` failed with:
 
-```
+```text
 15:56:11.457 ERROR terraform: │ does not match configured version constraint ~> 5.0; must use terraform
 ```
 
 The error pointed at the AWS provider: something was asking for a provider version that did not satisfy the constraint declared in the root configuration (`~> 5.0`). Other layers (infrastructure, ecs, eks) worked; the failure appeared only for the new frontend layers or when the frontend module was involved.
 
-### 6.2 Root Cause
+<h3 id="war-story-6-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">6.2 Root Cause</h3>
 
 Terragrunt generates a provider block from `root.hcl`, which sets `required_providers.aws.version = "~> 5.0"`. Terraform then uses a **lock file** (`.terraform.lock.hcl`) in each layer directory (or in a module directory) to pin the exact provider version and checksums.
 
@@ -226,11 +307,11 @@ A lock file had been created—either in the frontend **module** or in the front
 
 Terraform requires that the **locked** provider version satisfy the **configured** constraint. Here, 6.x does **not** satisfy `~> 5.0` (which allows only 5.x). So Terraform refused to proceed and reported that the locked version "does not match configured version constraint ~> 5.0; must use terraform" (i.e. re-run init so the lock matches the constraint).
 
-### 6.3 Key Insight
+<h3 id="war-story-6-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">6.3 Key Insight</h3>
 
 > Lock files (`.terraform.lock.hcl`) must be consistent with the provider constraints in the generated root. If a layer or module has a lock that pins a provider version outside the root constraint (e.g. lock has 6.x, root has ~> 5.0), Terraform will fail. Fix by either: (1) remove the stale lock and re-run `terragrunt init` so Terraform locks a version that satisfies the constraint, or (2) update the root constraint to allow the locked version (e.g. ~> 6.0) and then align all layers.
 
-### 6.4 Resolution
+<h3 id="war-story-6-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">6.4 Resolution</h3>
 
 - **Identify conflicting locks:** Located `.terraform.lock.hcl` in the frontend module (`module_infra_basic/aws/terra/modules/frontend/`) and in the frontend-ecs / frontend-eks environment directories. Inspected them and confirmed they pinned the AWS provider to 6.x (e.g. `version = "6.28.0"`) while `root.hcl` constrains to `~> 5.0`.
 - **Remove stale locks:** Deleted those lock files so they would not override the root constraint. Lock files in **environment** directories (next to `terragrunt.hcl`) are the ones Terragrunt/Terraform use for that layer; lock files inside **modules** can also be used when the module is inited in isolation, so removing both ensured a clean slate.
@@ -239,13 +320,13 @@ Terraform requires that the **locked** provider version satisfy the **configured
 
 After this, plan and apply for frontend-ecs and frontend-eks succeeded without the version constraint error.
 
-### 6.5 Takeaway
+<h3 id="war-story-6-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">6.5 Takeaway</h3>
 
 When you see "does not match configured version constraint ~> X.Y; must use terraform", the lock file has pinned a provider version that does not satisfy the constraint in your Terraform/root config. Resolve it by deleting the offending `.terraform.lock.hcl` (in the layer or module) and re-running `terragrunt init` so Terraform locks a version that satisfies the constraint; or update the constraint to match the lock and re-init everywhere. Keep root constraint and lock files in sync and commit lock files so everyone uses the same provider version.
 
 ---
 
-## 7. Preempt Teardown: State Lock Failure and Teardown Reporting Success on Failure
+<h2 id="war-story-7" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">7. Preempt Teardown: State Lock Failure and Teardown Reporting Success on Failure</h2>
 
 **creation:** `<260201>`
 **last_updated:** `<260201>`
@@ -254,11 +335,11 @@ When you see "does not match configured version constraint ~> X.Y; must use terr
 **difficulty:** 6
 **significance:** 7
 
-### 7.1 Context
+<h3 id="war-story-7-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">7.1 Context</h3>
 
 During `./run.sh aws kube dev --preempt`, the EKS layer Terraform destroy failed with **"Error acquiring the state lock"** (Lock ID in S3, from a previous interrupted apply). Despite the failure, the teardown script logged **"[SUCCESS] EKS layer destroyed!"** and continued to the next step (ECS destroy). The run did not fail fast: the user only discovered the error by reading logs, and the pipeline proceeded as if teardown had succeeded.
 
-### 7.2 Root Cause
+<h3 id="war-story-7-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">7.2 Root Cause</h3>
 
 Two separate issues:
 
@@ -269,24 +350,24 @@ Two separate issues:
    - followed unconditionally by `log_success "EKS layer destroyed!"`
    So any destroy failure (state lock, API error, etc.) was only warned; the script never exited with a non-zero status and always reported success. The intent had been to treat "no resources to destroy" as idempotent, but the same branch swallowed **all** failures.
 
-### 7.3 Key Insight
+<h3 id="war-story-7-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">7.3 Key Insight</h3>
 
 > When a destructive step can fail for multiple reasons (state lock vs. "already destroyed"), don’t treat every non-zero exit as idempotent. Fail fast on real errors so the orchestrator stops and the user sees the failure; document recovery (e.g. force-unlock) for the lock case.
 
-### 7.4 Resolution
+<h3 id="war-story-7-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">7.4 Resolution</h3>
 
 - **Fail-fast:** In `teardown.sh`, EKS and ECS (and frontend-eks / frontend-ecs) destroy now check the exit code of `terragrunt destroy`. On failure, the script logs an error (including a force-unlock hint), exits with status 1, and does **not** run `log_success`. Teardown stops immediately and the orchestrator reports failure.
 - **State lock recovery:** Run `terragrunt force-unlock <LOCK_ID>` in the layer directory (EKS, ECS, or infrastructure). For non-interactive use: `echo yes | terragrunt force-unlock <LOCK_ID>`. See War Story 17.
 - **Preempt and shared infra:** Separately, preempt was fixed to use `--container-type all` so shared infrastructure (VPC, Aurora, DB subnet group) is torn down too, avoiding the "subnet group not in same VPC" error after preempt (see war story 16).
 - **Import before shared destroy:** If infrastructure Terraform state was empty (e.g. after state loss), `terragrunt destroy` for the shared layer had nothing to destroy; orphaned resources (DB subnet group, etc.) remained in AWS. Deploy then re-imported them and hit the same VPC mismatch. **orchestration/aws/teardown-resources-all.sh** now runs `import-existing-infrastructure.sh` for the shared layer *before* calling shared Terraform destroy when `--container-type all`, so state is populated and destroy can remove those resources.
 
-### 7.5 Takeaway
+<h3 id="war-story-7-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">7.5 Takeaway</h3>
 
 Orchestration scripts must not report success when a critical step fails. Using `cmd || { log_warning "..." }` and then always running `log_success` hides real errors (state lock, API failures) and breaks fail-fast. Check exit codes and exit 1 on failure; reserve "idempotent" handling for cases you can detect explicitly (e.g. "no state" or "already destroyed"). For Terraform state lock, document force-unlock and non-interactive usage (`echo yes |`) so users can recover and retry.
 
 ---
 
-## 8. Import Preexisting Scripts: Before Apply and Before Destroy
+<h2 id="war-story-8" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">8. Import Preexisting Scripts: Before Apply and Before Destroy</h2>
 
 **creation:** `<260130>`
 **last_updated:** `<260130>`
@@ -295,15 +376,15 @@ Orchestration scripts must not report success when a critical step fails. Using 
 **difficulty:** 6
 **significance:** 8
 
-### 8.1 Context
+<h3 id="war-story-8-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">8.1 Context</h3>
 
 We have import-preexisting scripts (e.g. `import-existing-infrastructure.sh`) that run `terraform import` to pull existing AWS resources into Terraform state. Two questions arose: why run them **before** `terragrunt apply`, and why also run them **before** `terragrunt destroy`? The second became critical when, after a full teardown, deploy still failed with: **`api error InvalidParameterValue: The new Subnets are not in the same Vpc as the existing subnet group`**.
 
-### 8.2 Why Import Before Apply
+<h3 id="war-story-8-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">8.2 Why Import Before Apply</h3>
 
 When reality was changed **outside** Terraform (e.g. brutal teardown that deletes resources via AWS API but does not update state, or state was lost and resources were recreated manually), resources exist in AWS but **not** in Terraform state. A normal `terragrunt apply` then tries to **create** those resources again. AWS responds with "already exists"–style errors (e.g. `EntityAlreadyExists`, `ResourceAlreadyExistsException`). Running the import script **before** apply pulls current AWS reality into state so Terraform treats those resources as managed; apply can then refresh/update instead of trying to create, and the flow stays consistent.
 
-### 8.3 Why Import Before Destroy
+<h3 id="war-story-8-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">8.3 Why Import Before Destroy</h3>
 
 If Terraform state was **empty** (e.g. state bucket recreated or state lost) but AWS still has resources (e.g. the RDS DB subnet group `fru-dev-aurora-subnet-group` left in an old VPC), `terragrunt destroy` has **nothing in state** to destroy—it no-ops. The orphan (subnet group, etc.) remains in AWS. The next deploy runs import **before** apply (as above) and pulls that subnet group into state; our config, however, wants the subnet group to use subnets from the **new** VPC. Terraform therefore plans to **update** the group to the new subnets. AWS RDS rejects that with:
 
@@ -311,7 +392,7 @@ If Terraform state was **empty** (e.g. state bucket recreated or state lost) but
 
 So the error recurs not because import is wrong, but because we never **destroyed** the orphan—destroy had no state to act on. Running the import script **before** destroy (for the same layer) populates state with existing AWS resources so `terragrunt destroy` can actually **remove** them. After that, the next apply creates one VPC, subnets, and subnet group in one consistent run; no "update to different VPC" step, so no InvalidParameterValue.
 
-### 8.4 Is This a Common Scenario?
+<h3 id="war-story-8-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">8.4 Is This a Common Scenario?</h3>
 
 Yes. State/reality drift is very common with Terraform:
 
@@ -321,12 +402,12 @@ Yes. State/reality drift is very common with Terraform:
 
 That's why Terraform has first-class **import** and **refresh**: adoption and drift are expected. Needing to fix state before **destroy** (so destroy actually has something to destroy) is the same idea—less often written down, but the same "state must match reality before you act" principle.
 
-### 8.5 Resolution
+<h3 id="war-story-8-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">8.5 Resolution</h3>
 
 - **Before apply:** Deploy already runs each layer’s import script (e.g. `import-existing-infrastructure.sh`) before that layer’s plan/apply so state matches reality and apply does not hit "already exists."
 - **Before destroy:** **orchestration/aws/teardown-resources-all.sh** now runs the relevant import script(s) **before** each layer’s `terragrunt destroy`: infrastructure before shared destroy; EKS + frontend-eks before EKS destroy; ECS + frontend-ecs before ECS destroy. State is populated so destroy can remove orphaned resources instead of no-op’ing; the next deploy then creates a clean stack without the VPC/subnet group mismatch.
 
-### 8.6 Takeaway
+<h3 id="war-story-8-sec-6" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">8.6 Takeaway</h3>
 
 Import scripts reconcile **state with reality**: they don’t apply external state files—they pull current AWS reality into Terraform state. You need them **before apply** when resources exist in AWS but not in state (so apply doesn’t try to create and hit "already exists"). You also need them **before destroy** when state is empty but AWS still has resources (so destroy can remove orphans instead of no-op’ing and causing the next deploy to re-import and hit errors like `The new Subnets are not in the same Vpc as the existing subnet group`). Same tool, two moments: before apply and before destroy, to keep the whole Terraform flow consistent.
 
@@ -334,7 +415,7 @@ For a focused reference on the per-layer import scripts, their CLI, and teardown
 
 ---
 
-## 9. Fixing "The new Subnets are not in the same Vpc as the existing subnet group" — What We Did and Option A vs Option B
+<h2 id="war-story-9" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">9. Fixing "The new Subnets are not in the same Vpc as the existing subnet group" — What We Did and Option A vs Option B</h2>
 
 **creation:** `<260130>`
 **last_updated:** `<260130>`
@@ -343,7 +424,7 @@ For a focused reference on the per-layer import scripts, their CLI, and teardown
 **difficulty:** 6
 **significance:** 8
 
-### 9.1 Context and Goal
+<h3 id="war-story-9-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">9.1 Context and Goal</h3>
 
 The goal is to run **`./run.sh <local|aws> <kube|nonkube> dev --preempt`** problem-free. Preempt tears down all AWS layers (EKS + ECS + shared infrastructure) then redeploys. The recurring failure was:
 
@@ -351,7 +432,7 @@ The goal is to run **`./run.sh <local|aws> <kube|nonkube> dev --preempt`** probl
 
 This appears during Phase 2 (Deploy infrastructure layer) after a preempt or teardown. War stories 16, 17, and 18 describe the root causes and partial fixes; this story summarizes **what we did already** and the **choice between Option A (fail-back) and Option B (separate long-term layer)**.
 
-### 9.2 Root Cause (Recap)
+<h3 id="war-story-9-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">9.2 Root Cause (Recap)</h3>
 
 1. **State vs reality:** The infrastructure layer creates one VPC, subnets, RDS DB subnet group, and Aurora in code. A single apply cannot produce a mismatch. The error occurs when:
    - Terraform state was empty or pointed at a **new** VPC (e.g. after state loss or a new apply that created VPC B).
@@ -362,7 +443,7 @@ This appears during Phase 2 (Deploy infrastructure layer) after a preempt or tea
    - **Empty state:** If infrastructure state was empty, `terragrunt destroy` had nothing to destroy (no-op). Orphaned subnet group (and VPC A) remained; next deploy re-imported the subnet group and tried to point it at VPC B → error (War Story 18).
    - **prevent_destroy:** Secrets Manager resources in the same layer have `lifecycle { prevent_destroy = true }`. Terraform **aborts the entire destroy** when any resource has prevent_destroy. So VPC, Aurora, and the DB subnet group were **never** destroyed; they stayed in AWS. Next deploy re-imported and hit the same VPC mismatch.
 
-### 9.3 What We Did Already (Current Fixes)
+<h3 id="war-story-9-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">9.3 What We Did Already (Current Fixes)</h3>
 
 #### 19.3.1 Import before destroy (all layers)
 
@@ -382,12 +463,20 @@ This appears during Phase 2 (Deploy infrastructure layer) after a preempt or tea
   - The second destroy then removes VPC, Aurora, DB subnet group, IAM, S3 (everything left in the layer). Secrets remain in AWS (only removed from state) and are re-imported on the next deploy.
 - **Effect:** Preempt can complete a full teardown of shared infra without getting stuck on prevent_destroy. Teardown logic is more complex and tied to a fixed list of state addresses.
 
-### 9.4 Option A (Current): Fail-Back with state-rm
+<h3 id="war-story-9-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">9.4 Option A (Current): Fail-Back with state-rm</h3>
 
-| Aspect | Description |
-|---
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Aspect</th>
+<th style="padding:8px">Description</th>
+</tr>
+</thead>
+<tbody>
+</tbody>
+</table>
 
-## 10. CONTAINER_IMAGE After Phase 1: Background Job vs Main Shell When Using --skip-build
+<h2 id="war-story-10" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">10. CONTAINER_IMAGE After Phase 1: Background Job vs Main Shell When Using --skip-build</h2>
 
 **creation:** `<260202>`
 **last_updated:** `<260202>`
@@ -396,11 +485,11 @@ This appears during Phase 2 (Deploy infrastructure layer) after a preempt or tea
 **difficulty:** 7
 **significance:** 8
 
-### 10.1 Context
+<h3 id="war-story-10-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">10.1 Context</h3>
 
 With `./run.sh aws kube dev --skip-build`, Phase 1 (check_or_build_image) correctly set `CONTAINER_IMAGE` to the ECR `latest` image and skipped build/push. Later, Delta table creation (Phase 5) failed with "image not found" for a **different** tag (e.g. `fru_dev_..._dirty_20260202_200059`). The same image identifier must be used for the whole run (Terraform, Delta, k8s); otherwise downstream steps try to pull an image that was never built.
 
-### 10.2 Root Cause
+<h3 id="war-story-10-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">10.2 Root Cause</h3>
 
 1. **Startup:** At script startup, `load_image_identifiers "aws"` runs and sets `CONTAINER_IMAGE` via `resolve_container_image_for_aws`, which produces a **new** tag (commit + timestamp, e.g. `..._200059`). So the main shell had `CONTAINER_IMAGE` = that new tag from the start.
 
@@ -412,11 +501,11 @@ With `./run.sh aws kube dev --skip-build`, Phase 1 (check_or_build_image) correc
 
 So the bug was not in Delta or in --skip-build logic per se; it was that the **main shell** never adopted the image identifier that Phase 1 (running in the background) had set and logged.
 
-### 10.3 Key Insight
+<h3 id="war-story-10-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">10.3 Key Insight</h3>
 
 > When a long-running step runs in a **background** process, any variables it sets (e.g. CONTAINER_IMAGE) are not visible in the parent. The parent must either (1) get that value from the child’s output (e.g. extract from logs) and set it in the main shell, or (2) not run that step in background. Prefer extracting the canonical value from the step’s output so the rest of the pipeline uses exactly what that step used (e.g. ECR:latest when --skip-build).
 
-### 10.4 Resolution
+<h3 id="war-story-10-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">10.4 Resolution</h3>
 
 - **After Phase 1:** In `orchestration/aws/run.sh`, after the Phase 1 background job completes, we now **always** try to extract `CONTAINER_IMAGE` from the Phase 1 output (lines matching `CONTAINER_IMAGE=`, `Using container image:`, or `Using CONTAINER_IMAGE:`). If we find a match, we set and export that value in the main shell; only if we find nothing do we keep the current value or regenerate. So the rest of the run (Terraform, Delta, k8s) uses the **same** image Phase 1 used (e.g. `ECR:latest` when --skip-build, or the built tag when we built).
 
@@ -424,13 +513,13 @@ So the bug was not in Delta or in --skip-build logic per se; it was that the **m
 
 - **Grep pattern:** The extraction pattern was updated to match the log line emitted in the --skip-build path (`Using CONTAINER_IMAGE: ...`) so that path is captured correctly.
 
-### 10.5 Takeaway
+<h3 id="war-story-10-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">10.5 Takeaway</h3>
 
 If a step that "sets the canonical value" for the rest of the pipeline (e.g. CONTAINER_IMAGE) runs in a **background** process, the parent must **adopt** that value from the child’s output (e.g. by parsing logs) and set it in the main shell. Do not assume "if CONTAINER_IMAGE is already set, leave it"—the existing value may be from an earlier phase (e.g. startup) and wrong for downstream. Prefer "extract from the step that actually chose the image; use that for the rest of the run." For --skip-build, use a single, well-defined tag (e.g. ECR:latest) and ensure the build path always updates that tag so --skip-build is reliable.
 
 ---
 
-## 11. Shell Scripts "Permission Denied" After a Major Refactor: Git Mode 100755 → 100644
+<h2 id="war-story-11" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">11. Shell Scripts "Permission Denied" After a Major Refactor: Git Mode 100755 → 100644</h2>
 
 **creation:** `<260205>`
 **last_updated:** `<260205>`
@@ -439,11 +528,11 @@ If a step that "sets the canonical value" for the rest of the pipeline (e.g. CON
 **difficulty:** 4
 **significance:** 6
 
-### 11.1 Context
+<h3 id="war-story-11-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">11.1 Context</h3>
 
 After a large refactor commit (logger migration, ECR scripts, many file touches), orchestration and deploy started failing with "Permission denied" when invoking scripts—e.g. `orchestration/local/setup-python.sh`, `orchestration/terraform/setup-s3-bucket.sh`, and others. The same scripts had worked before the refactor.
 
-### 11.2 Root Cause
+<h3 id="war-story-11-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">11.2 Root Cause</h3>
 
 Git records each file's **mode** (e.g. 100644 = regular file, 100755 = executable). The refactor commit had many "mode change 100755 => 100644" entries: shell scripts that were previously committed as executable were committed again as **non-executable**. Once that's in history, every checkout (and every clone) gets those files without the execute bit, so the shell refuses to run them and returns "Permission denied".
 
@@ -452,11 +541,11 @@ Common causes for the mode drop during a refactor:
 - **Checkout on a filesystem or Git config** where `core.fileMode` is false or execute bits aren't preserved, then add/commit from that state.
 - **Bulk operations** (find/replace, move, or tooling) that rewrote or re-added files without preserving mode.
 
-### 11.3 Key Insight
+<h3 id="war-story-11-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">11.3 Key Insight</h3>
 
 > After a big refactor, if many scripts suddenly report "Permission denied", check Git mode: they may have been committed as 100644. Fix with `chmod +x` and **re-commit the mode** so the fix is permanent for everyone.
 
-### 11.4 Resolution
+<h3 id="war-story-11-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">11.4 Resolution</h3>
 
 - **Immediate fix:** Restore execute bit on all shell scripts:  
   `find . -name '*.sh' -type f ! -path './.git/*' -exec chmod +x {} \;`
@@ -464,13 +553,13 @@ Common causes for the mode drop during a refactor:
   `git add -u '*.sh'` (or add the specific scripts), then commit e.g. "fix: restore execute bit on shell scripts (were committed as 100644)".
 - **Prevention:** When doing large refactors, avoid re-adding or rewriting scripts in a way that drops the execute bit; after bulk changes, run `chmod +x` on `*.sh` and include that in the commit. Optionally add a CI or pre-commit check that verifies known entrypoint scripts are executable.
 
-### 11.5 Takeaway
+<h3 id="war-story-11-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">11.5 Takeaway</h3>
 
 Git does not enforce "this file should be executable"; it only stores the mode that was committed. If scripts are committed as 100644, they will be checked out non-executable everywhere. After a refactor that touches many scripts, verify they still run—and if not, fix mode and commit the fix so the repo stays runnable.
 
 ---
 
-## 12. Calling Child Shell Scripts: exec vs Run-Then-Exit, and Not Swallowing Output
+<h2 id="war-story-12" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">12. Calling Child Shell Scripts: exec vs Run-Then-Exit, and Not Swallowing Output</h2>
 
 **creation:** `<260205>`
 **last_updated:** `<260205>`
@@ -479,28 +568,28 @@ Git does not enforce "this file should be executable"; it only stores the mode t
 **difficulty:** 5
 **significance:** 7
 
-### 12.1 Context
+<h3 id="war-story-12-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">12.1 Context</h3>
 
 We added simple start/end log lines to entrypoint scripts (`run.sh`, `teardown.sh`, `orchestration/run.sh`, `orchestration/teardown.sh`) so logs would show e.g. `### start of orchestration/run.sh ###` and `### end of orchestration/run.sh ###`. On successful runs we never saw the "end" lines. Separately, when a phase failed (e.g. ECS Phase 1 container image check), the log showed only a generic "Phase failed (fail-fast)" with no underlying error (ECR/git/resolve)—the real error was missing from the log.
 
-### 12.2 Root Cause (Two Different Issues)
+<h3 id="war-story-12-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">12.2 Root Cause (Two Different Issues)</h3>
 
 **Why "end" never appeared:** The dispatchers used **exec** to run the next script (e.g. `exec "$REPO_ROOT/orchestration/aws/run.sh" ...`). **exec** replaces the current process with the child; the parent script never returns. So any code after the exec (including `log_info "### end of ... ###"`) is never executed. The "end" line only ran on error/help paths that exited before the exec.
 
 **Why phase errors were invisible:** The ECS workflow used `step_num=$(run_phase_and_capture deploy_phase_check_image ...)`. Inside `run_phase_and_capture`, the phase ran as `"$@" 2>&1 | tee "$tmpf"`. All phase stdout/stderr went through the pipe; **tee** wrote to the temp file and to its stdout. That stdout was the only stdout of the function, and it was **consumed by the command substitution** (`step_num=$(...)`). So the phase’s log output (including `log_error` and the real failure reason) was captured into the substitution result and then discarded—never printed. Only the final "Phase failed (fail-fast)" from the caller was visible.
 
-### 12.3 Key Insight
+<h3 id="war-story-12-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">12.3 Key Insight</h3>
 
 > **exec** is "run and never return": use it when you want the child to fully replace the parent (e.g. save one process slot). If the parent must run code after the child finishes (e.g. log "end", cleanup, or aggregate exit code), **do not use exec**—run the child as a normal command, capture its exit code, then do the post-work and exit with that code.
 >
 > **Command substitution** `var=$(cmd)` captures all stdout of `cmd`. If `cmd` is a pipeline (e.g. `phase 2>&1 | tee file`), then the pipeline’s stdout (everything tee writes to stdout) becomes the substitution result. So the user never sees that output—it’s swallowed. If the user must see phase output (especially errors), either don’t put it in a substitution, or duplicate it to stderr (e.g. `tee "$file" >&2`) so it’s visible while still writing to the file.
 
-### 12.4 Resolution
+<h3 id="war-story-12-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">12.4 Resolution</h3>
 
 - **"End" logging:** Replaced **exec** with run-then-exit in all four entrypoints. The parent runs the child script (no exec), captures exit code with `set +e` / `_rc=$?` / `set -e`, logs `### end of ... ###`, then `exit $_rc`. Exit codes are preserved; "end" is always logged when the dispatcher finishes.
 - **Phase output visibility (ECS):** In `run_phase_and_capture`, changed the pipeline to `"$@" 2>&1 | tee "$tmpf" >&2` so tee’s output is duplicated to stderr. The user (and any `2>&1 | tee log` around the run) now sees the phase output including the real error; the temp file is still used to parse the step number.
 
-### 12.5 Calling Child Scripts: General Guidelines
+<h3 id="war-story-12-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">12.5 Calling Child Scripts: General Guidelines</h3>
 
 - **When to use exec:** When the parent is a thin launcher and you want the child to replace it completely (same PID, no code after the child). Good for "exec the real binary" or "exec the next stage and never return."
 - **When not to use exec:** When the parent must run after the child (logging, cleanup, aggregating exit codes, or running multiple children). Run the child as a normal command, capture `$?`, then do the rest and `exit $rc`.
@@ -508,13 +597,13 @@ We added simple start/end log lines to entrypoint scripts (`run.sh`, `teardown.s
 - **Don’t swallow important output:** If you run `result=$(some_script 2>&1 | tee file)`, the user sees nothing from `some_script`—it’s all in `result`. For phases or scripts that log errors to stdout/stderr, either run them without capturing (so output goes to the terminal) or tee to stderr: `some_script 2>&1 | tee file >&2` so output is visible and still in `file`.
 - **exit vs return in called functions:** If a **sourced** function uses `exit 1`, the whole process exits—the caller never gets control to log or record failure. For functions that are called (not exec’d) and where the caller should handle failure, use `return 1` so the caller can run `perf_step_end`, log, then exit. Reserve `exit` for "this process should stop here."
 
-### 12.6 Takeaway
+<h3 id="war-story-12-sec-6" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">12.6 Takeaway</h3>
 
 Use **exec** only when the parent must not run after the child. For dispatchers that need to log "end" or handle exit codes, run the child, capture `$?`, log/cleanup, then exit with that code. Avoid command substitution that captures the only copy of phase output—duplicate to stderr (e.g. `tee file >&2`) so errors stay visible. Prefer **return** over **exit** in shared functions so callers can record and log before exiting.
 
 ---
 
-## 13. Verification Script Stops With No Feedback: set -e and Command Substitution
+<h2 id="war-story-13" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">13. Verification Script Stops With No Feedback: set -e and Command Substitution</h2>
 
 **creation:** `<260205>`
 **last_updated:** `<260205>`
@@ -523,11 +612,11 @@ Use **exec** only when the parent must not run after the child. For dispatchers 
 **difficulty:** 7
 **significance:** 8
 
-### 13.1 Context
+<h3 id="war-story-13-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">13.1 Context</h3>
 
 Running the ECS verification script (`CONTAINER_TYPE=ecs ./orchestration/aws/verification/auto_verify_and_manual_hint.sh "" dev false`) caused the script to exit after printing "Fetching Terraform output: ecs_cluster_id" with **no error message and no further output**. Exit code was 1. Users had no indication of *why* it stopped.
 
-### 13.2 Root Cause
+<h3 id="war-story-13-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">13.2 Root Cause</h3>
 
 The script uses **set -e** (exit on first non-zero). In the ECS fetch logic we had:
 
@@ -541,23 +630,23 @@ When **terragrunt** failed (e.g. output `ecs_cluster_id` not in Terraform state)
 
 Separately, the ECS Terraform module had outputs named `cluster_id` and `service_name`, but the verification script expected `ecs_cluster_id` and `ecs_service_name`. Those names weren’t in state yet, so terragrunt failed—and the script had no fallback to the existing output names.
 
-### 13.3 Key Insight
+<h3 id="war-story-13-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">13.3 Key Insight</h3>
 
 > With **set -e**, any command that returns non-zero exits the script. Command substitution **var="$(cmd)"** inherits **cmd**’s exit status—so a failing **cmd** makes the assignment itself "fail" and the script exits before the next statement. For non-fatal captures (e.g. optional Terraform outputs), use **set +e** around the capture block, or design so failure doesn’t propagate (e.g. capture and then check status explicitly before using the value).
 
-### 13.4 Resolution
+<h3 id="war-story-13-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">13.4 Resolution</h3>
 
 - **Make terragrunt capture non-fatal:** In `fetch-deployment-info-ecs.sh`, wrapped all terragrunt output captures in **set +e** … **set -e**. Failed terragrunt calls no longer exit the script; the existing `if [ $tg_status -ne 0 ]` logic runs and logs a warning.
 - **Fallback to existing output names:** Try `ecs_cluster_id` first, then **cluster_id**; try `ecs_service_name` first, then **service_name**. Verification works with current Terraform state (no need to add new outputs or run apply) and with future state once the aliases exist.
 - **Sanitize terragrunt output:** Terragrunt sometimes mixes log/ANSI lines into the same stream as the value. Added a small helper that keeps only the last "value" line (drops empty and log-like lines) so **ALB_DNS**, **ECS_CLUSTER_ID**, **ECS_SERVICE_NAME**, and **CLOUDFRONT_DOMAIN** are not polluted—URLs and hints stay correct.
 
-### 13.5 Takeaway
+<h3 id="war-story-13-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">13.5 Takeaway</h3>
 
 With **set -e**, a failing command substitution in an assignment will exit the script before you can check `$?` or log. Use **set +e** around non-fatal external calls (terragrunt, optional AWS/Terraform reads) so you can handle failure and log. When scripting against Terraform outputs, support both "new" and "legacy" output names so the same script works before and after adding outputs. Sanitize captured output (e.g. last line only) when the tool may mix logs with the value.
 
 ---
 
-## 14. API Validation HTTP 000000: Retry Logic Bailing on Ambiguous Status
+<h2 id="war-story-14" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">14. API Validation HTTP 000000: Retry Logic Bailing on Ambiguous Status</h2>
 
 **creation:** `<260205>`
 **last_updated:** `<260205>`
@@ -566,21 +655,21 @@ With **set -e**, a failing command substitution in an assignment will exit the s
 **difficulty:** 6
 **significance:** 7
 
-### 14.1 Context
+<h3 id="war-story-14-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">14.1 Context</h3>
 
 During endpoint validation (e.g. ECS or EKS API health), the script sometimes reported **HTTP 000000** and then **stopped or failed** instead of retrying. The API might have been temporarily unreachable (e.g. ALB still provisioning, connection reset), but the validator treated the run as a definitive failure and exited.
 
-### 14.2 Root Cause
+<h3 id="war-story-14-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">14.2 Root Cause</h3>
 
 The retry logic treated only a small set of status strings as "known": e.g. exactly `200`, `502`, `503`, `504`, `000`. The code used strict string checks: if status is `000` then retry; if `200` then success; **else** (any other value) treat as failure and **return 1** immediately.
 
 Curl (or the pipeline) can produce **000000** instead of **000**—e.g. streaming output mixed with the status code, or formatting that appended extra digits. The string `000000` did **not** match `000`, so it fell into the **else** branch and the script exited with failure instead of retrying. So a transient "no response yet" (effectively 000) was misclassified as a permanent error.
 
-### 14.3 Key Insight
+<h3 id="war-story-14-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">14.3 Key Insight</h3>
 
 > When parsing HTTP status codes from curl or other tools, **normalize** to a fixed length (e.g. first three digits) before branching. Treat **000** as "no response / transient"—retry, don’t fail. Reserve immediate failure only for **definitive** client errors (e.g. 404, 401, 403); for 5xx and ambiguous values (including 000 and any unexpected string), keep retrying until timeout.
 
-### 14.4 Resolution
+<h3 id="war-story-14-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">14.4 Resolution</h3>
 
 - **Normalize status:** In `validate-endpoints.sh`, normalize the HTTP code to the **first three characters** (e.g. `000000` → `000`, `200` → `200`) before any comparison.
 - **000 = retry:** Treat normalized `000` as "no response yet" and continue retrying; do not treat it as success or as a definitive failure.
@@ -588,13 +677,13 @@ Curl (or the pipeline) can produce **000000** instead of **000**—e.g. streamin
 
 This prevented transient connectivity or "HTTP 000" / "000000" cases from bailing out early and gave the API time to become ready (e.g. ALB propagation).
 
-### 14.5 Takeaway
+<h3 id="war-story-14-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">14.5 Takeaway</h3>
 
 Don’t use strict string equality (e.g. `"$status" = "000"`) when the tool might output extra digits or padding. Normalize status to three digits first. Treat 000 as retry; only fail fast on definitive 4xx that mean "endpoint not found or forbidden." For 5xx and 000, retry until timeout so temporary unavailability (ALB still coming up, ERR_HTTP2, etc.) doesn’t cause a false failure.
 
 ---
 
-## 15. Breaking the Dependency Deadlock: Mocking Attributes for Multi-Phase Lifecycle
+<h2 id="war-story-15" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">15. Breaking the Dependency Deadlock: Mocking Attributes for Multi-Phase Lifecycle</h2>
 
 **creation:** `<260206-220111>`
 **last_updated:** `<260206-220111>`
@@ -603,22 +692,22 @@ Don’t use strict string equality (e.g. `"$status" = "000"`) when the tool migh
 **difficulty:** 6
 **significance:** 8
 
-### 15.1 Context
+<h3 id="war-story-15-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">15.1 Context</h3>
 
 In a complex multi-layered infrastructure (VPC → App Cluster → Frontend), Terragrunt scripts often hit a "Deadlock":
 *   **During Deploy**: You can't `plan` the App Cluster because the VPC (VPC ID, Subnets) doesn't exist yet.
 *   **During Teardown**: You can't `destroy` the App Cluster if the VPC was already accidentally deleted or partially torn down, because the App Cluster's config crashes while looking for the VPC's outputs.
 *   **During Reconciliation**: Our `import` scripts, run before destruction to ensure a clean slate, would crash if the parent infrastructure had no state.
 
-### 15.2 Root Cause
+<h3 id="war-story-15-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">15.2 Root Cause</h3>
 
 Terragrunt’s `dependency` block is "fail-fast" by default. If the `config_path` points to a module with no `terraform.tfstate` or no `outputs {}` block, Terragrunt terminates with an error. This prevents developers from even *seeing* a plan (Phase 1) or *cleaning up* orphans (Teardown) without the parent being fully standing and "Applied."
 
-### 15.3 Key Insight
+<h3 id="war-story-15-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">15.3 Key Insight</h3>
 
 > Infrastructure-as-Code must be "Runtime-Optional." The configuration should be able to resolve itself using "Best Effort" data: real outputs when they exist, and "Mocks" when they don't. This decoupling is essential for CI/CD dry-runs and disaster recovery.
 
-### 15.4 Resolution
+<h3 id="war-story-15-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">15.4 Resolution</h3>
 
 We implemented a three-tier "Mocking Strategy" to ensure the lifecycle never gets stuck:
 
@@ -635,13 +724,13 @@ We implemented a three-tier "Mocking Strategy" to ensure the lifecycle never get
     vpc_id = try(dependency.infrastructure.outputs.vpc_id, "vpc-xxxxxxxx")
     ```
 
-### 15.5 Takeaway
+<h3 id="war-story-15-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">15.5 Takeaway</h3>
 
 Mocking isn't just for testing; it's a structural requirement for complex infrastructure lifecycles. By whitelisting commands like `import` and `destroy` for mock usage, you transform your codebase from a "fragile chain" into a "robust stack" that can be partially destroyed, re-imported, or planned in any order without crashing. Always use the `try()` + `mock_outputs` + `allowed_commands` trio for any cross-module dependency.
 
 ---
 
-## 16. Kubernetes Manifests: Where Should Cloud-Agnostic Assets Live?
+<h2 id="war-story-16" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">16. Kubernetes Manifests: Where Should Cloud-Agnostic Assets Live?</h2>
 
 **creation:** `<260210-030400>`
 **last_updated:** `<260210-030400>`
@@ -650,36 +739,36 @@ Mocking isn't just for testing; it's a structural requirement for complex infras
 **difficulty:** 4
 **significance:** 6
 
-### 16.1 Context
+<h3 id="war-story-16-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">16.1 Context</h3>
 
 During infrastructure reorganization, we had Kubernetes manifests (`api-service.yaml`, `api-deployment.yaml`, etc.) nested under `deploy-aws/kube/k8s/`. The problem: these manifests are **completely cloud-agnostic**—they contain only Kubernetes-native YAML and work identically on EKS, GKE, AKS, or local k3s.
 
 Nesting them under `deploy-aws/` carried a false implication that these were AWS-specific assets, when in reality they belonged in a "truly shared" location usable by both AWS and GCP deployments.
 
-### 16.2 The Question
+<h3 id="war-story-16-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">16.2 The Question</h3>
 
 > Should `deploy-aws/kube/k8s/` contain these manifests, or should they move to a "shared" location that both cloud providers can reference?
 
 **Initial hypothesis:** Move them somewhere truly shared and cloud-agnostic.
 
-### 16.3 Key Insight
+<h3 id="war-story-16-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">16.3 Key Insight</h3>
 
 > **Cloud-agnostic assets (Kubernetes YAML, generic Docker configs, language-agnostic tools) should live physically separate from cloud-provider-specific code.** This prevents three antipatterns:
 > 1. New team members assume k8s manifests are AWS-specific 
 > 2. GCP deployment can't easily reuse the same manifests without copy-paste
 > 3. Future cloud providers (Azure, IBM) hit the same friction
 
-### 16.4 Resolution
+<h3 id="war-story-16-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">16.4 Resolution</h3>
 
 Moved `deploy-aws/kube/k8s/` → `infra_terraform/modules/cloud_shared/k8s/` alongside other cloud-agnostic components. Updated references in `tools/aws/kube_apply.py`.
 
-### 16.5 Takeaway
+<h3 id="war-story-16-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">16.5 Takeaway</h3>
 
 **Organize by asset type, not by cloud provider.** If an asset works identically on multiple cloud providers, it should live in `shared/`. If it's provider-specific, it belongs in `aws/` or `gcp/`. This rule prevents organizational confusion and unblocks multi-cloud adoption.
 
 ---
 
-## 17. AWS vs GCP Primitives: When to Separate Cloud-Specific Modules
+<h2 id="war-story-17" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">17. AWS vs GCP Primitives: When to Separate Cloud-Specific Modules</h2>
 
 **creation:** `<260210-030400>`
 **last_updated:** `<260210-030400>`
@@ -688,13 +777,13 @@ Moved `deploy-aws/kube/k8s/` → `infra_terraform/modules/cloud_shared/k8s/` alo
 **difficulty:** 7
 **significance:** 8
 
-### 17.1 Context
+<h3 id="war-story-17-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">17.1 Context</h3>
 
 After moving Kubernetes manifests to `shared/`, we faced the question: Should `s3_bucket` and `vpc` live in `shared/primitives/` or move to `aws/primitives/`?
 
 These modules are **AWS-specific** (S3 is not Azure Blob or GCP Cloud Storage). Yet they sat in `shared/primitives/`, falsely implying cloud-agnosticism.
 
-### 17.2 Three Architectural Approaches
+<h3 id="war-story-17-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">17.2 Three Architectural Approaches</h3>
 
 **Option A: Leave in `shared/primitives/` (Legacy)**
 - Con: Confuses readers; modules aren't actually cloud-agnostic
@@ -714,9 +803,9 @@ flowchart TB
     AWS --> VPC["vpc/"]
     GCP --> GCS["gcs_bucket/"]
     GCP --> GCPVPC["vpc/"]
-    style SHARED fill:#e8eaf6
-    style AWS fill:#e3f2fd
-    style GCP fill:#fff3e0
+    style SHARED fill:#e8eaf6,font-size:9px
+    style AWS fill:#e3f2fd,font-size:9px
+    style GCP fill:#fff3e0,font-size:9px
 ```
 
 - Pro: Clear semantic separation (aws/primitives = AWS resources)
@@ -725,7 +814,7 @@ flowchart TB
 
 **Option C: Phase 2 (Not Recommended) — True multi-cloud abstraction**
 
-### 17.3 Decision: Phase 1 Now, Phase 2 Never (Unless Needed)
+<h3 id="war-story-17-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">17.3 Decision: Phase 1 Now, Phase 2 Never (Unless Needed)</h3>
 
 We chose **Phase 1** because:
 
@@ -738,17 +827,17 @@ We chose **Phase 1** because:
    - Testing burden (test every implementation against every interface)
    - Onboarding friction (learn two levels: interface + implementation)
 
-### 17.4 The Anti-Pattern We Avoided
+<h3 id="war-story-17-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">17.4 The Anti-Pattern We Avoided</h3>
 
 > Building Phase 2 abstraction with one cloud is **YAGNI violation on steroids.** You're not solving a problem; you're creating one.
 
 Many teams fall here: "We *might* use Azure someday, so abstract now." Result: 3x codebase, 2x maintenance, same single-cloud deployment. When Azure arrives, they find the abstraction insufficient and rewrite it anyway.
 
-### 17.5 Key Insight
+<h3 id="war-story-17-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">17.5 Key Insight</h3>
 
 > **Start concrete, abstract later.** Write AWS modules clearly. If GCP comes, organize identically (`gcp/primitives/gcs_bucket/`, `gcp/primitives/vpc/`). Only after supporting 2-3 cloud providers with proven patterns, consider Phase 2.
 
-### 17.6 Takeaway
+<h3 id="war-story-17-sec-6" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">17.6 Takeaway</h3>
 
 Organize infrastructure modules by **cloud provider → resource type** until abstraction is proven necessary. Clear concrete code is better than confusing abstract code. Deferring Phase 2 doesn't eliminate it; it just ensures you build it with real requirements, not speculation.
 **Option C: Phase 2 (Not Recommended) — True multi-cloud abstraction**
@@ -793,9 +882,9 @@ flowchart TB
         GCPVPC --> GCPVPCB["variables.tf"]
         GCPVPC --> GCPVPCC["outputs.tf"]
     end
-    style SHARED fill:#e8eaf6
-    style AWS fill:#e3f2fd
-    style GCP fill:#fff3e0
+    style SHARED fill:#e8eaf6,font-size:9px
+    style AWS fill:#e3f2fd,font-size:9px
+    style GCP fill:#fff3e0,font-size:9px
 ```
 
 **The Core Problem: Terraform Has No Polymorphism**
@@ -865,24 +954,53 @@ output "bucket_name" {
 
 **The Reality of "Interface + Implementation" in Terraform:**
 
-| Aspect | Typed Language | Terraform |
-|--------|---|---|
-| Interface enforcement | Compiler verifies at compile time | Manual field-by-field documentation; no enforcement |
-| Implementation swapping | Polymorphic dispatch (1 line changes behavior) | Conditional logic + module count/for_each scattered through code |
-| Output safety | Type system ensures caller gets expected type | Caller must know which cloud they're on to use correct output |
-| Debugging | Stack trace points to implementation | Conditional path is opaque; must trace through count/for_each logic |
-| Testing | Test interface + each implementation separately | Must test each implementation × each caller combination |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Aspect</th>
+<th style="padding:8px">Typed Language</th>
+<th style="padding:8px">Terraform</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px">Interface enforcement</td>
+<td style="padding:8px;background:#e8f5e9">Compiler verifies at compile time</td>
+<td style="padding:8px;background:#e8f5e9">Manual field-by-field documentation; no enforcement</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">Implementation swapping</td>
+<td style="padding:8px;background:#fff3e0">Polymorphic dispatch (1 line changes behavior)</td>
+<td style="padding:8px;background:#fff3e0">Conditional logic + module count/for_each scattered through code</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">Output safety</td>
+<td style="padding:8px;background:#e8f5e9">Type system ensures caller gets expected type</td>
+<td style="padding:8px;background:#e8f5e9">Caller must know which cloud they're on to use correct output</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">Debugging</td>
+<td style="padding:8px;background:#fff3e0">Stack trace points to implementation</td>
+<td style="padding:8px;background:#fff3e0">Conditional path is opaque; must trace through count/for_each logic</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">Testing</td>
+<td style="padding:8px;background:#e8f5e9">Test interface + each implementation separately</td>
+<td style="padding:8px;background:#e8f5e9">Must test each implementation × each caller combination</td>
+</tr>
+</tbody>
+</table>
 
 **The Real Cost: Distributed Coupling**
 
 Phase 1 scatters modules by **cloud provider** (clear, separates concerns):
-```
+```text
 deploy-aws/shared/durable/main.tf
   → source = ../../infra_terraform/modules/aws/primitives/s3_bucket
 ```
 
 Phase 2 scatters logic by **conditional routing** (couples everything):
-```
+```text
 infra_terraform/modules/cloud_shared/primitives/storage_bucket/main.tf
   → module "aws_impl" { count = var.cloud_provider == "aws" ? 1 : 0 }
   → module "gcp_impl" { count = var.cloud_provider == "gcp" ? 1 : 0 }
@@ -898,7 +1016,7 @@ deploy-gcp/shared/durable/main.tf
 
 Now every call site **must know** it's passing cloud-specific inputs and choosing the right outputs. The "abstraction" doesn't hide the implementation—it **exposes it everywhere**.
 
-### 17.3 Decision: Phase 1 Now, We Will Do Phase 2 Later When We Truly Understand The Pattern
+<h3 id="war-story-17-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">17.3 Decision: Phase 1 Now, We Will Do Phase 2 Later When We Truly Understand The Pattern</h3>
 
 We chose **Phase 1** for now, but we acknowledge: **we DO have multi-cloud (AWS and GCP).** So why not Phase 2?
 
@@ -917,7 +1035,7 @@ If we build Phase 2 now, we're guessing. If we build it after AWS and GCP both r
    - **Testing burden:** N implementations × M callers × 2 scenarios = exponential test cases
    - **Onboarding friction:** new developers must learn "the interface pattern and which implementations do what"
 
-### 17.4 The Gamble We Avoided
+<h3 id="war-story-17-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">17.4 The Gamble We Avoided</h3>
 
 > Building Phase 2 abstraction without multiple successful deployments is **betting that we understand the problem.** We don't, yet.
 
@@ -925,7 +1043,7 @@ Many teams fall here: "We *might* use Azure someday, so abstract now." Result: 3
 
 **The Hidden Risk:** You ship Phase 2, it works for AWS, then GCP deployment reveals: "Oh, the abstraction doesn't fit. We need to parameterize X differently." Now you're debugging in production and retrofitting the abstraction.
 
-### 17.5 The Real Takeaway: Proven Patterns Over Speculation
+<h3 id="war-story-17-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">17.5 The Real Takeaway: Proven Patterns Over Speculation</h3>
 
 > **Don't abstract multi-cloud support until you've deployed to multiple clouds and found the patterns.** Phase 1 (separate folders) is clear, maintainable, and ready for Phase 2 IF the pattern becomes obvious.
 
@@ -941,26 +1059,26 @@ With Phase 2 (premature):
 - Abstractions leak (callers see implementation details)
 - Refactoring is harder (removing a cloud-specific conditional is risky)
 
-### 17.6 Key Insight
+<h3 id="war-story-17-sec-6" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">17.6 Key Insight</h3>
 
 > **Start concrete, abstract later.** Write AWS modules clearly. Once GCP runs in production and we've solved real multi-cloud problems, *then* Phase 2 (if needed) will be obvious and safe to implement.
 
-### 17.7 Takeaway
+<h3 id="war-story-17-sec-7" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">17.7 Takeaway</h3>
 
 Organize infrastructure modules by **cloud provider → resource type** until abstraction is proven necessary. Clear concrete code is better than confusing abstract code with hidden routing logic and divergent outputs. Deferring Phase 2 doesn't defer the possibility—it ensures that when we build it, we build it with real requirements and proven patterns, not speculation.
 
 ---
 
-## 18. Terraform: "Backend state config changed" — why it happens and how we fixed it
+<h2 id="war-story-18" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">18. Terraform: "Backend state config changed" — why it happens and how we fixed it</h2>
 
 **creation:** `<260210>`
 **last_updated:** `<260210>`
 
-### 18.1 What happened
+<h3 id="war-story-18-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">18.1 What happened</h3>
 
 We hit this during `terraform init -upgrade`:
 
-```
+```text
 Error: Backend configuration changed
 
 A change in the backend configuration has been detected, which may require
@@ -969,13 +1087,13 @@ migrating existing state.
 
 Terraform stopped because it detected a mismatch between the backend declared in the HCL and the cached backend metadata in the working directory.
 
-### 18.2 Why it happens
+<h3 id="war-story-18-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">18.2 Why it happens</h3>
 
 - Terraform declares its backend (S3, etc.) in HCL. It also stores metadata in `.terraform/` in the working directory.
 - If `.terraform/` metadata disagrees with the current backend block (different bucket, prefix, or config), Terraform refuses to proceed to avoid corrupting or losing the canonical state.
 - Common triggers: moving modules, refactoring directories, checking out branches with different backend config, or stale `.terraform/` from another machine.
 
-### 18.3 How we fixed it
+<h3 id="war-story-18-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">18.3 How we fixed it</h3>
 
 **Manual init:**
 - When we moved the ecr module and refreshed modules, we ran:
@@ -991,13 +1109,13 @@ terraform init -upgrade -reconfigure
 - **ensure_secrets.py** — Uses `tofu init` to read durable outputs before setting secret values. It previously ran `init -upgrade` without `-reconfigure`, so when backend metadata disagreed (e.g. after deploy had already initted with different config), init failed with "Backend configuration changed". Fix: add `-reconfigure` and `check=True` so init fails loudly instead of silently; add safe handling for missing output keys (`o.get("openai_api_key_secret_arn", {}).get("value")`) with a clear error if durable wasn't applied.
 - **build_and_push_images.py** — Reads nondurable outputs (ECR URLs). It passed `os.path.basename(stack_dir)` (e.g. `"nondurable"`) to `backend_config()`, producing the wrong state key (`fru/dev/nondurable.tfstate`) instead of the canonical `fru/dev/aws-shared-nondurable.tfstate`. That mismatch triggered "Backend configuration changed" and caused output to fail or return empty, leading to `KeyError: 'ecr_app_url'`. Fix: pass the full `stack_dir` to `backend_config()` (e.g. `"deploy-aws/shared/nondurable"`); add `-reconfigure` and `check=True` to init.
 
-### 18.4 Takeaway
+<h3 id="war-story-18-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">18.4 Takeaway</h3>
 
 Treat backend changes as an operational event. After refactors run `terraform init -upgrade -reconfigure` in the affected directories to refresh module caches and avoid the backend mismatch error. Coordinate and use `-migrate-state` only when you mean to relocate the canonical state. **Any script that runs tofu init** must use the same backend config as the main deploy (full stack path for `backend_config`, `-reconfigure`), or it will hit the same error.
 
 ---
 
-## 19. Live Config vs Modules: Making Deploy Stacks Pure Composition (Gruntwork-Style "Live")
+<h2 id="war-story-19" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">19. Live Config vs Modules: Making Deploy Stacks Pure Composition (Gruntwork-Style "Live")</h2>
 
 **creation:** `<260210>`
 **last_updated:** `<260210>`
@@ -1006,19 +1124,19 @@ Treat backend changes as an operational event. After refactors run `terraform in
 **difficulty:** 5
 **significance:** 7
 
-### 19.1 Context
+<h3 id="war-story-19-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">19.1 Context</h3>
 
 Our project separates **infra_terraform/modules** (A: reusable Terraform modules) from **deploy** (B: composition of modules for deployment). Industry best practice (Gruntwork, Terragrunt) dictates that "live" config should be *thin*—purely module composition and variable passing—with no inline `resource` blocks. We discovered that `deploy-aws/nonkube` had ~15 inline resources (Spark EventBridge, IAM roles, CloudWatch), while `deploy-gcp` stacks had inline resources in durable, nondurable, and kube. This violated the "live = config only" principle.
 
-### 19.2 Root Cause
+<h3 id="war-story-19-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">19.2 Root Cause</h3>
 
 Resources were defined directly in deploy stacks instead of being encapsulated in reusable modules. The same pattern appeared on both AWS and GCP: `resource "aws_*"` and `resource "google_*"` blocks lived in deploy directories rather than in `infra_terraform/modules/`.
 
-### 19.3 Key Insight
+<h3 id="war-story-19-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">19.3 Key Insight</h3>
 
 > **Live config should be pure composition.** If a deploy stack contains `resource` blocks, those belong in a module. The deploy stack's job is to wire modules together with variables and pass outputs—nothing more. This aligns with Gruntwork's "modules" (reusable) vs "live" (environment-specific composition) split.
 
-### 19.4 Resolution
+<h3 id="war-story-19-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">19.4 Resolution</h3>
 
 1. **AWS:** Extracted Spark EventBridge wiring into `infra_terraform/modules/aws/ecs_spark_schedule/`. Replaced 15 inline resources in `nonkube/main.tf` with a single `module "ecs_spark_schedule"` call.
 
@@ -1026,13 +1144,13 @@ Resources were defined directly in deploy stacks instead of being encapsulated i
 
 3. **Rename:** Renamed `deploy-aws/` → `infra_terraform/live_deploy/aws/` and `deploy-gcp/` → `infra_terraform/live_deploy/gcp/` to explicitly signal the "live" role. Updated `backend.py` and `init_terra_upgrade_reconfigure.sh` to map `live-deploy-*` to the same state keys (`aws-*`, `gcp-*`) for backward compatibility.
 
-### 19.5 Takeaway
+<h3 id="war-story-19-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">19.5 Takeaway</h3>
 
 Keep deploy stacks thin: module composition only. Extract any `resource` block into a reusable module. Name your deploy directories to reflect their role (e.g. `infra_terraform/live_deploy/aws`) so the architecture is self-documenting. When renaming, preserve state key semantics so existing Terraform state remains valid.
 
 ---
 
-## 20. K8s Pre-Destroy: Why We Keep kubectl Instead of Moving K8s Resources into Terraform
+<h2 id="war-story-20" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">20. K8s Pre-Destroy: Why We Keep kubectl Instead of Moving K8s Resources into Terraform</h2>
 
 **creation:** `<260215>`
 **last_updated:** `<260215>`
@@ -1041,11 +1159,11 @@ Keep deploy stacks thin: module composition only. Extract any `resource` block i
 **difficulty:** 5
 **significance:** 7
 
-### 20.1 Context
+<h3 id="war-story-20-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">20.1 Context</h3>
 
 Kube teardown requires pre-destroy: we run `kubectl` to scale deployments, delete the LoadBalancer service, CronJob, Job, and namespace before Terraform can destroy the EKS cluster. Without this, AWS blocks cluster deletion (LoadBalancer holds ENIs; pods block removal). The question arose: could we eliminate pre-destroy by moving K8s resources (Namespace, Deployment, Service, CronJob, Job) into Terraform using the `kubernetes` provider? Terraform would then destroy them in the right order before the cluster.
 
-### 20.2 Evaluation
+<h3 id="war-story-20-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">20.2 Evaluation</h3>
 
 **Pros of Terraform-managed K8s:** Single source of truth, no pre-destroy, declarative, proper dependency ordering, idempotent teardown.
 
@@ -1056,17 +1174,17 @@ Kube teardown requires pre-destroy: we run `kubectl` to scale deployments, delet
 - **Migration:** Existing clusters have resources created by kubectl; would need `terraform import` or clean redeploy.
 - **Slower iteration:** Changing a Deployment means `tofu apply` instead of `kubectl apply -f`; heavier for K8s-only tweaks.
 
-### 20.3 Decision
+<h3 id="war-story-20-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">20.3 Decision</h3>
 
 We kept the pre-destroy approach. The cons outweighed the pros: templating, provider config, and secret handling add significant complexity; kubectl + pre-destroy is simpler and works. **Caveat:** When using in-tree Classic ELB, we must also remove `k8s-elb-*` SGs post kube destroy, before durable—otherwise VPC deletion fails. See `tools/aws/kube/kube_pre_destroy.py`, `tools/aws/kube/teardown_orphan_cleanup.py`, and `tools/aws/teardown.py`.
 
-### 20.4 Takeaway
+<h3 id="war-story-20-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">20.4 Takeaway</h3>
 
 Moving K8s resources into Terraform is possible but not always worth it. When templating, provider config, and secret wiring add substantial complexity, keeping kubectl + pre-destroy is a pragmatic choice. **Details:** Full Terraform vs kubectl comparison, including the in-tree ELB `k8s-elb-*` SG caveat, is in [KUBE_LB.md](docs/learned/cloud_shared/KUBE_LB.md).
 
 ---
 
-## 21. Image Version Tags: `latest` vs Version Tag, When Each Is Used, and the load_dotenv Overwrite Bug
+<h2 id="war-story-21" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">21. Image Version Tags: `latest` vs Version Tag, When Each Is Used, and the load_dotenv Overwrite Bug</h2>
 
 **creation:** `<260218>`
 **last_updated:** `<260218>`
@@ -1075,22 +1193,39 @@ Moving K8s resources into Terraform is possible but not always worth it. When te
 **difficulty:** 6
 **significance:** 8
 
-### 21.1 Context
+<h3 id="war-story-21-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">21.1 Context</h3>
 
 We build and push two Docker images (app + spark) to ECR. Each image can have multiple tags. Deploy uses one tag to pull the image; the frontend `/version` endpoint displays tags for debugging. Confusion arose around: (1) when to use `latest` vs a version tag like `fru_dev_20260218_aa244e9_dirty_...`, (2) why `load_dotenv` was overwriting deploy-set values and causing ImagePullBackOff, and (3) how `--skip-build` should behave.
 
-### 21.2 The Two Tags
+<h3 id="war-story-21-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">21.2 The Two Tags</h3>
 
-| Tag | Format | Purpose |
-|-----|--------|---------|
-| **Version tag** | `fru_<env>_<date>_<sha>_<slug>` or `fru_<env>_<date>_<sha>_dirty_<ts>` | Unique per build; used for deployment so K8s/ECS pull the exact image we just pushed. Displayed on `/version`. |
-| **latest** | Literal `latest` | Convenience tag; always points to the most recently pushed image. Used by `--skip-build` when no build runs. |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Tag</th>
+<th style="padding:8px">Format</th>
+<th style="padding:8px">Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Version tag</strong></td>
+<td style="padding:8px;background:#e8f5e9"><code>fru_<env>_<date>_<sha>_<slug></code> or <code>fru_<env>_<date>_<sha>_dirty_<ts></code></td>
+<td style="padding:8px;background:#e8f5e9">Unique per build; used for deployment so K8s/ECS pull the exact image we just pushed. Displayed on <code>/version</code>.</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>latest</strong></td>
+<td style="padding:8px;background:#fff3e0">Literal <code>latest</code></td>
+<td style="padding:8px;background:#fff3e0">Convenience tag; always points to the most recently pushed image. Used by <code>--skip-build</code> when no build runs.</td>
+</tr>
+</tbody>
+</table>
 
 **Version tag format** (from `image_tag.generate_image_tag()`):
 - Clean: `fru_dev_20260218_aa244e9_refactor-image-tagging`
 - Dirty (uncommitted changes): `fru_dev_20260218_aa244e9_dirty_20260218_072510`
 
-### 21.3 Deployment Flow: Which Tag Is Used When
+<h3 id="war-story-21-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">21.3 Deployment Flow: Which Tag Is Used When</h3>
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '11px', 'fontFamily': 'sans-serif' }, 'flowchart': { 'padding': 8, 'nodeSpacing': 25, 'rankSpacing': 30 }}}%%
@@ -1114,21 +1249,38 @@ flowchart LR
         S6["6. Fails fast if latest not in ECR"]
         S1 --> S2 --> S3 --> S4 --> S5 --> S6
     end
-    style FULL fill:#e3f2fd
-    style SKIP fill:#e8f5e9
+    style FULL fill:#e3f2fd,font-size:9px
+    style SKIP fill:#e8f5e9,font-size:9px
 ```
 
-### 21.4 .env Behavior: APP_IMAGE_TAG and SPARK_IMAGE_TAG
+<h3 id="war-story-21-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">21.4 .env Behavior: APP_IMAGE_TAG and SPARK_IMAGE_TAG</h3>
 
-| .env state | Behavior |
-|------------|----------|
-| `APP_IMAGE_TAG=v1` | Use `v1` everywhere (pin version). No auto-generation. |
-| `APP_IMAGE_TAG=latest` or commented out | Auto-generate version tag. Full deploy: build pushes both version_tag and latest. |
-| `SPARK_IMAGE_TAG` commented out | Defaults to `latest`; deploy sets it before build. |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">.env state</th>
+<th style="padding:8px">Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><code>APP_IMAGE_TAG=v1</code></td>
+<td style="padding:8px;background:#e8f5e9">Use <code>v1</code> everywhere (pin version). No auto-generation.</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><code>APP_IMAGE_TAG=latest</code> or commented out</td>
+<td style="padding:8px;background:#fff3e0">Auto-generate version tag. Full deploy: build pushes both version_tag and latest.</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><code>SPARK_IMAGE_TAG</code> commented out</td>
+<td style="padding:8px;background:#e8f5e9">Defaults to <code>latest</code>; deploy sets it before build.</td>
+</tr>
+</tbody>
+</table>
 
 **Important:** `load_dotenv(override=False)` in `tools/cloud_shared/env.py` means **existing env vars are not overwritten**. When deploy sets `APP_IMAGE_TAG` and invokes build as a subprocess with that env, the build script's `load_dotenv()` will not overwrite it with `.env`'s value. This fixes the overwrite bug.
 
-### 21.5 Root Cause: ImagePullBackOff from load_dotenv Overwrite
+<h3 id="war-story-21-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">21.5 Root Cause: ImagePullBackOff from load_dotenv Overwrite</h3>
 
 **Symptom:** Deploy ran with `app_image_full = repo:fru_dev_20260218_aa244e9_dirty_...`, but pods showed ImagePullBackOff. ECR only had `latest`; the version tag was never pushed.
 
@@ -1141,22 +1293,47 @@ flowchart LR
 
 **Fix:** `load_dotenv(override=False)` so `.env` does not overwrite vars already set by deploy.
 
-### 21.6 Summary Table
+<h3 id="war-story-21-sec-6" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">21.6 Summary Table</h3>
 
-| Scenario | Image used for deploy | Tags for /version |
-|----------|------------------------|-------------------|
-| Full deploy, APP_IMAGE_TAG unset | `repo:version_tag` | `version_tag` (from build) |
-| Full deploy, APP_IMAGE_TAG=v1 | `repo:v1` | `v1` |
-| Full deploy, APP_IMAGE_TAG=latest | `repo:version_tag` (generated) | `version_tag` |
-| --skip-build | Resolved from registry | `APP_IMAGE_TAG` from `get_deploy_image_uris` |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Scenario</th>
+<th style="padding:8px">Image used for deploy</th>
+<th style="padding:8px">Tags for /version</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px">Full deploy, APP_IMAGE_TAG unset</td>
+<td style="padding:8px;background:#e8f5e9"><code>repo:version_tag</code></td>
+<td style="padding:8px;background:#e8f5e9"><code>version_tag</code> (from build)</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">Full deploy, APP_IMAGE_TAG=v1</td>
+<td style="padding:8px;background:#fff3e0"><code>repo:v1</code></td>
+<td style="padding:8px;background:#fff3e0"><code>v1</code></td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">Full deploy, APP_IMAGE_TAG=latest</td>
+<td style="padding:8px;background:#e8f5e9"><code>repo:version_tag</code> (generated)</td>
+<td style="padding:8px;background:#e8f5e9"><code>version_tag</code></td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">--skip-build</td>
+<td style="padding:8px;background:#fff3e0">Resolved from registry</td>
+<td style="padding:8px;background:#fff3e0"><code>APP_IMAGE_TAG</code> from <code>get_deploy_image_uris</code></td>
+</tr>
+</tbody>
+</table>
 
-### 21.7 Takeaway
+<h3 id="war-story-21-sec-7" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">21.7 Takeaway</h3>
 
 Use two tags: a **version tag** for deployment (unique per build) and **latest** for fast re-deploys without building (`--skip-build`). Always push both when building. Use `load_dotenv(override=False)` so parent scripts (deploy) can set env vars that child scripts (build) will keep. When `APP_IMAGE_TAG` and `SPARK_IMAGE_TAG` are commented out in `.env`, deploy auto-generates the version tag and everything works.
 
 ---
 
-## 22. Terraform Import Idempotency: "Resource already managed" as Success
+<h2 id="war-story-22" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">22. Terraform Import Idempotency: "Resource already managed" as Success</h2>
 
 **creation:** `<260222>`
 **last_updated:** `<260222>`
@@ -1165,11 +1342,11 @@ Use two tags: a **version tag** for deployment (unique per build) and **latest**
 **difficulty:** 4
 **significance:** 6
 
-### 22.1 Context
+<h3 id="war-story-22-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">22.1 Context</h3>
 
 When running `tofu import` for a resource that is **already in Terraform state**, the command fails (exit 1) with:
 
-```
+```text
 Error: Resource already managed by OpenTofu
 OpenTofu is already managing a remote object for module.frontend.aws_s3_bucket.frontend.
 To import to this address you must first remove the existing object from the state.
@@ -1177,23 +1354,23 @@ To import to this address you must first remove the existing object from the sta
 
 This is expected when import runs idempotently (e.g. deploy scope=all, where kube and nonkube both import the same global resource; or re-running deploy after a partial run).
 
-### 22.2 Root Cause
+<h3 id="war-story-22-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">22.2 Root Cause</h3>
 
 Terraform/OpenTofu import is **not** idempotent by default. If the resource is already in state, import fails. Our import script runs before every apply to reconcile state with AWS. When we import a resource that was already imported (by the same deploy or a prior run), we hit this error.
 
-### 22.3 Resolution
+<h3 id="war-story-22-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">22.3 Resolution</h3>
 
 Treat "Resource already managed" as **success**, not failure. Pattern-match on stderr for `Resource already managed` (or `already managed by Terraform`). When matched, log and return success. The script is idempotent: import succeeds if the resource is adopted, and also succeeds if it was already in state.
 
 Distinguish three outcomes: (1) **Imported**—resource adopted into state; (2) **Already in state**—import skipped, harmless; (3) **Does not exist**—skip if `allow_skip_nonexistent`; (4) **Real failure**—log and fail.
 
-### 22.4 Takeaway
+<h3 id="war-story-22-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">22.4 Takeaway</h3>
 
 Import scripts can be idempotent by recognizing "already in state" as OK. Use pattern matching on import output; do not treat non-zero exit as failure when the message indicates the resource is already managed. Log clearly: "OK (already in state—import skipped; harmless, not an error)" so operators know it is not a problem.
 
 ---
 
-## 23. Deploy scope=all and Shared Global Resources: Import Idempotency Across Scopes
+<h2 id="war-story-23" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">23. Deploy scope=all and Shared Global Resources: Import Idempotency Across Scopes</h2>
 
 **creation:** `<260222>`
 **last_updated:** `<260222>`
@@ -1202,27 +1379,27 @@ Import scripts can be idempotent by recognizing "already in state" as OK. Use pa
 **difficulty:** 5
 **significance:** 6
 
-### 23.1 Context
+<h3 id="war-story-23-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">23.1 Context</h3>
 
 When running `deploy --scope all` (kube + nonkube), both scopes run import before apply. CloudFront OAC is **global**—one per account. The kube and nonkube frontends both use the same OAC (e.g. `fru-dev-frontend-kube-oac` and `fru-dev-frontend-nonkube-oac` are distinct, but each scope imports its own).
 
 When deploying to **us-east-1** with scope=all, kube might import first and adopt the OAC. When nonkube runs import for the same resource (or when the same scope runs import twice due to orchestration), the second import fails with "Resource already managed by OpenTofu."
 
-### 23.2 Root Cause
+<h3 id="war-story-23-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">23.2 Root Cause</h3>
 
 Import runs per-scope. Global resources (OAC, some IAM) can be imported by one scope and then "already in state" from another scope's perspective—or the same scope re-running. If we treat "Resource already managed" as failure, deploy would fail unnecessarily.
 
-### 23.3 Resolution
+<h3 id="war-story-23-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">23.3 Resolution</h3>
 
 Treat "Resource already managed" as success (War Story 51). The import script is idempotent: the first import adopts the resource; subsequent imports (same or different scope) see "already in state" and succeed. No manual state removal needed.
 
-### 23.4 Takeaway
+<h3 id="war-story-23-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">23.4 Takeaway</h3>
 
 When deploying multiple scopes (e.g. all = kube + nonkube), global resources may be imported by one scope and then "already managed" for another. Import idempotency makes this harmless. Ensure the import script recognizes "Resource already managed" as OK.
 
 ---
 
-## 24. OpenTofu vs Terraform: Provider-Agnostic Error Pattern Matching
+<h2 id="war-story-24" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">24. OpenTofu vs Terraform: Provider-Agnostic Error Pattern Matching</h2>
 
 **creation:** `<260222>`
 **last_updated:** `<260222>`
@@ -1231,25 +1408,25 @@ When deploying multiple scopes (e.g. all = kube + nonkube), global resources may
 **difficulty:** 3
 **significance:** 5
 
-### 24.1 Context
+<h3 id="war-story-24-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">24.1 Context</h3>
 
 Our import script pattern-matches on stderr to detect "Resource already managed." Terraform says "Resource already managed by Terraform"; OpenTofu says "Resource already managed by OpenTofu." We use a single regex.
 
-### 24.2 Root Cause
+<h3 id="war-story-24-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">24.2 Root Cause</h3>
 
 We migrated from Terraform to OpenTofu. Error messages changed slightly (vendor name in the string). A regex that matched only "Terraform" would miss OpenTofu's message.
 
-### 24.3 Resolution
+<h3 id="war-story-24-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">24.3 Resolution</h3>
 
 Match on the **common substring** `Resource already managed` instead of the full phrase. That matches both Terraform and OpenTofu. Same for "already managed by Terraform"—both work. Prefer provider-agnostic patterns when the semantic meaning is the same.
 
-### 24.4 Takeaway
+<h3 id="war-story-24-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">24.4 Takeaway</h3>
 
 When supporting both Terraform and OpenTofu (or multiple providers), use error patterns that match the shared semantic content, not vendor-specific wording. `Resource already managed` works for both.
 
 ---
 
-## 25. AI-Generated Logic Can Still Have Major Errors — Inverted Condition and Variable Reuse
+<h2 id="war-story-25" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">25. AI-Generated Logic Can Still Have Major Errors — Inverted Condition and Variable Reuse</h2>
 
 **creation:** `<260210>`
 **last_updated:** `<260210>`
@@ -1258,11 +1435,11 @@ When supporting both Terraform and OpenTofu (or multiple providers), use error p
 **difficulty:** 5
 **significance:** 8
 
-### 25.1 Context
+<h3 id="war-story-25-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">25.1 Context</h3>
 
 While documenting a refactor plan for "Kube Apply Ran Twice" (see `docs/learned/cloud_shared/DEPLOY_BUILD_DOCKER.md` §2), AI-generated pseudocode was proposed for a two-phase deploy flow: first Terraform apply (possibly without NLB hostname), then kube_apply + poll for hostname, then a second Terraform apply to set CloudFront's API origin to the NLB DNS. The pseudocode looked plausible but contained a major logic bug.
 
-### 25.2 The Buggy Pseudocode
+<h3 id="war-story-25-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">25.2 The Buggy Pseudocode</h3>
 
 ```python
 lb_host = _try_get_lb_hostname(env, region)  # kubectl or tofu output
@@ -1277,7 +1454,7 @@ if not lb_host:  # ← BUG: runs when we DON'T have hostname
     apply_stack(..., extra_vars=["-var", f"ingress_hostname={lb_host}"])  # passes empty!
 ```
 
-### 25.3 Root Cause
+<h3 id="war-story-25-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">25.3 Root Cause</h3>
 
 The bug had two parts:
 
@@ -1287,7 +1464,7 @@ The bug had two parts:
 
 **Concrete trace (fresh deploy):** Before first apply: `lb_host` is `None`. After poll: `lb_host` becomes the real hostname. `if not lb_host` is `False`, so we skip the second apply. We would never update CloudFront when we needed to.
 
-### 25.4 Corrected Version
+<h3 id="war-story-25-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">25.4 Corrected Version</h3>
 
 ```python
 hostname_before_first_apply = _try_get_lb_hostname(env, region)
@@ -1301,16 +1478,36 @@ if need_second_apply:
     apply_stack(..., extra_vars=["-var", f"ingress_hostname={hostname_after_poll}"])
 ```
 
-### 25.5 Why the Bug Happened
+<h3 id="war-story-25-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">25.5 Why the Bug Happened</h3>
 
-| Factor | Explanation |
-|--------|-------------|
-| **Comment vs. condition mismatch** | "Didn't have before" was interpreted as "don't have now" when scanning quickly. |
-| **Variable reuse** | One variable for two phases made it impossible to express "didn't have before" and "have now" correctly. |
-| **Negative condition** | `if not lb_host` is a negative condition; easier to misread than "when do we need to run?" |
-| **No execution/trace** | Pseudocode wasn't traced through with concrete values; a fresh-deploy trace would have exposed the bug. |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Factor</th>
+<th style="padding:8px">Explanation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Comment vs. condition mismatch</strong></td>
+<td style="padding:8px;background:#e8f5e9">"Didn't have before" was interpreted as "don't have now" when scanning quickly.</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Variable reuse</strong></td>
+<td style="padding:8px;background:#fff3e0">One variable for two phases made it impossible to express "didn't have before" and "have now" correctly.</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Negative condition</strong></td>
+<td style="padding:8px;background:#e8f5e9"><code>if not lb_host</code> is a negative condition; easier to misread than "when do we need to run?"</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>No execution/trace</strong></td>
+<td style="padding:8px;background:#fff3e0">Pseudocode wasn't traced through with concrete values; a fresh-deploy trace would have exposed the bug.</td>
+</tr>
+</tbody>
+</table>
 
-### 25.6 Takeaway
+<h3 id="war-story-25-sec-6" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">25.6 Takeaway</h3>
 
 AI-generated logic and pseudocode can contain major errors. Treat it as a draft, not production-ready. **Watch out for:**
 
@@ -1322,7 +1519,7 @@ AI-generated logic and pseudocode can contain major errors. Treat it as a draft,
 
 ---
 
-## 26. Import and Apply Skip When Plan Shows No Changes
+<h2 id="war-story-26" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">26. Import and Apply Skip When Plan Shows No Changes</h2>
 
 **creation:** `<260210>`
 **last_updated:** `<260210>`
@@ -1331,32 +1528,49 @@ AI-generated logic and pseudocode can contain major errors. Treat it as a draft,
 **difficulty:** 5
 **significance:** 8
 
-### 26.1 Context
+<h3 id="war-story-26-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">26.1 Context</h3>
 
 Before each kube/nonkube apply, we run a broad import to reconcile state with AWS. When infrastructure is already in sync (plan shows "No changes"), import adds no value—we won't create anything, so we won't hit "already exists." Running import and apply anyway wastes time.
 
-### 26.2 Root Cause
+<h3 id="war-story-26-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">26.2 Root Cause</h3>
 
 Import was always run before apply. No check for whether plan would show changes. On re-deploys when nothing changed, we still ran import (many `tofu import` calls) and apply (no-op but still runs).
 
-### 26.3 Resolution
+<h3 id="war-story-26-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">26.3 Resolution</h3>
 
 Before import for a stack, run `tofu plan -detailed-exitcode` with the same vars as apply. Exit 0 = no changes → skip import and skip apply for that stack. Exit 2 = changes → run import, then apply. Implemented in `tools/aws/scope_shared/deploy/deploy_common.py` (`plan_shows_no_changes`) and wired into `deploy_kube.py` and `deploy_nonkube.py`.
 
-### 26.4 Savings
+<h3 id="war-story-26-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">26.4 Savings</h3>
 
-| | Estimated | Actual (2026-02-23 full-scope re-deploy) |
-|---|-----------|------------------------------------------|
-| **Typical** | ~2–8 min per stack | Plan clean → skip import + apply. |
-| **This run** | — | Kube import + apply skipped. Nonkube import 161.9s; kube import ~60–90s. Kube apply ~25–60s. **~2.5 min saved.** |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px"></th>
+<th style="padding:8px">Estimated</th>
+<th style="padding:8px">Actual (2026-02-23 full-scope re-deploy)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Typical</strong></td>
+<td style="padding:8px;background:#e8f5e9">~2–8 min per stack</td>
+<td style="padding:8px;background:#e8f5e9">Plan clean → skip import + apply.</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>This run</strong></td>
+<td style="padding:8px;background:#fff3e0">—</td>
+<td style="padding:8px;background:#fff3e0">Kube import + apply skipped. Nonkube import 161.9s; kube import ~60–90s. Kube apply ~25–60s. <strong>~2.5 min saved.</strong></td>
+</tr>
+</tbody>
+</table>
 
-### 26.5 Takeaway
+<h3 id="war-story-26-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">26.5 Takeaway</h3>
 
 When import is "just in case" (reconcile state before apply), run `plan -detailed-exitcode` first. If no changes, skip import and apply. Saves time on re-deploys when infrastructure is already in sync. See `docs/learned/cloud_shared/DEPLOY_BUILD_DOCKER.md` §2.
 
 ---
 
-## 27. Content-Based Build Skip: Hash vs Stored Hash
+<h2 id="war-story-27" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">27. Content-Based Build Skip: Hash vs Stored Hash</h2>
 
 **creation:** `<260210>`
 **last_updated:** `<260210>`
@@ -1365,44 +1579,78 @@ When import is "just in case" (reconcile state before apply), run `plan -detaile
 **difficulty:** 5
 **significance:** 8
 
-### 27.1 Context
+<h3 id="war-story-27-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">27.1 Context</h3>
 
 Deploy's build phase (Docker build + push) takes 5–15 minutes. On re-deploys where only Terraform or config changed (not app/spark code), we were building anyway. Using `repo:latest` without verification could deploy stale code if the last build was from different code.
 
-### 27.2 Root Cause
+<h3 id="war-story-27-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">27.2 Root Cause</h3>
 
 No content-aware skip. Options were: always build (slow) or `--skip-build` (use `repo:latest` blindly—risky if code changed). Git SHA alone is insufficient: uncommitted changes would not change the hash.
 
-### 27.3 Resolution
+<h3 id="war-story-27-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">27.3 Resolution</h3>
 
 Compute a hash of the build context (files in `core_app/` + Dockerfile path). Store it in S3 after each successful build. Before build, compare current hash to stored hash. If both app and spark match, skip build and use `repo:latest`. `--force-build` bypasses. Uncommitted changes change the hash. See `docs/learned/cloud_shared/DEPLOY_BUILD_DOCKER.md` and `tools/aws/scope_shared/deploy/build_context_hash.py`.
 
-### 27.4 Overhead: Hash Check Cost Is Negligible
+<h3 id="war-story-27-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">27.4 Overhead: Hash Check Cost Is Negligible</h3>
 
 The time to compute the hash and check it against S3 must be insignificant compared to the build time we save. Measured (2026-02-23, us-east-2):
 
-| Step | Time |
-|------|------|
-| Hash compute (app + spark) + S3 fetch (2 JSON files) + compare | **~2–3 s** |
-| Full Docker build + push (Phase 7 when building) | **~95–106 s** |
-| **Overhead ratio** | **~2–3%** of time saved |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Step</th>
+<th style="padding:8px">Time</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px">Hash compute (app + spark) + S3 fetch (2 JSON files) + compare</td>
+<td style="padding:8px;background:#e8f5e9"><strong>~2–3 s</strong></td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">Full Docker build + push (Phase 7 when building)</td>
+<td style="padding:8px;background:#fff3e0"><strong>~95–106 s</strong></td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Overhead ratio</strong></td>
+<td style="padding:8px;background:#e8f5e9"><strong>~2–3%</strong> of time saved</td>
+</tr>
+</tbody>
+</table>
 
 Phase 7 when skipping: 11 s total (includes ~8 s `tofu_output_json` for `artifacts_bucket`; the hash+S3+compare is ~2–3 s). The hash check overhead is negligible—we spend ~2–3 s to avoid ~95 s of build. The optimization pays for itself many times over.
 
-### 27.5 Savings
+<h3 id="war-story-27-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">27.5 Savings</h3>
 
-| | Estimated | Actual (2026-02-23 full-scope re-deploy, us-east-2) |
-|---|-----------|------------------------------------------------------|
-| **Typical** | ~3–10 min | Hash matches → skip Docker build and push. |
-| **Measured** | — | Run 1 (no stored hash): built, 594s total. Run 2 (hash match): skipped, 327s total. **~4.5 min saved.** Phase 7: 106s → 11s. |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px"></th>
+<th style="padding:8px">Estimated</th>
+<th style="padding:8px">Actual (2026-02-23 full-scope re-deploy, us-east-2)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Typical</strong></td>
+<td style="padding:8px;background:#e8f5e9">~3–10 min</td>
+<td style="padding:8px;background:#e8f5e9">Hash matches → skip Docker build and push.</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Measured</strong></td>
+<td style="padding:8px;background:#fff3e0">—</td>
+<td style="padding:8px;background:#fff3e0">Run 1 (no stored hash): built, 594s total. Run 2 (hash match): skipped, 327s total. <strong>~4.5 min saved.</strong> Phase 7: 106s → 11s.</td>
+</tr>
+</tbody>
+</table>
 
-### 27.6 Takeaway
+<h3 id="war-story-27-sec-6" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">27.6 Takeaway</h3>
 
 Use content-based hashing (not Git SHA) for build skip so uncommitted changes trigger rebuild. Store hash in S3; skip when current hash matches. `--force-build` for explicit override. The hash check overhead (~2–3 s) is negligible vs. build time saved (~95 s). See `docs/learned/cloud_shared/DEPLOY_BUILD_DOCKER.md`. Related: War Story 20 (CONTAINER_IMAGE and --skip-build in background process).
 
 ---
 
-## 28. Analytics Panel Stale Data: Browser HTTP Cache for /analytics API Response
+<h2 id="war-story-28" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">28. Analytics Panel Stale Data: Browser HTTP Cache for /analytics API Response</h2>
 
 **creation:** `<260210>`
 **last_updated:** `<260210>`
@@ -1411,23 +1659,23 @@ Use content-based hashing (not Git SHA) for build skip so uncommitted changes tr
 **difficulty:** 4
 **significance:** 6
 
-### 28.1 Context
+<h3 id="war-story-28-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">28.1 Context</h3>
 
 The analytics panel in the UI showed wrong or stale data. The API was healthy (200 OK when hit directly), and CloudFront was serving correctly. The problem went away when "Disable cache" was enabled in Chrome DevTools.
 
-### 28.2 Root Cause
+<h3 id="war-story-28-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">28.2 Root Cause</h3>
 
 The browser was serving a **cached** response for `GET /analytics` instead of fetching fresh data. The `/analytics` endpoint does not set `Cache-Control` headers, so the browser uses its default caching heuristics. A previously cached response (e.g. from when the API returned an error like "No analytics data available yet", or from before a batch run completed) was reused. With cache disabled, the browser bypassed its local cache and fetched fresh JSON from CloudFront—the panel then showed correct data.
 
-### 28.3 Distinction from War Story 42
+<h3 id="war-story-28-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">28.3 Distinction from War Story 42</h3>
 
 War Story 42 covers **CloudFront** (CDN edge) cache for the `/analytics` API route — when routing changes mid-deploy, the edge can serve cached HTML instead of JSON. This war story is about the **browser's** HTTP cache for an API response. Different layer, different fix.
 
-### 28.4 Workaround (Immediate)
+<h3 id="war-story-28-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">28.4 Workaround (Immediate)</h3>
 
 Chrome DevTools → Network tab → check "Disable cache". While DevTools is open, the browser bypasses cache. Closing DevTools or using a normal window restores default caching.
 
-### 28.5 Proper Fix: Cache-Control on /analytics
+<h3 id="war-story-28-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">28.5 Proper Fix: Cache-Control on /analytics</h3>
 
 Set `Cache-Control: no-store` or `Cache-Control: max-age=0` on the `/analytics` response so the browser does not cache it. Analytics data changes after each batch run; it should not be cached. Add to the Flask response in `core_app/backend/api/app.py`:
 
@@ -1440,13 +1688,13 @@ return response
 
 (And for error responses: same header so a cached error does not persist.)
 
-### 28.6 Takeaway
+<h3 id="war-story-28-sec-6" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">28.6 Takeaway</h3>
 
 API endpoints that return frequently changing data (analytics, dashboards) should set `Cache-Control: no-store` or `max-age=0` to prevent the browser from serving stale cached responses. If the UI shows wrong data but the API returns correct data when hit directly, suspect browser cache first.
 
 ---
 
-## 29. Multi-Cloud env_utils Placement: Cohesion Over Top-Level Extraction
+<h2 id="war-story-29" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">29. Multi-Cloud env_utils Placement: Cohesion Over Top-Level Extraction</h2>
 
 **creation:** `<260227>`
 **last_updated:** `<260227>`
@@ -1455,11 +1703,11 @@ API endpoints that return frequently changing data (analytics, dashboards) shoul
 **difficulty:** 6
 **significance:** 7
 
-### 29.1 Context
+<h3 id="war-story-29-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">29.1 Context</h3>
 
 In a multi-cloud project (AWS, GCP, local), we have provider-specific modules: `env_utils/aws/`, `env_utils/local/`, `env_utils/gcp/`. An initial refactor plan proposed moving `core_app/backend/env_utils/` to project root as `app_env_utils/`—the rationale: avoid a directory containing multiple cloud-provider subdirs buried deep in the tree (`core_app/backend/env_utils/aws`, `.../local`, `.../gcp`). Flattening cloud concerns at a higher level has obvious merit for discoverability and GCP readiness.
 
-### 29.2 The Tension
+<h3 id="war-story-29-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">29.2 The Tension</h3>
 
 Moving `app_env_utils/` to project root would require:
 
@@ -1469,28 +1717,48 @@ Moving `app_env_utils/` to project root would require:
 
 The Dockerfile would live inside `core_app/` but would no longer be "contained" there—it would reference sibling dirs at project root. That's misleading: the image is the core app; the Dockerfile should reflect that.
 
-### 29.3 Decision: In-Place Refactor
+<h3 id="war-story-29-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">29.3 Decision: In-Place Refactor</h3>
 
 We kept `env_utils/` under `core_app/backend/` and added `cloud_shared/` and `gcp/` in-place. Reasons:
 
-| Reason | Detail |
-|:-------|:-------|
-| **Logical cohesion** | env_utils is the core app's cloud-abstraction layer. It belongs with the app it serves. |
-| **Modularity** | core_app is a self-contained unit: backend, analytics, frontend, env_utils. Moving env_utils out would split that unit. |
-| **Docker semantics** | Build context stays `core_app`. `COPY backend /app/backend` includes env_utils. The Dockerfile builds the core app from core_app—no project-root context, no sibling-dir COPY. |
-| **Avoiding misleading layout** | A Dockerfile at `core_app/Dockerfile` that builds from project root and copies `app_env_utils` + `core_app/backend` suggests the image is "project root stuff"—but it's just the core app. Keeping env_utils inside core_app keeps the Dockerfile honest. |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Reason</th>
+<th style="padding:8px">Detail</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Logical cohesion</strong></td>
+<td style="padding:8px;background:#e8f5e9">env_utils is the core app's cloud-abstraction layer. It belongs with the app it serves.</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Modularity</strong></td>
+<td style="padding:8px;background:#fff3e0">core_app is a self-contained unit: backend, analytics, frontend, env_utils. Moving env_utils out would split that unit.</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Docker semantics</strong></td>
+<td style="padding:8px;background:#e8f5e9">Build context stays <code>core_app</code>. <code>COPY backend /app/backend</code> includes env_utils. The Dockerfile builds the core app from core_app—no project-root context, no sibling-dir COPY.</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Avoiding misleading layout</strong></td>
+<td style="padding:8px;background:#fff3e0">A Dockerfile at <code>core_app/Dockerfile</code> that builds from project root and copies <code>app_env_utils</code> + <code>core_app/backend</code> suggests the image is "project root stuff"—but it's just the core app. Keeping env_utils inside core_app keeps the Dockerfile honest.</td>
+</tr>
+</tbody>
+</table>
 
-### 29.4 Key Insight
+<h3 id="war-story-29-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">29.4 Key Insight</h3>
 
 > Avoiding cloud-provider subdirs at deep nesting has merit—but don't force such dirs all the way to the top. Consider cohesion: does the module belong with the component it serves? Consider Docker: does the build context match what the image actually is? In our case, env_utils serves core_app; the image is core_app. Keeping env_utils under core_app preserves both logical cohesion and Docker semantics.
 
-### 29.5 Takeaway
+<h3 id="war-story-29-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">29.5 Takeaway</h3>
 
 For multi-cloud structure refactors: (1) Flattening cloud-provider dirs out of deep nesting is good. (2) Pushing them to project root is not always right—weigh cohesion and Docker semantics. (3) If a module is the app's cloud-abstraction layer, keeping it under the app keeps the Dockerfile contained and the image meaning clear. (4) In-place refactor (add `cloud_shared/`, `gcp/` under existing `env_utils/`) achieved GCP readiness without build-context or Dockerfile changes.
 
 ---
 
-## 30. Multi-Cloud "Just Copy AWS" is a Pipe Dream: Iterate in Small Chunks
+<h2 id="war-story-30" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">30. Multi-Cloud "Just Copy AWS" is a Pipe Dream: Iterate in Small Chunks</h2>
 
 **creation:** `<260227>`
 **last_updated:** `<260227>`
@@ -1499,39 +1767,65 @@ For multi-cloud structure refactors: (1) Flattening cloud-provider dirs out of d
 **difficulty:** 7
 **significance:** 9
 
-### 30.1 Context
+<h3 id="war-story-30-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">30.1 Context</h3>
 
 When adding a second cloud provider (GCP) to a working AWS codebase, the natural expectation is: "mimic the AWS code in the corresponding GCP dirs and it will work." That thinking turned out to be a pipe dream. The GCP implementation required many iterations over a long period, solving numerous problems and receiving many explicit instructions before it worked end-to-end.
 
-### 30.2 Why "Copy AWS" Fails
+<h3 id="war-story-30-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">30.2 Why "Copy AWS" Fails</h3>
 
-| Expectation | Reality |
-|-------------|---------|
-| Same structure, same flow | Structure is similar, but **every** component has provider-specific differences |
-| Copy `backend.py`, change S3→GCS | State backend: GCS has built-in locking (no DynamoDB); bucket naming uses `project_id` not `account_id` |
-| Copy `build_and_push_images.py` | ECR vs Artifact Registry: different URLs, auth, CLI |
-| Copy `deploy.py` phases | Phase order is same, but each phase calls different backends (GCS vs S3, gcloud vs aws) |
-| Copy Terraform modules | VPC, DB, registry, CDN—all have different resource types and outputs |
-| Copy verify script | Endpoint resolution, LLM client (Bedrock vs Gemini), logging (CloudWatch vs Cloud Logging) |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Expectation</th>
+<th style="padding:8px">Reality</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px">Same structure, same flow</td>
+<td style="padding:8px;background:#e8f5e9">Structure is similar, but <strong>every</strong> component has provider-specific differences</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">Copy <code>backend.py</code>, change S3→GCS</td>
+<td style="padding:8px;background:#fff3e0">State backend: GCS has built-in locking (no DynamoDB); bucket naming uses <code>project_id</code> not <code>account_id</code></td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">Copy <code>build_and_push_images.py</code></td>
+<td style="padding:8px;background:#e8f5e9">ECR vs Artifact Registry: different URLs, auth, CLI</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">Copy <code>deploy.py</code> phases</td>
+<td style="padding:8px;background:#fff3e0">Phase order is same, but each phase calls different backends (GCS vs S3, gcloud vs aws)</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">Copy Terraform modules</td>
+<td style="padding:8px;background:#e8f5e9">VPC, DB, registry, CDN—all have different resource types and outputs</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">Copy verify script</td>
+<td style="padding:8px;background:#fff3e0">Endpoint resolution, LLM client (Bedrock vs Gemini), logging (CloudWatch vs Cloud Logging)</td>
+</tr>
+</tbody>
+</table>
 
-### 30.3 Key Insight
+<h3 id="war-story-30-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">30.3 Key Insight</h3>
 
 > Multi-cloud is not copy-paste. It is **systematic mapping** (document every AWS→GCP equivalent), **phased implementation** (env_utils first, then tools, then Terraform), and **incremental validation** (each phase must work before the next). Expect to iterate in small chunks and fix many "small" differences that compound.
 
-### 30.4 Resolution
+<h3 id="war-story-30-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">30.4 Resolution</h3>
 
 1. **Create `GCP_AWS_REFERENCE.md`** — Every GCP file references its AWS counterpart. Document gaps before coding.
 2. **Implement in phases** — Phase 0: env vars, provider detection. Phase 1: env_utils (LLM, storage). Phase 2: agent decoupling. Phase 3: tools (deploy, teardown, verify). Phase 4: Terraform modules and live_deploy.
 3. **Validate each phase** — Run doctor, health endpoint, single-stack deploy before moving on.
 4. **Expect explicit instructions** — Many "obvious" mappings are not; document and follow explicit instructions for each component.
 
-### 30.5 Takeaway
+<h3 id="war-story-30-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">30.5 Takeaway</h3>
 
 (1) Do not assume "copy AWS and change a few strings" will work. (2) Document the full mapping first (`docs/GCP_AWS_REFERENCE.md`). (3) Implement in phases; validate each phase. (4) For the next provider (Oracle, Azure), use `docs/WHAT_TO_DO_TO_BUILD_FOR_ANOTHER_CLOUD_PROVIDER.md` to avoid repeating the painful iteration.
 
 ---
 
-## 31. Provider-Driven LLM Factory: One Interface, Multiple Backends
+<h2 id="war-story-31" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">31. Provider-Driven LLM Factory: One Interface, Multiple Backends</h2>
 
 **creation:** `<260227>`
 **last_updated:** `<260227>`
@@ -1540,11 +1834,11 @@ When adding a second cloud provider (GCP) to a working AWS codebase, the natural
 **difficulty:** 6
 **significance:** 8
 
-### 31.1 Context
+<h3 id="war-story-31-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">31.1 Context</h3>
 
 The app needs an LLM client for the query agent. AWS uses Bedrock (Claude); GCP uses Gemini (AI Studio or Vertex AI); local uses Claude API. Each has different SDKs, auth, and initialization. The agent and tools must not know which backend is used.
 
-### 31.2 Architecture
+<h3 id="war-story-31-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">31.2 Architecture</h3>
 
 ```mermaid
 %%{init: {'themeVariables': {'fontSize': '9px'}}}%%
@@ -1580,22 +1874,42 @@ flowchart TB
     LOCAL --> CLAUDE
 ```
 
-### 31.3 Key Rules
+<h3 id="war-story-31-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">31.3 Key Rules</h3>
 
-| Rule | Detail |
-|------|--------|
-| **Cloud-first** | If `CLOUD_PROVIDER` is set, call *only* that provider's `get_llm_client()`. If it returns `None`, raise—do not silently fall back to another provider. |
-| **Fallback order** | If unset: aws → gcp → local (cloud deployments take precedence). |
-| **Interface** | All clients implement `LLMClient` (e.g. `complete()`, `stream_complete()`). |
-| **Location** | Factory in `env_utils/cloud_shared/client_factory.py`; each provider in `env_utils/{provider}/`. |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Rule</th>
+<th style="padding:8px">Detail</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Cloud-first</strong></td>
+<td style="padding:8px;background:#e8f5e9">If <code>CLOUD_PROVIDER</code> is set, call *only* that provider's <code>get_llm_client()</code>. If it returns <code>None</code>, raise—do not silently fall back to another provider.</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Fallback order</strong></td>
+<td style="padding:8px;background:#fff3e0">If unset: aws → gcp → local (cloud deployments take precedence).</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Interface</strong></td>
+<td style="padding:8px;background:#e8f5e9">All clients implement <code>LLMClient</code> (e.g. <code>complete()</code>, <code>stream_complete()</code>).</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Location</strong></td>
+<td style="padding:8px;background:#fff3e0">Factory in <code>env_utils/cloud_shared/client_factory.py</code>; each provider in <code>env_utils/{provider}/</code>.</td>
+</tr>
+</tbody>
+</table>
 
-### 31.4 Takeaway
+<h3 id="war-story-31-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">31.4 Takeaway</h3>
 
 (1) One factory, multiple providers. (2) Never hardcode which LLM to use—branch on `CLOUD_PROVIDER` and env vars. (3) Agent and verify scripts import `create_llm_client()` from cloud_shared; they never import Bedrock or Gemini directly. (4) Adding a new provider: add `env_utils/{provider}/get_llm_client()` and extend the factory.
 
 ---
 
-## 32. env_utils First: Cloud Provider Abstraction Before tools/
+<h2 id="war-story-32" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">32. env_utils First: Cloud Provider Abstraction Before tools/</h2>
 
 **creation:** `<260227>`
 **last_updated:** `<260227>`
@@ -1604,32 +1918,65 @@ flowchart TB
 **difficulty:** 6
 **significance:** 8
 
-### 32.1 Context
+<h3 id="war-story-32-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">32.1 Context</h3>
 
 The core app (API, agent, analytics) needs cloud-agnostic access to LLM, object storage, and credentials. If the app directly imports `boto3` or `s3_helpers`, adding GCP requires changing app code in many places. The abstraction layer must exist **before** building provider-specific tools.
 
-### 32.2 Implementation Order
+<h3 id="war-story-32-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">32.2 Implementation Order</h3>
 
-| Phase | What | Why first |
-|-------|------|-----------|
-| **0** | `get_cloud_provider()`, `.env` GCP vars | Enables branching everywhere |
-| **1** | `env_utils/cloud_shared/` (interfaces, factory, provider) | Defines contracts |
-| **2** | `env_utils/gcp/` (LLM, storage) | App can run on GCP |
-| **3** | Agent uses `create_llm_client()` | Removes `get_bedrock_client()` |
-| **4** | Filesystem uses `get_storage_backend()` | Removes direct s3_helpers |
-| **5** | `tools/gcp/` | Deploy, teardown, verify |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Phase</th>
+<th style="padding:8px">What</th>
+<th style="padding:8px">Why first</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>0</strong></td>
+<td style="padding:8px;background:#e8f5e9"><code>get_cloud_provider()</code>, <code>.env</code> GCP vars</td>
+<td style="padding:8px;background:#e8f5e9">Enables branching everywhere</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>1</strong></td>
+<td style="padding:8px;background:#fff3e0"><code>env_utils/cloud_shared/</code> (interfaces, factory, provider)</td>
+<td style="padding:8px;background:#fff3e0">Defines contracts</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>2</strong></td>
+<td style="padding:8px;background:#e8f5e9"><code>env_utils/gcp/</code> (LLM, storage)</td>
+<td style="padding:8px;background:#e8f5e9">App can run on GCP</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>3</strong></td>
+<td style="padding:8px;background:#fff3e0">Agent uses <code>create_llm_client()</code></td>
+<td style="padding:8px;background:#fff3e0">Removes <code>get_bedrock_client()</code></td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>4</strong></td>
+<td style="padding:8px;background:#e8f5e9">Filesystem uses <code>get_storage_backend()</code></td>
+<td style="padding:8px;background:#e8f5e9">Removes direct s3_helpers</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>5</strong></td>
+<td style="padding:8px;background:#fff3e0"><code>tools/gcp/</code></td>
+<td style="padding:8px;background:#fff3e0">Deploy, teardown, verify</td>
+</tr>
+</tbody>
+</table>
 
-### 32.3 Key Insight
+<h3 id="war-story-32-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">32.3 Key Insight</h3>
 
 > Do not start with `tools/gcp/deploy.py`. The app must be cloud-agnostic first. If the app still imports AWS-specific code, deploying to GCP will fail at runtime (e.g. Bedrock client in GKE). env_utils is the foundation; tools are the automation layer.
 
-### 32.4 Takeaway
+<h3 id="war-story-32-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">32.4 Takeaway</h3>
 
 (1) env_utils (LLM, storage, credentials) must be done before tools. (2) `app.py` and `query_agent.py` must not import provider-specific modules directly. (3) Health endpoint should report credentials status per provider. (4) See `docs/REFACTOR_NEXT_STEPS.md` and `docs/REFACTOR_PLAN_GCP_READINESS.md`.
 
 ---
 
-## 33. GCP_AWS_REFERENCE: Document Every Mapping Before You Code
+<h2 id="war-story-33" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">33. GCP_AWS_REFERENCE: Document Every Mapping Before You Code</h2>
 
 **creation:** `<260227>`
 **last_updated:** `<260227>`
@@ -1638,31 +1985,54 @@ The core app (API, agent, analytics) needs cloud-agnostic access to LLM, object 
 **difficulty:** 5
 **significance:** 8
 
-### 33.1 Context
+<h3 id="war-story-33-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">33.1 Context</h3>
 
 When implementing GCP, it is easy to miss equivalents or create inconsistent structure. Without a central reference, each file is implemented in isolation and gaps accumulate. A single document that maps every AWS component to its GCP equivalent (or "gap") prevents this.
 
-### 33.2 Structure of GCP_AWS_REFERENCE.md
+<h3 id="war-story-33-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">33.2 Structure of GCP_AWS_REFERENCE.md</h3>
 
-| Section | Content |
-|---------|---------|
-| **env_utils** | `gcp/gemini_api_client.py` ↔ `aws/bedrock_client.py`; `gcp/gcs_helpers.py` ↔ `aws/s3_helpers.py`; etc. |
-| **modules** | `gcp/primitives/gcs_bucket/` ↔ `aws/primitives/s3_bucket/`; gaps (artifact_registry, cloud_sql, etc.) |
-| **live_deploy** | Each stack: durable, nondurable, kube, nonkube; backend block, remote state |
-| **tools** | deploy.py, teardown.py, scope_shared/core, scope_shared/deploy, scope_shared/verify, kube, nonkube |
-| **Gaps** | What exists in AWS but not yet in GCP (import_preexist, pre-destroy, etc.) |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Section</th>
+<th style="padding:8px">Content</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>env_utils</strong></td>
+<td style="padding:8px;background:#e8f5e9"><code>gcp/gemini_api_client.py</code> ↔ <code>aws/bedrock_client.py</code>; <code>gcp/gcs_helpers.py</code> ↔ <code>aws/s3_helpers.py</code>; etc.</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>modules</strong></td>
+<td style="padding:8px;background:#fff3e0"><code>gcp/primitives/gcs_bucket/</code> ↔ <code>aws/primitives/s3_bucket/</code>; gaps (artifact_registry, cloud_sql, etc.)</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>live_deploy</strong></td>
+<td style="padding:8px;background:#e8f5e9">Each stack: durable, nondurable, kube, nonkube; backend block, remote state</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>tools</strong></td>
+<td style="padding:8px;background:#fff3e0">deploy.py, teardown.py, scope_shared/core, scope_shared/deploy, scope_shared/verify, kube, nonkube</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Gaps</strong></td>
+<td style="padding:8px;background:#e8f5e9">What exists in AWS but not yet in GCP (import_preexist, pre-destroy, etc.)</td>
+</tr>
+</tbody>
+</table>
 
-### 33.3 Key Insight
+<h3 id="war-story-33-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">33.3 Key Insight</h3>
 
 > Every GCP file should have a top-of-file comment: `# Reference: <path to AWS>`. When creating a new GCP component, look up the reference first. When the reference says "GCP: create equivalent," do not skip—it is a documented gap. Update the reference when you add or change components.
 
-### 33.4 Takeaway
+<h3 id="war-story-33-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">33.4 Takeaway</h3>
 
 (1) Maintain `docs/GCP_AWS_REFERENCE.md` as the single source of truth. (2) Use it as a checklist: implement each row, mark done. (3) For Oracle/Azure, create `ORACLE_AWS_REFERENCE.md` or `AZURE_AWS_REFERENCE.md` with the same structure. (4) Reference: `docs/GCP_AWS_REFERENCE.md`.
 
 ---
 
-## 34. tools/ Mirror: Create Exact Structure, Then Fill Gaps
+<h2 id="war-story-34" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">34. tools/ Mirror: Create Exact Structure, Then Fill Gaps</h2>
 
 **creation:** `<260227>`
 **last_updated:** `<260227>`
@@ -1671,13 +2041,13 @@ When implementing GCP, it is easy to miss equivalents or create inconsistent str
 **difficulty:** 6
 **significance:** 8
 
-### 34.1 Context
+<h3 id="war-story-34-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">34.1 Context</h3>
 
 `tools/aws/` has a specific structure: `deploy.py`, `teardown.py`, `kube/`, `nonkube/`, `scope_shared/core/`, `scope_shared/deploy/`, `scope_shared/verify/`, `standalone/`. Creating `tools/gcp/` ad hoc leads to missing scripts and inconsistent behavior.
 
-### 34.2 Required Structure (mirror AWS)
+<h3 id="war-story-34-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">34.2 Required Structure (mirror AWS)</h3>
 
-```
+```text
 tools/gcp/
 ├── deploy.py              # Entry point
 ├── teardown.py            # Teardown orchestrator
@@ -1695,26 +2065,58 @@ tools/gcp/
     └── doctor.py
 ```
 
-### 34.3 Implementation Strategy
+<h3 id="war-story-34-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">34.3 Implementation Strategy</h3>
 
-| Step | Action |
-|------|--------|
-| 1 | Create the directory structure (empty files or stubs). |
-| 2 | Implement `scope_shared/core/` first (backend, terra_runner, terra_init)—everything else depends on it. |
-| 3 | Implement `scope_shared/deploy/setup_state_backend.py` (GCS bucket). |
-| 4 | Implement `scope_shared/deploy/build_and_push_images.py` (Artifact Registry). |
-| 5 | Implement `deploy.py` phases; wire to `run_deploy_stack`, `run_deploy_kube`, `run_deploy_nonkube`. |
-| 6 | Implement `teardown.py` (reverse order of deploy). |
-| 7 | Implement `scope_shared/verify/verify_all_deploy.py`. |
-| 8 | Fill gaps (ensure_secrets, setup_database, kube_pre_destroy, etc.). |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Step</th>
+<th style="padding:8px">Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px">1</td>
+<td style="padding:8px;background:#e8f5e9">Create the directory structure (empty files or stubs).</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">2</td>
+<td style="padding:8px;background:#fff3e0">Implement <code>scope_shared/core/</code> first (backend, terra_runner, terra_init)—everything else depends on it.</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">3</td>
+<td style="padding:8px;background:#e8f5e9">Implement <code>scope_shared/deploy/setup_state_backend.py</code> (GCS bucket).</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">4</td>
+<td style="padding:8px;background:#fff3e0">Implement <code>scope_shared/deploy/build_and_push_images.py</code> (Artifact Registry).</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">5</td>
+<td style="padding:8px;background:#e8f5e9">Implement <code>deploy.py</code> phases; wire to <code>run_deploy_stack</code>, <code>run_deploy_kube</code>, <code>run_deploy_nonkube</code>.</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">6</td>
+<td style="padding:8px;background:#fff3e0">Implement <code>teardown.py</code> (reverse order of deploy).</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">7</td>
+<td style="padding:8px;background:#e8f5e9">Implement <code>scope_shared/verify/verify_all_deploy.py</code>.</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">8</td>
+<td style="padding:8px;background:#fff3e0">Fill gaps (ensure_secrets, setup_database, kube_pre_destroy, etc.).</td>
+</tr>
+</tbody>
+</table>
 
-### 34.4 Takeaway
+<h3 id="war-story-34-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">34.4 Takeaway</h3>
 
 (1) Create the full structure first; do not implement randomly. (2) Core (backend, terra_runner) is the foundation. (3) Deploy and teardown must mirror AWS phase order. (4) Reference: `docs/GCP_AWS_REFERENCE.md` Section 4.
 
 ---
 
-## 35. Terraform State Backend: GCS vs S3, Different Config Required
+<h2 id="war-story-35" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">35. Terraform State Backend: GCS vs S3, Different Config Required</h2>
 
 **creation:** `<260227>`
 **last_updated:** `<260227>`
@@ -1723,31 +2125,54 @@ tools/gcp/
 **difficulty:** 6
 **significance:** 7
 
-### 35.1 Context
+<h3 id="war-story-35-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">35.1 Context</h3>
 
 `tools/aws/scope_shared/core/terra_init.py` (or equivalent) calls `backend_config()` to generate the backend block for Terraform/OpenTofu. AWS passes `bucket`, `key`, `region`, `dynamodb_table`. GCP passes `bucket`, `prefix`—and no `dynamodb_table`. The `backend_config()` function must branch on cloud provider.
 
-### 35.2 Backend Block Comparison
+<h3 id="war-story-35-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">35.2 Backend Block Comparison</h3>
 
-| AWS (S3) | GCP (GCS) |
-|-----------|-----------|
-| `backend "s3"` | `backend "gcs"` |
-| `bucket = "..."` | `bucket = "..."` |
-| `key = "fru/dev/us-east-1/aws-shared-durable.tfstate"` | `prefix = "fru/dev/us-central1/gcp-shared-durable.tfstate"` |
-| `region = "us-east-1"` | (not used; bucket is regional) |
-| `dynamodb_table = "fru-dev-lock"` | (not used; GCS has built-in locking) |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">AWS (S3)</th>
+<th style="padding:8px">GCP (GCS)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><code>backend "s3"</code></td>
+<td style="padding:8px;background:#e8f5e9"><code>backend "gcs"</code></td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><code>bucket = "..."</code></td>
+<td style="padding:8px;background:#fff3e0"><code>bucket = "..."</code></td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><code>key = "fru/dev/us-east-1/aws-shared-durable.tfstate"</code></td>
+<td style="padding:8px;background:#e8f5e9"><code>prefix = "fru/dev/us-central1/gcp-shared-durable.tfstate"</code></td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><code>region = "us-east-1"</code></td>
+<td style="padding:8px;background:#fff3e0">(not used; bucket is regional)</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><code>dynamodb_table = "fru-dev-lock"</code></td>
+<td style="padding:8px;background:#e8f5e9">(not used; GCS has built-in locking)</td>
+</tr>
+</tbody>
+</table>
 
-### 35.3 Key Insight
+<h3 id="war-story-35-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">35.3 Key Insight</h3>
 
 > Do not reuse AWS's `backend_config()` for GCP. Create a GCP-specific `backend_config()` or add a `cloud` parameter. The state key/prefix format may also differ (`gcp-shared-durable` vs `aws-shared-durable`). Ensure `stack_id_from_dir()` returns the correct prefix for each cloud.
 
-### 35.4 Takeaway
+<h3 id="war-story-35-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">35.4 Takeaway</h3>
 
 (1) `tools/gcp/scope_shared/core/terra_init.py` (or `terra_runner.py`) must call a GCP-aware `backend_config()`. (2) Bootstrap creates only the GCS bucket; no lock table. (3) State prefix format: `{prefix}/{env}/{region}/{stack_id}.tfstate`. (4) See War Story 4 (GCS vs S3 State Backend).
 
 ---
 
-## 36. Deploy Phase Order: doctor → bootstrap → durable → nondurable → secrets → build → apply
+<h2 id="war-story-36" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">36. Deploy Phase Order: doctor → bootstrap → durable → nondurable → secrets → build → apply</h2>
 
 **creation:** `<260227>`
 **last_updated:** `<260227>`
@@ -1756,34 +2181,75 @@ tools/gcp/
 **difficulty:** 5
 **significance:** 8
 
-### 36.1 Context
+<h3 id="war-story-36-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">36.1 Context</h3>
 
 Deploy has a fixed phase order. Changing it (e.g. applying nondurable before durable) causes failures because nondurable depends on durable outputs (VPC, DB, etc.). The order is the same for AWS and GCP; only the backends differ.
 
-### 36.2 Phase Order (canonical)
+<h3 id="war-story-36-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">36.2 Phase Order (canonical)</h3>
 
-| Phase | What | Why |
-|-------|------|-----|
-| 1 | **Doctor** | Pre-flight: creds, CLI, env vars, APIs (GCP) |
-| 2 | **Bootstrap** | Create state bucket (S3 or GCS) if missing |
-| 3 | **durable_with_cooloff** | Secrets (DB password, API keys) |
-| 4 | **durable** | VPC, DB (Aurora/Cloud SQL), VPC connector (GCP) |
-| 5 | **nondurable** | Buckets (delta, artifacts), registry (ECR/Artifact Registry) |
-| 6 | **Ensure secrets** | Populate Secret Manager / Secrets Manager with values |
-| 7 | **Build & push** | Docker images to registry |
-| 8 | **Apply kube/nonkube** | EKS/GKE or ECS/Cloud Run |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Phase</th>
+<th style="padding:8px">What</th>
+<th style="padding:8px">Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px">1</td>
+<td style="padding:8px;background:#e8f5e9"><strong>Doctor</strong></td>
+<td style="padding:8px;background:#e8f5e9">Pre-flight: creds, CLI, env vars, APIs (GCP)</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">2</td>
+<td style="padding:8px;background:#fff3e0"><strong>Bootstrap</strong></td>
+<td style="padding:8px;background:#fff3e0">Create state bucket (S3 or GCS) if missing</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">3</td>
+<td style="padding:8px;background:#e8f5e9"><strong>durable_with_cooloff</strong></td>
+<td style="padding:8px;background:#e8f5e9">Secrets (DB password, API keys)</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">4</td>
+<td style="padding:8px;background:#fff3e0"><strong>durable</strong></td>
+<td style="padding:8px;background:#fff3e0">VPC, DB (Aurora/Cloud SQL), VPC connector (GCP)</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">5</td>
+<td style="padding:8px;background:#e8f5e9"><strong>nondurable</strong></td>
+<td style="padding:8px;background:#e8f5e9">Buckets (delta, artifacts), registry (ECR/Artifact Registry)</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">6</td>
+<td style="padding:8px;background:#fff3e0"><strong>Ensure secrets</strong></td>
+<td style="padding:8px;background:#fff3e0">Populate Secret Manager / Secrets Manager with values</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">7</td>
+<td style="padding:8px;background:#e8f5e9"><strong>Build & push</strong></td>
+<td style="padding:8px;background:#e8f5e9">Docker images to registry</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">8</td>
+<td style="padding:8px;background:#fff3e0"><strong>Apply kube/nonkube</strong></td>
+<td style="padding:8px;background:#fff3e0">EKS/GKE or ECS/Cloud Run</td>
+</tr>
+</tbody>
+</table>
 
-### 36.3 Key Insight
+<h3 id="war-story-36-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">36.3 Key Insight</h3>
 
 > Teardown is the **reverse** order: kube/nonkube → nondurable → durable → durable_with_cooloff. Do not destroy durable before nondurable—nondurable may reference durable outputs in remote state.
 
-### 36.4 Takeaway
+<h3 id="war-story-36-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">36.4 Takeaway</h3>
 
 (1) Deploy and teardown scripts must use the same phase definitions. (2) Extract `deploy_phases()` and `teardown_phases()` to a shared module (e.g. `phases.py`) so AWS and GCP stay in sync. (3) Reference: `tools/gcp/deploy.py`, `tools/aws/deploy.py`.
 
 ---
 
-## 37. Cloud Run vs ECS: VPC Connector vs Fargate in VPC
+<h2 id="war-story-37" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">37. Cloud Run vs ECS: VPC Connector vs Fargate in VPC</h2>
 
 **creation:** `<260227>`
 **last_updated:** `<260227>`
@@ -1792,31 +2258,60 @@ Deploy has a fixed phase order. Changing it (e.g. applying nondurable before dur
 **difficulty:** 6
 **significance:** 8
 
-### 37.1 Context
+<h3 id="war-story-37-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">37.1 Context</h3>
 
 Both Cloud Run and ECS Fargate are serverless container platforms. But their networking models differ: ECS Fargate tasks run **inside** the VPC; Cloud Run runs **outside** by default. This affects how the API reaches the database.
 
-### 37.2 Comparison
+<h3 id="war-story-37-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">37.2 Comparison</h3>
 
-| Aspect | AWS (ECS Fargate) | GCP (Cloud Run) |
-|--------|-------------------|-----------------|
-| **Network** | Tasks in VPC subnets | Runs outside VPC |
-| **DB access** | Direct to Aurora private IP | Requires VPC connector |
-| **Load balancer** | ALB in front of ECS | Cloud Run has built-in URL |
-| **Scheduler** | EventBridge → ECS RunTask | Cloud Scheduler → Cloud Run Job |
-| **Secrets** | Secrets Manager → env | Secret Manager → env |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Aspect</th>
+<th style="padding:8px">AWS (ECS Fargate)</th>
+<th style="padding:8px">GCP (Cloud Run)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Network</strong></td>
+<td style="padding:8px;background:#e8f5e9">Tasks in VPC subnets</td>
+<td style="padding:8px;background:#e8f5e9">Runs outside VPC</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>DB access</strong></td>
+<td style="padding:8px;background:#fff3e0">Direct to Aurora private IP</td>
+<td style="padding:8px;background:#fff3e0">Requires VPC connector</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Load balancer</strong></td>
+<td style="padding:8px;background:#e8f5e9">ALB in front of ECS</td>
+<td style="padding:8px;background:#e8f5e9">Cloud Run has built-in URL</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Scheduler</strong></td>
+<td style="padding:8px;background:#fff3e0">EventBridge → ECS RunTask</td>
+<td style="padding:8px;background:#fff3e0">Cloud Scheduler → Cloud Run Job</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Secrets</strong></td>
+<td style="padding:8px;background:#e8f5e9">Secrets Manager → env</td>
+<td style="padding:8px;background:#e8f5e9">Secret Manager → env</td>
+</tr>
+</tbody>
+</table>
 
-### 37.3 Key Insight
+<h3 id="war-story-37-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">37.3 Key Insight</h3>
 
 > Do not assume Cloud Run "just works" like ECS. Cloud Run needs a VPC connector to reach Cloud SQL. The durable stack must create the connector; the nonkube stack must pass it to the Cloud Run module. See War Story 3 (Cloud Run → Cloud SQL: VPC Connector Required).
 
-### 37.4 Takeaway
+<h3 id="war-story-37-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">37.4 Takeaway</h3>
 
 (1) ECS: task definition specifies subnets; traffic to Aurora stays in VPC. (2) Cloud Run: add `vpc_access { connector, egress = PRIVATE_RANGES_ONLY }` to the service. (3) Same pattern for Cloud Run Job (Spark)—it also needs the connector to reach Cloud SQL. (4) Reference: `docs/learned/cloud_shared/GCP_API_CLOUD_SQL_WIRING.md`.
 
 ---
 
-## 38. Nonkube Verification Passed, UI Failed Later: Scale-to-Zero and Lazy Agent Init
+<h2 id="war-story-38" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">38. Nonkube Verification Passed, UI Failed Later: Scale-to-Zero and Lazy Agent Init</h2>
 
 **creation:** `<260306>`
 **last_updated:** `<260306>`
@@ -1825,19 +2320,19 @@ Both Cloud Run and ECS Fargate are serverless container platforms. But their net
 **difficulty:** 7
 **significance:** 8
 
-### 38.1 Context
+<h3 id="war-story-38-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">38.1 Context</h3>
 
 GCP nonkube showed "Build: No Version Info Found," "Agent-based query processing is disabled," and "Backend API not reachable" in the UI—yet verification had passed 10 hours earlier. The same URL worked again after redeploy.
 
-### 38.2 Root Cause
+<h3 id="war-story-38-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">38.2 Root Cause</h3>
 
 (1) **Scale-to-zero:** `min_instance_count=0` lets Cloud Run scale to zero. Verification runs right after deploy (warm instances, retries). Hours later, a user hit a cold-started instance. (2) **Lazy agent init:** The UI uses `/query/stream`, which did not call `ensure_agent()` before checking `query_agent is None`. If the background `_run_slow_init()` hadn't finished or had failed, the instance served "Agent disabled" indefinitely. (3) **APP_IMAGE_TAG:** With `--skip-build`, GCP deploy never set tags; `/version` returned 500 when empty.
 
-### 38.3 Key Insight
+<h3 id="war-story-38-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">38.3 Key Insight</h3>
 
 > Verification passing ≠ production healthy. Cold-started instances can fail agent init. Ensure the primary UI endpoint (`/query/stream`) calls `ensure_agent()` before the `query_agent is None` check. For GCP skip-build, populate `APP_IMAGE_TAG` from Artifact Registry via `get_deploy_image_uris`.
 
-### 38.4 Resolution
+<h3 id="war-story-38-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">38.4 Resolution</h3>
 
 - Added `ensure_agent()` to `/query/stream` before the check.
 - GCP deploy: resolve `APP_IMAGE_TAG` from Artifact Registry when `--skip-build` via `get_deploy_image_uris`.
@@ -1845,13 +2340,13 @@ GCP nonkube showed "Build: No Version Info Found," "Agent-based query processing
 - `/version`: fallback to `"latest"` when tags empty.
 - Removed unused `/query-v2`; annotated `/query` as deprecated (UI uses `/query/stream`).
 
-### 38.5 Takeaway
+<h3 id="war-story-38-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">38.5 Takeaway</h3>
 
 For nonkube with scale-to-zero: (1) call `ensure_agent()` on every agent-dependent endpoint, including `/query/stream`; (2) populate version tags even when skip-build; (3) optionally set `min_instance_count=1` to avoid cold starts. See `docs/learned/cloud_shared/BACKEND_SCALING_NONKUBE_MULTI_CLOUD.md` for full architecture, GCP vs AWS scaling, and best practices.
 
 ---
 
-## 39. Terraform Inconsistent State: Durable Has ECS, tofu state rm Fails with ResourceNotFoundException
+<h2 id="war-story-39" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">39. Terraform Inconsistent State: Durable Has ECS, tofu state rm Fails with ResourceNotFoundException</h2>
 
 **creation:** `<260313>`
 **last_updated:** `<260313>`
@@ -1860,11 +2355,11 @@ For nonkube with scale-to-zero: (1) call `ensure_agent()` on every agent-depende
 **difficulty:** 6
 **significance:** 8
 
-### 39.1 Context
+<h3 id="war-story-39-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">39.1 Context</h3>
 
 Durable state was corrupted (e.g. wrong `tofu init` dir, wrong backend key, or manual state copy) and contained resources that belong to nonkube (ECS, EventBridge). On redeploy, durable apply runs first and plans to **destroy** ECS because it is in durable state but not in durable config. The fix is to run `tofu state rm module.ecs` from the durable stack before redeploying. But `tofu state rm` failed with **`ResourceNotFoundException`** when acquiring the DynamoDB state lock—blocking the fix.
 
-### 39.2 Root Cause
+<h3 id="war-story-39-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">39.2 Root Cause</h3>
 
 Two intertwined issues:
 
@@ -1872,11 +2367,11 @@ Two intertwined issues:
 
 2. **DynamoDB lock table missing or wrong region:** The S3 backend uses a DynamoDB table for state locking. When you run `tofu state rm`, Terraform initializes the backend and tries to connect to DynamoDB. If the table does not exist or is in the wrong region, you get `ResourceNotFoundException` **even with `-lock=false`**—the backend connects to DynamoDB during init, before the lock flag is applied. See [TERRA_DYNAMODB_LOCK_TABLE.md](../learned/terra/TERRA_DYNAMODB_LOCK_TABLE.md).
 
-### 39.3 Key Insight
+<h3 id="war-story-39-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">39.3 Key Insight</h3>
 
 > Fixing corrupted Terraform state with `tofu state rm` can be blocked by a missing DynamoDB lock table. Run bootstrap first to create the table in the deploy region; then `tofu state rm` will succeed.
 
-### 39.4 Resolution
+<h3 id="war-story-39-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">39.4 Resolution</h3>
 
 1. **Bootstrap** (creates the lock table in the correct region):
    ```bash
@@ -1892,13 +2387,13 @@ Two intertwined issues:
 
 3. **Redeploy** via orchestrator.
 
-### 39.5 Takeaway
+<h3 id="war-story-39-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">39.5 Takeaway</h3>
 
 When durable state contains resources that belong to another stack, `tofu state rm` is the fix—but it requires the DynamoDB lock table to exist in the backend region. Bootstrap creates it. For full step-by-step instructions and diagrams, see [TERRA_LEARNED_INCONSISTENT_STATES.md](../learned/terra/TERRA_LEARNED_INCONSISTENT_STATES.md). For lock table details and `-lock=false` behavior, see [TERRA_DYNAMODB_LOCK_TABLE.md](../learned/terra/TERRA_DYNAMODB_LOCK_TABLE.md).
 
 ---
 
-## 40. EKS CronJob Overload: Jobs Accumulate, Node Fails, fru-api Pending
+<h2 id="war-story-40" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">40. EKS CronJob Overload: Jobs Accumulate, Node Fails, fru-api Pending</h2>
 
 **creation:** `<260313>`
 **last_updated:** `<260313>`
@@ -1907,11 +2402,11 @@ When durable state contains resources that belong to another stack, `tofu state 
 **difficulty:** 7
 **significance:** 8
 
-### 40.1 Context
+<h3 id="war-story-40-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">40.1 Context</h3>
 
 After deploy, **fru-api** pods stayed **Pending** indefinitely. EKS nodes transitioned to **NotReady** with "Kubelet stopped posting node status." Replacement nodes exhibited the same failure within ~3 minutes of boot. EC2 instances appeared healthy; the issue was at the kubelet/application layer.
 
-### 40.2 The Cascade
+<h3 id="war-story-40-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">40.2 The Cascade</h3>
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '9px' }, 'flowchart': { 'nodeSpacing': 15, 'rankSpacing': 20 }}}%%
@@ -1935,28 +2430,54 @@ graph TD
   style H fill:#ffebee,stroke:#c62828,stroke-width:1px,font-size:9px
 ```
 
-### 40.3 Root Cause
+<h3 id="war-story-40-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">40.3 Root Cause</h3>
 
-| Factor | Effect |
-|--------|--------|
-| <span style="background:#e3f2fd;padding:1px 3px">**t3.small**</span> | 2 vCPU, 2GB RAM — minimal headroom for system + workload |
-| <span style="background:#e3f2fd;padding:1px 3px">**concurrencyPolicy: Allow**</span> | Default; new Job every 5 min even if previous still running |
-| <span style="background:#e3f2fd;padding:1px 3px">**No ttlSecondsAfterFinished**</span> | Completed/failed Jobs and pods persist indefinitely |
-| <span style="background:#e3f2fd;padding:1px 3px">**Spark analytics pods**</span> | JVM + driver + local executors; ~512MB–1GB+ per pod, no limits |
-| <span style="background:#e3f2fd;padding:1px 3px">**maxPods=11**</span> | 5+ Spark + 2 fru-api + daemonsets → node at capacity |
-| <span style="background:#e3f2fd;padding:1px 3px">**Memory pressure**</span> | Multiple Spark pods on 2GB node → kubelet stops responding |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Factor</th>
+<th style="padding:8px">Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><span style="background:#e3f2fd;padding:1px 3px"><strong>t3.small</strong></span></td>
+<td style="padding:8px;background:#e8f5e9">2 vCPU, 2GB RAM — minimal headroom for system + workload</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><span style="background:#e3f2fd;padding:1px 3px"><strong>concurrencyPolicy: Allow</strong></span></td>
+<td style="padding:8px;background:#fff3e0">Default; new Job every 5 min even if previous still running</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><span style="background:#e3f2fd;padding:1px 3px"><strong>No ttlSecondsAfterFinished</strong></span></td>
+<td style="padding:8px;background:#e8f5e9">Completed/failed Jobs and pods persist indefinitely</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><span style="background:#e3f2fd;padding:1px 3px"><strong>Spark analytics pods</strong></span></td>
+<td style="padding:8px;background:#fff3e0">JVM + driver + local executors; ~512MB–1GB+ per pod, no limits</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><span style="background:#e3f2fd;padding:1px 3px"><strong>maxPods=11</strong></span></td>
+<td style="padding:8px;background:#e8f5e9">5+ Spark + 2 fru-api + daemonsets → node at capacity</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><span style="background:#e3f2fd;padding:1px 3px"><strong>Memory pressure</strong></span></td>
+<td style="padding:8px;background:#fff3e0">Multiple Spark pods on 2GB node → kubelet stops responding</td>
+</tr>
+</tbody>
+</table>
 
-### 40.4 Key Insight
+<h3 id="war-story-40-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">40.4 Key Insight</h3>
 
 > A CronJob creates a **new Job** (and Pod) each time the schedule fires. With `concurrencyPolicy: Allow` and no `ttlSecondsAfterFinished`, Jobs accumulate and overlap. Heavy workloads (Spark) on a small node (t3.small) overload it; kubelet stops; replacement nodes fail the same way.
 
-### 40.5 Takeaway
+<h3 id="war-story-40-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">40.5 Takeaway</h3>
 
 CronJob is a scheduler, not a singleton. Each schedule tick = one Job. For long-running or memory-heavy jobs, set `concurrencyPolicy: Forbid` and `ttlSecondsAfterFinished` to avoid accumulation and overlap. See War Story 41 for recovery and prevention.
 
 ---
 
-## 41. EKS Kube Recovery: CronJob Overload and Node Failure — Playbook and Prevention
+<h2 id="war-story-41" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">41. EKS Kube Recovery: CronJob Overload and Node Failure — Playbook and Prevention</h2>
 
 **creation:** `<260313>`
 **last_updated:** `<260314>`
@@ -1965,18 +2486,38 @@ CronJob is a scheduler, not a singleton. Each schedule tick = one Job. For long-
 **difficulty:** 6
 **significance:** 8
 
-### 41.1 Context
+<h3 id="war-story-41-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">41.1 Context</h3>
 
 When fru-api pods are Pending and nodes are NotReady due to CronJob overload (War Story 40), a recovery playbook is needed. The fix has two parts: **immediate recovery** (stop the cascade, free capacity, terminate the bad node, wait for replacement) and **prevention** (manifest changes so it does not recur).
 
-### 41.2 Affected Regions: us-east-2 and us-east-1 — Same Tainted-Node Pattern
+<h3 id="war-story-41-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">41.2 Affected Regions: us-east-2 and us-east-1 — Same Tainted-Node Pattern</h3>
 
 <span style="background:#ffebee;padding:2px 6px;border-radius:4px">**Both us-east-2 and us-east-1**</span> suffered the same failure pattern. You must run the full recovery playbook in **each affected region**, including **terminating the NotReady node** and **waiting for ASG replacement**.
 
-| Region | When Observed | Symptoms | Root Cause |
-|--------|---------------|----------|------------|
-| <span style="background:#e3f2fd;padding:1px 3px">**us-east-2**</span> | 2026-03 (War Story 40) | fru-api Pending; node NotReady; "Kubelet stopped posting node status" | CronJob overload → 60+ Jobs → memory pressure → kubelet stops |
-| <span style="background:#e3f2fd;padding:1px 3px">**us-east-1**</span> | 2026-03-14 | fru-api Pending; node NotReady; taint `node.kubernetes.io/unreachable:NoExecute` | Same: stuck Job (175m) + node overload → kubelet unreachable |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Region</th>
+<th style="padding:8px">When Observed</th>
+<th style="padding:8px">Symptoms</th>
+<th style="padding:8px">Root Cause</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><span style="background:#e3f2fd;padding:1px 3px"><strong>us-east-2</strong></span></td>
+<td style="padding:8px;background:#e8f5e9">2026-03 (War Story 40)</td>
+<td style="padding:8px;background:#e8f5e9">fru-api Pending; node NotReady; "Kubelet stopped posting node status"</td>
+<td style="padding:8px;background:#e8f5e9">CronJob overload → 60+ Jobs → memory pressure → kubelet stops</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><span style="background:#e3f2fd;padding:1px 3px"><strong>us-east-1</strong></span></td>
+<td style="padding:8px;background:#fff3e0">2026-03-14</td>
+<td style="padding:8px;background:#fff3e0">fru-api Pending; node NotReady; taint <code>node.kubernetes.io/unreachable:NoExecute</code></td>
+<td style="padding:8px;background:#fff3e0">Same: stuck Job (175m) + node overload → kubelet unreachable</td>
+</tr>
+</tbody>
+</table>
 
 **Common outcome:** The node gets tainted with `node.kubernetes.io/unreachable:NoExecute`. Kubernetes evicts pods from it and cannot schedule new pods onto it. The only path to recovery is:
 
@@ -1986,7 +2527,7 @@ When fru-api pods are Pending and nodes are NotReady due to CronJob overload (Wa
 4. **Wait for ASG to launch a replacement node** (~3–4 min)
 5. Re-enable CronJob after cluster recovers
 
-### 41.3 Recovery Flow
+<h3 id="war-story-41-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">41.3 Recovery Flow</h3>
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '9px' }, 'flowchart': { 'nodeSpacing': 15, 'rankSpacing': 20 }}}%%
@@ -2007,19 +2548,50 @@ graph TD
   style G fill:#e8f5e9,stroke:#2e7d32,stroke-width:1px,font-size:9px
 ```
 
-### 41.4 Recovery Commands
+<h3 id="war-story-41-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">41.4 Recovery Commands</h3>
 
-| Step | Command |
-|------|---------|
-| <span style="background:#e3f2fd;padding:1px 3px">**1. Suspend CronJob**</span> | `kubectl patch cronjob fru-analytics-periodic-kube -n fru-kube -p '{"spec":{"suspend":true}}'` |
-| <span style="background:#e3f2fd;padding:1px 3px">**2. Delete periodic Jobs**</span> | `kubectl get jobs -n fru-kube -o name \| grep periodic \| xargs kubectl delete -n fru-kube` (or `--all`; deploy re-runs bootstrap) |
-| <span style="background:#e3f2fd;padding:1px 3px">**3. Force-delete stuck pods**</span> | `kubectl delete pod <pod> -n fru-kube --force --grace-period=0` (for pods stuck Terminating on unreachable nodes) |
-| <span style="background:#e3f2fd;padding:1px 3px">**4. Terminate NotReady node**</span> | `AWS_PROFILE=admin aws ec2 terminate-instances --instance-ids <id> --region <region>` (instance ID: `kubectl get node -o jsonpath='{.items[0].spec.providerID}'` → extract `i-xxx` from end) |
-| <span style="background:#fff8e1;padding:1px 3px">**5. Wait for ASG replacement**</span> | ~3–4 min — see §41.5 below |
-| <span style="background:#e8f5e9;padding:1px 3px">**6. Verify**</span> | `kubectl get nodes` and `kubectl get pods -n fru-kube -l app=fru-api` |
-| <span style="background:#e8f5e9;padding:1px 3px">**7. Re-enable CronJob**</span> | `kubectl patch cronjob fru-analytics-periodic-kube -n fru-kube -p '{"spec":{"suspend":false}}'` |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Step</th>
+<th style="padding:8px">Command</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><span style="background:#e3f2fd;padding:1px 3px"><strong>1. Suspend CronJob</strong></span></td>
+<td style="padding:8px;background:#e8f5e9"><code>kubectl patch cronjob fru-analytics-periodic-kube -n fru-kube -p '{"spec":{"suspend":true}}'</code></td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><span style="background:#e3f2fd;padding:1px 3px"><strong>2. Delete periodic Jobs</strong></span></td>
+<td style="padding:8px;background:#fff3e0">`kubectl get jobs -n fru-kube -o name \</td>
+<td style="padding:8px;background:#fff3e0">grep periodic \</td>
+<td style="padding:8px;background:#fff3e0">xargs kubectl delete -n fru-kube<code> (or </code>--all`; deploy re-runs bootstrap)</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><span style="background:#e3f2fd;padding:1px 3px"><strong>3. Force-delete stuck pods</strong></span></td>
+<td style="padding:8px;background:#e8f5e9"><code>kubectl delete pod <pod> -n fru-kube --force --grace-period=0</code> (for pods stuck Terminating on unreachable nodes)</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><span style="background:#e3f2fd;padding:1px 3px"><strong>4. Terminate NotReady node</strong></span></td>
+<td style="padding:8px;background:#fff3e0"><code>AWS_PROFILE=admin aws ec2 terminate-instances --instance-ids <id> --region <region></code> (instance ID: <code>kubectl get node -o jsonpath='{.items[0].spec.providerID}'</code> → extract <code>i-xxx</code> from end)</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><span style="background:#fff8e1;padding:1px 3px"><strong>5. Wait for ASG replacement</strong></span></td>
+<td style="padding:8px;background:#e8f5e9">~3–4 min — see §41.5 below</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><span style="background:#e8f5e9;padding:1px 3px"><strong>6. Verify</strong></span></td>
+<td style="padding:8px;background:#fff3e0"><code>kubectl get nodes</code> and <code>kubectl get pods -n fru-kube -l app=fru-api</code></td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><span style="background:#e8f5e9;padding:1px 3px"><strong>7. Re-enable CronJob</strong></span></td>
+<td style="padding:8px;background:#e8f5e9"><code>kubectl patch cronjob fru-analytics-periodic-kube -n fru-kube -p '{"spec":{"suspend":false}}'</code></td>
+</tr>
+</tbody>
+</table>
 
-### 41.5 ASG Replacement: What It Is and How It Works
+<h3 id="war-story-41-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">41.5 ASG Replacement: What It Is and How It Works</h3>
 
 <span style="background:#e3f2fd;padding:2px 6px;border-radius:4px">**What is an ASG?**</span> An **Auto Scaling Group** (ASG) is an AWS construct that maintains a desired number of EC2 instances for your EKS worker node group. When you create an EKS managed node group, AWS creates an ASG behind it.
 
@@ -2047,23 +2619,69 @@ sequenceDiagram
     You->>EKS: kubectl get nodes (new node Ready)
 ```
 
-| Phase | Duration | What Happens |
-|-------|----------|--------------|
-| <span style="background:#ffebee;padding:1px 3px">**1. Terminate**</span> | Immediate | You run `aws ec2 terminate-instances`. Instance state: `shutting-down` → `terminated`. |
-| <span style="background:#fff3e0;padding:1px 3px">**2. ASG detects shortfall**</span> | ~30–60 s | ASG compares desired vs. current capacity; decides to launch a replacement. |
-| <span style="background:#fff8e1;padding:1px 3px">**3. New instance launch**</span> | ~1–2 min | EC2 instance boots from launch template; joins VPC, gets private IP. |
-| <span style="background:#e8f5e9;padding:1px 3px">**4. EKS node registration**</span> | ~1–2 min | EKS bootstrap (kubelet, containerd) runs; node registers with control plane; status becomes `Ready`. |
-| <span style="background:#e3f2fd;padding:1px 3px">**Total**</span> | **~3–4 min** | New node Ready; fru-api pods can schedule. |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Phase</th>
+<th style="padding:8px">Duration</th>
+<th style="padding:8px">What Happens</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><span style="background:#ffebee;padding:1px 3px"><strong>1. Terminate</strong></span></td>
+<td style="padding:8px;background:#e8f5e9">Immediate</td>
+<td style="padding:8px;background:#e8f5e9">You run <code>aws ec2 terminate-instances</code>. Instance state: <code>shutting-down</code> → <code>terminated</code>.</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><span style="background:#fff3e0;padding:1px 3px"><strong>2. ASG detects shortfall</strong></span></td>
+<td style="padding:8px;background:#fff3e0">~30–60 s</td>
+<td style="padding:8px;background:#fff3e0">ASG compares desired vs. current capacity; decides to launch a replacement.</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><span style="background:#fff8e1;padding:1px 3px"><strong>3. New instance launch</strong></span></td>
+<td style="padding:8px;background:#e8f5e9">~1–2 min</td>
+<td style="padding:8px;background:#e8f5e9">EC2 instance boots from launch template; joins VPC, gets private IP.</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><span style="background:#e8f5e9;padding:1px 3px"><strong>4. EKS node registration</strong></span></td>
+<td style="padding:8px;background:#fff3e0">~1–2 min</td>
+<td style="padding:8px;background:#fff3e0">EKS bootstrap (kubelet, containerd) runs; node registers with control plane; status becomes <code>Ready</code>.</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><span style="background:#e3f2fd;padding:1px 3px"><strong>Total</strong></span></td>
+<td style="padding:8px;background:#e8f5e9"><strong>~3–4 min</strong></td>
+<td style="padding:8px;background:#e8f5e9">New node Ready; fru-api pods can schedule.</td>
+</tr>
+</tbody>
+</table>
 
 <span style="background:#e8f5e9;padding:2px 6px;border-radius:4px">**How to monitor:**</span> Run `kubectl get nodes -w` in one terminal. You will see the old node eventually disappear (or show `NotReady,SchedulingDisabled`) and a new node appear with `Ready`. Alternatively, `kubectl get nodes` every 60 seconds until a Ready node appears.
 
-### 41.6 Prevention: Manifest Changes
+<h3 id="war-story-41-sec-6" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">41.6 Prevention: Manifest Changes</h3>
 
-| Change | Purpose |
-|--------|---------|
-| <span style="background:#e3f2fd;padding:1px 3px">**concurrencyPolicy: Forbid**</span> | Only one Job at a time; skip new run if previous still running |
-| <span style="background:#e3f2fd;padding:1px 3px">**ttlSecondsAfterFinished: 240**</span> | Auto-delete Job and pods 4 min after completion |
-| <span style="background:#e3f2fd;padding:1px 3px">**Optional: desired_size=2 or t3.medium**</span> | More headroom for overlapping workloads |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Change</th>
+<th style="padding:8px">Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><span style="background:#e3f2fd;padding:1px 3px"><strong>concurrencyPolicy: Forbid</strong></span></td>
+<td style="padding:8px;background:#e8f5e9">Only one Job at a time; skip new run if previous still running</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><span style="background:#e3f2fd;padding:1px 3px"><strong>ttlSecondsAfterFinished: 240</strong></span></td>
+<td style="padding:8px;background:#fff3e0">Auto-delete Job and pods 4 min after completion</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><span style="background:#e3f2fd;padding:1px 3px"><strong>Optional: desired_size=2 or t3.medium</strong></span></td>
+<td style="padding:8px;background:#e8f5e9">More headroom for overlapping workloads</td>
+</tr>
+</tbody>
+</table>
 
 Applied in `infra_terraform/modules/cloud_shared/k8s/spark-cronjob.yaml.j2`:
 
@@ -2076,15 +2694,44 @@ spec:
       ttlSecondsAfterFinished: 240
 ```
 
-### 41.7 Scope: CronJobs vs EventBridge vs GCP
+<h3 id="war-story-41-sec-7" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">41.7 Scope: CronJobs vs EventBridge vs GCP</h3>
 
 The wasteful-resource problem and TTL apply differently across schedulers and providers:
 
-| Scheduler | Provider | Overlap? | TTL? | Failure mode |
-|-----------|----------|----------|------|--------------|
-| <span style="background:#e3f2fd;padding:1px 3px">**K8s CronJob**</span> | AWS EKS, GCP GKE | Yes (default `concurrencyPolicy: Allow`) | `ttlSecondsAfterFinished: 240` — Jobs and pods auto-deleted 4 min after completion | Shared node → pods accumulate → node overload → kubelet stops |
-| <span style="background:#e3f2fd;padding:1px 3px">**EventBridge → ECS**</span> | AWS nonkube | Yes — each schedule tick starts a new task even if previous still running | No — EventBridge has no TTL; each invocation is a separate ECS task | Isolated Fargate tasks — no shared node; no node crash (but overlapping runs waste $) |
-| <span style="background:#e3f2fd;padding:1px 3px">**Cloud Scheduler → Cloud Run Job**</span> | GCP nonkube | Each execution is independent | N/A — Cloud Run Job executions don't accumulate like K8s Jobs | Different semantics; no K8s-style TTL needed |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Scheduler</th>
+<th style="padding:8px">Provider</th>
+<th style="padding:8px">Overlap?</th>
+<th style="padding:8px">TTL?</th>
+<th style="padding:8px">Failure mode</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><span style="background:#e3f2fd;padding:1px 3px"><strong>K8s CronJob</strong></span></td>
+<td style="padding:8px;background:#e8f5e9">AWS EKS, GCP GKE</td>
+<td style="padding:8px;background:#e8f5e9">Yes (default <code>concurrencyPolicy: Allow</code>)</td>
+<td style="padding:8px;background:#e8f5e9"><code>ttlSecondsAfterFinished: 240</code> — Jobs and pods auto-deleted 4 min after completion</td>
+<td style="padding:8px;background:#e8f5e9">Shared node → pods accumulate → node overload → kubelet stops</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><span style="background:#e3f2fd;padding:1px 3px"><strong>EventBridge → ECS</strong></span></td>
+<td style="padding:8px;background:#fff3e0">AWS nonkube</td>
+<td style="padding:8px;background:#fff3e0">Yes — each schedule tick starts a new task even if previous still running</td>
+<td style="padding:8px;background:#fff3e0">No — EventBridge has no TTL; each invocation is a separate ECS task</td>
+<td style="padding:8px;background:#fff3e0">Isolated Fargate tasks — no shared node; no node crash (but overlapping runs waste $)</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><span style="background:#e3f2fd;padding:1px 3px"><strong>Cloud Scheduler → Cloud Run Job</strong></span></td>
+<td style="padding:8px;background:#e8f5e9">GCP nonkube</td>
+<td style="padding:8px;background:#e8f5e9">Each execution is independent</td>
+<td style="padding:8px;background:#e8f5e9">N/A — Cloud Run Job executions don't accumulate like K8s Jobs</td>
+<td style="padding:8px;background:#e8f5e9">Different semantics; no K8s-style TTL needed</td>
+</tr>
+</tbody>
+</table>
 
 **Kube vs nonkube (AWS):** The node failure happened on kube because all CronJob pods share a single node (t3.small). Nonkube uses ECS Fargate — each Spark task runs in its own Fargate instance, so there is no shared node to overload. EventBridge can still start overlapping tasks (wasteful in $ and redundant writes), but it does not crash a node.
 
@@ -2092,24 +2739,44 @@ The wasteful-resource problem and TTL apply differently across schedulers and pr
 
 **GCP:** GCP kube (GKE) uses the same CronJob manifest (`spark-cronjob.yaml.j2`), so it gets `concurrencyPolicy: Forbid` and `ttlSecondsAfterFinished: 240`. GCP nonkube uses Cloud Scheduler → Cloud Run Job; executions are independent and do not pile up the same way, so no equivalent TTL is required.
 
-### 41.8 Key Insight
+<h3 id="war-story-41-sec-8" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">41.8 Key Insight</h3>
 
 > Recovery requires stopping the cascade (suspend CronJob, delete Jobs) before replacing the node. Otherwise the new node receives the same overload and fails again. You must **terminate the NotReady EC2 instance** and **wait for ASG replacement** — both us-east-2 and us-east-1 required this. Re-enable CronJob only after the cluster recovers and fru-api pods are Running.
 
-### 41.9 Deploy-Trigger Hypothesis: Why Every Deploy Causes Unreachable
+<h3 id="war-story-41-sec-9" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">41.9 Deploy-Trigger Hypothesis: Why Every Deploy Causes Unreachable</h3>
 
 <span style="background:#ffebee;padding:2px 6px;border-radius:4px">**Do not blindly replace the node.**</span> Something causes the node to become unreachable. Evidence suggests the **deploy itself** triggers it:
 
-| Deploy Phase | Concurrent Load on 1× t3.small (2GB) |
-|--------------|--------------------------------------|
-| helm upgrade LB controller | 2 old (Terminating) + 2 new (Starting) ≈ 600MB spike |
-| kube_apply + rollout restart fru-api | 2 old (Terminating) + 2 new (Starting) ≈ 1GB |
-| CronJob Spark (if schedule fired) | 1 Spark pod ≈ 512MB–1GB |
-| **Total** | **2.3GB+ on 2GB node → OOM → kubelet stops** |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Deploy Phase</th>
+<th style="padding:8px">Concurrent Load on 1× t3.small (2GB)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px">helm upgrade LB controller</td>
+<td style="padding:8px;background:#e8f5e9">2 old (Terminating) + 2 new (Starting) ≈ 600MB spike</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">kube_apply + rollout restart fru-api</td>
+<td style="padding:8px;background:#fff3e0">2 old (Terminating) + 2 new (Starting) ≈ 1GB</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">CronJob Spark (if schedule fired)</td>
+<td style="padding:8px;background:#e8f5e9">1 Spark pod ≈ 512MB–1GB</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Total</strong></td>
+<td style="padding:8px;background:#fff3e0"><strong>2.3GB+ on 2GB node → OOM → kubelet stops</strong></td>
+</tr>
+</tbody>
+</table>
 
 See [EKS_NODE_KUBELET_CRONJOB.md](../learned/cloud_shared/EKS_NODE_KUBELET_CRONJOB.md) §4 for diagnostic commands (run **before** terminating) and mitigation options (suspend CronJob before deploy, scale to 2 nodes, t3.medium).
 
-### 41.10 Deploy Fail-Fast and Investigation (us-east-1, us-east-2, 2026-03)
+<h3 id="war-story-41-sec-10" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">41.10 Deploy Fail-Fast and Investigation (us-east-1, us-east-2, 2026-03)</h3>
 
 When fru-api or aws-load-balancer-controller pods stay Pending due to node unreachable/taint, deploy now **fail-fasts after ~90s** instead of waiting the full timeout. `k8s_deploy_helpers.py` detects:
 
@@ -2118,13 +2785,13 @@ When fru-api or aws-load-balancer-controller pods stay Pending due to node unrea
 
 On detection, deploy prints a full investigation including **node conditions** (when did it transition?), **cluster events** (OOMKilled?), and **EC2 console output** hint. Same pattern in <span style="background:#e3f2fd;padding:1px 3px">**us-east-1**</span> and <span style="background:#e3f2fd;padding:1px 3px">**us-east-2**</span>. Run diagnostics (EKS_NODE_KUBELET_CRONJOB.md §4) **before** terminating. Follow recovery playbook in §41.4 and §41.5.
 
-### 41.11 Takeaway
+<h3 id="war-story-41-sec-11" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">41.11 Takeaway</h3>
 
 For EKS kube with Spark CronJobs: (1) use `concurrencyPolicy: Forbid` and `ttlSecondsAfterFinished` to prevent accumulation; (2) if nodes go NotReady in **any region** (us-east-1, us-east-2, etc.), follow the recovery playbook in order — **including terminating the node and waiting for ASG replacement**; (3) re-enable CronJob only after deploy applies the fixes and cluster recovers. See [EKS_NODE_KUBELET_CRONJOB.md](../learned/cloud_shared/EKS_NODE_KUBELET_CRONJOB.md) for full reference.
 
 ---
 
-## 42. Batch Analytics "Backend API not reachable": CloudFront Edge Cache for /analytics After Two-Phase Deploy
+<h2 id="war-story-42" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">42. Batch Analytics "Backend API not reachable": CloudFront Edge Cache for /analytics After Two-Phase Deploy</h2>
 
 **creation:** `<260315>`
 **last_updated:** `<260315>`
@@ -2133,11 +2800,11 @@ For EKS kube with Spark CronJobs: (1) use `concurrencyPolicy: Forbid` and `ttlSe
 **difficulty:** 5
 **significance:** 7
 
-### 42.1 Context
+<h3 id="war-story-42-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">42.1 Context</h3>
 
 After a two-phase kube deploy (EKS apply → kube_apply → poll NLB hostname → second Terraform apply to wire CloudFront API origin), the **query** UI worked (chat, `/query`), but the **Batch Analytics** panel showed "Backend API not reachable. CloudFront may not be routing /analytics to the backend." The frontend received HTML instead of JSON.
 
-### 42.2 Architecture: Two-Phase Kube Deploy
+<h3 id="war-story-42-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">42.2 Architecture: Two-Phase Kube Deploy</h3>
 
 The kube deploy uses two Terraform applies because the NLB hostname is not known until after the LoadBalancer Service is provisioned:
 
@@ -2163,33 +2830,95 @@ graph TD
   style H fill:#e8f5e9,stroke:#2e7d32,stroke-width:1px,font-size:9px
 ```
 
-### 42.3 Root Cause: CloudFront Edge Cache
+<h3 id="war-story-42-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">42.3 Root Cause: CloudFront Edge Cache</h3>
 
-| Phase | CloudFront state | Request to /analytics | Response |
-|:------|:-----------------|:---------------------|:---------|
-| <span style="background:#e3f2fd;padding:1px 3px">**Phase 1**</span> | S3 origin only; API origin not yet added | Path matches ordered behavior → target = S3 | S3 returns 404 (no object) → CloudFront custom_error_response returns index.html |
-| <span style="background:#e3f2fd;padding:1px 3px">**Phase 2**</span> | API origin added; cache behaviors updated | Path matches ordered behavior → target = API | API returns JSON |
-| <span style="background:#ffebee;padding:2px 4px">**Problem**</span> | Edge cache populated before Phase 2 | Cache hit at edge | CloudFront serves **cached** index.html from Phase 1 |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Phase</th>
+<th style="padding:8px">CloudFront state</th>
+<th style="padding:8px">Request to /analytics</th>
+<th style="padding:8px">Response</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><span style="background:#e3f2fd;padding:1px 3px"><strong>Phase 1</strong></span></td>
+<td style="padding:8px;background:#e8f5e9">S3 origin only; API origin not yet added</td>
+<td style="padding:8px;background:#e8f5e9">Path matches ordered behavior → target = S3</td>
+<td style="padding:8px;background:#e8f5e9">S3 returns 404 (no object) → CloudFront custom_error_response returns index.html</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><span style="background:#e3f2fd;padding:1px 3px"><strong>Phase 2</strong></span></td>
+<td style="padding:8px;background:#fff3e0">API origin added; cache behaviors updated</td>
+<td style="padding:8px;background:#fff3e0">Path matches ordered behavior → target = API</td>
+<td style="padding:8px;background:#fff3e0">API returns JSON</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><span style="background:#ffebee;padding:2px 4px"><strong>Problem</strong></span></td>
+<td style="padding:8px;background:#e8f5e9">Edge cache populated before Phase 2</td>
+<td style="padding:8px;background:#e8f5e9">Cache hit at edge</td>
+<td style="padding:8px;background:#e8f5e9">CloudFront serves <strong>cached</strong> index.html from Phase 1</td>
+</tr>
+</tbody>
+</table>
 
 **Key insight:** CloudFront cached the 404→index.html response at the edge during Phase 1. When Phase 2 updated the distribution to route `/analytics` to the API, the **edge cache was not invalidated**. Existing cached entries for `/analytics` continued to serve HTML until the cache expired or was invalidated.
 
-### 42.4 Why /query Worked but /analytics Did Not
+<h3 id="war-story-42-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">42.4 Why /query Worked but /analytics Did Not</h3>
 
-| Path | Likely cached? | Observed |
-|:-----|:---------------|:---------|
-| <span style="background:#e3f2fd;padding:1px 3px">**/query**</span> | Possibly not hit before Phase 2, or invalidated by frontend deploy | <span style="background:#c8e6c9;padding:2px 4px">✓</span> Works |
-| <span style="background:#ffebee;padding:2px 4px">**/analytics**</span> | Hit during Phase 1 (Batch Analytics panel loads on mount) | <span style="background:#ffcdd2;padding:2px 4px">⚠</span> Returns HTML |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Path</th>
+<th style="padding:8px">Likely cached?</th>
+<th style="padding:8px">Observed</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><span style="background:#e3f2fd;padding:1px 3px"><strong>/query</strong></span></td>
+<td style="padding:8px;background:#e8f5e9">Possibly not hit before Phase 2, or invalidated by frontend deploy</td>
+<td style="padding:8px;background:#e8f5e9"><span style="background:#c8e6c9;padding:2px 4px">✓</span> Works</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><span style="background:#ffebee;padding:2px 4px"><strong>/analytics</strong></span></td>
+<td style="padding:8px;background:#fff3e0">Hit during Phase 1 (Batch Analytics panel loads on mount)</td>
+<td style="padding:8px;background:#fff3e0"><span style="background:#ffcdd2;padding:2px 4px">⚠</span> Returns HTML</td>
+</tr>
+</tbody>
+</table>
 
 The Batch Analytics panel fetches `/analytics` on mount. If the user opened the app before Phase 2 completed, or if CloudFront had cached the response from a prior request, the edge served the cached HTML.
 
-### 42.5 Distinction from War Story 28
+<h3 id="war-story-42-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">42.5 Distinction from War Story 28</h3>
 
-| War Story | Cache layer | Symptom | Fix |
-|:----------|:------------|:--------|:----|
-| <span style="background:#e3f2fd;padding:1px 3px">**28**</span> | <span style="background:#fff3e0;padding:1px 3px">Browser</span> HTTP cache | Stale data; API returns correct when hit directly | `Cache-Control: no-store` on API response |
-| <span style="background:#e3f2fd;padding:1px 3px">**42**</span> | <span style="background:#fff3e0;padding:1px 3px">CloudFront</span> edge cache | HTML instead of JSON; routing config changed mid-deploy | Invalidate `/analytics` after Phase 2 |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">War Story</th>
+<th style="padding:8px">Cache layer</th>
+<th style="padding:8px">Symptom</th>
+<th style="padding:8px">Fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><span style="background:#e3f2fd;padding:1px 3px"><strong>28</strong></span></td>
+<td style="padding:8px;background:#e8f5e9"><span style="background:#fff3e0;padding:1px 3px">Browser</span> HTTP cache</td>
+<td style="padding:8px;background:#e8f5e9">Stale data; API returns correct when hit directly</td>
+<td style="padding:8px;background:#e8f5e9"><code>Cache-Control: no-store</code> on API response</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><span style="background:#e3f2fd;padding:1px 3px"><strong>42</strong></span></td>
+<td style="padding:8px;background:#fff3e0"><span style="background:#fff3e0;padding:1px 3px">CloudFront</span> edge cache</td>
+<td style="padding:8px;background:#fff3e0">HTML instead of JSON; routing config changed mid-deploy</td>
+<td style="padding:8px;background:#fff3e0">Invalidate <code>/analytics</code> after Phase 2</td>
+</tr>
+</tbody>
+</table>
 
-### 42.6 Resolution
+<h3 id="war-story-42-sec-6" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">42.6 Resolution</h3>
 
 **1. Immediate fix:** Invalidate CloudFront cache for `/analytics`:
 
@@ -2209,38 +2938,61 @@ Wait 1–2 minutes for edge propagation, then retry Batch Analytics.
 
 **3. Script:** `tmp/backup_tf_state/invalidate_kube_analytics.sh` sources `.env` and runs the invalidation. Use when Batch Analytics shows "Backend API not reachable" but `/query` works.
 
-### 42.7 Takeaway
+<h3 id="war-story-42-sec-7" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">42.7 Takeaway</h3>
 
 When CloudFront routing changes after a deploy (e.g. two-phase kube deploy adding the API origin), **invalidate** any paths that were previously served from a different origin. Otherwise the edge cache can serve stale content (e.g. index.html from S3) until TTL expires. For API paths like `/analytics`, run `create-invalidation` after the second apply, or add invalidation to the deploy pipeline. See [AWS_LEARNED_CLOUDFRONT.md](../learned/aws/AWS_LEARNED_CLOUDFRONT.md) for cache behavior and path routing.
 
 ---
 
-## 43. EKS Nodes NotReady After Deploy: No Wait for min_node_count Before helm/kube_apply
+<h2 id="war-story-43" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">43. EKS Nodes NotReady After Deploy: No Wait for min_node_count Before helm/kube_apply</h2>
 
 **creation:** `<260315>`
 **keywords:** EKS, deploy, min_node_count, wait_for_kube_nodes_ready, t3.small, NotReady, kubelet stopped
 **difficulty:** 6
 **significance:** 8
 
-### 43.1 Context
+<h3 id="war-story-43-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">43.1 Context</h3>
 
 us-east-2 kube deploy ran with CronJob fixes deployed (Forbid, ttlSecondsAfterFinished) and `min_node_count: 2`. Both nodes transitioned to NotReady with "Kubelet stopped posting node status" during or shortly after deploy. The CronJob accumulation hypothesis did not apply — so what caused it?
 
-### 43.2 Investigation
+<h3 id="war-story-43-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">43.2 Investigation</h3>
 
-| Check | Result |
-|-------|--------|
-| CloudFront config | Correct — API origin wired, `/analytics*` routes to ALB |
-| CronJob manifest | `concurrencyPolicy: Forbid`, `ttlSecondsAfterFinished: 240` ✓ |
-| Config YAML | `min_node_count: 2` for us-east-2 ✓ |
-| Node launch times | Node 1: 16:50 UTC; Node 2: 00:31 UTC (16h earlier) |
-| Deploy flow | tofu apply → CronJob suspend → helm → kube_apply → rollout restart |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Check</th>
+<th style="padding:8px">Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px">CloudFront config</td>
+<td style="padding:8px;background:#e8f5e9">Correct — API origin wired, <code>/analytics*</code> routes to ALB</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">CronJob manifest</td>
+<td style="padding:8px;background:#fff3e0"><code>concurrencyPolicy: Forbid</code>, <code>ttlSecondsAfterFinished: 240</code> ✓</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">Config YAML</td>
+<td style="padding:8px;background:#e8f5e9"><code>min_node_count: 2</code> for us-east-2 ✓</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">Node launch times</td>
+<td style="padding:8px;background:#fff3e0">Node 1: 16:50 UTC; Node 2: 00:31 UTC (16h earlier)</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">Deploy flow</td>
+<td style="padding:8px;background:#e8f5e9">tofu apply → CronJob suspend → helm → kube_apply → rollout restart</td>
+</tr>
+</tbody>
+</table>
 
 **Root cause:** The deploy does **not** wait for `min_node_count` Ready nodes after tofu apply. Terraform updates the ASG desired capacity, but new nodes take 2–5 min to boot and register. The deploy immediately runs helm upgrade and kube_apply — all pods schedule on the **single Ready node** (or the first to become Ready). That node gets overloaded → memory pressure → kubelet stops → node unreachable.
 
-### 43.3 Deploy Order Gap
+<h3 id="war-story-43-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">43.3 Deploy Order Gap</h3>
 
-```
+```text
 tofu apply (min_node_count=2)  →  ASG scales; new node launching (async)
        ↓
 CronJob suspend  →  helm upgrade  →  kube_apply  →  rollout restart
@@ -2250,30 +3002,30 @@ All pods schedule on 1 Ready node  →  2.3GB+ on 2GB  →  OOM  →  kubelet st
 
 Even with `min_node_count: 2`, if the second node is still booting, the scheduler has only one Ready node. The fix: **wait for min_node_count Ready nodes** before helm/kube_apply.
 
-### 43.4 Fix Applied
+<h3 id="war-story-43-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">43.4 Fix Applied</h3>
 
 - **`tools/cloud_shared/deploy/wait_for_capacity.py`** — `wait_for_kube_nodes_ready(min_count, ...)` polls `kubectl get nodes` until at least `min_count` nodes have `Ready=True`.
 - **`tools/aws/kube/deploy_kube.py`** — After tofu apply, before Phase 9.4 (CronJob suspend), call `wait_for_kube_nodes_ready(min_nodes)` when `plan_clean` is false.
 - Env vars: `KUBE_NODE_WAIT_TIMEOUT_SEC` (default 600), `KUBE_NODE_WAIT_INTERVAL_SEC` (default 15).
 
-### 43.5 Takeaway
+<h3 id="war-story-43-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">43.5 Takeaway</h3>
 
 When tofu apply changes node count (scale-up or fresh cluster), **wait for those nodes to be Ready** before running helm, kube_apply, or rollout restart. Otherwise the first Ready node receives all workload and can OOM. See [TODO_REFACTOR_RESOURCE_CHECK.md](../TODO_REFACTOR_RESOURCE_CHECK.md) for the full refactor plan (kube + nonkube).
 
 ---
 
-## 44. Nonkube Deploy "Module not installed": Cwd-Dependent Path Resolution and Why the Bug Was Latent
+<h2 id="war-story-44" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">44. Nonkube Deploy "Module not installed": Cwd-Dependent Path Resolution and Why the Bug Was Latent</h2>
 
 **creation:** `<260315>`
 **keywords:** nonkube, deploy, orchestrator, REPO_ROOT, tofu init, import_preexist, path resolution, cwd, latent bug
 **difficulty:** 6
 **significance:** 8
 
-### 44.1 Context
+<h3 id="war-story-44-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">44.1 Context</h3>
 
 `scope=all` deploy failed at the nonkube import phase with 7 import failures. Error: *"This module's local cache directory ../../../../modules/cloud_shared/primitives/tags could not be read. Run tofu init to install all modules."* Kube deploy succeeded; the failure was specific to nonkube.
 
-### 44.2 Root Cause
+<h3 id="war-story-44-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">44.2 Root Cause</h3>
 
 Path resolution depended on the current working directory:
 
@@ -2282,27 +3034,47 @@ Path resolution depended on the current working directory:
 
 When `cwd` was wrong (e.g. `infra_terraform/live_deploy/aws/nonkube`), `stack_dir` resolved to a non-existent path and tofu failed with "Module not installed".
 
-### 44.3 Why the Bug Was Latent
+<h3 id="war-story-44-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">44.3 Why the Bug Was Latent</h3>
 
-| Factor | Effect |
-|--------|--------|
-| **Import often skipped** | When `plan_shows_no_changes` is true (state clean), the import phase is skipped. In us-east-1 with existing state, import rarely ran. |
-| **New region** | us-east-2 as a new region meant empty/dirty state → plan showed changes → import ran → bug manifested. |
-| **Convention** | Docs say "Usage (from project root)". Running from project root kept `cwd` correct, so the bug stayed hidden. |
-| **Import phase is relatively new** | `run_import_nonkube` was added in the deployment-optimizations refactor. Before that, nonkube deploy had no import phase. |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Factor</th>
+<th style="padding:8px">Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Import often skipped</strong></td>
+<td style="padding:8px;background:#e8f5e9">When <code>plan_shows_no_changes</code> is true (state clean), the import phase is skipped. In us-east-1 with existing state, import rarely ran.</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>New region</strong></td>
+<td style="padding:8px;background:#fff3e0">us-east-2 as a new region meant empty/dirty state → plan showed changes → import ran → bug manifested.</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Convention</strong></td>
+<td style="padding:8px;background:#e8f5e9">Docs say "Usage (from project root)". Running from project root kept <code>cwd</code> correct, so the bug stayed hidden.</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Import phase is relatively new</strong></td>
+<td style="padding:8px;background:#fff3e0"><code>run_import_nonkube</code> was added in the deployment-optimizations refactor. Before that, nonkube deploy had no import phase.</td>
+</tr>
+</tbody>
+</table>
 
 The bug required both (a) import actually running, and (b) wrong `cwd`. Either condition alone avoided it.
 
-### 44.4 Fix Applied
+<h3 id="war-story-44-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">44.4 Fix Applied</h3>
 
 1. **`orchestrator.py`** — Set `env["REPO_ROOT"] = project_root` in `run_command()`, where `project_root = os.path.dirname(os.path.abspath(__file__))`. Ensures path resolution is cwd-independent for all subprocesses.
 2. **`tools/aws/scope_shared/core/terra_init.py`** — Added `_resolve_stack_dir()` to resolve `stack_dir` to an absolute path using `REPO_ROOT`, and pass that absolute path as `cwd` to tofu.
 
-### 44.5 Key Insight
+<h3 id="war-story-44-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">44.5 Key Insight</h3>
 
 > Never rely on `os.getcwd()` for resolving project-relative paths. Use `REPO_ROOT` (or equivalent) set by the top-level entry point. Subprocesses inherit env but not a guaranteed cwd; scripts may be invoked from any directory (IDE, CI, wrapper scripts).
 
-### 44.6 Takeaway
+<h3 id="war-story-44-sec-6" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">44.6 Takeaway</h3>
 
 (1) Set `REPO_ROOT` in the orchestrator (or main entry point) so all child processes resolve paths consistently. (2) Resolve stack dirs to absolute paths before passing them as `cwd` to tofu/subprocess. (3) Latent bugs often hide behind conditional execution (import skip) and convention (run from project root); new regions or different invocation patterns can expose them.
 

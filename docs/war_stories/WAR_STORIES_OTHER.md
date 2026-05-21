@@ -1,10 +1,49 @@
-# WAR_STORIES_OTHER
+<h1 id="war-stories-other-title" style="color:#0d47a1;font-size:1.5em;font-weight:700;border-bottom:2px solid #90caf9;padding-bottom:0.25em;margin-top:0">WAR_STORIES_OTHER</h1>
 
 A curated list of **non-trivial technical war stories**, capturing real lessons suitable for **senior-level interviews**.
 
+**Authoring discipline:** `.cursor/rules/exwar-war-stories-extraction.mdc` and `.cursor/rules/mrkd-markdown-authoring.mdc`.
+
 ---
 
-## 1. Scraping content from a shared ChatGPT link
+<h2 id="document-outline" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">Document outline</h2>
+
+1. [Reading guide](#reading-guide) — metadata and subsection labels.
+2. [Story index](#story-index) — quick links to every story.
+
+---
+
+<h2 id="reading-guide" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">Reading guide</h2>
+
+<table>
+<thead>
+<tr style="background:#1565c0;color:white"><th style="padding:8px">Field / label</th><th style="padding:8px">Meaning</th></tr>
+</thead>
+<tbody>
+<tr><td style="background:#e3f2fd;padding:8px"><strong>creation</strong> / <strong>last_updated</strong></td><td style="background:#e8f5e9;padding:8px">When the story was first captured and last revised (<code>&lt;YYMMDD&gt;</code> or <code>&lt;YYMMDD-HHMMSS&gt;</code>).</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px"><strong>keywords</strong></td><td style="background:#e8f5e9;padding:8px">Grep-friendly index into problem area and stack.</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px"><strong>difficulty</strong> / <strong>significance</strong></td><td style="background:#e8f5e9;padding:8px">Relative depth (1–10) and how reusable the lesson is for interviews.</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px"><strong>N.1–N.5</strong></td><td style="background:#e8f5e9;padding:8px">Context → Root Cause → Key Insight → Resolution → Takeaway.</td></tr>
+</tbody>
+</table>
+
+---
+
+<h2 id="story-index" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">Story index</h2>
+
+<table>
+<thead>
+<tr style="background:#1565c0;color:white"><th style="padding:8px">#</th><th style="padding:8px">Title</th><th style="padding:8px">Gist</th></tr>
+</thead>
+<tbody>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">1</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-1">1. Scraping content from a shared ChatGPT link</a></td><td style="padding:8px;background:#fff3e0">Scraping content from a shared ChatGPT link</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">2</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-2">2. Docker Desktop disk image, external SSD, and “phantom” disk usage</a></td><td style="padding:8px;background:#e8f5e9">Docker Desktop disk image, external SSD, and “phantom” disk usage</td></tr>
+</tbody>
+</table>
+
+---
+
+<h2 id="war-story-1" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">1. Scraping content from a shared ChatGPT link</h2>
 
 **creation:** `<260312>`
 
@@ -17,7 +56,7 @@ A curated list of **non-trivial technical war stories**, capturing real lessons 
 
 ---
 
-### 1.1 Context
+<h3 id="war-story-1-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">1.1 Context</h3>
 
 We had a public ChatGPT share URL like:
 
@@ -27,7 +66,7 @@ Opening this in the browser showed only the generic ChatGPT UI (header, “Chat 
 
 ---
 
-### 1.2 Root Cause
+<h3 id="war-story-1-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">1.2 Root Cause</h3>
 
 The share URL is **purely a UI endpoint**. The real conversation data lives behind a separate JSON endpoint:
 
@@ -45,7 +84,7 @@ The HTML page we were hitting originally never exposed this JSON, so scraping it
 
 ---
 
-### 1.3 Key Insight
+<h3 id="war-story-1-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">1.3 Key Insight</h3>
 
 > For ChatGPT share links, the **only reliable source of conversation text is the backend JSON (`/backend-api/share/<id>`)**, not the rendered HTML page.
 
@@ -57,14 +96,14 @@ Once we saw the JSON structure, the problem became a straightforward “walk a m
 
 ---
 
-### 1.4 Resolution
+<h3 id="war-story-1-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">1.4 Resolution</h3>
 
 Cursor saved the JSON to a local file under `agent-tools/`. We then used a small Python script to dump all messages.
 
 From the project root:
 
-```bash
-# python - << 'PY'
+```python
+# One-off: python - << 'PY'  (from project root)
 import json, os
 
 path = os.path.join(
@@ -106,7 +145,7 @@ This was enough to recover the full CI/CD + feature-flag discussion that the HTM
 
 ---
 
-### 1.5 Takeaway
+<h3 id="war-story-1-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">1.5 Takeaway</h3>
 
 - **Don’t scrape the HTML shell** for ChatGPT shares; the real data is at `backend-api/share/<id>`.
 - The JSON is **tree-structured**; for **correct order** and **multimodal** messages, use **`linear_conversation`** and the rules in **`chatgpt/playwright/extract_transcript.mjs`** (a naive `mapping` loop is not enough).
@@ -122,7 +161,7 @@ This pattern is reusable any time we need to mine a shared ChatGPT conversation 
 
 ---
 
-## 2. Docker Desktop disk image, external SSD, and “phantom” disk usage
+<h2 id="war-story-2" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">2. Docker Desktop disk image, external SSD, and “phantom” disk usage</h2>
 
 **creation:** `<260308>`  
 
@@ -135,7 +174,7 @@ This pattern is reusable any time we need to mine a shared ChatGPT conversation 
 
 ---
 
-### 2.1 Context
+<h3 id="war-story-2-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">2.1 Context</h3>
 
 We were running Docker Desktop with Kubernetes (kind) on a MacBook Air. Docker images and clusters were eating a lot of space, so we decided to move Docker Desktop’s disk image (`Docker.raw`) off the internal SSD onto an external SSD mounted at `/Volumes/Doc-Bk-JJ-SDD-1-APFS/`.
 
@@ -153,7 +192,7 @@ Instead, disk space behaved strangely:
 
 ---
 
-### 2.2 Root Causes
+<h3 id="war-story-2-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">2.2 Root Causes</h3>
 
 There were **three overlapping root causes**:
 
@@ -173,7 +212,7 @@ There were **three overlapping root causes**:
 
 ---
 
-### 2.3 Resolution
+<h3 id="war-story-2-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">2.3 Resolution</h3>
 
 We stabilized the setup with a combination of **process, path, and tooling fixes**:
 
@@ -193,7 +232,7 @@ We stabilized the setup with a combination of **process, path, and tooling fixes
 
 ---
 
-### 2.4 Takeaways
+<h3 id="war-story-2-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">2.4 Takeaways</h3>
 
 - **Deleting a big file ≠ instant space back** if any process still has it open; use `lsof +L1` before assuming the disk is “lying”.  
 - **Sparse files** (like `Docker.raw`) can be hundreds of GB logically but only a few GB physically; always trust `du` and `df`, not just `ls -lh`.  
@@ -206,4 +245,3 @@ We stabilized the setup with a combination of **process, path, and tooling fixes
   - Killing backend processes,  
   - Verifying no one is holding `Docker.raw`,  
   - Then safely deleting or relocating the disk image.
-

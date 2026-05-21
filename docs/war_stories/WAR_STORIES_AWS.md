@@ -1,12 +1,92 @@
-# WAR_STORIES_AWS
+<h1 id="war-stories-aws-title" style="color:#0d47a1;font-size:1.5em;font-weight:700;border-bottom:2px solid #90caf9;padding-bottom:0.25em;margin-top:0">WAR_STORIES_AWS</h1>
 
 A curated list of **non-trivial technical war stories**, capturing real lessons suitable for **senior-level interviews**.
 
-# AWS-Specific War Stories
+**Authoring discipline:** `.cursor/rules/exwar-war-stories-extraction.mdc` and `.cursor/rules/mrkd-markdown-authoring.mdc`.
+
+**AWS-Specific War Stories**
 
 ---
 
-## 1. HTTP 000000 Error: HTTPS vs HTTP Protocol Mismatch for EKS Network Load Balancer
+<h2 id="document-outline" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">Document outline</h2>
+
+1. [Reading guide](#reading-guide) — metadata and subsection labels.
+2. [Story index](#story-index) — quick links to every story.
+
+---
+
+<h2 id="reading-guide" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">Reading guide</h2>
+
+<table>
+<thead>
+<tr style="background:#1565c0;color:white"><th style="padding:8px">Field / label</th><th style="padding:8px">Meaning</th></tr>
+</thead>
+<tbody>
+<tr><td style="background:#e3f2fd;padding:8px"><strong>creation</strong> / <strong>last_updated</strong></td><td style="background:#e8f5e9;padding:8px">When the story was first captured and last revised (<code>&lt;YYMMDD&gt;</code> or <code>&lt;YYMMDD-HHMMSS&gt;</code>).</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px"><strong>keywords</strong></td><td style="background:#e8f5e9;padding:8px">Grep-friendly index into problem area and stack.</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px"><strong>difficulty</strong> / <strong>significance</strong></td><td style="background:#e8f5e9;padding:8px">Relative depth (1–10) and how reusable the lesson is for interviews.</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px"><strong>N.1–N.5</strong></td><td style="background:#e8f5e9;padding:8px">Context → Root Cause → Key Insight → Resolution → Takeaway.</td></tr>
+</tbody>
+</table>
+
+---
+
+<h2 id="story-index" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">Story index</h2>
+
+<table>
+<thead>
+<tr style="background:#1565c0;color:white"><th style="padding:8px">#</th><th style="padding:8px">Title</th><th style="padding:8px">Gist</th></tr>
+</thead>
+<tbody>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">1</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-1">1. HTTP 000000 Error: HTTPS vs HTTP Protocol Mismatch for EKS Network Load Balancer</a></td><td style="padding:8px;background:#fff3e0">HTTP 000000 Error: HTTPS vs HTTP Protocol Mismatch for EKS Network Load…</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">2</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-2">2. CloudFront Invalidation Timeout: Stdout/Stderr Capture Corrupting Return Values</a></td><td style="padding:8px;background:#e8f5e9">CloudFront Invalidation Timeout: Stdout/Stderr Capture Corrupting Return Values</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">3</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-3">3. EKS Load Balancer Type Confusion: NLB vs ALB Misunderstanding</a></td><td style="padding:8px;background:#fff3e0">EKS Load Balancer Type Confusion: NLB vs ALB Misunderstanding</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">4</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-4">4. Protocol Inconsistency: HTTPS Used Where HTTP Required for NLB Endpoints</a></td><td style="padding:8px;background:#e8f5e9">Protocol Inconsistency: HTTPS Used Where HTTP Required for NLB Endpoints</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">5</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-5">5. VPC Teardown: Dependency Graph and Safe Deletion Order</a></td><td style="padding:8px;background:#fff3e0">VPC Teardown: Dependency Graph and Safe Deletion Order</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">6</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-6">6. ELB Deletion and ENIs: Eventual Consistency, Not a Bug</a></td><td style="padding:8px;background:#e8f5e9">ELB Deletion and ENIs: Eventual Consistency, Not a Bug</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">7</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-7">7. deploy-frontend.sh: Terragrunt Warning Text Captured as S3 Bucket Name</a></td><td style="padding:8px;background:#fff3e0">deploy-frontend.sh: Terragrunt Warning Text Captured as S3 Bucket Name</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">8</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-8">8. AWS CLI Version Incompatibility: v1 vs v2 and Enforcing 2.x</a></td><td style="padding:8px;background:#e8f5e9">AWS CLI Version Incompatibility: v1 vs v2 and Enforcing 2.x</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">9</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-9">9. Load Balancer Ownership: Terraform vs Kubernetes and Why We Avoid Terraform's kubectl for EKS</a></td><td style="padding:8px;background:#fff3e0">Load Balancer Ownership: Terraform vs Kubernetes and Why We Avoid Terraform's kubectl…</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">10</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-10">10. Phase 2 Infrastructure: RDS Subnet Group VPC Mismatch</a></td><td style="padding:8px;background:#e8f5e9">Phase 2 Infrastructure: RDS Subnet Group VPC Mismatch</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">11</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-11">11. Fixing "The new Subnets are not in the same Vpc as the existing subnet group" — What We Did and Option A vs Option B</a></td><td style="padding:8px;background:#fff3e0">Fixing "The new Subnets are not in the same Vpc as the…</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">12</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-12">12. S3A NumberFormatException ("30s" / "60s") — Why It Resurfaced After Refactor</a></td><td style="padding:8px;background:#e8f5e9">S3A NumberFormatException ("30s" / "60s") — Why It Resurfaced After Refactor</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">13</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-13">13. Spark/Delta Job: From ECS-Dependent to Local Fat Image (EKS/ECS-Independent)</a></td><td style="padding:8px;background:#fff3e0">Spark/Delta Job: From ECS-Dependent to Local Fat Image (EKS/ECS-Independent)</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">14</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-14">14. EKS API/Frontend URL Not Available: Missing NGINX Ingress Controller in Deploy Pipeline</a></td><td style="padding:8px;background:#e8f5e9">EKS API/Frontend URL Not Available: Missing NGINX Ingress Controller in Deploy Pipeline</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">15</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-15">15. EKS Analytics Scheduler: "No analytics data available" — Scheduler Validation, S3A Credentials, and Admin vs Bedrock</a></td><td style="padding:8px;background:#fff3e0">EKS Analytics Scheduler: "No analytics data available" — Scheduler Validation, S3A Credentials,…</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">16</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-16">16. Making Kube Work with Cloud-Provider Agnostic NLB: Why It Worked Before but Not After Refactor</a></td><td style="padding:8px;background:#e8f5e9">Making Kube Work with Cloud-Provider Agnostic NLB: Why It Worked Before but…</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">17</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-17">17. CloudFront 502 for EKS: Why Post-Deploy Origin Update is Kube-Only</a></td><td style="padding:8px;background:#fff3e0">CloudFront 502 for EKS: Why Post-Deploy Origin Update is Kube-Only</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">18</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-18">18. ECR Prune: Manifest List and Why "Oldest First" Fails for Some Images</a></td><td style="padding:8px;background:#e8f5e9">ECR Prune: Manifest List and Why "Oldest First" Fails for Some Images</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">19</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-19">19. Teardown and ECR: No Tags, No Deletion — Why Teardown Left All Images and How We Fixed It</a></td><td style="padding:8px;background:#fff3e0">Teardown and ECR: No Tags, No Deletion — Why Teardown Left All…</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">20</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-20">20. API Validation HTTP 000000: Retry Logic Bailing on Ambiguous Status</a></td><td style="padding:8px;background:#e8f5e9">API Validation HTTP 000000: Retry Logic Bailing on Ambiguous Status</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">21</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-21">21. Terraform State Lock Ambiguity: "Acquiring" vs "Releasing" and the S3 PreconditionFailed (412) Trap</a></td><td style="padding:8px;background:#fff3e0">Terraform State Lock Ambiguity: "Acquiring" vs "Releasing" and the S3 PreconditionFailed (412)…</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">22</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-22">22. CloudFront 403 Access Denied: Treating Real Failures as "Retriable" and the Missing Frontend Deploy</a></td><td style="padding:8px;background:#e8f5e9">CloudFront 403 Access Denied: Treating Real Failures as "Retriable" and the Missing…</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">23</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-23">23. EKS Security Groups: AWS-Created Side Effects, Not Terraform Resources</a></td><td style="padding:8px;background:#fff3e0">EKS Security Groups: AWS-Created Side Effects, Not Terraform Resources</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">24</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-24">24. SPA 404→index.html, Stale CDN Cache, and the "Expected JavaScript but got text/html" MIME Error</a></td><td style="padding:8px;background:#e8f5e9">SPA 404→index.html, Stale CDN Cache, and the "Expected JavaScript but got text/html"…</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">25</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-25">25. CloudFront 502 on API Paths: NLB Internal, Probe Timeouts, and the Need for Fail-Fast Pod Verification</a></td><td style="padding:8px;background:#fff3e0">CloudFront 502 on API Paths: NLB Internal, Probe Timeouts, and the Need…</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">26</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-26">26. Analytics "Database not configured" and Query Stream "Agent disabled" — Aurora, Secrets Manager, and AWS Credentials</a></td><td style="padding:8px;background:#e8f5e9">Analytics "Database not configured" and Query Stream "Agent disabled" — Aurora, Secrets…</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">27</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-27">27. Bedrock ValidationException: Inference Profile vs Model ID — How to Deploy and Why Both Matter</a></td><td style="padding:8px;background:#fff3e0">Bedrock ValidationException: Inference Profile vs Model ID — How to Deploy and…</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">28</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-28">28. Orphan Resources: ECR and VPC Surviving Teardown Because They're Not in State</a></td><td style="padding:8px;background:#e8f5e9">Orphan Resources: ECR and VPC Surviving Teardown Because They're Not in State</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">29</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-29">29. Import vs Terraform Refresh: State Reconciliation and the Cross-Region Orphan</a></td><td style="padding:8px;background:#fff3e0">Import vs Terraform Refresh: State Reconciliation and the Cross-Region Orphan</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">30</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-30">30. ResourceAlreadyExistsException: Broader Pre-Deploy Import vs. Ideal Minimal Import</a></td><td style="padding:8px;background:#e8f5e9">ResourceAlreadyExistsException: Broader Pre-Deploy Import vs. Ideal Minimal Import</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">31</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-31">31. OriginAccessControlAlreadyExists: CloudFront API Is us-east-1 Only</a></td><td style="padding:8px;background:#fff3e0">OriginAccessControlAlreadyExists: CloudFront API Is us-east-1 Only</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">32</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-32">32. Multi-Region S3 Bucket Naming: Global Uniqueness Requires Region in Name</a></td><td style="padding:8px;background:#e8f5e9">Multi-Region S3 Bucket Naming: Global Uniqueness Requires Region in Name</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">33</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-33">33. AWS Orphan Scan and Removal: Pattern-Based Detection, Phased Deletion, and ENI Wait</a></td><td style="padding:8px;background:#fff3e0">AWS Orphan Scan and Removal: Pattern-Based Detection, Phased Deletion, and ENI Wait</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">34</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-34">34. AWS Authentication: Access Keys vs SSO vs Profile — Expiry, Session Limits, and When Each Fails</a></td><td style="padding:8px;background:#e8f5e9">AWS Authentication: Access Keys vs SSO vs Profile — Expiry, Session Limits,…</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">35</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-35">35. VPC Subnet Tag Drift: Durable vs Kube and lifecycle ignore_changes</a></td><td style="padding:8px;background:#fff3e0">VPC Subnet Tag Drift: Durable vs Kube and lifecycle ignore_changes</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">36</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-36">36. Kube Apply Ran Twice: Single Apply When NLB Hostname Known</a></td><td style="padding:8px;background:#e8f5e9">Kube Apply Ran Twice: Single Apply When NLB Hostname Known</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">37</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-37">37. Kube CronJob Missing AWS Credentials: Shared Analytics Data and Why We Keep It Centralized</a></td><td style="padding:8px;background:#fff3e0">Kube CronJob Missing AWS Credentials: Shared Analytics Data and Why We Keep…</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">38</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-38">38. Kube Load Balancer Choice: Classic ELB vs NLB and the --elb Flag</a></td><td style="padding:8px;background:#e8f5e9">Kube Load Balancer Choice: Classic ELB vs NLB and the --elb Flag</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">39</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-39">39. Path-Style Naming Convention: When to Use Slashes vs Hyphens for AWS Resource Names</a></td><td style="padding:8px;background:#fff3e0">Path-Style Naming Convention: When to Use Slashes vs Hyphens for AWS Resource…</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">40</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-40">40. Docker ECR Login: macOS Keychain Error (100028)</a></td><td style="padding:8px;background:#e8f5e9">Docker ECR Login: macOS Keychain Error (100028)</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">41</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-41">41. ECR Per-Region vs Centralized: Why We Keep Regional Repos</a></td><td style="padding:8px;background:#fff3e0">ECR Per-Region vs Centralized: Why We Keep Regional Repos</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">42</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-42">42. Smart Cross-Region Image Build Strategy: One Build, Many Regions</a></td><td style="padding:8px;background:#e8f5e9">Smart Cross-Region Image Build Strategy: One Build, Many Regions</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">43</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-43">43. First-Deploy Kube: NLB Hostname Not Ready — Extend Poll, Fail-Fast</a></td><td style="padding:8px;background:#fff3e0">First-Deploy Kube: NLB Hostname Not Ready — Extend Poll, Fail-Fast</td></tr>
+</tbody>
+</table>
+
+---
+
+<h2 id="war-story-1" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">1. HTTP 000000 Error: HTTPS vs HTTP Protocol Mismatch for EKS Network Load Balancer</h2>
 
 **creation:** `<260127-175946>`
 **last_updated:** `<260127-175946>`
@@ -15,11 +95,11 @@ A curated list of **non-trivial technical war stories**, capturing real lessons 
 **difficulty:** 7
 **significance:** 8
 
-### 1.1 Context
+<h3 id="war-story-1-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">1.1 Context</h3>
 
 During endpoint validation, direct API endpoint checks for EKS ingress endpoints (DNS names like `*.elb.us-east-1.amazonaws.com`) consistently returned `HTTP 000000` errors. CloudFront endpoints worked fine, but the direct load balancer endpoint failed validation. The error appeared as a warning: `[WARNING] ⚠ API endpoint returned HTTP 000000`.
 
-### 1.2 Root Cause
+<h3 id="war-story-1-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">1.2 Root Cause</h3>
 
 The code was attempting HTTPS connections to EKS ingress endpoints, but EKS uses NGINX Ingress Controller which creates an AWS Network Load Balancer (NLB). NLBs don't have SSL certificates by default unless explicitly configured with AWS Certificate Manager (ACM). 
 
@@ -31,11 +111,11 @@ When `curl` attempted an HTTPS connection to an NLB without a valid certificate:
 
 The `000` status code from curl is not an HTTP status code—it indicates that curl never received an HTTP response because the SSL/TLS handshake failed before any HTTP communication occurred.
 
-### 1.3 Key Insight
+<h3 id="war-story-1-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">1.3 Key Insight</h3>
 
 > NLBs and ALBs without ACM certificates don't serve HTTPS with valid certificates. The `000` curl status code indicates SSL handshake failure, not an HTTP protocol error. Always use HTTP for AWS load balancer DNS names unless you've explicitly configured ACM certificates.
 
-### 1.4 Resolution
+<h3 id="war-story-1-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">1.4 Resolution</h3>
 
 Modified `fetch-deployment-info.sh` to always use `http://` when constructing API URLs for EKS ingress hostnames (which are NLB DNS names ending in `.elb.amazonaws.com`):
 
@@ -53,13 +133,13 @@ API_URL="http://$K8S_INGRESS_HOST"
 
 Also fixed the same issue in `test/common_sh/test_environment.sh` which had been overlooked during the initial fix.
 
-### 1.5 Takeaway
+<h3 id="war-story-1-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">1.5 Takeaway</h3>
 
 Always use HTTP for AWS load balancer DNS names (`.elb.amazonaws.com`) unless you've explicitly configured ACM certificates. The `000` curl status code is a red flag for SSL/TLS issues, not HTTP protocol problems. When debugging endpoint failures, check the protocol first—many "HTTP errors" are actually SSL certificate problems.
 
 ---
 
-## 2. CloudFront Invalidation Timeout: Stdout/Stderr Capture Corrupting Return Values
+<h2 id="war-story-2" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">2. CloudFront Invalidation Timeout: Stdout/Stderr Capture Corrupting Return Values</h2>
 
 **creation:** `<260127-175946>`
 **last_updated:** `<260127-175946>`
@@ -68,7 +148,7 @@ Always use HTTP for AWS load balancer DNS names (`.elb.amazonaws.com`) unless yo
 **difficulty:** 8
 **significance:** 9
 
-### 2.1 Context
+<h3 id="war-story-2-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">2.1 Context</h3>
 
 CloudFront invalidation consistently timed out with `NoSuchInvalidation` errors, even though invalidations were being created successfully. The deployment script would:
 1. Create a CloudFront invalidation (succeeded)
@@ -78,7 +158,7 @@ CloudFront invalidation consistently timed out with `NoSuchInvalidation` errors,
 
 **Why CloudFront Invalidation is Needed:** CloudFront caches content at edge locations worldwide. When you deploy new frontend files to S3, CloudFront continues serving the old cached version until the cache expires (which can take hours or days). Invalidation tells CloudFront to immediately purge cached content and fetch fresh files from the origin (S3). Without invalidation, users see stale content after deployments.
 
-### 2.2 Root Cause
+<h3 id="war-story-2-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">2.2 Root Cause</h3>
 
 The function `create_cloudfront_invalidation()` was designed to return the invalidation ID via stdout for command substitution:
 
@@ -88,7 +168,7 @@ invalidation_id=$(create_cloudfront_invalidation "$dist_id" "/*")
 
 However, the function also logged messages to stdout using `log_info()` and `log_success()`, which write to stdout. When captured with command substitution, the variable captured **both** the log messages and the invalidation ID:
 
-```
+```bash
 invalidation_id='[INFO] Creating CloudFront invalidation...
 [INFO]   Distribution ID: E33TA1D0OAYUNR
 [INFO]   Paths: /*
@@ -98,11 +178,11 @@ IAS6QGH99WVY9LQVVST4POTQBE'
 
 This corrupted string was then passed to `wait_for_invalidation()`, which called `aws cloudfront get-invalidation --id '[INFO] Creating...IAS6QGH99WVY9LQVVST4POTQBE'`. AWS correctly returned `NoSuchInvalidation` because that malformed string is not a valid invalidation ID.
 
-### 2.3 Key Insight
+<h3 id="war-story-2-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">2.3 Key Insight</h3>
 
 > Functions that return values via stdout must NEVER log to stdout. Command substitution captures ALL stdout, making it impossible to separate logs from return values. Use stderr for logging, or better yet, use environment variables for values that need to be passed between functions.
 
-### 2.4 Resolution
+<h3 id="war-story-2-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">2.4 Resolution</h3>
 
 **Initial Fix Attempt:** Redirected log messages to stderr (`>&2`), which worked but was fragile and error-prone. Any future developer adding a log statement without the redirect would reintroduce the bug.
 
@@ -129,11 +209,11 @@ This approach:
 - Is consistent with other deployment scripts (`fetch-deployment-info.sh` pattern)
 - Is more robust (no risk of mixing logs with return values)
 
-### 2.5 Takeaway
+<h3 id="war-story-2-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">2.5 Takeaway</h3>
 
 When a function is meant to return a value, either: (1) log to stderr only, or (2) use environment variables. Command substitution captures ALL stdout, making it impossible to separate logs from return values. Environment variables are more robust, explicit, and follow Unix conventions (stdout for data, stderr for diagnostics, or use environment for function-to-function communication).
 
-### 2.6 Timestamp Portability: `%3N` vs macOS `date`
+<h3 id="war-story-2-sec-6" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">2.6 Timestamp Portability: `%3N` vs macOS `date`</h3>
 
 **creation:** `<260205-000000>`  
 **last_updated:** `<260205-000000>`
@@ -156,7 +236,7 @@ This preserved the desired `[YYYY-MM-DD HH:MM:SS.mmm TZ]` format on macOS and Li
 
 ---
 
-## 3. EKS Load Balancer Type Confusion: NLB vs ALB Misunderstanding
+<h2 id="war-story-3" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">3. EKS Load Balancer Type Confusion: NLB vs ALB Misunderstanding</h2>
 
 **creation:** `<260127-175946>`
 **last_updated:** `<260127-175946>`
@@ -165,11 +245,11 @@ This preserved the desired `[YYYY-MM-DD HH:MM:SS.mmm TZ]` format on macOS and Li
 **difficulty:** 5
 **significance:** 6
 
-### 3.1 Context
+<h3 id="war-story-3-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">3.1 Context</h3>
 
 During debugging of the HTTP 000000 error, code comments and analysis incorrectly stated that "EKS uses AWS Load Balancer Controller to create ALBs." However, the project's EKS setup documentation (`docs/README_WORKFLOW_EKS_NOTES.md`) indicated that EKS uses NGINX Ingress Controller, which creates NLBs, not ALBs. This architectural misunderstanding led to incorrect assumptions about SSL certificate configuration.
 
-### 3.2 Root Cause
+<h3 id="war-story-3-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">3.2 Root Cause</h3>
 
 EKS supports multiple ingress controllers, each creating different types of load balancers:
 - **AWS Load Balancer Controller** → Creates Application Load Balancers (ALBs)
@@ -177,11 +257,11 @@ EKS supports multiple ingress controllers, each creating different types of load
 
 The project uses NGINX Ingress Controller, but comments and analysis incorrectly assumed ALB usage. This led to confusion about why SSL certificates weren't working (ALBs can have ACM certificates more easily configured, while NLBs require explicit ACM setup).
 
-### 3.3 Key Insight
+<h3 id="war-story-3-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">3.3 Key Insight</h3>
 
 > EKS can use different ingress controllers, each creating different load balancer types. Don't assume load balancer types based on platform (EKS vs ECS). Always verify the actual ingress controller and load balancer type in your infrastructure.
 
-### 3.4 Resolution
+<h3 id="war-story-3-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">3.4 Resolution</h3>
 
 Updated comments and documentation to correctly reflect NLB usage for EKS:
 
@@ -194,17 +274,17 @@ Updated comments and documentation to correctly reflect NLB usage for EKS:
 
 This clarification helped explain why HTTP (not HTTPS) was required for EKS ingress endpoints.
 
-### 3.5 Takeaway
+<h3 id="war-story-3-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">3.5 Takeaway</h3>
 
 Don't assume load balancer types based on platform (EKS vs ECS). Verify the actual ingress controller and load balancer type in your infrastructure. Different ingress controllers create different load balancer types, and each has different SSL/TLS certificate requirements.
 
-### 3.6 Correction (2025)
+<h3 id="war-story-3-sec-6" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">3.6 Correction (2025)</h3>
 
 **Actual LB type:** The kube API is exposed via `fru-api-svc` (type LoadBalancer), not NGINX Ingress. Without `service.beta.kubernetes.io/aws-load-balancer-type: external`, the **in-tree** cloud provider reconciles it and creates a **Classic ELB**—not NLB. The protocol guidance (use HTTP for LB endpoints) still applies. See [KUBE_LB.md](docs/learned/cloud_shared/KUBE_LB.md).
 
 ---
 
-## 4. Protocol Inconsistency: HTTPS Used Where HTTP Required for NLB Endpoints
+<h2 id="war-story-4" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">4. Protocol Inconsistency: HTTPS Used Where HTTP Required for NLB Endpoints</h2>
 
 **creation:** `<260127-175946>`
 **last_updated:** `<260127-175946>`
@@ -213,11 +293,11 @@ Don't assume load balancer types based on platform (EKS vs ECS). Verify the actu
 **difficulty:** 4
 **significance:** 6
 
-### 4.1 Context
+<h3 id="war-story-4-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">4.1 Context</h3>
 
 After fixing the HTTP 000000 error in `fetch-deployment-info.sh` by changing EKS ingress URLs from HTTPS to HTTP, the same issue persisted in test files. The test script `test/common_sh/test_environment.sh` was still attempting HTTPS connections to EKS ingress endpoints, causing test failures.
 
-### 4.2 Root Cause
+<h3 id="war-story-4-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">4.2 Root Cause</h3>
 
 During the initial fix, only the main deployment script (`fetch-deployment-info.sh`) was updated. The test file `test/common_sh/test_environment.sh` contained duplicate logic for constructing API URLs from EKS ingress hostnames, but it wasn't updated. This created an inconsistency where:
 - Production deployment scripts used HTTP (correct)
@@ -229,11 +309,11 @@ During the initial fix, only the main deployment script (`fetch-deployment-info.
 
 This is a common pattern: CloudFront handles HTTPS for end users, while the origin (NLB/ALB) uses HTTP internally. The NLB doesn't need certificates because it's not directly exposed to end users—only CloudFront connects to it.
 
-### 4.3 Key Insight
+<h3 id="war-story-4-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">4.3 Key Insight</h3>
 
 > When fixing protocol issues, search the entire codebase for similar patterns. Test files and utility scripts often duplicate logic that needs the same fix. Also understand the architecture: CloudFront terminates SSL for end users, while internal load balancers (NLB/ALB) typically use HTTP.
 
-### 4.4 Resolution
+<h3 id="war-story-4-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">4.4 Resolution</h3>
 
 Updated `test/common_sh/test_environment.sh` to use `http://` for EKS ingress hostnames, matching the main script behavior:
 
@@ -249,17 +329,17 @@ API_URL="http://$k8s_ingress"
 
 This ensured consistency across all scripts and fixed test failures.
 
-### 4.5 Takeaway
+<h3 id="war-story-4-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">4.5 Takeaway</h3>
 
 Always search for similar patterns across the entire codebase when fixing protocol/URL construction issues. Test files are often overlooked but contain duplicate logic that needs the same fix. Understand your architecture: if CloudFront is in front, it handles HTTPS for users while internal load balancers use HTTP. Local testing of LB endpoints must use HTTP because LBs (Classic or NLB) typically don't have ACM certificates; CloudFront provides the HTTPS layer for production users.
 
-### 4.6 Correction (2025)
+<h3 id="war-story-4-sec-6" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">4.6 Correction (2025)</h3>
 
 **Actual LB type:** The kube API uses `fru-api-svc` LoadBalancer (Classic ELB via in-tree), not NLB. The HTTP/HTTPS guidance still applies. See [KUBE_LB.md](docs/learned/cloud_shared/KUBE_LB.md).
 
 ---
 
-## 5. VPC Teardown: Dependency Graph and Safe Deletion Order
+<h2 id="war-story-5" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">5. VPC Teardown: Dependency Graph and Safe Deletion Order</h2>
 
 **creation:** `<260129>`
 **last_updated:** `<260129>`
@@ -268,11 +348,11 @@ Always search for similar patterns across the entire codebase when fixing protoc
 **difficulty:** 7
 **significance:** 8
 
-### 5.1 Context
+<h3 id="war-story-5-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">5.1 Context</h3>
 
 During brutal-force AWS resource removal (scripted teardown from a resource-inventory JSON), deletions failed with `DependencyViolation`: subnets could not be deleted ("has dependencies"), security groups could not be deleted ("has a dependent object"), and the VPC could not be deleted ("has dependencies"). The script deleted load balancers, NAT gateways, and internet gateways in an order that seemed logical, but subnet and VPC deletion still failed.
 
-### 5.2 Root Cause
+<h3 id="war-story-5-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">5.2 Root Cause</h3>
 
 VPC and its resources form a strict dependency graph. Deleting in the wrong order leaves "downstream" resources still referencing "upstream" ones, so AWS correctly refuses to delete. The relevant structure is:
 
@@ -291,17 +371,17 @@ flowchart TB
     SUBNETS --> RT["Route Tables (subnet associations)"]
     ENIS --> ENI_CHILD["EC2 / ECS / EKS / RDS / ALB / NAT"]
     ENIS --> VPC_IF["VPC Endpoints (interface)"]
-    style VPC fill:#e3f2fd
-    style ENIS fill:#fff3e0
+    style VPC fill:#e3f2fd,font-size:9px
+    style ENIS fill:#fff3e0,font-size:9px
 ```
 
 The script had **no step for ENIs** and **no step for VPC endpoints**. ENIs (network interfaces) are created by ALBs, NAT gateways, EC2, RDS, EKS, etc. They live in subnets and reference security groups. Until those ENIs are gone, you cannot delete the subnet or (in many cases) the security groups. Similarly, VPC endpoints (interface or gateway) must be deleted before the VPC. Deletion must follow a **safe order** that respects this graph.
 
-### 5.3 Key Insight
+<h3 id="war-story-5-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">5.3 Key Insight</h3>
 
 > VPC teardown is not "delete everything in any order." It is a dependency-aware sequence: remove load balancers and NAT first, then VPC endpoints, then ENIs, then subnets, then route tables (non-main), then security groups (non-default), then internet gateway, then VPC. Missing ENIs or VPC endpoints in your teardown script will cause DependencyViolation and leave the VPC stuck.
 
-### 5.4 Resolution
+<h3 id="war-story-5-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">5.4 Resolution</h3>
 
 - **Inventory:** Extended the find-all script to collect **network interfaces (ENIs)** and **VPC endpoints** in non-default VPCs, so the removal script has a full picture.
 - **Order:** Implemented removal in this order (steps 1–17): CloudFront → EKS → ECS → RDS → Load balancers → EC2 instances → NAT gateways → Elastic IPs → Internet gateways → **ENIs** → Subnets → Security groups → **VPC endpoints** → VPCs → ECR → S3 → IAM.
@@ -310,7 +390,7 @@ The script had **no step for ENIs** and **no step for VPC endpoints**. ENIs (net
 
 After these changes, teardown could progress past subnets and security groups once ENIs and VPC endpoints were removed.
 
-### 5.5 Takeaway
+<h3 id="war-story-5-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">5.5 Takeaway</h3>
 
 Model the VPC dependency graph explicitly and implement teardown in a safe order: Load balancers / NAT → VPC Endpoints → ENIs → Subnets → Route Tables (non-main) → Security Groups (non-default) → Internet Gateway → VPC. Include ENIs and VPC endpoints in both inventory and removal; omitting them is a common cause of DependencyViolation during VPC teardown.
 
@@ -318,7 +398,7 @@ Model the VPC dependency graph explicitly and implement teardown in a safe order
 
 ---
 
-## 6. ELB Deletion and ENIs: Eventual Consistency, Not a Bug
+<h2 id="war-story-6" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">6. ELB Deletion and ENIs: Eventual Consistency, Not a Bug</h2>
 
 **creation:** `<260129>`
 **last_updated:** `<260129>`
@@ -327,11 +407,11 @@ Model the VPC dependency graph explicitly and implement teardown in a safe order
 **difficulty:** 7
 **significance:** 8
 
-### 6.1 Context
+<h3 id="war-story-6-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">6.1 Context</h3>
 
 After deleting Application Load Balancers (ALBs) during teardown, the script tried to delete remaining network interfaces (ENIs) so subnets and the VPC could be removed. Two ENIs remained, each with an attachment ID like `ela-attach-04fc51a5d84c05f6f` and `InstanceOwnerId: amazon-aws`. The script could not detach them (`OperationNotPermitted: You are not allowed to manage 'ela-attach' attachments`) and could not delete the ENIs while they were attached. Subnet and VPC deletion kept failing with DependencyViolation. In the console, the ENI showed an attachment that didn't link to any visible resource—the ALB was already gone.
 
-### 6.2 Root Cause
+<h3 id="war-story-6-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">6.2 Root Cause</h3>
 
 **A. Why it doesn't disappear immediately (this is key)**  
 ELB deletion is **asynchronous**.
@@ -355,11 +435,11 @@ When you delete a load balancer:
 
 This is a **wait state**, not a mistake. The system is behaving as designed.
 
-### 6.3 Key Insight
+<h3 id="war-story-6-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">6.3 Key Insight</h3>
 
 > After you delete an ALB/NLB, its ENIs are released asynchronously by AWS. You cannot detach or force-delete them; you must wait. Treat "ENI still attached (ela-attach) with no visible ELB" as normal eventual consistency. Scripts should either wait with a timeout and retry ENI deletion, or mark ENIs as "pending AWS cleanup" and exit; do not treat it as a fatal error or retry VPC/subnet deletion in a tight loop.
 
-### 6.4 Resolution
+<h3 id="war-story-6-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">6.4 Resolution</h3>
 
 - **Detection:** The removal script identifies ELB-managed attachments by `AttachmentId` starting with `ela-attach-` or `InstanceOwnerId` of `amazon-aws` / `amazon-elb`. For these, it does **not** attempt detach (which would fail with OperationNotPermitted).
 - **Wait-and-retry:** For such ENIs, the script first tries to delete the ENI; if that fails due to attachment still present, it waits up to 5 minutes, polling every 15 seconds to see if the attachment is gone (AWS released it), then retries delete.
@@ -367,7 +447,7 @@ This is a **wait state**, not a mistake. The system is behaving as designed.
 
 No code change can make AWS release the ENI sooner; the only correct behavior is to wait or to defer and retry.
 
-### 6.5 Takeaway
+<h3 id="war-story-6-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">6.5 Takeaway</h3>
 
 ELB deletion is asynchronous; ENIs are released last and can linger for 10–30+ minutes. Do not force-delete the ENI, do not delete the subnet while the ENI exists, and do not treat this as a bug—it is eventual consistency. Implement wait-and-retry with a timeout and/or a "pending cleanup" skip so teardown scripts can either succeed after a wait or be re-run later when AWS has finished cleanup.
 
@@ -375,7 +455,7 @@ ELB deletion is asynchronous; ENIs are released last and can linger for 10–30+
 
 ---
 
-## 7. deploy-frontend.sh: Terragrunt Warning Text Captured as S3 Bucket Name
+<h2 id="war-story-7" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">7. deploy-frontend.sh: Terragrunt Warning Text Captured as S3 Bucket Name</h2>
 
 **creation:** `<260131>`
 **last_updated:** `<260131>`
@@ -384,29 +464,29 @@ ELB deletion is asynchronous; ENIs are released last and can linger for 10–30+
 **difficulty:** 5
 **significance:** 7
 
-### 7.1 Context
+<h3 id="war-story-7-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">7.1 Context</h3>
 
 After moving the frontend (S3 + CloudFront) into its own Terragrunt layers (frontend-ecs / frontend-eks), deploy-frontend.sh was updated to read `s3_bucket_id` from the frontend-ecs (or frontend-eks) layer via `terragrunt output -raw s3_bucket_id`. In dry-runs, Phase 6 (frontend deployment) failed with: `Invalid bucket name "Warning: No outputs found..."` and AWS error that the bucket name must match `^[a-zA-Z0-9.\-_]{1,255}$`. The script was using that warning text as the bucket name.
 
-### 7.2 Root Cause
+<h3 id="war-story-7-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">7.2 Root Cause</h3>
 
 In a dry-run we never run `terragrunt apply`, so the frontend-ecs layer has no applied state and no real outputs. When deploy-frontend.sh ran `terragrunt output -raw s3_bucket_id` in the frontend-ecs directory, Terraform/Terragrunt printed the usual warning to stderr (or in some versions/contexts to stdout): "No outputs found" / "The state file either has no outputs defined...". That text was captured by command substitution (`s3_bucket_name=$(terragrunt output -raw s3_bucket_id 2>/dev/null || echo "")`). Suppressing stderr with `2>/dev/null` doesn't help if the warning goes to stdout; and even with stderr suppressed, some invocations can leave stdout with warning content. The script then passed this string to `aws s3 sync --dryrun ... s3://$S3_BUCKET_NAME`, so AWS received an invalid bucket name.
 
-### 7.3 Key Insight
+<h3 id="war-story-7-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">7.3 Key Insight</h3>
 
 > Never trust the raw result of `terragrunt output` or `terraform output` as a resource identifier without validating format. When the dependency layer has no applied state, the "output" may be warning text. Validate that the captured value matches the expected format (e.g. S3 bucket name regex); if it doesn't, treat it as empty and apply your existing "no output" logic (placeholder in dry-run, fail with clear message in real run).
 
-### 7.4 Resolution
+<h3 id="war-story-7-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">7.4 Resolution</h3>
 
 After reading `s3_bucket_name` from terragrunt output, added a format check: if the value is non-empty but does not match the S3 bucket name regex `^[a-zA-Z0-9.\-_]{1,255}$`, set `s3_bucket_name=""`. The existing logic then applies: in dry-run we use `dry-run-bucket-placeholder` and skip the real sync; in real run we fail with "get S3 bucket from Terraform / apply frontend layer first." No change to real deploys—once frontend-ecs is applied, terragrunt output returns a real bucket name that passes the regex.
 
-### 7.5 Takeaway
+<h3 id="war-story-7-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">7.5 Takeaway</h3>
 
 When a script gets a "resource identifier" from Terraform/Terragrunt output, validate its format before using it (e.g. bucket name, ARN). If the layer has no state, the command may print warning text that gets captured; treating any non-empty string as valid leads to confusing AWS errors. Validate, then treat invalid values as empty and handle the "no output" case explicitly (placeholder for dry-run, clear failure for real run).
 
 ---
 
-## 8. AWS CLI Version Incompatibility: v1 vs v2 and Enforcing 2.x
+<h2 id="war-story-8" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">8. AWS CLI Version Incompatibility: v1 vs v2 and Enforcing 2.x</h2>
 
 **creation:** `<260130>`
 **last_updated:** `<260130>`
@@ -415,11 +495,11 @@ When a script gets a "resource identifier" from Terraform/Terragrunt output, val
 **difficulty:** 5
 **significance:** 7
 
-### 8.1 Context
+<h3 id="war-story-8-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">8.1 Context</h3>
 
 Deployment and teardown scripts (ECR login, S3 sync, CloudFront invalidation, ECS/EKS discovery) all rely on the `aws` CLI. On some machines deployments failed with obscure errors: "Unknown option: --no-include-email", "the get-login command has been replaced", or JSON/behavior differences in scripted calls. CI or a fresh clone would sometimes succeed while a teammate's laptop failed, or the opposite—pointing to a tooling version mismatch rather than application code.
 
-### 8.2 Root Cause
+<h3 id="war-story-8-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">8.2 Root Cause</h3>
 
 AWS CLI has two major branches with different behavior and interfaces:
 
@@ -428,11 +508,11 @@ AWS CLI has two major branches with different behavior and interfaces:
 
 The project had no enforced prerequisite for "which AWS CLI." Scripts assumed a modern CLI (e.g. ECR get-login-password, or current S3/CloudFront behavior). If the system had only AWS CLI v1 (e.g. from an old `pip install awscli` or a preinstalled OS package), or if PATH picked up v1 before v2, those scripts failed. There was no single place that checked version and guided users to install or upgrade to 2.x.
 
-### 8.3 Key Insight
+<h3 id="war-story-8-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">8.3 Key Insight</h3>
 
 > Don't assume "aws" on PATH is a specific major version. AWS CLI v1 and v2 are not fully compatible. Scripts that depend on v2-only behavior (e.g. ECR get-login-password, or current command outputs) must run in an environment where v2 is guaranteed—enforce a minimum version (e.g. 2.x) via a prerequisite check and document it clearly.
 
-### 8.4 Resolution
+<h3 id="war-story-8-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">8.4 Resolution</h3>
 
 - **Explicit requirement:** Documented and enforced **AWS CLI 2.x** as the minimum. The main orchestrator (`orchestration/aws/run.sh`) runs the shared prerequisites step, which invokes `orchestration/prerequisites/check-and-install.sh` for the "aws" provider; that in turn runs the AWS CLI–specific check.
 - **Version check:** In `orchestration/prerequisites/aws-cli/check-and-install.sh`, added a version check: run `aws --version`, parse the first semantic version (e.g. `2.15.0`), and require major version >= 2. If `aws` is missing or version is < 2.x, the script prompts to install (or auto-installs where supported, e.g. official AWS installer for Linux/macOS). This ensures every AWS deployment path sees the same "need 2.x" message and, when install succeeds, uses 2.x.
@@ -440,13 +520,13 @@ The project had no enforced prerequisite for "which AWS CLI." Scripts assumed a 
 
 With that, version incompatibility is caught at the start of a run (or at install time), and failures are clearly attributed to "AWS CLI too old" or "install AWS CLI 2.x," not to cryptic command option or output mismatches.
 
-### 8.5 Takeaway
+<h3 id="war-story-8-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">8.5 Takeaway</h3>
 
 When automation depends on the AWS CLI, pin a major version (e.g. 2.x) and enforce it: a prerequisite check that parses `aws --version` and requires that version, plus install/upgrade guidance or automation. Document the requirement in the runbook and README. That avoids v1/v2 confusion and ensures ECR, S3, CloudFront, and other scripted calls behave consistently across developers and CI.
 
 ---
 
-## 9. Load Balancer Ownership: Terraform vs Kubernetes and Why We Avoid Terraform's kubectl for EKS
+<h2 id="war-story-9" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">9. Load Balancer Ownership: Terraform vs Kubernetes and Why We Avoid Terraform's kubectl for EKS</h2>
 
 **creation:** `<260130>`
 **last_updated:** `<260130>`
@@ -455,11 +535,11 @@ When automation depends on the AWS CLI, pin a major version (e.g. 2.x) and enfor
 **difficulty:** 6
 **significance:** 8
 
-### 9.1 Context
+<h3 id="war-story-9-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">9.1 Context</h3>
 
 This project supports two container runtimes on AWS: **ECS (non-kube)** and **EKS (kube)**. Both need a load balancer in front of the API: ECS uses an Application Load Balancer (ALB); EKS uses a Network Load Balancer (NLB) created when the NGINX Ingress controller is deployed. The question arose: should load balancer creation live in Terraform for both, or only for ECS? And if we use Kubernetes to own the EKS LB, is that just a quirk or does it align with best practice?
 
-### 9.2 Root Cause / Design Choice
+<h3 id="war-story-9-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">9.2 Root Cause / Design Choice</h3>
 
 We deliberately split ownership:
 
@@ -469,23 +549,23 @@ We deliberately split ownership:
 
 We use K8s as the owner for the EKS LB because **using Terraform to create and manage it would require Terraform's Kubernetes provider** (e.g. `kubernetes_service`, `kubernetes_ingress`). That approach is slow (Terraform would drive `kubectl`-equivalent API calls, often with more plan/apply cycles and state bloat) and cumbersome (you duplicate what the platform already does: apply a Service/Ingress and the cloud controller creates the LB). It is also unnecessary—Kubernetes and the AWS cloud controller already create and manage the NLB as a first-class outcome of deploying the Ingress. So we let the platform own the LB and only feed the resulting LB DNS (e.g. from `kubectl get svc`) into Terraform where needed (e.g. CloudFront origin for frontend-eks).
 
-### 9.3 Key Insight
+<h3 id="war-story-9-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">9.3 Key Insight</h3>
 
 > Put load balancer ownership where the runtime that uses it lives. For ECS there is no Ingress abstraction—Terraform owns the ALB and wires the ECS service to it. For EKS, the Ingress/Service is the natural owner; using Terraform's Kubernetes provider to create the LB would be slow, cumbersome, and redundant. Let the platform (K8s + cloud controller) own the LB; use Terraform only for the cluster and for downstream consumers (e.g. CloudFront) that need the LB DNS.
 
-### 9.4 Resolution
+<h3 id="war-story-9-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">9.4 Resolution</h3>
 
 - **ECS:** Kept ALB (and target group, listeners, SGs) in Terraform. No change—this is the standard pattern for ECS.
 - **EKS:** Kept LB creation out of Terraform. Terraform creates the EKS cluster only. The deploy pipeline (Helm/kubectl) deploys the Ingress controller and its Service; AWS creates the NLB. The canonical path is to update CloudFront’s API origin using `update-cloudfront-loadbalancer.sh` (called by `kube/aws/deploy.sh`) after the Ingress hostname is available. No Terraform Kubernetes provider for the LB.
 - **Documentation:** Captured the split and the rationale so future changes don't accidentally push EKS LB into Terraform (Kubernetes provider) or ECS ALB into a non-Terraform path.
 
-### 9.5 Takeaway
+<h3 id="war-story-9-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">9.5 Takeaway</h3>
 
 Asymmetric ownership is intentional and matches industry practice: Terraform owns long-lived infra that has no other owner (e.g. ECS ALB); the container platform owns resources it natively creates (e.g. EKS NLB via Ingress/Service). Avoid using Terraform's Kubernetes provider to create LBs when the platform can do it natively—it is slow, cumbersome, and unnecessary. Document the split so the design stays consistent and "who owns the LB" is clear for both ECS and EKS.
 
 ---
 
-## 10. Phase 2 Infrastructure: RDS Subnet Group VPC Mismatch
+<h2 id="war-story-10" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">10. Phase 2 Infrastructure: RDS Subnet Group VPC Mismatch</h2>
 
 **creation:** `<260131>`
 **last_updated:** `<260131>`
@@ -494,11 +574,11 @@ Asymmetric ownership is intentional and matches industry practice: Terraform own
 **difficulty:** 6
 **significance:** 7
 
-### 10.1 Context
+<h3 id="war-story-10-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">10.1 Context</h3>
 
 During `./run.sh aws kube dev`, Phase 2 (Deploy infrastructure layer) failed with a Terraform error involving the RDS DB subnet group and VPC—e.g. the subnet group must contain only subnets in the same VPC, or an update to `aws_db_subnet_group.aurora` failed because the new subnets belong to a different VPC. The infrastructure code itself wires VPC → subnets → subnet group → Aurora in one module; a single apply should never produce a mismatch. So the failure pointed to state vs reality: something in AWS or Terraform state was out of sync.
 
-### 10.2 Root Cause
+<h3 id="war-story-10-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">10.2 Root Cause</h3>
 
 The infrastructure layer creates one VPC, its subnets, the RDS subnet group (using those subnets), and Aurora. In code, everything is tied to `module.vpc`; no mismatch is possible in a fresh apply.
 
@@ -511,11 +591,11 @@ The mismatch appears when:
 
 So the error is a **state/reality** issue: Terraform believes it owns a VPC and subnets (e.g. the new one), while the live RDS subnet group is still tied to the old VPC’s subnets.
 
-### 10.3 Key Insight
+<h3 id="war-story-10-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">10.3 Key Insight</h3>
 
 > When Terraform fails with "subnet group / VPC mismatch" for RDS, the code is usually correct—the same module creates VPC, subnets, and subnet group. The failure means the **live** DB subnet group in AWS was created with subnets from a different VPC than the one Terraform is now managing (e.g. after state loss or multiple VPCs). Fix by aligning state and reality: full teardown and redeploy, or import/cleanup so one VPC and one subnet group are in sync.
 
-### 10.4 Resolution
+<h3 id="war-story-10-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">10.4 Resolution</h3>
 
 - **Clean slate (recommended for dev):** Run `./run.sh aws kube dev --preempt` to destroy and redeploy; that ensures one VPC and one subnet group.
 - **Import existing infra:** Run `./orchestration/terraform/import_preexist/import-existing-infrastructure.sh dev fru` so Terraform state matches existing resources; only helps if the current config (VPC/subnets) matches what you want to keep.
@@ -523,13 +603,13 @@ So the error is a **state/reality** issue: Terraform believes it owns a VPC and 
 
 See War Stories 12, 17, 23, and related entries for deployment errors (S3 bucket empty, frontend invalid bucket, Docker not running, Terraform plugin checksum) with causes and fixes.
 
-### 10.5 Takeaway
+<h3 id="war-story-10-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">10.5 Takeaway</h3>
 
 RDS DB subnet group errors that mention VPC or "same VPC" are almost always state/reality drift: the resource in AWS was created with one VPC’s subnets, while Terraform is now managing another VPC. Resolve by making state and AWS consistent (teardown + redeploy, or import/cleanup), not by changing the infrastructure module’s VPC/subnet wiring.
 
 ---
 
-## 11. Fixing "The new Subnets are not in the same Vpc as the existing subnet group" — What We Did and Option A vs Option B
+<h2 id="war-story-11" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">11. Fixing "The new Subnets are not in the same Vpc as the existing subnet group" — What We Did and Option A vs Option B</h2>
 
 **creation:** `<260130>`
 **last_updated:** `<260130>`
@@ -538,7 +618,7 @@ RDS DB subnet group errors that mention VPC or "same VPC" are almost always stat
 **difficulty:** 6
 **significance:** 8
 
-### 11.1 Context and Goal
+<h3 id="war-story-11-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">11.1 Context and Goal</h3>
 
 The goal is to run **`./run.sh <local|aws> <kube|nonkube> dev --preempt`** problem-free. Preempt tears down all AWS layers (EKS + ECS + shared infrastructure) then redeploys. The recurring failure was:
 
@@ -546,7 +626,7 @@ The goal is to run **`./run.sh <local|aws> <kube|nonkube> dev --preempt`** probl
 
 This appears during Phase 2 (Deploy infrastructure layer) after a preempt or teardown. War stories 16, 17, and 18 describe the root causes and partial fixes; this story summarizes **what we did already** and the **choice between Option A (fail-back) and Option B (separate long-term layer)**.
 
-### 11.2 Root Cause (Recap)
+<h3 id="war-story-11-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">11.2 Root Cause (Recap)</h3>
 
 1. **State vs reality:** The infrastructure layer creates one VPC, subnets, RDS DB subnet group, and Aurora in code. A single apply cannot produce a mismatch. The error occurs when:
    - Terraform state was empty or pointed at a **new** VPC (e.g. after state loss or a new apply that created VPC B).
@@ -557,7 +637,7 @@ This appears during Phase 2 (Deploy infrastructure layer) after a preempt or tea
    - **Empty state:** If infrastructure state was empty, `terragrunt destroy` had nothing to destroy (no-op). Orphaned subnet group (and VPC A) remained; next deploy re-imported the subnet group and tried to point it at VPC B → error (War Story 18).
    - **prevent_destroy:** Secrets Manager resources in the same layer have `lifecycle { prevent_destroy = true }`. Terraform **aborts the entire destroy** when any resource has prevent_destroy. So VPC, Aurora, and the DB subnet group were **never** destroyed; they stayed in AWS. Next deploy re-imported and hit the same VPC mismatch.
 
-### 11.3 What We Did Already (Current Fixes)
+<h3 id="war-story-11-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">11.3 What We Did Already (Current Fixes)</h3>
 
 #### 19.3.1 Import before destroy (all layers)
 
@@ -577,20 +657,28 @@ This appears during Phase 2 (Deploy infrastructure layer) after a preempt or tea
   - The second destroy then removes VPC, Aurora, DB subnet group, IAM, S3 (everything left in the layer). Secrets remain in AWS (only removed from state) and are re-imported on the next deploy.
 - **Effect:** Preempt can complete a full teardown of shared infra without getting stuck on prevent_destroy. Teardown logic is more complex and tied to a fixed list of state addresses.
 
-### 11.4 Option A (Current): Fail-Back with state-rm
+<h3 id="war-story-11-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">11.4 Option A (Current): Fail-Back with state-rm</h3>
 
-| Aspect | Description |
-|---
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Aspect</th>
+<th style="padding:8px">Description</th>
+</tr>
+</thead>
+<tbody>
+</tbody>
+</table>
 
 ---
 
-## 12. S3A NumberFormatException ("30s" / "60s") — Why It Resurfaced After Refactor
+<h2 id="war-story-12" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">12. S3A NumberFormatException ("30s" / "60s") — Why It Resurfaced After Refactor</h2>
 
-### 12.1 What Happened
+<h3 id="war-story-12-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">12.1 What Happened</h3>
 
 During Delta table creation (Phase 5), Spark failed with `NumberFormatException: For input string: "60s"` and later `"30s"`. Hadoop/S3A expects **numeric** values (e.g. milliseconds or seconds) for time-related config; Spark or Hadoop defaults were supplying duration **strings** like `"30s"` / `"60s"`, which the S3A client cannot parse.
 
-### 12.2 Where "60s" / "24h" Come From (Confirmed)
+<h3 id="war-story-12-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">12.2 Where "60s" / "24h" Come From (Confirmed)</h3>
 
 The duration strings are **not in our codebase**. They come from **Apache Hadoop's bundled defaults** in dependency JARs.
 
@@ -616,7 +704,7 @@ From Hadoop's `core-default.xml` (hadoop-common-project/hadoop-common/src/main/r
 
 When Spark loads the S3A filesystem, these defaults are applied. Delta Lake's LogStore (and S3A multipart purge code) then parses them with code that expects numeric values (e.g. `Configuration.getLong()`), causing `NumberFormatException`. The `purge.age` is in seconds; `24h` = 86400.
 
-### 12.3 Ecosystem Inconsistency (Not "S3A vs Core")
+<h3 id="war-story-12-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">12.3 Ecosystem Inconsistency (Not "S3A vs Core")</h3>
 
 This is not that the S3A module "doesn't fit" Hadoop core. Rather:
 
@@ -625,18 +713,43 @@ This is not that the S3A module "doesn't fit" Hadoop core. Rather:
 
 The mismatch is **inconsistent adoption** of the new config format across the Hadoop ecosystem and Delta Lake, not a design flaw between S3A and core.
 
-### 12.4 AWS-Only; GCP Unaffected
+<h3 id="war-story-12-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">12.4 AWS-Only; GCP Unaffected</h3>
 
-| Aspect | AWS | GCP |
-|--------|-----|-----|
-| Storage scheme | `s3a://` | `gs://` |
-| Filesystem impl | `S3AFileSystem` (hadoop-aws) | `GoogleHadoopFileSystem` (gcs-connector) |
-| Config prefix | `fs.s3a.*` | `fs.gs.*` |
-| Source of "60s" | Hadoop `fs.s3a.*` defaults | Not used |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Aspect</th>
+<th style="padding:8px">AWS</th>
+<th style="padding:8px">GCP</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px">Storage scheme</td>
+<td style="padding:8px;background:#e8f5e9"><code>s3a://</code></td>
+<td style="padding:8px;background:#e8f5e9"><code>gs://</code></td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">Filesystem impl</td>
+<td style="padding:8px;background:#fff3e0"><code>S3AFileSystem</code> (hadoop-aws)</td>
+<td style="padding:8px;background:#fff3e0"><code>GoogleHadoopFileSystem</code> (gcs-connector)</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">Config prefix</td>
+<td style="padding:8px;background:#e8f5e9"><code>fs.s3a.*</code></td>
+<td style="padding:8px;background:#e8f5e9"><code>fs.gs.*</code></td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">Source of "60s"</td>
+<td style="padding:8px;background:#fff3e0">Hadoop <code>fs.s3a.*</code> defaults</td>
+<td style="padding:8px;background:#fff3e0">Not used</td>
+</tr>
+</tbody>
+</table>
 
 GCP uses the GCS connector and `gs://` URIs. The `fs.s3a.*` properties are never loaded. The numeric overrides are only needed for the AWS path.
 
-### 12.5 Why It Worked Before and Resurfaced
+<h3 id="war-story-12-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">12.5 Why It Worked Before and Resurfaced</h3>
 
 - **Before refactor:** Data-lake setup used `EXECUTION_METHOD=ecs_task` and called **run-spark-job-aws.sh**. That script gets S3A config from the **Python** helper `get_s3a_spark_config()` (in `spark_jobs/utils/spark_config.py`), which sets **all** time-related params to **numeric** values (e.g. `connection.establish.timeout=5000`, `threads.keepalivetime=60`). So the ECS path never hit duration-string defaults.
 
@@ -644,7 +757,7 @@ GCP uses the GCS connector and `gs://` URIs. The `fs.s3a.*` properties are never
 
 So the bug was **fixed once** in the Python single source of truth, but a **new code path** (Docker ECR) duplicated config in shell and lost those overrides.
 
-### 12.6 Resolution Options (We Chose Option 1)
+<h3 id="war-story-12-sec-6" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">12.6 Resolution Options (We Chose Option 1)</h3>
 
 1. **Config helper (chosen):** Centralize numeric overrides in `core_app/analytics/jobs/utils/spark_s3a_config.py` with a clear docstring. Single source of truth; documented rationale. Standard workaround until upstream fixes it.
 
@@ -654,7 +767,7 @@ So the bug was **fixed once** in the Python single source of truth, but a **new 
 
 4. **Upstream fix:** Delta Lake (or Hadoop) could use `Configuration.getDuration()` for these configs. File an issue; remove our override when fixed.
 
-### 12.7 Current Resolution
+<h3 id="war-story-12-sec-7" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">12.7 Current Resolution</h3>
 
 - **Single source of truth:** `core_app/analytics/jobs/utils/spark_s3a_config.get_s3a_numeric_overrides()` yields `(key, value)` pairs. `run_analytics.py` applies them when `CLOUD_PROVIDER` is AWS.
 
@@ -664,19 +777,19 @@ So the bug was **fixed once** in the Python single source of truth, but a **new 
 
 - **Documentation:** `spark_s3a_config.py` docstring explains the Hadoop/Delta parsing mismatch, links to this war story, and states that GCP is unaffected.
 
-### 12.8 Takeaway
+<h3 id="war-story-12-sec-8" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">12.8 Takeaway</h3>
 
 When you introduce a **new code path** that does the same job as an existing one (e.g. Docker ECR vs ECS for Delta), reuse the **same** source of config (e.g. Python helper) instead of reimplementing a minimal version. Reimplementing leads to drift (e.g. missing numeric overrides) and resurfacing of bugs that were already fixed elsewhere. For S3A/Hadoop, **all** time-related config must be numeric (no `"30s"` / `"60s"`); keep that in one place and reference it everywhere.
 
 ---
 
-## 13. Spark/Delta Job: From ECS-Dependent to Local Fat Image (EKS/ECS-Independent)
+<h2 id="war-story-13" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">13. Spark/Delta Job: From ECS-Dependent to Local Fat Image (EKS/ECS-Independent)</h2>
 
-### 13.1 What Happened
+<h3 id="war-story-13-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">13.1 What Happened</h3>
 
 The one-off Spark job that creates the Delta table (CSV → Delta in S3) used to run **only on ECS** (ECS Run Task). After a major refactor, it runs **on the operator’s local machine** inside Docker, using the same ECR image. That made Delta creation work for **EKS-only** (no ECS) but introduced a heavy local dependency: pull and run a fat image (Spark, Java, Hadoop, app) on your laptop.
 
-### 13.2 Before the Refactor
+<h3 id="war-story-13-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">13.2 Before the Refactor</h3>
 
 - **Where it ran:** ECS. `EXECUTION_METHOD=ecs_task` → `run-spark-job-aws.sh` → **ECS Run Task** with the app image. The Spark job ran **in AWS** as a one-off ECS task.
 - **Dependency:** You **had to have an ECS cluster**. For **ECS** deploys (`aws nonkube`), that was fine. For **EKS-only** (`aws kube`), there was no ECS cluster to run the task, so **Delta table creation failed** unless you also stood up ECS just for this step.
@@ -701,12 +814,12 @@ flowchart LR
     F[(S3 CSV)]
     G[(S3 Delta)]
   end
-  style local fill:#fff3e0
-  style aws fill:#ffebee
-  style E fill:#ef5350,color:#fff
+  style local fill:#fff3e0,font-size:9px
+  style aws fill:#ffebee,font-size:9px
+  style E fill:#ef5350,color:#fff,font-size:9px
 ```
 
-### 13.3 After the Refactor
+<h3 id="war-story-13-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">13.3 After the Refactor</h3>
 
 - **Where it runs:** **Local Docker.** `EXECUTION_METHOD=docker_ecr` → `run-spark-job-docker-ecr.sh` → `docker run ... $CONTAINER_IMAGE /bin/sh -c "spark-submit ... ingest_delta.py <s3a-in> <s3a-out>"`. The job runs **once** on the operator’s machine; CSV and Delta live in S3, so only compute is local.
 - **Dependency:** **Independent of EKS and ECS.** One code path for both `aws kube` and `aws nonkube`. No ECS cluster required for EKS-only.
@@ -730,18 +843,18 @@ flowchart LR
     G[(S3 CSV)]
     H[(S3 Delta)]
   end
-  style local fill:#e8f5e9
-  style aws fill:#e3f2fd
-  style E fill:#2e7d32,color:#fff
+  style local fill:#e8f5e9,font-size:9px
+  style aws fill:#e3f2fd,font-size:9px
+  style E fill:#2e7d32,color:#fff,font-size:9px
 ```
 
-### 13.4 Takeaway
+<h3 id="war-story-13-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">13.4 Takeaway</h3>
 
 To support EKS-only without requiring ECS, we moved the Delta-creation job from “run in ECS” to “run in local Docker with the ECR image.” That removed the ECS dependency but tied the step to a **local fat image** run. For future improvement: separate a thin API image from a Spark/Delta image, and optionally run the Spark job in AWS again (e.g. EKS Job or ECS task) so the operator doesn’t need to pull/run the heavy image locally.
 
 ---
 
-## 14. EKS API/Frontend URL Not Available: Missing NGINX Ingress Controller in Deploy Pipeline
+<h2 id="war-story-14" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">14. EKS API/Frontend URL Not Available: Missing NGINX Ingress Controller in Deploy Pipeline</h2>
 
 **creation:** `<260203>`
 **last_updated:** `<260203>`
@@ -750,7 +863,7 @@ To support EKS-only without requiring ECS, we moved the Delta-creation job from 
 **difficulty:** 7
 **significance:** 8
 
-### 14.1 Context (what we saw in tmp/logs/run12.log)
+<h3 id="war-story-14-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">14.1 Context (what we saw in tmp/logs/run12.log)</h3>
 
 After a full EKS deploy, Phase 5.2 reported success ("Kubernetes manifests deployed") but Phase 7 validation failed:
 
@@ -766,7 +879,7 @@ kubernetes-manifests.sh: line 771: pids[@]: unbound variable
 
 So we had two issues: (1) validation could not get API/Frontend URLs, and (2) a `set -u` unbound variable when cleaning up the deployment-wait loop.
 
-### 14.2 Root Cause
+<h3 id="war-story-14-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">14.2 Root Cause</h3>
 
 **Why API/Frontend URL were "not available"**
 
@@ -788,11 +901,11 @@ We were applying the app Ingress (from our template) but **we never installed th
 
 The deploy script runs with `set -u`. After the parallel deployment-wait loop, we unset each `pids[$i]` as deployments complete. In some shells/paths, the array can end up effectively unset; then `${#pids[@]}` or `${pids[@]}` in the cleanup block triggers "unbound variable."
 
-### 14.3 Key Insight
+<h3 id="war-story-14-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">14.3 Key Insight</h3>
 
 > The Ingress resource only gets a hostname in `.status.loadBalancer.ingress` when an **Ingress Controller** is running and has adopted it. Installing the controller (NGINX via Helm) must be a step in the EKS deploy pipeline, **before** applying application manifests that reference `ingressClassName: fru-nginx-cls`.
 
-### 14.4 Resolution
+<h3 id="war-story-14-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">14.4 Resolution</h3>
 
 1. **Add NGINX Ingress Controller to the deploy pipeline**
    - New Helm values: `ingress-nginx-values-eks.yaml` (NLB, `ingressClassResource.name: fru-nginx-cls`).
@@ -808,7 +921,7 @@ The deploy script runs with `set -u`. After the parallel deployment-wait loop, w
 4. **CloudFront**
    - The script that updates CloudFront origin reads the NLB hostname from the same Ingress status; once NGINX is installed and adopts the Ingress, that hostname is set and CloudFront can be updated.
 
-### 14.5 Minimum steps to apply and retest (without full run.sh)
+<h3 id="war-story-14-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">14.5 Minimum steps to apply and retest (without full run.sh)</h3>
 
 - Ensure EKS cluster and `kubectl` context are ready.
 - Run the EKS deploy script (this installs NGINX, applies manifests, updates CloudFront):
@@ -828,13 +941,13 @@ The deploy script runs with `set -u`. After the parallel deployment-wait loop, w
 
 (If you use `orchestration/aws/run.sh`, you can resume from Phase 5.2 and then run Phase 7, assuming earlier phases are already done.)
 
-### 14.6 Takeaway
+<h3 id="war-story-14-sec-6" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">14.6 Takeaway</h3>
 
 "API/Frontend URL not available" after applying an Ingress usually means **no Ingress Controller is running** to provision the load balancer and fill Ingress `.status`. For EKS with NGINX, install the controller in the deploy pipeline before applying Ingresses that reference its class. Fix shell cleanup under `set -u` by using default-empty for array length and elements (`${arr[@]:-}`, `((${#arr[@]:-0} > 0))`) so empty/unset arrays don't trigger unbound variable.
 
 ---
 
-## 15. EKS Analytics Scheduler: "No analytics data available" — Scheduler Validation, S3A Credentials, and Admin vs Bedrock
+<h2 id="war-story-15" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">15. EKS Analytics Scheduler: "No analytics data available" — Scheduler Validation, S3A Credentials, and Admin vs Bedrock</h2>
 
 **creation:** `<260203>`
 **last_updated:** `<260203>`
@@ -843,11 +956,11 @@ The deploy script runs with `set -u`. After the parallel deployment-wait loop, w
 **difficulty:** 7
 **significance:** 8
 
-### 15.1 Context
+<h3 id="war-story-15-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">15.1 Context</h3>
 
 The analytics panel in the UI showed "No analytics data available yet. Analytics will be available after the first batch run." The Spark batch analytics job runs inside the API pod (via `run_scheduler.py`) when `ENABLE_ANALYTICS_SCHEDULER=true`, but it was not producing data. Clicking "Retry" didn't help.
 
-### 15.2 Root Cause (Multiple Fixes)
+<h3 id="war-story-15-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">15.2 Root Cause (Multiple Fixes)</h3>
 
 1. **Scheduler validation rejected EKS:** The scheduler checked `is_ecs_deployment` for S3 path validation. EKS uses `CONTAINER_TYPE=eks`, so `is_ecs_deployment` was false, and the code raised: "DELTA_TABLE_PATH is an S3 path, but CONTAINER_TYPE=eks does not indicate ECS deployment." The fix: use `is_aws_deployment = is_ecs_deployment or is_eks_deployment` for validation and S3A config.
 
@@ -857,24 +970,24 @@ The analytics panel in the UI showed "No analytics data available yet. Analytics
 
 4. **S3A credentials provider:** Spark uses Hadoop S3A. We had `IAMInstanceCredentialsProvider` (instance metadata). EKS pods use **static env credentials**, not instance metadata. The JVM didn't pick up `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` from the pod. Fix: use a **chain** of providers: `EnvironmentVariableCredentialsProvider,IAMInstanceCredentialsProvider` in `spark_config.py`, so env vars are tried first (EKS), then instance metadata (ECS).
 
-### 15.3 Key Insight
+<h3 id="war-story-15-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">15.3 Key Insight</h3>
 
 > EKS pods with static credentials need env-based S3A providers. Use a credential chain (env first, then instance metadata) so both EKS (env) and ECS (task role) work. For EKS pods that need both Bedrock and S3, use admin credentials in the K8s secret; bedrock-admin alone lacks S3.
 
-### 15.4 Resolution
+<h3 id="war-story-15-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">15.4 Resolution</h3>
 
 - **Scheduler:** `scheduler.py` now uses `is_aws_deployment` for path validation and S3A config.
 - **ConfigMap/Deployment:** Added `delta-table-path`, `container-type`, `delta-lake-package`; manifest generation fetches `s3_delta_table_path` from Terraform and converts to `s3a://`.
 - **Secret:** K8s secret now uses admin credentials for EKS (both Bedrock and S3 access).
 - **S3A config:** `get_s3a_spark_config()` uses `EnvironmentVariableCredentialsProvider,IAMInstanceCredentialsProvider`.
 
-### 15.5 Takeaway
+<h3 id="war-story-15-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">15.5 Takeaway</h3>
 
 For EKS analytics: (1) treat EKS as an AWS deployment (`is_aws_deployment`); (2) pass `DELTA_TABLE_PATH`, `CONTAINER_TYPE`, `DELTA_LAKE_PACKAGE` into pods; (3) use admin credentials if pods need both Bedrock and S3; (4) use S3A credential chain with env provider first for static credentials in EKS.
 
 ---
 
-## 16. Making Kube Work with Cloud-Provider Agnostic NLB: Why It Worked Before but Not After Refactor
+<h2 id="war-story-16" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">16. Making Kube Work with Cloud-Provider Agnostic NLB: Why It Worked Before but Not After Refactor</h2>
 
 **creation:** `<260203>`
 **last_updated:** `<260203>`
@@ -883,31 +996,56 @@ For EKS analytics: (1) treat EKS as an AWS deployment (`is_aws_deployment`); (2)
 **difficulty:** 8
 **significance:** 9
 
-### 16.1 Context and the Struggle
+<h3 id="war-story-16-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">16.1 Context and the Struggle</h3>
 
 We struggled to figure out why the EKS NLB worked before but no longer worked after a refactor. Deployments reported success, but the API URL and Frontend URL were "not available," and `/analytics` returned 502. The refactor had reorganized deploy steps and Terraform layers; the NLB used to appear, then it didn't.
 
-### 16.2 How Kube Gets an NLB (Cloud-Provider Agnostic)
+<h3 id="war-story-16-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">16.2 How Kube Gets an NLB (Cloud-Provider Agnostic)</h3>
 
 We use a **cloud-provider agnostic** approach: Kubernetes abstractions, not AWS-specific Terraform for the load balancer.
 
-| Component | What it is | Who creates it |
-|-----------|------------|----------------|
-| **Ingress** | K8s resource that routes HTTP traffic | Our deploy applies manifest (`ingress.template.yaml`) |
-| **Ingress Controller** | Watches Ingresses and configures a proxy | NGINX Ingress Controller (Helm) |
-| **Service (LoadBalancer)** | K8s object; when `type: LoadBalancer`, the **cloud** creates a real LB | NGINX chart creates `ingress-nginx-controller` Service; AWS creates NLB |
-| **NLB hostname** | DNS of the load balancer | Appears in `Service.status.loadBalancer.ingress` and in each adopted **Ingress** `.status.loadBalancer.ingress` |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Component</th>
+<th style="padding:8px">What it is</th>
+<th style="padding:8px">Who creates it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Ingress</strong></td>
+<td style="padding:8px;background:#e8f5e9">K8s resource that routes HTTP traffic</td>
+<td style="padding:8px;background:#e8f5e9">Our deploy applies manifest (<code>ingress.template.yaml</code>)</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Ingress Controller</strong></td>
+<td style="padding:8px;background:#fff3e0">Watches Ingresses and configures a proxy</td>
+<td style="padding:8px;background:#fff3e0">NGINX Ingress Controller (Helm)</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Service (LoadBalancer)</strong></td>
+<td style="padding:8px;background:#e8f5e9">K8s object; when <code>type: LoadBalancer</code>, the <strong>cloud</strong> creates a real LB</td>
+<td style="padding:8px;background:#e8f5e9">NGINX chart creates <code>ingress-nginx-controller</code> Service; AWS creates NLB</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>NLB hostname</strong></td>
+<td style="padding:8px;background:#fff3e0">DNS of the load balancer</td>
+<td style="padding:8px;background:#fff3e0">Appears in <code>Service.status.loadBalancer.ingress</code> and in each adopted <strong>Ingress</strong> <code>.status.loadBalancer.ingress</code></td>
+</tr>
+</tbody>
+</table>
 
 The NLB is **not** in Terraform. It is created by AWS when the NGINX controller's Service (`type: LoadBalancer`) is applied. NGINX adopts Ingresses with `ingressClassName: fru-nginx-cls` and copies the NLB hostname into their `.status`. CloudFront and verification scripts read that hostname to reach the API.
 
-### 16.3 Why It Worked Before and Broke After Refactor
+<h3 id="war-story-16-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">16.3 Why It Worked Before and Broke After Refactor</h3>
 
 - **Before:** NGINX Ingress Controller was installed manually or by an earlier pipeline step. When we applied the app Ingress, NGINX was already running, adopted it, and filled `.status.loadBalancer.ingress` with the NLB hostname.
 - **After refactor:** The deploy pipeline was reordered. We applied the app Ingress **before** installing NGINX (or NGINX install was removed from the automated flow). No controller → no NLB → Ingress `.status` stayed empty → API/Frontend URLs unavailable, CloudFront 502.
 
 So the "refactor" didn't break the Ingress manifest; it **dropped or reordered** the step that installs the Ingress Controller. See War Story 23 for the fix (add NGINX install as Substep 4.5 before app manifests).
 
-### 16.4 Teardown: Releasing the NLB
+<h3 id="war-story-16-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">16.4 Teardown: Releasing the NLB</h3>
 
 The NLB is created by the NGINX controller's Service. When we teardown EKS:
 
@@ -916,18 +1054,18 @@ The NLB is created by the NGINX controller's Service. When we teardown EKS:
 
 We use Option B: `stop-eks-services.sh` now uninstalls the NGINX Helm release first, then scales down deployments and deletes app services. This ensures the NLB (and its ENIs) are released in a predictable order during teardown.
 
-### 16.5 Where Teardown Lives
+<h3 id="war-story-16-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">16.5 Where Teardown Lives</h3>
 
 - **EKS pre-destroy:** `module_infra_kubetypes/kube/aws/teardown/eks_pre_destroy.py` calls `stop-eks-services.sh`.
 - **NGINX uninstall:** Inside `stop-eks-services.sh`, before scaling deployments, we run `helm uninstall ingress-nginx -n ingress-nginx` (if Helm and the release exist). This is the correct place because: (1) it runs before Terraform destroy; (2) it runs while the cluster is still up and kubectl works; (3) it explicitly releases the NLB so we don't rely solely on cluster deletion.
 
-### 16.6 Takeaway
+<h3 id="war-story-16-sec-6" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">16.6 Takeaway</h3>
 
 The kube NLB is created by Kubernetes (NGINX Ingress Controller's LoadBalancer Service), not Terraform. Install NGINX in the deploy pipeline **before** app Ingresses. For teardown, uninstall NGINX explicitly so the NLB is released before cluster destroy; otherwise ENIs can linger. The "cloud-provider agnostic" design means we use standard K8s abstractions; the cloud (AWS) creates the actual NLB when it sees the LoadBalancer Service.
 
 ---
 
-## 17. CloudFront 502 for EKS: Why Post-Deploy Origin Update is Kube-Only
+<h2 id="war-story-17" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">17. CloudFront 502 for EKS: Why Post-Deploy Origin Update is Kube-Only</h2>
 
 **creation:** `<260203>`
 **last_updated:** `<260222>`
@@ -936,11 +1074,11 @@ The kube NLB is created by Kubernetes (NGINX Ingress Controller's LoadBalancer S
 **difficulty:** 6
 **significance:** 8
 
-### 17.1 Context
+<h3 id="war-story-17-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">17.1 Context</h3>
 
 After EKS deploy, the frontend (CloudFront) showed **502 Bad Gateway** for `/query`, `/analytics`, and other API paths. The API was healthy when hit directly via the NLB, but CloudFront could not reach it.
 
-### 17.2 Root Cause
+<h3 id="war-story-17-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">17.2 Root Cause</h3>
 
 CloudFront's **API origin** (the backend URL for `/query`, `/analytics`, etc.) was never updated to the real EKS NLB hostname.
 
@@ -949,16 +1087,36 @@ CloudFront's **API origin** (the backend URL for `/query`, `/analytics`, etc.) w
 
 The script `update-cloudfront-loadbalancer.sh` does that. But it was reading `cloudfront_distribution_id` from the **EKS** Terraform layer (`.../kube/aws/terra/environments/dev/eks`), which does **not** define that output. The output lives in the **frontend** module, used by the **frontend-eks** layer. So the script got no ID, **skipped** the update, and CloudFront kept pointing at a placeholder or stale origin → 502.
 
-### 17.3 Why This Is Kube-Only
+<h3 id="war-story-17-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">17.3 Why This Is Kube-Only</h3>
 
-| Backend | Who creates LB | When LB hostname exists | CloudFront origin |
-|---------|----------------|-------------------------|-------------------|
-| **ECS** | Terraform (ALB) | At Terraform apply | Set at apply time by frontend-ecs |
-| **EKS** | Kubernetes (NGINX → NLB) | After Ingress and NGINX are up | **Must** be updated post-deploy |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Backend</th>
+<th style="padding:8px">Who creates LB</th>
+<th style="padding:8px">When LB hostname exists</th>
+<th style="padding:8px">CloudFront origin</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>ECS</strong></td>
+<td style="padding:8px;background:#e8f5e9">Terraform (ALB)</td>
+<td style="padding:8px;background:#e8f5e9">At Terraform apply</td>
+<td style="padding:8px;background:#e8f5e9">Set at apply time by frontend-ecs</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>EKS</strong></td>
+<td style="padding:8px;background:#fff3e0">Kubernetes (NGINX → NLB)</td>
+<td style="padding:8px;background:#fff3e0">After Ingress and NGINX are up</td>
+<td style="padding:8px;background:#fff3e0"><strong>Must</strong> be updated post-deploy</td>
+</tr>
+</tbody>
+</table>
 
 ECS uses Terraform-owned infrastructure; EKS uses the cloud-provider agnostic NLB (War Story 25). For EKS, the NLB is created by Kubernetes, so its hostname is not available at Terraform apply time. Hence the post-deploy CloudFront update is **only needed for kube (EKS)**.
 
-### 17.4 The Fix
+<h3 id="war-story-17-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">17.4 The Fix</h3>
 
 - **update-cloudfront-loadbalancer.sh** now reads `cloudfront_distribution_id` from the **frontend-eks** layer:  
   `module_infra_basic/aws/terra/environments/<env>/frontend-eks`
@@ -967,14 +1125,34 @@ ECS uses Terraform-owned infrastructure; EKS uses the cloud-provider agnostic NL
 
 See War Stories 26, 38, 43 for CloudFront origin and script details.
 
-### 17.5 Two-Phase CloudFront Origin Flow (Kube Deploy)
+<h3 id="war-story-17-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">17.5 Two-Phase CloudFront Origin Flow (Kube Deploy)</h3>
 
 The kube deploy uses a **two-phase apply** for CloudFront:
 
-| Phase | When | ingress_hostname | CloudFront origins |
-|-------|------|------------------|--------------------|
-| **1** | First tofu apply (before kubectl) | null | S3 only; API paths route to S3 (wrong) |
-| **2** | After kubectl apply (Ingress + NLB exist) | NLB hostname | S3 + ALB; API paths route to NLB (correct) |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Phase</th>
+<th style="padding:8px">When</th>
+<th style="padding:8px">ingress_hostname</th>
+<th style="padding:8px">CloudFront origins</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>1</strong></td>
+<td style="padding:8px;background:#e8f5e9">First tofu apply (before kubectl)</td>
+<td style="padding:8px;background:#e8f5e9">null</td>
+<td style="padding:8px;background:#e8f5e9">S3 only; API paths route to S3 (wrong)</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>2</strong></td>
+<td style="padding:8px;background:#fff3e0">After kubectl apply (Ingress + NLB exist)</td>
+<td style="padding:8px;background:#fff3e0">NLB hostname</td>
+<td style="padding:8px;background:#fff3e0">S3 + ALB; API paths route to NLB (correct)</td>
+</tr>
+</tbody>
+</table>
 
 **Phase 1:** Terraform applies the kube stack. At this moment, the NLB does not exist—it is created by Kubernetes when the Ingress and NGINX Ingress Controller are applied. So `ingress_hostname` is null, and the frontend module creates CloudFront with only the S3 origin. Cache behaviors for `/query`, `/analytics`, etc. point at S3 (or a placeholder), which is wrong.
 
@@ -982,13 +1160,13 @@ The kube deploy uses a **two-phase apply** for CloudFront:
 
 This "chicken and egg"—CloudFront needs the NLB hostname, but the NLB only exists after k8s apply—is why kube requires the two-phase flow. ECS does not: Terraform creates the ALB at apply time, so `alb_dns_name` is available from the start.
 
-### 17.6 Takeaway
+<h3 id="war-story-17-sec-6" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">17.6 Takeaway</h3>
 
 502 for API paths through CloudFront on EKS usually means CloudFront's API origin was never updated to the EKS NLB. The post-deploy script must read `cloudfront_distribution_id` from the **frontend-eks** layer (where it's defined), not the EKS layer. This step is kube-only because EKS uses a Kubernetes-created NLB whose hostname appears only after deploy. The two-phase flow (apply without origin → kubectl → apply with origin) is inherent to this design.
 
 ---
 
-## 18. ECR Prune: Manifest List and Why "Oldest First" Fails for Some Images
+<h2 id="war-story-18" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">18. ECR Prune: Manifest List and Why "Oldest First" Fails for Some Images</h2>
 
 **creation:** `<260205>`
 **last_updated:** `<260205>`
@@ -997,30 +1175,30 @@ This "chicken and egg"—CloudFront needs the NLB hostname, but the NLB only exi
 **difficulty:** 6
 **significance:** 7
 
-### 18.1 Context
+<h3 id="war-story-18-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">18.1 Context</h3>
 
 A prune script deleted most old ECR images but left a few behind with `ImageReferencedByManifestList` errors. Deleting "oldest first" (to keep the N most recent) meant the script tried to delete child images (e.g. amd64/arm64 manifests) before the parent; ECR refuses to delete a child while a manifest list still references it.
 
-### 18.2 Root Cause
+<h3 id="war-story-18-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">18.2 Root Cause</h3>
 
 Multi-arch builds (e.g. Docker buildx with `--platform linux/amd64,linux/arm64`) produce a **manifest list** (one digest that points to multiple platform images). The tag (e.g. `latest`) lives on the manifest list; the per-platform images have no tag in the UI. ECR's `batch-delete-image` returns `ImageReferencedByManifestList` when you try to delete a digest that is still referenced by another digest (the manifest list). Deletion order matters: you must delete the **manifest list digest first**, then the child digests become orphaned and can be deleted.
 
-### 18.3 Key Insight
+<h3 id="war-story-18-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">18.3 Key Insight</h3>
 
 > When pruning ECR, delete **newest first** (by `imagePushedAt` desc) so the manifest list (usually the "tag" / newest) is removed before its children. Deleting oldest first leaves manifest-list children undeletable until the parent is gone.
 
-### 18.4 Resolution
+<h3 id="war-story-18-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">18.4 Resolution</h3>
 
 - Prune script: sort images by push date and delete in **newest-first** order (or when doing "keep N", the "to delete" set is the oldest, but send them to the API in an order that processes manifest lists before children—e.g. still newest-first for the batch so the list is in the same batch and deleted first).
 - To clear everything: delete the manifest list digest explicitly first (identify it as the one that had the tag), then run prune again so the now-orphaned children can be deleted.
 
-### 18.5 Takeaway
+<h3 id="war-story-18-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">18.5 Takeaway</h3>
 
 ECR manifest lists create a parent-child relationship. Always delete the parent (manifest list) before its children; newest-first ordering usually achieves this. The "untagged" / `<none>` images in the console are often those child manifests.
 
 ---
 
-## 19. Teardown and ECR: No Tags, No Deletion — Why Teardown Left All Images and How We Fixed It
+<h2 id="war-story-19" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">19. Teardown and ECR: No Tags, No Deletion — Why Teardown Left All Images and How We Fixed It</h2>
 
 **creation:** `<260205>`
 **last_updated:** `<260205>`
@@ -1029,11 +1207,11 @@ ECR manifest lists create a parent-child relationship. Always delete the parent 
 **difficulty:** 5
 **significance:** 7
 
-### 19.1 Context
+<h3 id="war-story-19-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">19.1 Context</h3>
 
 Running `./teardown.sh aws all dev` (or eks/ecs only) never deleted ECR images; the repo kept accumulating builds. We also wanted teardown with `--container-type eks` to delete only EKS-related images and leave ECS images intact (and vice versa), but there was no way to tell which images belonged to which target.
 
-### 19.2 Root Cause
+<h3 id="war-story-19-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">19.2 Root Cause</h3>
 
 Two separate issues:
 
@@ -1041,22 +1219,22 @@ Two separate issues:
 
 2. **No tag to identify deployment target.** Images were pushed with only a version tag and `latest`. To delete "only EKS" or "only ECS" images we need a tag that identifies the target (e.g. literal tags `eks` and `ecs`). Without that, we could only delete all or none.
 
-### 19.3 Key Insight
+<h3 id="war-story-19-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">19.3 Key Insight</h3>
 
 > Teardown must run an explicit ECR cleanup step. To scope deletion by container-type, tag images at build time with the deployment target (`eks` and/or `ecs`); then teardown can delete only images that have the matching tag.
 
-### 19.4 Resolution
+<h3 id="war-story-19-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">19.4 Resolution</h3>
 
 - **Build-push:** After pushing the version tag and `latest`, push one or both of the literal tags `eks` and `ecs` based on `CONTAINER_TYPE` (eks, ecs, or all). Same digest, extra tags; no change to version or `latest` semantics.
 - **Teardown:** Added a step that runs `ecr-delete-by-container-type.sh`: for `--container-type eks` delete only images with tag `eks`; for `ecs` only tag `ecs`; for `all` delete all images. Newest-first deletion order to respect manifest lists.
 
-### 19.5 Takeaway
+<h3 id="war-story-19-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">19.5 Takeaway</h3>
 
 If teardown should clean ECR, it must call ECR deletion explicitly—Terraform won't do it if the repo isn't in state. For teardown-by-container-type, tag at push time (e.g. `eks`, `ecs`) so you can filter at delete time. Tag at push time (e.g. `eks`, `ecs`) so you can filter at delete time.
 
 ---
 
-## 20. API Validation HTTP 000000: Retry Logic Bailing on Ambiguous Status
+<h2 id="war-story-20" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">20. API Validation HTTP 000000: Retry Logic Bailing on Ambiguous Status</h2>
 
 **creation:** `<260205>`
 **last_updated:** `<260205>`
@@ -1065,21 +1243,21 @@ If teardown should clean ECR, it must call ECR deletion explicitly—Terraform w
 **difficulty:** 6
 **significance:** 7
 
-### 20.1 Context
+<h3 id="war-story-20-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">20.1 Context</h3>
 
 During endpoint validation (e.g. ECS or EKS API health), the script sometimes reported **HTTP 000000** and then **stopped or failed** instead of retrying. The API might have been temporarily unreachable (e.g. ALB still provisioning, connection reset), but the validator treated the run as a definitive failure and exited.
 
-### 20.2 Root Cause
+<h3 id="war-story-20-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">20.2 Root Cause</h3>
 
 The retry logic treated only a small set of status strings as "known": e.g. exactly `200`, `502`, `503`, `504`, `000`. The code used strict string checks: if status is `000` then retry; if `200` then success; **else** (any other value) treat as failure and **return 1** immediately.
 
 Curl (or the pipeline) can produce **000000** instead of **000**—e.g. streaming output mixed with the status code, or formatting that appended extra digits. The string `000000` did **not** match `000`, so it fell into the **else** branch and the script exited with failure instead of retrying. So a transient "no response yet" (effectively 000) was misclassified as a permanent error.
 
-### 20.3 Key Insight
+<h3 id="war-story-20-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">20.3 Key Insight</h3>
 
 > When parsing HTTP status codes from curl or other tools, **normalize** to a fixed length (e.g. first three digits) before branching. Treat **000** as "no response / transient"—retry, don’t fail. Reserve immediate failure only for **definitive** client errors (e.g. 404, 401, 403); for 5xx and ambiguous values (including 000 and any unexpected string), keep retrying until timeout.
 
-### 20.4 Resolution
+<h3 id="war-story-20-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">20.4 Resolution</h3>
 
 - **Normalize status:** In `validate-endpoints.sh`, normalize the HTTP code to the **first three characters** (e.g. `000000` → `000`, `200` → `200`) before any comparison.
 - **000 = retry:** Treat normalized `000` as "no response yet" and continue retrying; do not treat it as success or as a definitive failure.
@@ -1087,12 +1265,12 @@ Curl (or the pipeline) can produce **000000** instead of **000**—e.g. streamin
 
 This prevented transient connectivity or "HTTP 000" / "000000" cases from bailing out early and gave the API time to become ready (e.g. ALB propagation).
 
-### 20.5 Takeaway
+<h3 id="war-story-20-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">20.5 Takeaway</h3>
 
 Don’t use strict string equality (e.g. `"$status" = "000"`) when the tool might output extra digits or padding. Normalize status to three digits first. Treat 000 as retry; only fail fast on definitive 4xx that mean "endpoint not found or forbidden." For 5xx and 000, retry until timeout so temporary unavailability (ALB still coming up, ERR_HTTP2, etc.) doesn’t cause a false failure.
 
 ---
-## 21. Terraform State Lock Ambiguity: "Acquiring" vs "Releasing" and the S3 PreconditionFailed (412) Trap
+<h2 id="war-story-21" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">21. Terraform State Lock Ambiguity: "Acquiring" vs "Releasing" and the S3 PreconditionFailed (412) Trap</h2>
 
 **creation:** `<260206-215835>`
 **last_updated:** `<260206-215835>`
@@ -1101,21 +1279,21 @@ Don’t use strict string equality (e.g. `"$status" = "000"`) when the tool migh
 **difficulty:** 7
 **significance:** 8
 
-### 21.1 Context
+<h3 id="war-story-21-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">21.1 Context</h3>
 
 During automated infrastructure teardown using Terragrunt, the system hit a recurring "silent failure" pattern. Some layers (like `frontend-ecs`) were successfully repairing stale state locks, but others (like the shared `infrastructure` layer) reported `[SUCCESS]` even when they actually failed due to a lock. Furthermore, the **EKS layer reconstruction (import)** phase was crashing during teardown because it couldn't resolve its parent dependency's outputs.
 
-### 21.2 Root Cause
+<h3 id="war-story-21-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">21.2 Root Cause</h3>
 
 1.  **Semantic Lock Blindness:** The teardown script's lock-detection regex was strictly looking for `Error acquiring the state lock`. However, Terraform often fails the check-in process at the end of a destroy, resulting in `Error releasing the state lock`. Because the script didn't recognize "releasing," it didn't trigger the automatic `force-unlock` fallback, and the exit code 1 was eaten by a loop that assumed success.
 2.  **The S3 412 (PreconditionFailed) Trap:** In certain race conditions with the S3 backend, AWS returns a low-level `HTTP 412` error. This "PreconditionFailed" occurs before the high-level Terraform error is rendered, meaning a clean **Lock ID** is never printed to stdout. This broke the automated `force-unlock <LOCK_ID>` parsing, causing the script to guide the user into a dead end.
 3.  **Circular Dependency Crash during Import:** To ensure a clean teardown, we run `import` scripts to reconcile state before `destroy`. Terragrunt's dependency resolution crashes during `import` if the parent layer (e.g., VPC/Infrastructure) has already been destroyed or has no outputs. 
 
-### 21.3 Key Insight
+<h3 id="war-story-21-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">21.3 Key Insight</h3>
 
 > State lock management is bidirectional (ACQUIRE vs RELEASE). Automation must handle the "check-in" failure as seriously as the "check-out" failure. Additionally, low-level AWS errors (412) can obscure the Lock ID, necessitating a "fail-fast and notify" strategy over a "continue blindly" one.
 
-### 21.4 Resolution
+<h3 id="war-story-21-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">21.4 Resolution</h3>
 
 - **Bidirectional Lock Detection:** Updated the teardown and import libraries to use a generalized regex: `Error (acquiring|releasing) the state lock`.
 - **Enforced Fail-Fast:** Converted internal warnings into fatal `exit 1` errors. If a lock repair fails (e.g., because no Lock ID could be parsed from a 412 error), the script now terminates immediately for safety instead of proceeding with an inconsistent state.
@@ -1125,13 +1303,13 @@ During automated infrastructure teardown using Terragrunt, the system hit a recu
   ```
   This allowed EKS/ECS layers to reconcile their state using mock VPC IDs even if the physical VPC was already gone.
 
-### 21.5 Takeaway
+<h3 id="war-story-21-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">21.5 Takeaway</h3>
 
 Automated teardown scripts must be as robust as deployment scripts. Don't just look for "acquiring" locks—detect "release" failures too. Treat low-level AWS S3 errors (412) as deterministic lock failures and never proceed if state reconciliation (`import`) fails. Use `mock_outputs_allowed_terraform_commands` broadly to prevent child layers from crashing when their parents are already deleted during a partial teardown.
 
 ---
 
-## 22. CloudFront 403 Access Denied: Treating Real Failures as "Retriable" and the Missing Frontend Deploy
+<h2 id="war-story-22" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">22. CloudFront 403 Access Denied: Treating Real Failures as "Retriable" and the Missing Frontend Deploy</h2>
 
 **creation:** `<260211>`
 **last_updated:** `<260211>`
@@ -1140,7 +1318,7 @@ Automated teardown scripts must be as robust as deployment scripts. Don't just l
 **difficulty:** 6
 **significance:** 8
 
-### 22.1 Context
+<h3 id="war-story-22-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">22.1 Context</h3>
 
 Post-deploy verification of the nonkube stack (ECS + CloudFront) ran for 15+ minutes, polling endpoints that returned `HTTP 403 Access Denied`. We had added 403 to a "retriable" list under the assumption that CloudFront propagation could cause transient 403s. Verification kept retrying instead of failing fast. The raw error was:
 
@@ -1151,7 +1329,7 @@ Post-deploy verification of the nonkube stack (ECS + CloudFront) ran for 15+ min
 </Error>
 ```
 
-### 22.2 Root Cause
+<h3 id="war-story-22-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">22.2 Root Cause</h3>
 
 Two separate issues:
 
@@ -1159,11 +1337,11 @@ Two separate issues:
 
 2. **The new deploy flow never deployed frontend to S3.** The legacy project runs `deploy-frontend.sh`, which builds the frontend and syncs `dist/` to the S3 bucket. The new project created the CloudFront distribution and S3 bucket via Terraform but **never uploaded frontend assets**. The bucket was empty. When CloudFront tried to fetch `/`, `index.html`, or `/health`, S3 returned 403 (or 404). Additionally, CloudFront lacked a path pattern for `/health`, so `/health` went to the default behavior (S3) instead of the ALB.
 
-### 22.3 Key Insight
+<h3 id="war-story-22-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">22.3 Key Insight</h3>
 
 > Distinguish "transient not-ready-yet" (502/503 from ECS/ALB startup) from "real failure" (403 from permissions or missing content). 403 should never be retried; it signals a configuration or deploy-gap problem.
 
-### 22.4 Resolution
+<h3 id="war-story-22-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">22.4 Resolution</h3>
 
 1. **Removed 403 from retriable.** Only 502 and 503 remain retriable; 403 now fails immediately so we surface real config errors.
 
@@ -1171,13 +1349,13 @@ Two separate issues:
 
 3. **Added `/health` to CloudFront path patterns.** The legacy frontend module routes `/health` to the ALB. Our CloudFront module was missing this; we added an `ordered_cache_behavior` for `/health` targeting the API origin.
 
-### 22.5 Takeaway
+<h3 id="war-story-22-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">22.5 Takeaway</h3>
 
 When designing verification retry logic, only tolerate status codes that indicate *transient* unavailability (502/503 during startup). 403 Access Denied is a configuration or content problem—retrying it forever hides the real bug. When migrating from a legacy deploy flow, ensure every deploy step (including frontend build + sync) is present in the new flow; missing steps cause "mysterious" failures that look like propagation delays.
 
 ---
 
-## 23. EKS Security Groups: AWS-Created Side Effects, Not Terraform Resources
+<h2 id="war-story-23" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">23. EKS Security Groups: AWS-Created Side Effects, Not Terraform Resources</h2>
 
 **creation:** `<260215>`
 **last_updated:** `<260215>`
@@ -1186,11 +1364,11 @@ When designing verification retry logic, only tolerate status codes that indicat
 **difficulty:** 5
 **significance:** 7
 
-### 23.1 Context
+<h3 id="war-story-23-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">23.1 Context</h3>
 
 When we tear down the kube stack, EKS cluster and node security groups (`{cluster}-cluster-sg`, `{cluster}-nodes-sg`) sometimes remain orphaned after the cluster is deleted. Terraform does not remove them. Why?
 
-### 23.2 Root Cause
+<h3 id="war-story-23-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">23.2 Root Cause</h3>
 
 These SGs are **not Terraform resources**. They are created by **AWS** as a side effect when:
 - `aws_eks_cluster` is applied → AWS CreateCluster API → AWS creates the cluster SG
@@ -1198,11 +1376,11 @@ These SGs are **not Terraform resources**. They are created by **AWS** as a side
 
 Terraform's `aws_eks_cluster` and `aws_eks_node_group` do not declare `aws_security_group` blocks. The SGs are created by the EKS service, not by Terraform. When Terraform destroys the cluster, it deletes the cluster via the AWS API; AWS does not always delete the associated SGs. They are unique in that sense: created by AWS, not managed by Terraform, and often orphaned on cluster deletion.
 
-### 23.3 Industry Practice
+<h3 id="war-story-23-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">23.3 Industry Practice</h3>
 
 The common approach is **post-destroy cleanup**: run a script after `terraform destroy` to delete orphaned SGs. Alternatives include accepting orphaned SGs (low cost) or using custom SGs in Terraform (more complex, changes default EKS setup). We use `remove_orphaned_eks_security_groups` in pre_destroy—idempotent, runs when cluster is gone, cleans via AWS CLI.
 
-### 23.4 Takeaway
+<h3 id="war-story-23-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">23.4 Takeaway</h3>
 
 EKS cluster and node SGs are AWS-created side effects, not Terraform resources. Terraform cannot manage their lifecycle. Post-destroy CLI cleanup is the common industry practice. Document this so future maintainers understand why `remove_orphaned_eks_security_groups` exists and that it is not a workaround for missing Terraform—the SGs were never in Terraform.
 
@@ -1210,7 +1388,7 @@ EKS cluster and node SGs are AWS-created side effects, not Terraform resources. 
 
 ---
 
-## 24. SPA 404→index.html, Stale CDN Cache, and the "Expected JavaScript but got text/html" MIME Error
+<h2 id="war-story-24" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">24. SPA 404→index.html, Stale CDN Cache, and the "Expected JavaScript but got text/html" MIME Error</h2>
 
 **creation:** `<260216>`
 **last_updated:** `<260216>` (added 42.5 Code You Must Use; invalidation + wait parity with legacy)
@@ -1219,17 +1397,17 @@ EKS cluster and node SGs are AWS-created side effects, not Terraform resources. 
 **difficulty:** 6
 **significance:** 8
 
-### 24.1 Context
+<h3 id="war-story-24-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">24.1 Context</h3>
 
 After deploying a new frontend to S3 (with CloudFront in front), users saw:
 
-```
+```text
 Failed to load module script: Expected a JavaScript-or-Wasm module script but the server responded with a MIME type of "text/html".
 ```
 
 The app failed to load. The deploy had succeeded—new files were in S3. Why was the browser receiving HTML when it expected JavaScript?
 
-### 24.2 The 404→200 Custom Error: SPA Routing Rationale
+<h3 id="war-story-24-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">24.2 The 404→200 Custom Error: SPA Routing Rationale</h3>
 
 CloudFront (and many SPA setups) use a custom error response:
 
@@ -1245,7 +1423,7 @@ custom_error_response {
 
 **The downside:** When the request is for a real asset (e.g. `/assets/index-abc123.js`) and that file is missing (404), we also return `index.html`. The browser expected JavaScript; it got HTML. MIME type error.
 
-### 24.3 Root Cause: Stale CDN Cache + Deleted Assets
+<h3 id="war-story-24-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">24.3 Root Cause: Stale CDN Cache + Deleted Assets</h3>
 
 The failure chain:
 
@@ -1260,13 +1438,13 @@ The failure chain:
 
 The new project's `tools/aws/deploy_frontend.py` now runs CloudFront invalidation and waits for completion (parity with legacy `deploy-frontend.sh` and `cloudfront-invalidation.sh`). See §42.5 for the code you must use.
 
-### 24.4 The Fix: CDN Invalidation After Deploy
+<h3 id="war-story-24-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">24.4 The Fix: CDN Invalidation After Deploy</h3>
 
 `aws cloudfront create-invalidation --paths "/*"` tells CloudFront to purge its cache for those paths. After invalidation, CloudFront fetches fresh content from S3. The next request for `/` gets the new `index.html`, which references `index-C2htoP48.js`. The browser requests that file—it exists—200 with correct JS. No 404, no MIME error.
 
 **Summary:** Invalidation clears the cached `index.html`. Without it, CloudFront keeps serving old HTML that points at deleted asset filenames. The 404 happens because we're requesting the *old* file name. Invalidation forces CloudFront to fetch the *new* index.html, which has the correct (new) file names.
 
-### 24.5 Code You Must Use: Invalidation + Wait (Legacy Parity)
+<h3 id="war-story-24-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">24.5 Code You Must Use: Invalidation + Wait (Legacy Parity)</h3>
 
 The fix is not just to create an invalidation—you must also **wait for it to complete** before considering the deploy done. Otherwise, users may hit the site while invalidation is still in progress and see stale content. The legacy project (`module_infra_frontend/aws/helpers/cloudfront-invalidation.sh`) does both: `create_cloudfront_invalidation` and `wait_for_invalidation`. The new project mirrors this in `tools/aws/deploy_frontend.py`.
 
@@ -1311,35 +1489,61 @@ aws cloudfront create-invalidation --distribution-id <DIST_ID> --paths "/*"
 aws cloudfront get-invalidation --distribution-id <DIST_ID> --id <INVALIDATION_ID>
 ```
 
-### 24.6 Is This CloudFront-Specific?
+<h3 id="war-story-24-sec-6" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">24.6 Is This CloudFront-Specific?</h3>
 
 No. The need is **CDN-specific**. Any layer that caches responses can cause this:
 
-| Layer | Invalidation / purge needed? |
-|-------|------------------------------|
-| CloudFront (AWS) | Yes — `create-invalidation` |
-| Cloudflare | Yes — Purge Cache API |
-| GCP Cloud CDN | Yes — cache invalidation API |
-| Fastly, Akamai, etc. | Yes — each has its own purge API |
-| Nginx / reverse proxy | Only if you enable caching |
-| Direct file server (no CDN) | No — files overwritten, next request gets new content |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Layer</th>
+<th style="padding:8px">Invalidation / purge needed?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px">CloudFront (AWS)</td>
+<td style="padding:8px;background:#e8f5e9">Yes — <code>create-invalidation</code></td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">Cloudflare</td>
+<td style="padding:8px;background:#fff3e0">Yes — Purge Cache API</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">GCP Cloud CDN</td>
+<td style="padding:8px;background:#e8f5e9">Yes — cache invalidation API</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">Fastly, Akamai, etc.</td>
+<td style="padding:8px;background:#fff3e0">Yes — each has its own purge API</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">Nginx / reverse proxy</td>
+<td style="padding:8px;background:#e8f5e9">Only if you enable caching</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">Direct file server (no CDN)</td>
+<td style="padding:8px;background:#fff3e0">No — files overwritten, next request gets new content</td>
+</tr>
+</tbody>
+</table>
 
 **Self-hosting or other clouds:** Without a CDN, files are replaced on deploy; the next request hits the new files. No invalidation. With a CDN in front (e.g. Cloudflare), you need to purge the CDN cache after deploy.
 
-### 24.7 Industry Best Practice
+<h3 id="war-story-24-sec-7" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">24.7 Industry Best Practice</h3>
 
 1. **Invalidate after deploy** — Run a purge step in CI/CD after uploading new assets. Standard for CDN-backed frontends.
 2. **Don't cache index.html** — Set `index.html` to no cache or very short TTL. It's the entry point; it should always be fresh. Hashed assets can be cached long-term.
 3. **Content-hashed filenames** — Use hashes in asset URLs (e.g. `index-abc123.js`). Each deploy gets new URLs. This avoids stale assets *if* index.html is fresh. The bug we hit was cached index.html still pointing at old asset URLs.
 4. **Hybrid** — Long cache for hashed assets, no/short cache for index.html, plus invalidation after deploy for belt-and-suspenders.
 
-### 24.8 Takeaway
+<h3 id="war-story-24-sec-8" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">24.8 Takeaway</h3>
 
 The 404→index.html custom error is correct for SPA deep links. It breaks when the missing resource is an asset (JS/CSS) that the browser expects to be that type. The fix is to avoid 404s on assets: run CDN invalidation after deploy so users get fresh index.html with correct asset URLs. Invalidation is not CloudFront-specific—any CDN requires it. Self-hosting without a CDN typically does not.
 
 ---
 
-## 25. CloudFront 502 on API Paths: NLB Internal, Probe Timeouts, and the Need for Fail-Fast Pod Verification
+<h2 id="war-story-25" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">25. CloudFront 502 on API Paths: NLB Internal, Probe Timeouts, and the Need for Fail-Fast Pod Verification</h2>
 
 **creation:** `<260216>`
 **last_updated:** `<260216>`
@@ -1348,11 +1552,11 @@ The 404→index.html custom error is correct for SPA deep links. It breaks when 
 **difficulty:** 7
 **significance:** 8
 
-### 25.1 Context
+<h3 id="war-story-25-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">25.1 Context</h3>
 
 After deploying the kube stack, users saw 502 Bad Gateway on `/version`, `/analytics`, and `/health` through CloudFront. The frontend loaded (S3), but API paths failed. The deploy script completed successfully—why were the API endpoints broken?
 
-### 25.2 Root Cause Chain (Multiple Layers)
+<h3 id="war-story-25-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">25.2 Root Cause Chain (Multiple Layers)</h3>
 
 502 from CloudFront can mean several things. In this case, **two** issues compounded:
 
@@ -1362,7 +1566,7 @@ After deploying the kube stack, users saw 502 Bad Gateway on `/version`, `/analy
    - **Readiness/liveness probes** used `timeoutSeconds: 1` (default). The `/health` request sometimes took longer (agent init, cold start), so probes timed out.
    - After 3 consecutive probe failures, Kubernetes marked the pod unhealthy and restarted it. Restart loop → CrashLoopBackOff → no ready pods → NLB has no targets.
 
-### 25.3 Lessons Learned
+<h3 id="war-story-25-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">25.3 Lessons Learned</h3>
 
 1. **502 has multiple causes** — Don't assume one fix. Check the full chain: CloudFront → NLB (internet-facing?) → Service → Pods (ready?). Any break causes 502.
 
@@ -1372,20 +1576,20 @@ After deploying the kube stack, users saw 502 Bad Gateway on `/version`, `/analy
 
 4. **Deploy "success" ≠ API working** — The deploy script applied manifests and moved on. It never verified that pods came up. We declared success while pods were in CrashLoopBackOff. **Fail-fast**: after applying K8s manifests, wait for the API deployment to have ready replicas; if not within timeout, fail the deploy.
 
-### 25.4 Fixes Applied
+<h3 id="war-story-25-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">25.4 Fixes Applied</h3>
 
 - **api-service.yaml:** `service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing`
 - **kube/main.tf:** Tag public subnets with `kubernetes.io/role/elb` and `kubernetes.io/cluster/<name>` so the controller can place internet-facing NLBs there.
 - **api-deployment.yaml:** Increased probe `timeoutSeconds`, `initialDelaySeconds`, `periodSeconds` so pods aren't killed by transient slowness.
 - **deploy.py:** Added `wait_for_fru_api_ready()` after kube deploy—fail the deploy if pods don't become ready within timeout.
 
-### 25.5 Takeaway
+<h3 id="war-story-25-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">25.5 Takeaway</h3>
 
 CloudFront 502 on API paths can stem from NLB unreachability (internal vs internet-facing) or from unhealthy origins (pods crashing). Fix both. And don't trust deploy success without verifying the critical path: wait for pods to be ready before declaring the deploy done.
 
 ---
 
-## 26. Analytics "Database not configured" and Query Stream "Agent disabled" — Aurora, Secrets Manager, and AWS Credentials
+<h2 id="war-story-26" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">26. Analytics "Database not configured" and Query Stream "Agent disabled" — Aurora, Secrets Manager, and AWS Credentials</h2>
 
 **creation:** `<260210>`
 **last_updated:** `<260216>`
@@ -1394,7 +1598,7 @@ CloudFront 502 on API paths can stem from NLB unreachability (internal vs intern
 **difficulty:** 7
 **significance:** 8
 
-### 26.1 Context
+<h3 id="war-story-26-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">26.1 Context</h3>
 
 After a successful kube deploy, two API endpoints failed:
 
@@ -1405,11 +1609,11 @@ The frontend loaded, `/version` and `/health` worked (502 was fixed per War Stor
 
 After fixing the DB connection, a **second error** appeared for `/query/stream`:
 
-```
+```text
 MessageEvent { data: '{"message": "Agent processing failed: AWS service error: Unable to locate credentials"}' }
 ```
 
-### 26.2 Root Cause (Part 1: Database)
+<h3 id="war-story-26-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">26.2 Root Cause (Part 1: Database)</h3>
 
 The API container connects to Aurora PostgreSQL using `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, and `PGPASSWORD`. When the connection fails with `password authentication failed for user "postgres"`, the app:
 
@@ -1420,7 +1624,7 @@ The API container connects to Aurora PostgreSQL using `PGHOST`, `PGPORT`, `PGDAT
 
 **The real bug:** Aurora's master password and the value in AWS Secrets Manager (`db_password_plain`) did not match. The API pods get `PGPASSWORD` from a K8s secret `db-credentials`, which is populated at bootstrap by fetching from `db_password_plain_secret_arn`. If that secret has the wrong password, Aurora rejects the connection.
 
-### 26.3 Root Cause (Part 2: AWS Credentials for Bedrock)
+<h3 id="war-story-26-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">26.3 Root Cause (Part 2: AWS Credentials for Bedrock)</h3>
 
 The agent uses **AWS Bedrock** (via boto3) for SQL generation. When the DB is fixed, the agent runs but Bedrock calls fail with "Unable to locate credentials" because the API pods had **no AWS credentials**.
 
@@ -1430,16 +1634,36 @@ boto3 (and the AWS SDK) use the standard credential pair: `AWS_ACCESS_KEY_ID` (p
 
 **Fix:** Create an `aws-credentials` K8s secret with `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` from `.env` (`AWS_ADMIN_ACCESS_KEY_ID`/`AWS_ADMIN_SECRET_ACCESS_KEY` or `AWS_BEDROCK_ACCESS_KEY_ID`/`AWS_BEDROCK_SECRET_ACCESS_KEY`), and add env vars to the API deployment to read from that secret. Per War Story 24, use admin credentials (which have both Bedrock and S3) so the analytics scheduler can also access S3.
 
-### 26.4 Password Flow (Kube and Nonkube)
+<h3 id="war-story-26-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">26.4 Password Flow (Kube and Nonkube)</h3>
 
 We know exactly how Aurora is created: Phase 3 (durable apply) passes `aurora_master_password` from `PGPASSWORD` in `.env`. Phase 5 (ensure_secrets) reads the same `PGPASSWORD` and writes to Secrets Manager. So in a single deploy run, Aurora and `db_password_plain` use the **same source**—they match by design.
 
-| Step | What happens |
-|------|--------------|
-| 1. Durable apply | Aurora is created with `aurora_master_password` (from `PGPASSWORD` in `.env`) |
-| 2. ensure_secrets | Reads `PGPASSWORD` from `.env`, writes to `db_password` (JSON) and `db_password_plain` (plain) in Secrets Manager |
-| 3. Kube bootstrap | `kube_apply.py` fetches from `db_password_plain_secret_arn`, creates K8s secret `db-credentials` with `PGPASSWORD` |
-| 4. Nonkube ECS | ECS task definition references `db_password_plain_secret_arn`; ECS injects the value as `PGPASSWORD` at runtime |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Step</th>
+<th style="padding:8px">What happens</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px">1. Durable apply</td>
+<td style="padding:8px;background:#e8f5e9">Aurora is created with <code>aurora_master_password</code> (from <code>PGPASSWORD</code> in <code>.env</code>)</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">2. ensure_secrets</td>
+<td style="padding:8px;background:#fff3e0">Reads <code>PGPASSWORD</code> from <code>.env</code>, writes to <code>db_password</code> (JSON) and <code>db_password_plain</code> (plain) in Secrets Manager</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">3. Kube bootstrap</td>
+<td style="padding:8px;background:#e8f5e9"><code>kube_apply.py</code> fetches from <code>db_password_plain_secret_arn</code>, creates K8s secret <code>db-credentials</code> with <code>PGPASSWORD</code></td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">4. Nonkube ECS</td>
+<td style="padding:8px;background:#fff3e0">ECS task definition references <code>db_password_plain_secret_arn</code>; ECS injects the value as <code>PGPASSWORD</code> at runtime</td>
+</tr>
+</tbody>
+</table>
 
 **Note:** We use only `PGPASSWORD` (not `DB_PASSWORD`). The latter was removed; all code reads from `PGPASSWORD`.
 
@@ -1450,13 +1674,13 @@ We know exactly how Aurora is created: Phase 3 (durable apply) passes `aurora_ma
 - `.env` was changed after Aurora creation but before `ensure_secrets` ran
 - Terraform does not update RDS master password on subsequent applies; Aurora keeps its original password
 
-### 26.5 How Nonkube and Legacy Kube Handle This
+<h3 id="war-story-26-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">26.5 How Nonkube and Legacy Kube Handle This</h3>
 
 - **Nonkube:** ECS tasks read `PGPASSWORD` directly from Secrets Manager at task start. If you fix `db_password_plain` and force a new deployment, the next ECS task gets the updated value.
 - **Legacy Kube:** Same pattern—`db_password_plain_secret_arn` → K8s secret or ECS secret injection. The password must match Aurora.
 - **New Kube:** `kube_apply.py` fetches from `db_password_plain_secret_arn` at bootstrap and creates the K8s secret. Pods do not auto-refresh when the AWS secret changes; you must update the K8s secret and restart pods.
 
-### 26.6 Resolution (Manual)
+<h3 id="war-story-26-sec-6" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">26.6 Resolution (Manual)</h3>
 
 **For DB (password mismatch):**
 
@@ -1483,7 +1707,7 @@ We know exactly how Aurora is created: Phase 3 (durable apply) passes `aurora_ma
 2. Re-run bootstrap so `kube_apply.py` creates the `aws-credentials` secret and the deployment picks it up.
 3. Or run `python tools/aws/standalone/temp_one_off/fix_kube_db_credentials.py --env $FRU_ENV` (it refreshes both db-credentials and aws-credentials).
 
-### 26.7 Diagnosis
+<h3 id="war-story-26-sec-7" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">26.7 Diagnosis</h3>
 
 Use the diagnose script:
 
@@ -1499,7 +1723,7 @@ To verify that `PGPASSWORD` in `.env` can connect to Aurora (or that `db_passwor
 PYTHONPATH=. python tools/aws/verify_db_password.py --env dev
 ```
 
-### 26.8 Deploy Refactors (Prevention)
+<h3 id="war-story-26-sec-8" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">26.8 Deploy Refactors (Prevention)</h3>
 
 To reduce recurrence, the deploy flow was updated:
 
@@ -1508,15 +1732,36 @@ To reduce recurrence, the deploy flow was updated:
 3. **Post-deploy DB verification** — After pods are ready and the NLB hostname is available, deploy calls `/health` and checks `database=connected`. If disconnected, deploy fails with guidance pointing to this war story.
 4. **AWS credentials for agent** — `kube_apply.py` creates an `aws-credentials` secret from `AWS_ADMIN_*` or `AWS_BEDROCK_*` in `.env`, and the API deployment reads `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` from it. Both env vars are required for boto3 to call Bedrock.
 
-### 26.9 K8s Secrets Summary (Kube API Pods)
+<h3 id="war-story-26-sec-9" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">26.9 K8s Secrets Summary (Kube API Pods)</h3>
 
-| Secret | Keys | Source |
-|--------|------|--------|
-| db-credentials | PGPASSWORD | `db_password_plain` in Secrets Manager (from ensure_secrets) |
-| app-credentials | OPENAI_API_KEY | `openai_api_key` in Secrets Manager |
-| aws-credentials | AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY | `AWS_ADMIN_*` or `AWS_BEDROCK_*` from `.env` at bootstrap time |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Secret</th>
+<th style="padding:8px">Keys</th>
+<th style="padding:8px">Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px">db-credentials</td>
+<td style="padding:8px;background:#e8f5e9">PGPASSWORD</td>
+<td style="padding:8px;background:#e8f5e9"><code>db_password_plain</code> in Secrets Manager (from ensure_secrets)</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">app-credentials</td>
+<td style="padding:8px;background:#fff3e0">OPENAI_API_KEY</td>
+<td style="padding:8px;background:#fff3e0"><code>openai_api_key</code> in Secrets Manager</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">aws-credentials</td>
+<td style="padding:8px;background:#e8f5e9">AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY</td>
+<td style="padding:8px;background:#e8f5e9"><code>AWS_ADMIN_*</code> or <code>AWS_BEDROCK_*</code> from <code>.env</code> at bootstrap time</td>
+</tr>
+</tbody>
+</table>
 
-### 26.10 Takeaway
+<h3 id="war-story-26-sec-10" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">26.10 Takeaway</h3>
 
 `/analytics` and "Agent-based query processing is disabled" often share one root cause: DB connection failure. When Aurora returns `password authentication failed for user "postgres"`, the fix is to align three places: (1) Aurora master password, (2) `db_password_plain` in Secrets Manager, (3) K8s secret `db-credentials` (for kube). Use `ensure_secrets` with the correct `.env`, then refresh the K8s secret and restart pods.
 
@@ -1524,7 +1769,7 @@ After fixing the DB, if `/query/stream` returns "Agent processing failed: Unable
 
 ---
 
-## 27. Bedrock ValidationException: Inference Profile vs Model ID — How to Deploy and Why Both Matter
+<h2 id="war-story-27" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">27. Bedrock ValidationException: Inference Profile vs Model ID — How to Deploy and Why Both Matter</h2>
 
 **creation:** `<260216>`
 **last_updated:** `<260216>`
@@ -1533,26 +1778,43 @@ After fixing the DB, if `/query/stream` returns "Agent processing failed: Unable
 **difficulty:** 6
 **significance:** 7
 
-### 27.1 Context
+<h3 id="war-story-27-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">27.1 Context</h3>
 
 After fixing DB and AWS credentials, `/query/stream` returned:
 
-```
+```text
 Agent processing failed: Bedrock API error: ValidationException - Invocation of model ID anthropic.claude-3-5-haiku-20241022-v1:0 with on-demand throughput isn't supported. Retry your request with the ID or ARN of an inference profile that contains this model.
 ```
 
 The agent uses Bedrock for SQL generation. The error indicated we were passing the **model ID** where Bedrock expected an **inference profile ID**.
 
-### 27.2 Inference Profile vs Model ID
+<h3 id="war-story-27-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">27.2 Inference Profile vs Model ID</h3>
 
-| Term | Example | Purpose |
-|------|---------|--------|
-| **Model ID** | `anthropic.claude-3-5-haiku-20241022-v1:0` | The underlying model identifier. For Claude 3.5 and newer models, **direct invocation with this ID is not supported** for on-demand throughput. |
-| **Inference profile ID** | `us.anthropic.claude-3-5-haiku-20241022-v1:0` | An AWS Bedrock construct that references the model with specific provisioning. For on-demand usage, you must pass this as the `modelId` parameter to `invoke_model`. |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Term</th>
+<th style="padding:8px">Example</th>
+<th style="padding:8px">Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Model ID</strong></td>
+<td style="padding:8px;background:#e8f5e9"><code>anthropic.claude-3-5-haiku-20241022-v1:0</code></td>
+<td style="padding:8px;background:#e8f5e9">The underlying model identifier. For Claude 3.5 and newer models, <strong>direct invocation with this ID is not supported</strong> for on-demand throughput.</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Inference profile ID</strong></td>
+<td style="padding:8px;background:#fff3e0"><code>us.anthropic.claude-3-5-haiku-20241022-v1:0</code></td>
+<td style="padding:8px;background:#fff3e0">An AWS Bedrock construct that references the model with specific provisioning. For on-demand usage, you must pass this as the <code>modelId</code> parameter to <code>invoke_model</code>.</td>
+</tr>
+</tbody>
+</table>
 
 The Bedrock API accepts the inference profile ID in the `modelId` field. The error occurs when you pass the raw model ID instead.
 
-### 27.3 Why Both Are in .env
+<h3 id="war-story-27-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">27.3 Why Both Are in .env</h3>
 
 The app uses a priority chain:
 
@@ -1567,7 +1829,7 @@ AWS_BEDROCK_INFERENCE_PROFILE_ID=us.anthropic.claude-3-5-haiku-20241022-v1:0
 AWS_BEDROCK_MODEL_ID=anthropic.claude-3-5-haiku-20241022-v1:0
 ```
 
-### 27.4 App Code Flow
+<h3 id="war-story-27-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">27.4 App Code Flow</h3>
 
 The agent calls Bedrock via `claude_complete()` from `backend.llm.client_factory`, which creates `AWSBedrockClient` from `backend.env_utils.aws.bedrock_client`. The client:
 
@@ -1580,15 +1842,38 @@ Relevant files:
 - `core_app/backend/env_utils/aws/bedrock_client.py` — `AWSBedrockClient.complete()`
 - `core_app/backend/agents/tools/sql_generator_tool.py` — calls `claude_complete()` for SQL generation
 
-### 27.5 Kube Route: How Bedrock Vars Reach Pods
+<h3 id="war-story-27-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">27.5 Kube Route: How Bedrock Vars Reach Pods</h3>
 
-| Step | What happens |
-|------|--------------|
-| 1. `.env` | `AWS_BEDROCK_INFERENCE_PROFILE_ID` and `AWS_BEDROCK_MODEL_ID` |
-| 2. `deploy.py` | Reads from `.env`, passes `--bedrock-inference-profile-id` and `--bedrock-model-id` to `kube_apply.py` |
-| 3. `fix_kube_db_credentials.py` | Same: passes these args when set in `.env` |
-| 4. `kube_apply.py` | Renders `infra_terraform/modules/cloud_shared/k8s/api-deployment.yaml` with `${AWS_BEDROCK_INFERENCE_PROFILE_ID}` and `${AWS_BEDROCK_MODEL_ID}` in `api_subs`. Values come from args **or** `os.getenv()` fallback when args are empty |
-| 5. Deployment | Pods get these as env vars in the container spec |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Step</th>
+<th style="padding:8px">What happens</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px">1. <code>.env</code></td>
+<td style="padding:8px;background:#e8f5e9"><code>AWS_BEDROCK_INFERENCE_PROFILE_ID</code> and <code>AWS_BEDROCK_MODEL_ID</code></td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">2. <code>deploy.py</code></td>
+<td style="padding:8px;background:#fff3e0">Reads from <code>.env</code>, passes <code>--bedrock-inference-profile-id</code> and <code>--bedrock-model-id</code> to <code>kube_apply.py</code></td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">3. <code>fix_kube_db_credentials.py</code></td>
+<td style="padding:8px;background:#e8f5e9">Same: passes these args when set in <code>.env</code></td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">4. <code>kube_apply.py</code></td>
+<td style="padding:8px;background:#fff3e0">Renders <code>infra_terraform/modules/cloud_shared/k8s/api-deployment.yaml</code> with <code>${AWS_BEDROCK_INFERENCE_PROFILE_ID}</code> and <code>${AWS_BEDROCK_MODEL_ID}</code> in <code>api_subs</code>. Values come from args <strong>or</strong> <code>os.getenv()</code> fallback when args are empty</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">5. Deployment</td>
+<td style="padding:8px;background:#e8f5e9">Pods get these as env vars in the container spec</td>
+</tr>
+</tbody>
+</table>
 
 **Key files:**
 - `tools/aws/kube_apply.py` — `--bedrock-inference-profile-id`, `--bedrock-model-id`; fallback: `args.X or os.getenv("AWS_BEDROCK_X")`
@@ -1596,28 +1881,65 @@ Relevant files:
 
 **Permanent fix in kube_apply:** When callers omit the args, `kube_apply` uses `os.getenv()` so values from `.env` are still applied. This ensures `fix_kube_db_credentials` and any other caller that inherits `.env` get the correct Bedrock config.
 
-### 27.6 Nonkube Route: How Bedrock Vars Reach ECS Tasks
+<h3 id="war-story-27-sec-6" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">27.6 Nonkube Route: How Bedrock Vars Reach ECS Tasks</h3>
 
-| Step | What happens |
-|------|--------------|
-| 1. `.env` | `AWS_BEDROCK_INFERENCE_PROFILE_ID` and `AWS_BEDROCK_MODEL_ID` |
-| 2. `get_base_vars()` | Maps `.env` to Terraform vars: `AWS_BEDROCK_INFERENCE_PROFILE_ID` → `TF_VAR_bedrock_inference_profile_id`, `AWS_BEDROCK_MODEL_ID` → `TF_VAR_bedrock_model_id` |
-| 3. Terraform apply | `infra_terraform/live_deploy/aws/nonkube/main.tf` passes `var.bedrock_inference_profile_id` and `var.bedrock_model_id` into the ECS module |
-| 4. ECS task definition | Container env includes `AWS_BEDROCK_INFERENCE_PROFILE_ID` and `AWS_BEDROCK_MODEL_ID` |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Step</th>
+<th style="padding:8px">What happens</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px">1. <code>.env</code></td>
+<td style="padding:8px;background:#e8f5e9"><code>AWS_BEDROCK_INFERENCE_PROFILE_ID</code> and <code>AWS_BEDROCK_MODEL_ID</code></td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">2. <code>get_base_vars()</code></td>
+<td style="padding:8px;background:#fff3e0">Maps <code>.env</code> to Terraform vars: <code>AWS_BEDROCK_INFERENCE_PROFILE_ID</code> → <code>TF_VAR_bedrock_inference_profile_id</code>, <code>AWS_BEDROCK_MODEL_ID</code> → <code>TF_VAR_bedrock_model_id</code></td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">3. Terraform apply</td>
+<td style="padding:8px;background:#e8f5e9"><code>infra_terraform/live_deploy/aws/nonkube/main.tf</code> passes <code>var.bedrock_inference_profile_id</code> and <code>var.bedrock_model_id</code> into the ECS module</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">4. ECS task definition</td>
+<td style="padding:8px;background:#fff3e0">Container env includes <code>AWS_BEDROCK_INFERENCE_PROFILE_ID</code> and <code>AWS_BEDROCK_MODEL_ID</code></td>
+</tr>
+</tbody>
+</table>
 
 **Key files:**
 - `tools/aws/scope_shared/core/terra_var_handling.py` — MAP: `AWS_BEDROCK_INFERENCE_PROFILE_ID` → `bedrock_inference_profile_id`, `AWS_BEDROCK_MODEL_ID` → `bedrock_model_id`
 - `infra_terraform/live_deploy/aws/nonkube/main.tf` — `AWS_BEDROCK_INFERENCE_PROFILE_ID = var.bedrock_inference_profile_id`, etc.
 - `infra_terraform/live_deploy/aws/nonkube/variables.tf` — `bedrock_inference_profile_id` (default `""`), `bedrock_model_id` (default `anthropic.claude-3-5-haiku-20241022-v1:0`)
 
-### 27.7 Summary Table
+<h3 id="war-story-27-sec-7" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">27.7 Summary Table</h3>
 
-| Route | Mechanism | Where values originate |
-|-------|------------|------------------------|
-| **Kube** | `kube_apply` substitutes into `api-deployment.yaml` | Args from deploy/fix script, or `os.getenv()` fallback |
-| **Nonkube** | Terraform passes `var.bedrock_*` into ECS task definition | `TF_VAR_*` from `get_base_vars()` (reads `.env`) |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Route</th>
+<th style="padding:8px">Mechanism</th>
+<th style="padding:8px">Where values originate</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Kube</strong></td>
+<td style="padding:8px;background:#e8f5e9"><code>kube_apply</code> substitutes into <code>api-deployment.yaml</code></td>
+<td style="padding:8px;background:#e8f5e9">Args from deploy/fix script, or <code>os.getenv()</code> fallback</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Nonkube</strong></td>
+<td style="padding:8px;background:#fff3e0">Terraform passes <code>var.bedrock_*</code> into ECS task definition</td>
+<td style="padding:8px;background:#fff3e0"><code>TF_VAR_*</code> from <code>get_base_vars()</code> (reads <code>.env</code>)</td>
+</tr>
+</tbody>
+</table>
 
-### 27.8 Resolution
+<h3 id="war-story-27-sec-8" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">27.8 Resolution</h3>
 
 1. Set both in `.env`:
    ```bash
@@ -1629,13 +1951,13 @@ Relevant files:
    - Quick fix: `python tools/aws/standalone/temp_one_off/fix_kube_db_credentials.py --env dev`
 3. **Nonkube:** Re-apply the nonkube stack so ECS task definition picks up the Terraform vars from `get_base_vars()`.
 
-### 27.9 Takeaway
+<h3 id="war-story-27-sec-9" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">27.9 Takeaway</h3>
 
 For Claude 3.5 on-demand, use the **inference profile ID** (e.g. `us.anthropic.claude-3-5-haiku-20241022-v1:0`), not the raw model ID. Set `AWS_BEDROCK_INFERENCE_PROFILE_ID` in `.env`. Kube gets it via `kube_apply` (args or `os.getenv` fallback); nonkube gets it via Terraform vars from `get_base_vars()`. Ensure both deploy paths pass these values into the container environment.
 
 ---
 
-## 28. Orphan Resources: ECR and VPC Surviving Teardown Because They're Not in State
+<h2 id="war-story-28" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">28. Orphan Resources: ECR and VPC Surviving Teardown Because They're Not in State</h2>
 
 **creation:** `<260217>`
 **last_updated:** `<260217>`
@@ -1644,11 +1966,11 @@ For Claude 3.5 on-demand, use the **inference profile ID** (e.g. `us.anthropic.c
 **difficulty:** 5
 **significance:** 7
 
-### 28.1 Context
+<h3 id="war-story-28-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">28.1 Context</h3>
 
 After running `teardown --scope all`, some AWS resources remained: an ECR repo `fru-api`, a VPC `fru-dev-vpc`, and legacy Secrets Manager secrets. Teardown reported "No changes. No objects need to be destroyed" for nonkube, kube, and shared-nondurable. The resources were never deleted.
 
-### 28.2 Root Cause
+<h3 id="war-story-28-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">28.2 Root Cause</h3>
 
 **Terraform only destroys what it manages.** State (in S3) records which resources Terraform created. If state is empty (`resources: []`) for a stack, `tofu destroy` has nothing to destroy—it exits with "No changes." Resources that exist in AWS but are **not** in state are **orphans**: Terraform never created them (or state was lost), so Terraform will never destroy them.
 
@@ -1656,16 +1978,30 @@ After running `teardown --scope all`, some AWS resources remained: an ECR repo `
 - **fru-dev-vpc:** A second VPC with different CIDRs (10.0.10/11 vs 10.0.1/2/101/102). The active durable VPC is `fru-dev` (with Aurora). `fru-dev-vpc` had a security group for VPC endpoints but no endpoints—orphaned from an older stack.
 - **Legacy secrets:** Duplicate/legacy naming (`aurora-db-password-plain`, `openai-api-key`, etc.) from Aurora auto-integration or older Terraform. Our stack uses `db_password_plain`, `openai_api_key`.
 
-### 28.3 S3 State + DynamoDB Lock (Quick Reference)
+<h3 id="war-story-28-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">28.3 S3 State + DynamoDB Lock (Quick Reference)</h3>
 
-| Resource | Role |
-|----------|------|
-| **S3** | Stores state JSON per stack. Each key = one state file. |
-| **DynamoDB** | Lock table. Acquire before apply/destroy; release after. Prevents concurrent runs from corrupting state. |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Resource</th>
+<th style="padding:8px">Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>S3</strong></td>
+<td style="padding:8px;background:#e8f5e9">Stores state JSON per stack. Each key = one state file.</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>DynamoDB</strong></td>
+<td style="padding:8px;background:#fff3e0">Lock table. Acquire before apply/destroy; release after. Prevents concurrent runs from corrupting state.</td>
+</tr>
+</tbody>
+</table>
 
 Flow: acquire lock → read state from S3 → plan/apply → write state to S3 → release lock. See `docs/learned/terra/TERRA_LEARNED_TOTAL.md` §0.6.
 
-### 28.4 Resolution
+<h3 id="war-story-28-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">28.4 Resolution</h3>
 
 - **Orphan cleanup:** Delete orphans manually via AWS CLI when confirmed safe:
   - Secrets: `aws secretsmanager delete-secret --secret-id <name> --force-delete-without-recovery`
@@ -1673,13 +2009,13 @@ Flow: acquire lock → read state from S3 → plan/apply → write state to S3 �
   - VPC: Detach IGW, delete subnets, delete non-default SGs, delete route tables, then `aws ec2 delete-vpc`.
 - **Verify before delete:** For VPCs, confirm no dependencies (Aurora, NAT, VPC endpoints). `fru-dev-vpc` had no IGW, no VPC endpoints, no Aurora—safe to remove.
 
-### 28.5 Takeaway
+<h3 id="war-story-28-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">28.5 Takeaway</h3>
 
 Teardown destroys only what's in Terraform state. Orphan resources (created outside our stacks or from lost state) survive. To clean them: identify orphans (AWS console or CLI), verify they're unused, then delete manually. S3 holds state; DynamoDB provides locking. Both are durable and never destroyed by teardown.
 
 ---
 
-## 29. Import vs Terraform Refresh: State Reconciliation and the Cross-Region Orphan
+<h2 id="war-story-29" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">29. Import vs Terraform Refresh: State Reconciliation and the Cross-Region Orphan</h2>
 
 **creation:** `<260210>`
 **last_updated:** `<260210>`
@@ -1688,32 +2024,46 @@ Teardown destroys only what's in Terraform state. Orphan resources (created outs
 **difficulty:** 6
 **significance:** 7
 
-### 29.1 Context
+<h3 id="war-story-29-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">29.1 Context</h3>
 
 We changed the frontend S3 bucket naming to include region (`fru-dev-frontend-nonkube-us-east-1-{account_id}`) so each `--cloud-region` gets its own bucket. An old bucket (`fru-dev-frontend-nonkube-{account_id}`) existed in a different region (us-east-2). The import step tried to import the new bucket name, which didn't exist. Should import fail and block deploy, or skip and let apply create it?
 
-### 29.2 Key Insight: Import Does Not Affect Terraform's Refresh Behavior
+<h3 id="war-story-29-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">29.2 Key Insight: Import Does Not Affect Terraform's Refresh Behavior</h3>
 
 > Terraform's built-in refresh (during plan/apply) determines what Terraform will do. Import runs *before* apply and only **adds** resources to state—it does not change how Terraform plans to destroy, update, or create resources.
 
-| Old resource in state? | Terraform behavior (with or without import) |
-|------------------------|---------------------------------------------|
-| Yes | Destroy old, create new (when config changes resource identity) |
-| No | Create new only; old resource becomes orphan in AWS |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Old resource in state?</th>
+<th style="padding:8px">Terraform behavior (with or without import)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px">Yes</td>
+<td style="padding:8px;background:#e8f5e9">Destroy old, create new (when config changes resource identity)</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">No</td>
+<td style="padding:8px;background:#fff3e0">Create new only; old resource becomes orphan in AWS</td>
+</tr>
+</tbody>
+</table>
 
 Import looks for resources that **exist in AWS but not in state**. It adopts them so apply doesn't fail with "EntityAlreadyExists". Import does *not* add the old bucket to state when we're looking for the *new* bucket name. So the old bucket's fate is determined solely by whether it was ever in state.
 
-### 29.3 Import as an Extra Layer of Protection
+<h3 id="war-story-29-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">29.3 Import as an Extra Layer of Protection</h3>
 
 Import adds another layer of protection: it reconciles state with reality *before* apply. When resources exist in AWS (e.g. IAM roles, OAC) but were never in state (e.g. after partial teardown, state loss), import adopts them. Without import, apply would try to create them and fail with "EntityAlreadyExists". Import prevents that.
 
-### 29.4 The Cross-Region Orphan: Special Case
+<h3 id="war-story-29-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">29.4 The Cross-Region Orphan: Special Case</h3>
 
 When we change resource naming (e.g. add region to bucket name), the *new* resource doesn't exist yet. Import tries to find it, doesn't, and with `allow_skip_nonexistent=True` we skip and proceed. Apply creates the new bucket. The old bucket (different name, possibly different region) is never in state—Terraform doesn't know about it. It becomes an **orphan**: exists in AWS, not managed by Terraform.
 
 **Approach:** Treat cross-region (or naming-change) orphans as a special case. Use `allow_skip_nonexistent=True` so deploy succeeds. After deploy, manually delete the orphan once CloudFront and other references have been updated to the new bucket. Verify no references before deletion.
 
-### 29.5 Pattern: Change TF → Import (skip if not found) → Deploy → Delete Orphan
+<h3 id="war-story-29-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">29.5 Pattern: Change TF → Import (skip if not found) → Deploy → Delete Orphan</h3>
 
 1. Change TF config (e.g. bucket naming)
 2. Import runs; skips resources that don't exist
@@ -1721,13 +2071,13 @@ When we change resource naming (e.g. add region to bucket name), the *new* resou
 4. Old resource is orphaned
 5. Manual cleanup: delete orphan after verifying no references
 
-### 29.6 Takeaway
+<h3 id="war-story-29-sec-6" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">29.6 Takeaway</h3>
 
 Terraform naturally handles refresh; import adds another layer of protection by adopting existing resources into state. Import does not change Terraform's plan for resources it doesn't touch. For naming changes that create new resource identities, use `allow_skip_nonexistent=True` and treat the resulting orphan as a one-time manual cleanup.
 
 ---
 
-## 30. ResourceAlreadyExistsException: Broader Pre-Deploy Import vs. Ideal Minimal Import
+<h2 id="war-story-30" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">30. ResourceAlreadyExistsException: Broader Pre-Deploy Import vs. Ideal Minimal Import</h2>
 
 **creation:** `<260210>`
 **last_updated:** `<260210>`
@@ -1736,26 +2086,43 @@ Terraform naturally handles refresh; import adds another layer of protection by 
 **difficulty:** 5
 **significance:** 7
 
-### 30.1 Context
+<h3 id="war-story-30-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">30.1 Context</h3>
 
 After brutal removal or partial teardown, deploy failed with `ResourceAlreadyExistsException` for CloudWatch log groups, ALB, target group, and security groups. These existed in AWS but not in Terraform state; apply tried to create them and AWS rejected.
 
-### 30.2 Two Approaches
+<h3 id="war-story-30-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">30.2 Two Approaches</h3>
 
-| Approach | Import | Other "already exists" |
-|----------|--------|------------------------|
-| **Ideal** | IAM roles only | Treat as surprise → destroy in AWS, recreate via apply |
-| **Current** | All resources that commonly cause "already exists" | Import them before apply |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Approach</th>
+<th style="padding:8px">Import</th>
+<th style="padding:8px">Other "already exists"</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Ideal</strong></td>
+<td style="padding:8px;background:#e8f5e9">IAM roles only</td>
+<td style="padding:8px;background:#e8f5e9">Treat as surprise → destroy in AWS, recreate via apply</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Current</strong></td>
+<td style="padding:8px;background:#fff3e0">All resources that commonly cause "already exists"</td>
+<td style="padding:8px;background:#fff3e0">Import them before apply</td>
+</tr>
+</tbody>
+</table>
 
 We use the **broader import** for convenience and simplicity: one deploy command works without manual destroy/recreate. Trade-off: we may adopt resources created outside Terraform; plan will show drift if config changed.
 
-### 30.3 Takeaway
+<h3 id="war-story-30-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">30.3 Takeaway</h3>
 
 Prefer Terraform-based teardown so state stays in sync. When state/reality drift occurs, broader pre-deploy import unblocks deploy quickly. See **docs/learned/terra/TERRA_LEARN_IMPORT_PREEXIST.md** for the ideal approach and implementation details.
 
 ---
 
-## 31. OriginAccessControlAlreadyExists: CloudFront API Is us-east-1 Only
+<h2 id="war-story-31" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">31. OriginAccessControlAlreadyExists: CloudFront API Is us-east-1 Only</h2>
 
 **creation:** `<260210>`
 **last_updated:** `<260222>`
@@ -1764,18 +2131,18 @@ Prefer Terraform-based teardown so state stays in sync. When state/reality drift
 **difficulty:** 6
 **significance:** 7
 
-### 31.1 Context
+<h3 id="war-story-31-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">31.1 Context</h3>
 
 During deploy to **us-east-2**, apply failed with:
 
-```
+```text
 Error: creating CloudFront Origin Access Control (fru-dev-frontend-nonkube-oac): 
 OriginAccessControlAlreadyExists: An origin access control with the same name already exists.
 ```
 
 The OAC existed in AWS (created by a prior us-east-1 deploy) but was not in us-east-2's Terraform state. The import phase should have adopted it before apply; instead, the import failed to find it, so apply tried to create it and AWS rejected.
 
-### 31.2 Root Cause
+<h3 id="war-story-31-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">31.2 Root Cause</h3>
 
 **CloudFront OAC is global**—one per account, shared across regions. The OAC name `fru-dev-frontend-nonkube-oac` is the same regardless of deploy region.
 
@@ -1783,7 +2150,7 @@ The OAC existed in AWS (created by a prior us-east-1 deploy) but was not in us-e
 
 When deploying to us-east-2, our import script used `get_terra_env(region)` which set `AWS_REGION=us-east-2`. The AWS CLI then called `aws cloudfront list-origin-access-controls` with that region. The CloudFront API may not respond correctly from non–us-east-1 endpoints, so the lookup returned empty. The import skipped the OAC, and apply tried to create it → `OriginAccessControlAlreadyExists`.
 
-### 31.3 Resolution
+<h3 id="war-story-31-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">31.3 Resolution</h3>
 
 Use `--region us-east-1` explicitly when calling CloudFront APIs in the import script:
 
@@ -1794,17 +2161,17 @@ data = _aws_json(cmd, "us-east-1", env)  # CloudFront API is us-east-1 only
 
 Added pagination support for `list-origin-access-controls` in case the account has many OACs. Added clear logging when OAC is not found and when apply fails with `OriginAccessControlAlreadyExists`.
 
-### 31.4 Region-Scoped OAC (260222)
+<h3 id="war-story-31-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">31.4 Region-Scoped OAC (260222)</h3>
 
 OAC is now **region-scoped**: name includes `{aws_region}` (e.g. `fru-dev-frontend-nonkube-us-east-1-oac`). Each region has its own OAC. This avoids `OriginAccessControlInUse` on teardown when tearing down one region while another region's distribution still references the OAC.
 
-### 31.5 Takeaway
+<h3 id="war-story-31-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">31.5 Takeaway</h3>
 
 CloudFront resources (OAC, distributions) are global, but the **API endpoint** is regional—us-east-1 only. When scripting AWS CLI calls for CloudFront, always pass `--region us-east-1` regardless of the deploy region. For Terraform, the AWS provider handles this; for custom scripts (e.g. import lookup), you must specify it explicitly. OAC names are region-scoped to avoid cross-region teardown conflicts. See [Amazon CloudFront endpoints and quotas](https://docs.aws.amazon.com/general/latest/gr/cf_region.html).
 
 ---
 
-## 32. Multi-Region S3 Bucket Naming: Global Uniqueness Requires Region in Name
+<h2 id="war-story-32" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">32. Multi-Region S3 Bucket Naming: Global Uniqueness Requires Region in Name</h2>
 
 **creation:** `<260222>`
 **last_updated:** `<260222>`
@@ -1813,27 +2180,27 @@ CloudFront resources (OAC, distributions) are global, but the **API endpoint** i
 **difficulty:** 4
 **significance:** 6
 
-### 32.1 Context
+<h3 id="war-story-32-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">32.1 Context</h3>
 
 When deploying to **us-east-2** after a prior us-east-1 deploy, the frontend S3 bucket changed from `fru-dev-frontend-kube-744139897900` to `fru-dev-frontend-kube-us-east-2-744139897900`. Terraform planned to replace the bucket (destroy + create).
 
-### 32.2 Root Cause
+<h3 id="war-story-32-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">32.2 Root Cause</h3>
 
 **S3 bucket names are globally unique** across all AWS accounts and regions. A single bucket name cannot be reused in another region. The original bucket name did not include the region; when we added multi-region support, the same logical name would have collided if we tried to create a bucket in us-east-2 with the same name.
 
 The module was updated to include `aws_region` in the bucket name: `fru-dev-frontend-${suffix}-${aws_region}-${account_id}`. Each region gets its own bucket.
 
-### 32.3 Resolution
+<h3 id="war-story-32-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">32.3 Resolution</h3>
 
 Include the region in the bucket name for resources that must be region-specific. For frontend, the bucket holds static assets; each region gets its own bucket and CloudFront origin. The Terraform plan showed replacement because the bucket identity changed.
 
-### 32.4 Takeaway
+<h3 id="war-story-32-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">32.4 Takeaway</h3>
 
 S3 bucket names are globally unique. For multi-region deployments, include the region in the name to avoid collisions. Expect Terraform to plan replacement when the naming convention changes.
 
 ---
 
-## 33. AWS Orphan Scan and Removal: Pattern-Based Detection, Phased Deletion, and ENI Wait
+<h2 id="war-story-33" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">33. AWS Orphan Scan and Removal: Pattern-Based Detection, Phased Deletion, and ENI Wait</h2>
 
 **creation:** `<260223>`
 **last_updated:** `<260223>`
@@ -1842,13 +2209,13 @@ S3 bucket names are globally unique. For multi-region deployments, include the r
 **difficulty:** 7
 **significance:** 8
 
-### 33.1 Context
+<h3 id="war-story-33-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">33.1 Context</h3>
 
 After teardown, some AWS resources survived: Classic ELBs, security groups (`k8s-elb-*`), target groups (`k8s-ingressn-*`), CloudFront OACs (legacy format), and IAM roles (e.g. AWS Load Balancer Controller). These are **orphans**—not in Terraform state, so `tofu destroy` never touches them. War Story 46 describes the problem; here we built a **scan-and-remove** pipeline to detect and delete them systematically.
 
 **Note:** The Classic ELB + `k8s-elb-*` SG pairs are created by `fru-api-svc` (type LoadBalancer) during kube deploy. Without `aws-load-balancer-type: external`, the in-tree cloud provider creates Classic ELBs. These pairs are **in use** while the cluster runs; only run orphan removal after teardown. To switch to NLB and avoid creating new Classic ELBs, add the annotation to `api-service.yaml`. See [KUBE_LB.md](docs/learned/cloud_shared/KUBE_LB.md).
 
-### 33.2 How We Scan and Detect Orphans
+<h3 id="war-story-33-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">33.2 How We Scan and Detect Orphans</h3>
 
 **Step 1: Scan all resources (no prefix filter)**  
 `scan_aws_remaining.py` lists resources across regions: ECS, EKS, load balancers (ALB, NLB, Classic), target groups, security groups, log groups, secrets, EBS, EventBridge, VPC, RDS, ECR, S3, IAM roles, CloudFront distributions and OACs. It uses AWS CLI with pagination.
@@ -1864,18 +2231,41 @@ Each resource is classified into one of:
 **Step 3: Pattern-based orphan rules (no hardcoding)**  
 `orphan_rules.py` uses dynamic `prefix` and `env` to classify:
 
-| Resource Type | Definitely Orphan When |
-|---------------|-------------------------|
-| CloudFront OAC | Name is `{prefix}-{env}-frontend-oac` (legacy; Terraform creates `*-{suffix}-{region}-oac`) |
-| IAM role | Name contains `-aws-load-balancer-controller` or `-csi-driver-role` (external controllers) |
-| Load balancer | Type is Classic (we use ALB/NLB only) |
-| Security group | Name starts with `k8s-elb-` and has our EKS cluster tag |
-| Target group | Name starts with `k8s-` (created by K8s Ingress, not Terraform) |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Resource Type</th>
+<th style="padding:8px">Definitely Orphan When</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px">CloudFront OAC</td>
+<td style="padding:8px;background:#e8f5e9">Name is <code>{prefix}-{env}-frontend-oac</code> (legacy; Terraform creates <code>*-{suffix}-{region}-oac</code>)</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">IAM role</td>
+<td style="padding:8px;background:#fff3e0">Name contains <code>-aws-load-balancer-controller</code> or <code>-csi-driver-role</code> (external controllers)</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">Load balancer</td>
+<td style="padding:8px;background:#e8f5e9">Type is Classic (we use ALB/NLB only)</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">Security group</td>
+<td style="padding:8px;background:#fff3e0">Name starts with <code>k8s-elb-</code> and has our EKS cluster tag</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">Target group</td>
+<td style="padding:8px;background:#e8f5e9">Name starts with <code>k8s-</code> (created by K8s Ingress, not Terraform)</td>
+</tr>
+</tbody>
+</table>
 
 **Step 4: Write orphans JSON**  
 The scan writes `orphan_data/orphans_<YYMMDD-hhmmss>.json` with structured records (resource_type, name, region, extra IDs) and recovery hints. This serves as both input for removal and an audit trail.
 
-### 33.3 How We Remove Orphans (Phased Deletion)
+<h3 id="war-story-33-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">33.3 How We Remove Orphans (Phased Deletion)</h3>
 
 **Problem:** Deleting a Classic ELB triggers async ENI release. The security group `k8s-elb-{lb_name}` cannot be deleted until AWS releases those ENIs (10–30 min). If we delete the SG first, we get `DependencyViolation: resource has a dependent object`. See War Story 7.
 
@@ -1894,7 +2284,7 @@ The scan writes `orphan_data/orphans_<YYMMDD-hhmmss>.json` with structured recor
 4. **Recovery record**  
    On successful removal, write `removed_<ts>.json` with what was deleted and when—audit trail in case something was needed.
 
-### 33.4 Usage (Clear and Easy to Follow)
+<h3 id="war-story-33-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">33.4 Usage (Clear and Easy to Follow)</h3>
 
 ```bash
 # 1. Scan (creates orphan_data/orphans_<ts>.json)
@@ -1916,7 +2306,7 @@ PYTHONPATH=. python tools/aws/standalone/temp_one_off/resources_scan/remove_for_
 - `ORPHAN_REMOVAL_WAIT_TIMEOUT_SEC` — max wait for SG to become deletable (default 1800)  
 - `ORPHAN_REMOVAL_POLL_INTERVAL_SEC` — poll interval (default 30)
 
-### 33.5 Key Insights
+<h3 id="war-story-33-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">33.5 Key Insights</h3>
 
 > **No hardcoding.** Orphan rules use `prefix` and `env` from args/env. Recovery hints live in a registry; new resource types add one entry. Deletion order is inferred from the orphan set, not hardcoded.
 
@@ -1924,13 +2314,13 @@ PYTHONPATH=. python tools/aws/standalone/temp_one_off/resources_scan/remove_for_
 
 > **Heartbeat for long ops.** AWS CLI calls use `run_with_heartbeat`; SG wait loop uses `update_heartbeat`. Users see progress instead of a silent hang.
 
-### 33.6 Takeaway
+<h3 id="war-story-33-sec-6" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">33.6 Takeaway</h3>
 
 Orphan resources survive teardown because they're not in Terraform state. Build a scan (list all, classify by pattern) and a removal script with **phased deletion** and **dependency inference**. Delete roots first; for dependents that need async cleanup (e.g. SG after ELB), poll with timeout and heartbeat. Store structured JSON for removal input and audit. Avoid hardcoding—use prefix/env and pattern-based rules so the same logic works across projects and environments.
 
 ---
 
-## 34. AWS Authentication: Access Keys vs SSO vs Profile — Expiry, Session Limits, and When Each Fails
+<h2 id="war-story-34" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">34. AWS Authentication: Access Keys vs SSO vs Profile — Expiry, Session Limits, and When Each Fails</h2>
 
 **creation:** `<260210>`
 **last_updated:** `<260210>`
@@ -1939,19 +2329,44 @@ Orphan resources survive teardown because they're not in Terraform state. Build 
 **difficulty:** 6
 **significance:** 8
 
-### 34.1 Context
+<h3 id="war-story-34-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">34.1 Context</h3>
 
 Deploy and Terraform runs failed with `SignatureDoesNotMatch` or `AuthFailure` at seemingly random times. The same `.env` and commands worked yesterday. Credentials were set in `.env` (access keys) or via `aws sso login` (SSO). The errors were opaque and led to confusion about whether the problem was keys, SSO, or something else.
 
-### 34.2 The Three Credential Paths
+<h3 id="war-story-34-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">34.2 The Three Credential Paths</h3>
 
-| Method | Source | Typical expiry / limits | Common failure modes |
-|--------|--------|-------------------------|----------------------|
-| **Access keys** (`.env`: `AWS_ADMIN_ACCESS_KEY_ID`, `AWS_ADMIN_SECRET_ACCESS_KEY`) | Long-lived IAM user keys | Keys don't expire by default; **session tokens** (if using STS) have max 12h. Rotated keys in `.env` but not updated → `AuthFailure`. | Keys rotated in console; `.env` still has old keys. Clock skew → `SignatureDoesNotMatch`. |
-| **SSO** (`aws sso login` + `AWS_PROFILE`) | Temporary credentials from IAM Identity Center | **Session max 12h** (configurable). Refresh token can expire (e.g. 7 days unused). | `aws sso login` not run; session expired. "Unable to locate credentials" or `AuthFailure`. |
-| **Profile** (`~/.aws/credentials` via `AWS_PROFILE`) | Long-lived keys or SSO-cached creds | Same as above depending on what the profile uses. Profile itself doesn't expire. | Profile uses SSO → same as SSO. Profile uses keys → same as keys. |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Method</th>
+<th style="padding:8px">Source</th>
+<th style="padding:8px">Typical expiry / limits</th>
+<th style="padding:8px">Common failure modes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Access keys</strong> (<code>.env</code>: <code>AWS_ADMIN_ACCESS_KEY_ID</code>, <code>AWS_ADMIN_SECRET_ACCESS_KEY</code>)</td>
+<td style="padding:8px;background:#e8f5e9">Long-lived IAM user keys</td>
+<td style="padding:8px;background:#e8f5e9">Keys don't expire by default; <strong>session tokens</strong> (if using STS) have max 12h. Rotated keys in <code>.env</code> but not updated → <code>AuthFailure</code>.</td>
+<td style="padding:8px;background:#e8f5e9">Keys rotated in console; <code>.env</code> still has old keys. Clock skew → <code>SignatureDoesNotMatch</code>.</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>SSO</strong> (<code>aws sso login</code> + <code>AWS_PROFILE</code>)</td>
+<td style="padding:8px;background:#fff3e0">Temporary credentials from IAM Identity Center</td>
+<td style="padding:8px;background:#fff3e0"><strong>Session max 12h</strong> (configurable). Refresh token can expire (e.g. 7 days unused).</td>
+<td style="padding:8px;background:#fff3e0"><code>aws sso login</code> not run; session expired. "Unable to locate credentials" or <code>AuthFailure</code>.</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Profile</strong> (<code>~/.aws/credentials</code> via <code>AWS_PROFILE</code>)</td>
+<td style="padding:8px;background:#e8f5e9">Long-lived keys or SSO-cached creds</td>
+<td style="padding:8px;background:#e8f5e9">Same as above depending on what the profile uses. Profile itself doesn't expire.</td>
+<td style="padding:8px;background:#e8f5e9">Profile uses SSO → same as SSO. Profile uses keys → same as keys.</td>
+</tr>
+</tbody>
+</table>
 
-### 34.3 Visual Summary: Credential Chain and Failure Points
+<h3 id="war-story-34-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">34.3 Visual Summary: Credential Chain and Failure Points</h3>
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '11px', 'fontFamily': 'sans-serif' }, 'flowchart': { 'padding': 8, 'nodeSpacing': 25, 'rankSpacing': 30 }}}%%
@@ -1980,44 +2395,90 @@ flowchart TB
     DEC["When FRU_AWS_USE_PROFILE=true: prefer profile over .env keys"]
     NOTE["Avoids AuthFailure when .env keys are rotated but profile is current"]
     DEC --> NOTE
-    style KEYS fill:#e3f2fd
-    style SSO fill:#fff3e0
-    style PROFILE fill:#e8f5e9
-    style DEC fill:#f3e5f5
+    style KEYS fill:#e3f2fd,font-size:9px
+    style SSO fill:#fff3e0,font-size:9px
+    style PROFILE fill:#e8f5e9,font-size:9px
+    style DEC fill:#f3e5f5,font-size:9px
 ```
 
-### 34.4 Error Messages and What They Mean
+<h3 id="war-story-34-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">34.4 Error Messages and What They Mean</h3>
 
-| Error | Likely cause | Fix |
-|-------|--------------|-----|
-| `SignatureDoesNotMatch` | Clock skew (local time vs AWS); expired session token | Sync clock (NTP); re-run `aws sso login`; or use fresh keys |
-| `AuthFailure: AWS was not able to validate the provided access credentials` | Stale/rotated keys; expired SSO session | Update `.env` keys; run `aws sso login`; or set `FRU_AWS_USE_PROFILE=true` to use profile |
-| `Unable to locate credentials` | No keys, no profile, or SSO session expired | Set keys in `.env`; run `aws sso login`; or configure `AWS_PROFILE` |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Error</th>
+<th style="padding:8px">Likely cause</th>
+<th style="padding:8px">Fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><code>SignatureDoesNotMatch</code></td>
+<td style="padding:8px;background:#e8f5e9">Clock skew (local time vs AWS); expired session token</td>
+<td style="padding:8px;background:#e8f5e9">Sync clock (NTP); re-run <code>aws sso login</code>; or use fresh keys</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><code>AuthFailure: AWS was not able to validate the provided access credentials</code></td>
+<td style="padding:8px;background:#fff3e0">Stale/rotated keys; expired SSO session</td>
+<td style="padding:8px;background:#fff3e0">Update <code>.env</code> keys; run <code>aws sso login</code>; or set <code>FRU_AWS_USE_PROFILE=true</code> to use profile</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><code>Unable to locate credentials</code></td>
+<td style="padding:8px;background:#e8f5e9">No keys, no profile, or SSO session expired</td>
+<td style="padding:8px;background:#e8f5e9">Set keys in <code>.env</code>; run <code>aws sso login</code>; or configure <code>AWS_PROFILE</code></td>
+</tr>
+</tbody>
+</table>
 
-### 34.5 Session Max Expiry (SSO and STS)
+<h3 id="war-story-34-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">34.5 Session Max Expiry (SSO and STS)</h3>
 
 - **SSO session:** Configurable in IAM Identity Center; default max 12 hours. After expiry, `aws sso login` required.
 - **STS AssumeRole:** Max 12 hours for `AssumeRole`; 1 hour for `GetSessionToken` (unless MFA extends it).
 - **Refresh token:** If you don't use SSO for 7+ days (configurable), the refresh token may expire; you must log in again via browser.
 
-### 34.6 Resolution: Prefer Profile When Keys Are Stale
+<h3 id="war-story-34-sec-6" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">34.6 Resolution: Prefer Profile When Keys Are Stale</h3>
 
 We added `FRU_AWS_USE_PROFILE=true` so deploy uses `AWS_PROFILE` (from `~/.aws/credentials`) instead of `AWS_ADMIN_*` from `.env`. When `.env` keys are rotated but the profile (e.g. populated by `setup-aws-profiles.sh` or SSO) is current, deploy succeeds. See `tools/aws/scope_shared/core/terra_runner.py` and `tools/aws/diagnose_auth.py`.
 
-### 34.7 Takeaway
+<h3 id="war-story-34-sec-7" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">34.7 Takeaway</h3>
 
-| Method | Best for | Caveat |
-|--------|----------|--------|
-| **Access keys in .env** | CI, scripts, automation | Rotate keys → update `.env` or use profile |
-| **SSO** | Human devs, short sessions | Run `aws sso login` before deploy; watch session expiry |
-| **Profile (long-lived keys)** | Stable automation | No expiry issues; keep keys secure |
-| **Profile (SSO-backed)** | Human devs | Same as SSO; profile is just the pointer |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Method</th>
+<th style="padding:8px">Best for</th>
+<th style="padding:8px">Caveat</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Access keys in .env</strong></td>
+<td style="padding:8px;background:#e8f5e9">CI, scripts, automation</td>
+<td style="padding:8px;background:#e8f5e9">Rotate keys → update <code>.env</code> or use profile</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>SSO</strong></td>
+<td style="padding:8px;background:#fff3e0">Human devs, short sessions</td>
+<td style="padding:8px;background:#fff3e0">Run <code>aws sso login</code> before deploy; watch session expiry</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Profile (long-lived keys)</strong></td>
+<td style="padding:8px;background:#e8f5e9">Stable automation</td>
+<td style="padding:8px;background:#e8f5e9">No expiry issues; keep keys secure</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Profile (SSO-backed)</strong></td>
+<td style="padding:8px;background:#fff3e0">Human devs</td>
+<td style="padding:8px;background:#fff3e0">Same as SSO; profile is just the pointer</td>
+</tr>
+</tbody>
+</table>
 
 Use `FRU_AWS_USE_PROFILE=true` when `.env` keys may be stale but your profile is current. Run `python tools/aws/diagnose_auth.py` to inspect which credential source deploy will use.
 
 ---
 
-## 35. VPC Subnet Tag Drift: Durable vs Kube and lifecycle ignore_changes
+<h2 id="war-story-35" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">35. VPC Subnet Tag Drift: Durable vs Kube and lifecycle ignore_changes</h2>
 
 **creation:** `<260210>`
 **last_updated:** `<260210>`
@@ -2026,26 +2487,43 @@ Use `FRU_AWS_USE_PROFILE=true` when `.env` keys may be stale but your profile is
 **difficulty:** 6
 **significance:** 7
 
-### 35.1 Context
+<h3 id="war-story-35-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">35.1 Context</h3>
 
 Durable creates VPC and subnets; kube adds `kubernetes.io/role/elb` and `kubernetes.io/cluster/<name>` tags via `aws_ec2_tag` so the AWS Load Balancer Controller can place internet-facing NLBs in public subnets. Without these tags, CloudFront gets 502 (War Story 43). Durable's `aws_subnet` desired state did not include these tags. On durable's next apply, Terraform planned to remove them; kube's next apply re-added them. Endless drift cycle.
 
-### 35.2 Root Cause
+<h3 id="war-story-35-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">35.2 Root Cause</h3>
 
 Terraform enforces desired state. Durable's desired state = `tags = merge(var.tags, { Name = ... })` only. Kube adds tags via `aws_ec2_tag` to the same subnets. Durable's `aws_subnet` sees "extra" tags in AWS and plans to remove them. Apply removes them; kube re-adds; repeat.
 
-### 35.3 Resolution
+<h3 id="war-story-35-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">35.3 Resolution</h3>
 
 Add `lifecycle { ignore_changes = [tags] }` to all subnet resources in `infra_terraform/modules/aws/primitives/vpc/main.tf`. Durable sets initial tags on create; subsequent applies do not touch tags. Kube's `aws_ec2_tag` can add k8s tags without durable removing them. Trade-off: durable cannot change its own tags later; acceptable if tags are stable.
 
-### 35.4 Savings
+<h3 id="war-story-35-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">35.4 Savings</h3>
 
-| | Estimated | Actual (2026-02-23 full-scope re-deploy) |
-|---|-----------|------------------------------------------|
-| **Typical** | ~30–60 s | Avoids durable apply touching subnets; kube no longer re-adds tags. |
-| **This run** | — | Preventive; not directly measurable. Durable showed "No changes." |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px"></th>
+<th style="padding:8px">Estimated</th>
+<th style="padding:8px">Actual (2026-02-23 full-scope re-deploy)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Typical</strong></td>
+<td style="padding:8px;background:#e8f5e9">~30–60 s</td>
+<td style="padding:8px;background:#e8f5e9">Avoids durable apply touching subnets; kube no longer re-adds tags.</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>This run</strong></td>
+<td style="padding:8px;background:#fff3e0">—</td>
+<td style="padding:8px;background:#fff3e0">Preventive; not directly measurable. Durable showed "No changes."</td>
+</tr>
+</tbody>
+</table>
 
-### 35.5 Takeaway
+<h3 id="war-story-35-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">35.5 Takeaway</h3>
 
 When two stacks manage the same resource (durable owns subnets; kube adds tags), use `lifecycle { ignore_changes = [tags] }` on the owning resource so the other stack's `aws_ec2_tag` additions are not reverted. See `docs/learned/cloud_shared/DEPLOY_BUILD_DOCKER.md` §2.
 
@@ -2053,7 +2531,7 @@ When two stacks manage the same resource (durable owns subnets; kube adds tags),
 
 ---
 
-## 36. Kube Apply Ran Twice: Single Apply When NLB Hostname Known
+<h2 id="war-story-36" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">36. Kube Apply Ran Twice: Single Apply When NLB Hostname Known</h2>
 
 **creation:** `<260210>`
 **last_updated:** `<260210>`
@@ -2062,32 +2540,49 @@ When two stacks manage the same resource (durable owns subnets; kube adds tags),
 **difficulty:** 6
 **significance:** 8
 
-### 36.1 Context
+<h3 id="war-story-36-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">36.1 Context</h3>
 
 Kube deploy required two Terraform applies: (1) first apply without `ingress_hostname` (NLB doesn't exist yet); (2) after kube_apply creates the NLB, poll for hostname, then second apply with `ingress_hostname` to wire CloudFront's API origin. On re-deploys, the NLB hostname is usually stable—we could get it before the first apply and skip the second.
 
-### 36.2 Root Cause
+<h3 id="war-story-36-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">36.2 Root Cause</h3>
 
 The NLB hostname is not known until Kubernetes creates the Service and AWS provisions the NLB. Terraform needs that hostname for the CloudFront module. Original flow: first apply (no hostname) → kube_apply → poll → second apply (with hostname). On re-deploy, we never tried to get the hostname first.
 
-### 36.3 Resolution
+<h3 id="war-story-36-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">36.3 Resolution</h3>
 
 Before the first apply, try `kubectl get svc fru-api-svc ... -o jsonpath={.status.loadBalancer.ingress[0].hostname}`. If non-empty, pass `ingress_hostname` in the first (and only) apply. After kube_apply + poll, run the second apply only when we got the hostname from poll (didn't have it before). See `tools/aws/kube/deploy_kube.py` and War Story 57 for the correct logic (avoid inverted condition).
 
-### 36.4 Savings
+<h3 id="war-story-36-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">36.4 Savings</h3>
 
-| | Estimated | Actual (2026-02-23 full-scope re-deploy) |
-|---|-----------|------------------------------------------|
-| **Typical** | ~1–5 min | Re-deploy: hostname known → skip second apply. |
-| **This run** | — | Second kube apply skipped (kube tofu apply: 0.0s). Nonkube apply was 24.9s; kube similar. **~1 min saved.** |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px"></th>
+<th style="padding:8px">Estimated</th>
+<th style="padding:8px">Actual (2026-02-23 full-scope re-deploy)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Typical</strong></td>
+<td style="padding:8px;background:#e8f5e9">~1–5 min</td>
+<td style="padding:8px;background:#e8f5e9">Re-deploy: hostname known → skip second apply.</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>This run</strong></td>
+<td style="padding:8px;background:#fff3e0">—</td>
+<td style="padding:8px;background:#fff3e0">Second kube apply skipped (kube tofu apply: 0.0s). Nonkube apply was 24.9s; kube similar. <strong>~1 min saved.</strong></td>
+</tr>
+</tbody>
+</table>
 
-### 36.5 Takeaway
+<h3 id="war-story-36-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">36.5 Takeaway</h3>
 
 When a Terraform var depends on async output (e.g. NLB hostname from k8s), try to fetch it before the first apply on re-deploys. Use distinct variables for "before" and "after" states to avoid logic bugs (War Story 57).
 
 ---
 
-## 37. Kube CronJob Missing AWS Credentials: Shared Analytics Data and Why We Keep It Centralized
+<h2 id="war-story-37" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">37. Kube CronJob Missing AWS Credentials: Shared Analytics Data and Why We Keep It Centralized</h2>
 
 **creation:** `<260210>`
 **last_updated:** `<260210>`
@@ -2096,41 +2591,55 @@ When a Terraform var depends on async output (e.g. NLB hostname from k8s), try t
 **difficulty:** 6
 **significance:** 7
 
-### 37.1 Context
+<h3 id="war-story-37-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">37.1 Context</h3>
 
 The analytics panel in the UI showed "Updated 3 minutes ago" for both Kube and Nonkube scopes, and the data appeared in sync. Investigating the Kube CronJob (`fru-analytics-periodic-kube*`) revealed pods in **Error** with restarts. Logs showed `NoAuthWithAWSException: No AWS Credentials provided` — Spark could not access S3 for the Delta table.
 
-### 37.2 Root Cause: CronJob Missing AWS Credentials
+<h3 id="war-story-37-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">37.2 Root Cause: CronJob Missing AWS Credentials</h3>
 
 The **bootstrap job** (`bootstrap-job.yaml`) gets `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `CLOUD_REGION` from `kube_apply.py` and runs once during deploy — so it succeeded. The **CronJob** (`spark-cronjob.yaml`) did **not** have these env vars. EKS pods don't use instance metadata (unlike ECS task role); they need static credentials from env. The CronJob only had `db-credentials` for PGPASSWORD; no AWS credentials.
 
 **Fix:** Add `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` from the `aws-credentials` secret (created at bootstrap) via `secretKeyRef`, plus `CLOUD_REGION` from kube_apply subs. See `spark-cronjob.yaml` and `kube_apply.py` schedule phase.
 
-### 37.3 Why Kube and Nonkube Panels Showed the Same Data
+<h3 id="war-story-37-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">37.3 Why Kube and Nonkube Panels Showed the Same Data</h3>
 
 Both scopes share the same data:
 
-| Layer | Shared? |
-|-------|---------|
-| **PostgreSQL `batch_analytics`** | Yes — both Spark jobs write to the same table in the shared Aurora DB |
-| **S3 Delta table** | Yes — both read from the same Delta Lake path (e.g. `s3a://.../delta/fru_sales`) |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Layer</th>
+<th style="padding:8px">Shared?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>PostgreSQL <code>batch_analytics</code></strong></td>
+<td style="padding:8px;background:#e8f5e9">Yes — both Spark jobs write to the same table in the shared Aurora DB</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>S3 Delta table</strong></td>
+<td style="padding:8px;background:#fff3e0">Yes — both read from the same Delta Lake path (e.g. <code>s3a://.../delta/fru_sales</code>)</td>
+</tr>
+</tbody>
+</table>
 
 The `/analytics` API reads from `batch_analytics` and returns the latest row. Kube and Nonkube APIs both connect to the same Aurora instance. So both UIs show the same data. The "Updated X ago" timestamp reflects the most recent successful Spark run from **either** environment — if the CronJob was failing, the timestamp came from Nonkube's EventBridge-triggered ECS Spark task.
 
-### 37.4 Decision: Keep Data Centralized
+<h3 id="war-story-37-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">37.4 Decision: Keep Data Centralized</h3>
 
 We considered separating analytics (e.g. `batch_analytics_kube` vs `batch_analytics_nonkube`) so each scope writes to its own table. We decided **not** to do that because:
 
 - **PROD:** In production, we deploy **either** Kube **or** Nonkube, not both. Having both scopes would be meaningless in PROD.
 - **DEV:** In dev, both scopes are useful for learning and as templates for each deployment target. Having both run analytics (CronJob + EventBridge) into the same table is acceptable — they both read from the same Delta source and write to the same `batch_analytics` table. The "last writer wins" behavior is fine for dev; the UI shows the most recent update regardless of which scope produced it.
 
-### 37.5 Takeaway
+<h3 id="war-story-37-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">37.5 Takeaway</h3>
 
 EKS CronJob pods need AWS credentials for S3 access (unlike ECS, which uses task role). Use the same `aws-credentials` secret from bootstrap for both API and CronJob. Kube and Nonkube share Delta and `batch_analytics`; in PROD only one scope will be deployed. See `docs/learned/cloud_shared/ANALYTICS_AND_DATA.md`.
 
 ---
 
-## 38. Kube Load Balancer Choice: Classic ELB vs NLB and the --elb Flag
+<h2 id="war-story-38" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">38. Kube Load Balancer Choice: Classic ELB vs NLB and the --elb Flag</h2>
 
 **creation:** `<260210>`
 **last_updated:** `<260210>`
@@ -2139,7 +2648,7 @@ EKS CronJob pods need AWS credentials for S3 access (unlike ECS, which uses task
 **difficulty:** 6
 **significance:** 8
 
-### 38.1 Context
+<h3 id="war-story-38-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">38.1 Context</h3>
 
 Our kube API is exposed via `fru-api-svc` (type LoadBalancer). Kubernetes does not create the load balancer itself—the **cloud provider** does. On AWS, two different reconcilers can handle a LoadBalancer Service:
 
@@ -2148,12 +2657,35 @@ Our kube API is exposed via `fru-api-svc` (type LoadBalancer). Kubernetes does n
 
 We needed to support both: NLB as the default (modern, better performance) and Classic ELB as a fallback (no eksctl/helm, pre-migration behavior). The `--elb` flag and dual manifests (`api-service.yaml` vs `api-service-elb.yaml`) implement this choice.
 
-### 38.2 The Two Tracks
+<h3 id="war-story-38-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">38.2 The Two Tracks</h3>
 
-| Track | Deploy flag | Manifest | Who reconciles | LB type |
-|-------|-------------|----------|----------------|---------|
-| **NLB** (default) | *no* `--elb` | `api-service.yaml` | AWS Load Balancer Controller | Network Load Balancer |
-| **Classic ELB** | `--elb` | `api-service-elb.yaml` | In-tree cloud provider | Classic ELB |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Track</th>
+<th style="padding:8px">Deploy flag</th>
+<th style="padding:8px">Manifest</th>
+<th style="padding:8px">Who reconciles</th>
+<th style="padding:8px">LB type</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>NLB</strong> (default)</td>
+<td style="padding:8px;background:#e8f5e9">*no* <code>--elb</code></td>
+<td style="padding:8px;background:#e8f5e9"><code>api-service.yaml</code></td>
+<td style="padding:8px;background:#e8f5e9">AWS Load Balancer Controller</td>
+<td style="padding:8px;background:#e8f5e9">Network Load Balancer</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Classic ELB</strong></td>
+<td style="padding:8px;background:#fff3e0"><code>--elb</code></td>
+<td style="padding:8px;background:#fff3e0"><code>api-service-elb.yaml</code></td>
+<td style="padding:8px;background:#fff3e0">In-tree cloud provider</td>
+<td style="padding:8px;background:#fff3e0">Classic ELB</td>
+</tr>
+</tbody>
+</table>
 
 **What NLB and Classic ELB are:** Classic ELB is AWS's original load balancer (pre-2016)—Layer 4/7, one product for TCP/HTTP/HTTPS. Still supported but legacy. Creates `k8s-elb-{hex}` security groups. NLB (Network Load Balancer, 2017+) is newer—Layer 4 only, lower latency, higher throughput, static IPs. Both use `*.elb.amazonaws.com` DNS. NLB is preferred for API traffic.
 
@@ -2163,9 +2695,9 @@ We needed to support both: NLB as the default (modern, better performance) and C
 
 **Setup requirements:** Classic ELB track needs no extra setup—the in-tree is built into EKS; apply `api-service-elb.yaml` and the LB appears. NLB track requires the AWS Load Balancer Controller to be installed first (Phase 9.5). Without it, a Service with `aws-load-balancer-type: external` would have no reconciler and would stay in `Pending`.
 
-### 38.3 How the Choice Flows Through Deploy
+<h3 id="war-story-38-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">38.3 How the Choice Flows Through Deploy</h3>
 
-```
+```text
 deploy.py --scope kube [--elb]
     │
     ├── doctor.py [--elb]  →  NLB track: requires eksctl, helm (for controller install)
@@ -2182,22 +2714,22 @@ deploy.py --scope kube [--elb]
 - **With `--elb`:** No controller install. `kube_apply` uses `api-service-elb.yaml` → in-tree creates Classic ELB.
 - **Without `--elb`:** Phase 9.5 runs `install_aws_load_balancer_controller.py` (eksctl IAM, Helm chart). `kube_apply` uses `api-service.yaml` → controller creates NLB.
 
-### 38.4 Why We Have Both Options
+<h3 id="war-story-38-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">38.4 Why We Have Both Options</h3>
 
 - **NLB (default):** Modern, better performance, recommended. Requires eksctl and helm for controller install; deploy handles this automatically.
 - **Classic ELB (`--elb`):** Fallback when eksctl/helm are unavailable or when reverting to pre-migration behavior. No controller; in-tree only. Useful for quick local or CI runs without extra tooling.
 
-### 38.5 Orphan Cleanup After Migration
+<h3 id="war-story-38-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">38.5 Orphan Cleanup After Migration</h3>
 
 When switching from Classic ELB to NLB, the old Classic ELB and its `k8s-elb-*` security group become orphans (no longer in Terraform or K8s state). Run `remove_for_orphans_data.py` after verifying the NLB works. See [KUBE_LB.md](docs/learned/cloud_shared/KUBE_LB.md).6.
 
-### 38.6 Takeaway
+<h3 id="war-story-38-sec-6" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">38.6 Takeaway</h3>
 
 The `--elb` flag selects the load balancer track: Classic ELB (in-tree) vs NLB (AWS Load Balancer Controller). Two manifests, one annotation difference, one flag. Document this choice clearly—it affects deploy prerequisites (eksctl/helm for NLB), orphan cleanup, and CloudFront origin wiring. See `docs/learned/cloud_shared/KUBE_LB.md`.
 
 ---
 
-## 39. Path-Style Naming Convention: When to Use Slashes vs Hyphens for AWS Resource Names
+<h2 id="war-story-39" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">39. Path-Style Naming Convention: When to Use Slashes vs Hyphens for AWS Resource Names</h2>
 
 **creation:** `<260210>`
 **last_updated:** `<260210>`
@@ -2206,15 +2738,15 @@ The `--elb` flag selects the load balancer track: Classic ELB (in-tree) vs NLB (
 **difficulty:** 5
 **significance:** 7
 
-### 39.1 Context
+<h3 id="war-story-39-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">39.1 Context</h3>
 
 During the dynamic naming refactor (see `docs/FINAL_REFACTOR_PLAN_DYNAMIC_NAMING.md`), we considered whether to use **path-style** names (forward slashes, e.g. `/fru/spark/dev/us-east-1`) or **hyphen-style** names (e.g. `fru-spark-dev-us-east-1`) for AWS resources. We needed to understand: (1) which components support path format, (2) what industry best practice recommends, (3) whether parsing optional segments would be a problem, and (4) how small we could keep the set of path-style components.
 
-### 39.2 Path vs Hyphen: Not a File Path
+<h3 id="war-story-39-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">39.2 Path vs Hyphen: Not a File Path</h3>
 
 Path-style names are **naming conventions**, not actual file paths. Secrets Manager and CloudWatch Log Groups store data in their own services—not as files on S3. The slash is just a character in the resource name string, used for organizational hierarchy. AWS does not interpret slashes as directory structure; it is purely for human and IAM pattern matching.
 
-### 39.3 AWS Documentation and Industry Best Practice
+<h3 id="war-story-39-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">39.3 AWS Documentation and Industry Best Practice</h3>
 
 **Secrets Manager — Hierarchical naming explicitly recommended:**
 
@@ -2243,19 +2775,54 @@ Path-style names are **naming conventions**, not actual file paths. Secrets Mana
 
 - Supports slashes for hierarchical namespacing (e.g. `team-a/web-app`). Less strongly documented as "best practice" than Secrets or Log Groups.
 
-### 39.4 Which Components Suit Path-Style Names? (Keep the Group Small)
+<h3 id="war-story-39-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">39.4 Which Components Suit Path-Style Names? (Keep the Group Small)</h3>
 
-| Component | Path format supported? | Industry best practice? | Our decision |
-|-----------|------------------------|-------------------------|---------------|
-| **Secrets Manager** | Yes | Yes — AWS recommends | **Use path** |
-| **CloudWatch Log Groups** | Yes | Yes — AWS uses it | **Use path** |
-| **SSM Parameter Store** | Yes | Yes — designed for it | N/A (not used) |
-| **ECR** | Yes | Weaker | No — keep hyphen |
-| **S3 buckets** | No | N/A | Hyphen only |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Component</th>
+<th style="padding:8px">Path format supported?</th>
+<th style="padding:8px">Industry best practice?</th>
+<th style="padding:8px">Our decision</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Secrets Manager</strong></td>
+<td style="padding:8px;background:#e8f5e9">Yes</td>
+<td style="padding:8px;background:#e8f5e9">Yes — AWS recommends</td>
+<td style="padding:8px;background:#e8f5e9"><strong>Use path</strong></td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>CloudWatch Log Groups</strong></td>
+<td style="padding:8px;background:#fff3e0">Yes</td>
+<td style="padding:8px;background:#fff3e0">Yes — AWS uses it</td>
+<td style="padding:8px;background:#fff3e0"><strong>Use path</strong></td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>SSM Parameter Store</strong></td>
+<td style="padding:8px;background:#e8f5e9">Yes</td>
+<td style="padding:8px;background:#e8f5e9">Yes — designed for it</td>
+<td style="padding:8px;background:#e8f5e9">N/A (not used)</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>ECR</strong></td>
+<td style="padding:8px;background:#fff3e0">Yes</td>
+<td style="padding:8px;background:#fff3e0">Weaker</td>
+<td style="padding:8px;background:#fff3e0">No — keep hyphen</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>S3 buckets</strong></td>
+<td style="padding:8px;background:#e8f5e9">No</td>
+<td style="padding:8px;background:#e8f5e9">N/A</td>
+<td style="padding:8px;background:#e8f5e9">Hyphen only</td>
+</tr>
+</tbody>
+</table>
 
 **Conclusion:** Limit path-style names to **Secrets Manager** and **CloudWatch Log Groups**. That keeps the set small and aligned with AWS guidance. Use hyphen-style for all other components (S3, ECR, EKS, ECS, VPC, Aurora, etc.).
 
-### 39.5 Our Enhanced Convention with Path Format
+<h3 id="war-story-39-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">39.5 Our Enhanced Convention with Path Format</h3>
 
 For path-style components, we use the enhanced convention with slashes:
 
@@ -2265,16 +2832,30 @@ Optional segments (region if shared, scope if shared) are omitted when not appli
 
 **Examples (the two canonical path-style names we use):**
 
-| Component | Example |
-|-----------|---------|
-| **Log group** | `/fru/spark/dev/us-east-1` |
-| **Secret** | `/fru/secret/openai_api_key/dev/us-east-1` |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Component</th>
+<th style="padding:8px">Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Log group</strong></td>
+<td style="padding:8px;background:#e8f5e9"><code>/fru/spark/dev/us-east-1</code></td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Secret</strong></td>
+<td style="padding:8px;background:#fff3e0"><code>/fru/secret/openai_api_key/dev/us-east-1</code></td>
+</tr>
+</tbody>
+</table>
 
 Current (legacy) format for comparison:
 - Log group: `/fru/dev/spark` (prefix/env/component)
 - Secret: `fru/dev/openai_api_key-us-east-1` (prefix/env/component-region)
 
-### 39.6 Optional Segments and Parsing: Do We Need to Worry?
+<h3 id="war-story-39-sec-6" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">39.6 Optional Segments and Parsing: Do We Need to Worry?</h3>
 
 We initially considered whether **optional segments** (e.g. omitting region when shared, omitting scope when shared) would cause parsing ambiguity when the segment count varies.
 
@@ -2285,7 +2866,7 @@ We initially considered whether **optional segments** (e.g. omitting region when
 
 We do not reverse-engineer "what env is this resource from?" by parsing its name. The optional-segment concern is theoretical for our project. We only need to update **pattern matching** in scan config (`is_project_resource`, `classify_orphan`) when names change—not parsing logic.
 
-### 39.7 Path Format vs Hyphen — When Would We Use Slashes Elsewhere?
+<h3 id="war-story-39-sec-7" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">39.7 Path Format vs Hyphen — When Would We Use Slashes Elsewhere?</h3>
 
 If we hypothetically replaced all hyphens with slashes in our convention:
 
@@ -2296,40 +2877,57 @@ If we hypothetically replaced all hyphens with slashes in our convention:
 2. **Most other resources:** VPC, Aurora, ALB, EKS, ECS, etc. typically do not support slashes in names. Hyphen-style is standard.
 3. **Optional segments:** Would cause variable segment count; parsing by position would break if we ever needed it. But we don't need it—so this is a non-issue for our use case.
 
-### 39.8 Takeaway
+<h3 id="war-story-39-sec-8" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">39.8 Takeaway</h3>
 
 Limit path-style names to **Secrets Manager** and **CloudWatch Log Groups**—the two components where AWS explicitly recommends or uses hierarchical path format. Use hyphen-style for everything else. Path format is a naming convention; it is not a file path. We construct and match names; we do not parse them. Reference: `docs/FINAL_REFACTOR_PLAN_DYNAMIC_NAMING.md` for the full naming convention and migration plan.
 
 ---
 
-## 40. Docker ECR Login: macOS Keychain Error (100028)
+<h2 id="war-story-40" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">40. Docker ECR Login: macOS Keychain Error (100028)</h2>
 
 **keywords:** Docker, ECR, macOS, Keychain, credsStore, docker login, credential helper, desktop, osxkeychain
 **difficulty:** 4
 **significance:** 6
 
-### 40.1 Context
+<h3 id="war-story-40-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">40.1 Context</h3>
 
 During deploy, `docker login` to ECR failed with:
-```
+```text
 error saving credentials: error storing credentials - err: exit status 1, out: `Keychain Error. (100028)`
 ```
 
 `aws ecr get-login-password` succeeded; the failure occurred when Docker tried to store the token, not when fetching it.
 
-### 40.2 Root Cause
+<h3 id="war-story-40-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">40.2 Root Cause</h3>
 
 Docker uses a **credential helper** (configured via `credsStore` in `~/.docker/config.json`) to store and retrieve registry credentials. On macOS, common helpers include:
 
-| credsStore value | Behavior |
-|------------------|----------|
-| `osxkeychain` | Stores credentials in macOS Keychain. Can fail with Keychain Error (100028) when Keychain is locked, inaccessible, or after Docker restart. |
-| `desktop` | Docker Desktop's built-in credential store. Stores credentials in Docker's own storage (not Keychain directly). Often more reliable. |
-| `""` (empty) | No helper. Docker stores credentials directly in `config.json` under `auths`. |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">credsStore value</th>
+<th style="padding:8px">Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><code>osxkeychain</code></td>
+<td style="padding:8px;background:#e8f5e9">Stores credentials in macOS Keychain. Can fail with Keychain Error (100028) when Keychain is locked, inaccessible, or after Docker restart.</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><code>desktop</code></td>
+<td style="padding:8px;background:#fff3e0">Docker Desktop's built-in credential store. Stores credentials in Docker's own storage (not Keychain directly). Often more reliable.</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><code>""</code> (empty)</td>
+<td style="padding:8px;background:#e8f5e9">No helper. Docker stores credentials directly in <code>config.json</code> under <code>auths</code>.</td>
+</tr>
+</tbody>
+</table>
 
 The Keychain error occurs when the credential helper (often `osxkeychain`) fails to write to Keychain—e.g. after Docker restart, when Keychain is locked, or in non-interactive contexts.
 
-### 40.3 Why We Didn't Encounter It Before
+<h3 id="war-story-40-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">40.3 Why We Didn't Encounter It Before</h3>
 
 Several possible reasons:
 
@@ -2339,11 +2937,11 @@ Several possible reasons:
 4. **Keychain state** — Keychain may have been unlocked or in a different state before; lock/sleep or credential changes can trigger errors.
 5. **Different credential helper** — Config may have used `credsStore: "desktop"` (Docker Desktop's helper) instead of `osxkeychain`; the desktop helper can avoid Keychain.
 
-### 40.4 Is This Common?
+<h3 id="war-story-40-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">40.4 Is This Common?</h3>
 
 Yes. Docker + macOS Keychain issues are well-documented. CI and automation often avoid Keychain by using `credsStore: ""` or a different credential helper. The error is common when Keychain is locked, after sleep/wake, or in headless environments.
 
-### 40.5 Resolution Options
+<h3 id="war-story-40-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">40.5 Resolution Options</h3>
 
 **Option A: `credsStore: ""` (bypass credential helper)**
 
@@ -2399,30 +2997,76 @@ Docker Desktop's built-in helper often works without Keychain. If your config al
 
 The empty `{}` in `auths` means credentials are stored by the credential helper, not in the file. The `desktop` helper stores them in Docker Desktop's own storage. No change needed if this works.
 
-### 40.6 Why It Worked With `credsStore: "desktop"` and Empty auths
+<h3 id="war-story-40-sec-6" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">40.6 Why It Worked With `credsStore: "desktop"` and Empty auths</h3>
 
 Two different setups:
 
-| Config | auths format | Where credentials live |
-|--------|--------------|-------------------------|
-| `credsStore: ""` | `"auth": "base64..."` in each registry entry | Plain text in `config.json` |
-| `credsStore: "desktop"` | `{}` (empty object) per registry | Docker Desktop's internal credential store |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Config</th>
+<th style="padding:8px">auths format</th>
+<th style="padding:8px">Where credentials live</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><code>credsStore: ""</code></td>
+<td style="padding:8px;background:#e8f5e9"><code>"auth": "base64..."</code> in each registry entry</td>
+<td style="padding:8px;background:#e8f5e9">Plain text in <code>config.json</code></td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><code>credsStore: "desktop"</code></td>
+<td style="padding:8px;background:#fff3e0"><code>{}</code> (empty object) per registry</td>
+<td style="padding:8px;background:#fff3e0">Docker Desktop's internal credential store</td>
+</tr>
+</tbody>
+</table>
 
 With `credsStore: "desktop"`, Docker delegates to Docker Desktop's credential helper, which uses its own storage (not Keychain). The Keychain error we saw earlier was likely transient—e.g. right after Docker restart when the helper was initializing, or when Docker was using `osxkeychain` in a different state.
 
-### 40.7 Cross-Cloud Applicability
+<h3 id="war-story-40-sec-7" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">40.7 Cross-Cloud Applicability</h3>
 
 The `credsStore` setting is a Docker client setting; it applies to **all registries**, not just AWS:
 
-| Provider | Registry | Works with `credsStore: ""`? |
-|----------|----------|------------------------------|
-| AWS ECR | `*.dkr.ecr.*.amazonaws.com` | Yes |
-| GCP Artifact Registry | `*.pkg.dev`, `gcr.io` | Yes |
-| Azure ACR | `*.azurecr.io` | Yes |
-| Docker Hub | `docker.io` | Yes |
-| GitHub CR | `ghcr.io` | Yes |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Provider</th>
+<th style="padding:8px">Registry</th>
+<th style="padding:8px">Works with <code>credsStore: ""</code>?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px">AWS ECR</td>
+<td style="padding:8px;background:#e8f5e9"><code>*.dkr.ecr.*.amazonaws.com</code></td>
+<td style="padding:8px;background:#e8f5e9">Yes</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">GCP Artifact Registry</td>
+<td style="padding:8px;background:#fff3e0"><code>*.pkg.dev</code>, <code>gcr.io</code></td>
+<td style="padding:8px;background:#fff3e0">Yes</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">Azure ACR</td>
+<td style="padding:8px;background:#e8f5e9"><code>*.azurecr.io</code></td>
+<td style="padding:8px;background:#e8f5e9">Yes</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">Docker Hub</td>
+<td style="padding:8px;background:#fff3e0"><code>docker.io</code></td>
+<td style="padding:8px;background:#fff3e0">Yes</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">GitHub CR</td>
+<td style="padding:8px;background:#e8f5e9"><code>ghcr.io</code></td>
+<td style="padding:8px;background:#e8f5e9">Yes</td>
+</tr>
+</tbody>
+</table>
 
-### 40.8 AWS Profile vs credsStore
+<h3 id="war-story-40-sec-8" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">40.8 AWS Profile vs credsStore</h3>
 
 **AWS profile** is used by `aws ecr get-login-password` (AWS API calls). That part works.
 
@@ -2430,24 +3074,24 @@ The `credsStore` setting is a Docker client setting; it applies to **all registr
 
 Using an AWS profile does not fix the Keychain error—they are separate systems.
 
-### 40.9 Gitignore for .docker
+<h3 id="war-story-40-sec-9" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">40.9 Gitignore for .docker</h3>
 
 - **Default:** Docker uses `~/.docker/config.json` in the home directory. That path is outside any project; no gitignore needed.
 - **Project-local:** If you set `DOCKER_CONFIG=.docker` in the project, then `.docker/` would contain `config.json` with credentials. In that case, add `.docker/` to `.gitignore`.
 
-### 40.10 Implementation: Temp Config vs Rely on ~/.docker
+<h3 id="war-story-40-sec-10" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">40.10 Implementation: Temp Config vs Rely on ~/.docker</h3>
 
 We initially added a **temp config workaround** in `build_and_push_images.py`: create a temporary directory with `config.json` containing `credsStore: ""`, set `DOCKER_CONFIG` to that dir, run `docker login`, then discard. This avoided Keychain without requiring the user to change their global config.
 
 We later **refactored** to remove the temp solution and rely on the user's existing `~/.docker/config.json`. The script now runs plain `docker login`; the user must have a working config (e.g. `credsStore: ""` or `credsStore: "desktop"`).
 
-### 40.11 Takeaway
+<h3 id="war-story-40-sec-11" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">40.11 Takeaway</h3>
 
 ECR login has two steps: (1) `aws ecr get-login-password` uses AWS credentials; (2) `docker login` stores the token via Docker's credential helper. The Keychain error is from step 2. Options: set `credsStore: ""` to store in config.json (plain text); use `docker-credential-ecr-login` for on-demand ECR tokens; or rely on `credsStore: "desktop"` if it works. The fix is cloud-agnostic and applies to any registry.
 
 ---
 
-## 41. ECR Per-Region vs Centralized: Why We Keep Regional Repos
+<h2 id="war-story-41" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">41. ECR Per-Region vs Centralized: Why We Keep Regional Repos</h2>
 
 **creation:** `<260210>`
 **last_updated:** `<260210>`
@@ -2456,28 +3100,45 @@ ECR login has two steps: (1) `aws ecr get-login-password` uses AWS credentials; 
 **difficulty:** 5
 **significance:** 6
 
-### 41.1 Context
+<h3 id="war-story-41-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">41.1 Context</h3>
 
 ECR repositories are regional—each region has its own registry. When deploying to multiple regions (e.g. us-east-1 and us-east-2), we must either: (A) build and push to each region's ECR, or (B) centralize in one region and have other regions pull from there.
 
-### 41.2 Options Compared
+<h3 id="war-story-41-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">41.2 Options Compared</h3>
 
-| Approach | Pros | Cons |
-|----------|------|------|
-| **Per-region (current)** | Images local to compute; no cross-region pull latency; simpler IAM (no cross-region); no data transfer cost | Build/push per region; more ECR repos |
-| **Centralized (one region)** | Single build/push; simpler CI | Cross-region pull latency; ECR data transfer cost (~$0.02/GB); IAM must allow cross-region access |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Approach</th>
+<th style="padding:8px">Pros</th>
+<th style="padding:8px">Cons</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Per-region (current)</strong></td>
+<td style="padding:8px;background:#e8f5e9">Images local to compute; no cross-region pull latency; simpler IAM (no cross-region); no data transfer cost</td>
+<td style="padding:8px;background:#e8f5e9">Build/push per region; more ECR repos</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Centralized (one region)</strong></td>
+<td style="padding:8px;background:#fff3e0">Single build/push; simpler CI</td>
+<td style="padding:8px;background:#fff3e0">Cross-region pull latency; ECR data transfer cost (~$0.02/GB); IAM must allow cross-region access</td>
+</tr>
+</tbody>
+</table>
 
-### 41.3 Decision
+<h3 id="war-story-41-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">41.3 Decision</h3>
 
 We keep per-region ECR. The application core is the same; this is deployment topology. Centralizing would add cross-region data transfer cost and latency for every container start. Per-region keeps compute and storage colocated. The trade-off is build time when deploying to a new region—we accept that for lower runtime cost and simpler IAM.
 
-### 41.4 Takeaway
+<h3 id="war-story-41-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">41.4 Takeaway</h3>
 
 ECR is regional by design. For multi-region, prefer per-region repos unless you have a strong reason to centralize (e.g. very large images, infrequent deploys). Colocation reduces cost and latency.
 
 ---
 
-## 42. Smart Cross-Region Image Build Strategy: One Build, Many Regions
+<h2 id="war-story-42" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">42. Smart Cross-Region Image Build Strategy: One Build, Many Regions</h2>
 
 **creation:** `<260227>`
 **last_updated:** `<260227>`
@@ -2486,47 +3147,94 @@ ECR is regional by design. For multi-region, prefer per-region repos unless you 
 **difficulty:** 6
 **significance:** 8
 
-### 42.1 Context
+<h3 id="war-story-42-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">42.1 Context</h3>
 
 When deploying to multiple regions (us-east-1, us-east-2, us-west-2, etc.), we need Docker images in each region's ECR. CI/CD best practice says "remove local artifacts after push" to free disk—but that implies each region would need a full build, or we'd have to pull from ECR and re-push. With many regions, that's wasteful: builds take ~2 minutes each; repeating them per region multiplies deploy time.
 
-### 42.2 Industry Practice vs. Our Approach
+<h3 id="war-story-42-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">42.2 Industry Practice vs. Our Approach</h3>
 
-| Approach | What We Remove Locally | Effect on Multi-Region |
-|:---------|:-----------------------|:------------------------|
-| **Industry practice** | Images themselves (full cleanup) | Each region needs a build, or pull-then-push. Wasteful. |
-| **Our approach** | Only ECR registry compound tags (e.g. `744139897900.dkr.ecr.us-east-2.amazonaws.com/fru-api-img-dev:latest`) | Canonical compound tags (`fru-api-img-dev:latest`) stay. One build → push to region 1 → push-only to regions 2, 3, 4… without rebuild. |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Approach</th>
+<th style="padding:8px">What We Remove Locally</th>
+<th style="padding:8px">Effect on Multi-Region</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Industry practice</strong></td>
+<td style="padding:8px;background:#e8f5e9">Images themselves (full cleanup)</td>
+<td style="padding:8px;background:#e8f5e9">Each region needs a build, or pull-then-push. Wasteful.</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px"><strong>Our approach</strong></td>
+<td style="padding:8px;background:#fff3e0">Only ECR registry compound tags (e.g. <code>744139897900.dkr.ecr.us-east-2.amazonaws.com/fru-api-img-dev:latest</code>)</td>
+<td style="padding:8px;background:#fff3e0">Canonical compound tags (<code>fru-api-img-dev:latest</code>) stay. One build → push to region 1 → push-only to regions 2, 3, 4… without rebuild.</td>
+</tr>
+</tbody>
+</table>
 
 We do **not** remove images. We remove only ephemeral compound tags that include the registry URL. Those exist only for `docker push`; once pushed, they clutter Docker Desktop and serve no purpose. Canonical compound tags (regionless, no registry URL) stay so push-only works across regions.
 
-### 42.3 Content-Based Build Skip + Deploy Scenarios
+<h3 id="war-story-42-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">42.3 Content-Based Build Skip + Deploy Scenarios</h3>
 
 Deploy computes a hash of the build context (source + Dockerfile). If it matches the hash stored in S3 from the last successful build, we skip the build. Combined with our local cleanup strategy:
 
-| Scenario | Build? | Push? | Notes |
-|:---------|:-------|:------|:------|
-| First deploy to region | Yes | Yes | No stored hash or ECR empty |
-| Same region, no code change | No | No | Content-skip; ECR already has images; Phase 8 skipped entirely |
-| Different region, no code change | No | Push-only | Content-skip; target ECR empty; tag local canonical → target ECR, push |
-| Code changed | Yes | Yes | Hash mismatch; full build + push |
+<table>
+<thead>
+<tr style="background:#1565c0;color:white">
+<th style="padding:8px">Scenario</th>
+<th style="padding:8px">Build?</th>
+<th style="padding:8px">Push?</th>
+<th style="padding:8px">Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="background:#e3f2fd;padding:8px">First deploy to region</td>
+<td style="padding:8px;background:#e8f5e9">Yes</td>
+<td style="padding:8px;background:#e8f5e9">Yes</td>
+<td style="padding:8px;background:#e8f5e9">No stored hash or ECR empty</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">Same region, no code change</td>
+<td style="padding:8px;background:#fff3e0">No</td>
+<td style="padding:8px;background:#fff3e0">No</td>
+<td style="padding:8px;background:#fff3e0">Content-skip; ECR already has images; Phase 8 skipped entirely</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">Different region, no code change</td>
+<td style="padding:8px;background:#e8f5e9">No</td>
+<td style="padding:8px;background:#e8f5e9">Push-only</td>
+<td style="padding:8px;background:#e8f5e9">Content-skip; target ECR empty; tag local canonical → target ECR, push</td>
+</tr>
+<tr>
+<td style="background:#e3f2fd;padding:8px">Code changed</td>
+<td style="padding:8px;background:#fff3e0">Yes</td>
+<td style="padding:8px;background:#fff3e0">Yes</td>
+<td style="padding:8px;background:#fff3e0">Hash mismatch; full build + push</td>
+</tr>
+</tbody>
+</table>
 
 Same-region redeploy (e.g. us-east-2 twice) does nothing for build/push—Phase 8 is skipped. Different-region deploy (e.g. us-east-1 after us-east-2) uses push-only: we reuse local `fru-api-img-dev:latest`, tag it for the target registry, and push. No rebuild.
 
-### 42.4 Regionless Repo Names
+<h3 id="war-story-42-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">42.4 Regionless Repo Names</h3>
 
 ECR allows the same repo name in different regions. We use regionless names (`fru-api-img-dev`, `fru-spark-img-dev`) so one canonical compound tag works for all regions. At push time we create the full form: `docker tag fru-api-img-dev:latest {ecr_url}/fru-api-img-dev:latest`, then push. After push, we remove the ECR compound tag locally; canonical stays.
 
-### 42.5 Key Insight
+<h3 id="war-story-42-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">42.5 Key Insight</h3>
 
 > Don't blindly follow "remove local artifacts after push." Removing *images* forces a rebuild per region. Remove only *ephemeral registry compound tags*; keep canonical compound tags so one build can push-only to many regions. Combine with content-based build skip for maximum efficiency.
 
-### 42.6 Takeaway
+<h3 id="war-story-42-sec-6" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">42.6 Takeaway</h3>
 
 For multi-region Docker deploys: (1) Use regionless repo names so one local reference works everywhere. (2) Remove only ECR registry compound tags after push, not images. (3) Use content-based build skip so unchanged code skips build. (4) Push-only fills empty ECR in new regions without rebuild. Result: build once, deploy to N regions with one build and N-1 push-only steps. See `docs/learned/cloud_shared/DEPLOY_BUILD_DOCKER.md`.
 
 ---
 
-## 43. First-Deploy Kube: NLB Hostname Not Ready — Extend Poll, Fail-Fast
+<h2 id="war-story-43" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">43. First-Deploy Kube: NLB Hostname Not Ready — Extend Poll, Fail-Fast</h2>
 
 **creation:** `<260314>`
 **last_updated:** `<260314>`
@@ -2535,11 +3243,11 @@ For multi-region Docker deploys: (1) Use regionless repo names so one local refe
 **difficulty:** 6
 **significance:** 8
 
-### 43.1 Context
+<h3 id="war-story-43-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">43.1 Context</h3>
 
 First deploy to us-east-1 completed successfully. Nonkube worked (query stream, analytics, version). Kube showed "Backend API not reachable" and "CloudFront may not be routing /analytics to the backend" — `/version`, `/analytics`, `/query/stream` returned `X-Cache: Error from Cloudfront`. Verification failed overall even though nonkube passed.
 
-### 43.2 Root Cause
+<h3 id="war-story-43-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">43.2 Root Cause</h3>
 
 Kube deploy uses a two-phase apply (War Story 17, 36): (1) first tofu apply with `ingress_hostname=null` → CloudFront has no API origin, API paths route to S3; (2) after kube_apply, poll for LB hostname, then second apply with `ingress_hostname=<hostname>` to wire CloudFront to the NLB.
 
@@ -2547,13 +3255,13 @@ On **first deploy**, the NLB is created by the AWS Load Balancer Controller asyn
 
 Result: CloudFront for kube has no API origin. All API paths (`/query`, `/analytics`, `/version`) route to S3 → 403/404 → CloudFront returns "Error from Cloudfront".
 
-### 43.3 Resolution
+<h3 id="war-story-43-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">43.3 Resolution</h3>
 
 - **Extend poll:** 60 attempts × 20s ≈ 20 min (matches GCP reapply script timeout).
 - **Fail-fast:** If no hostname after 20 min, raise `SystemExit` instead of warning. Deploy fails; user re-runs deploy (NLB may be ready by then).
 - No separate reapply script; deploy handles it.
 
-### 43.4 Takeaway
+<h3 id="war-story-43-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">43.4 Takeaway</h3>
 
 On first deploy, NLB can take 5–10+ min. Extend the poll to 20 min and fail-fast so we never leave kube in a half-wired state. See War Stories 17, 36.
 
