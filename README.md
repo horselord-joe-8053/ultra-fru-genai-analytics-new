@@ -2,7 +2,8 @@
 
 Inspired by real-life industrial usecases and data, **Fridges R Us (FRU)** is an end-to-end enterprise conversational analytics assistant over refrigerator sales data: **`structured`** fields (brand, store, ratings, dates) plus **`unstructured`** customer feedback (long complaints and themes). Users ask questions in plain language; the system returns grounded answers backed by SQL, vector search, and batch aggregates—not free-form hallucination.
 
-This repository is the 2nd Generation System of [ultra-fru-genai-analytics](https://github.com/horselord-joe-8053/ultra-fru-genai-analytics): same domain and data philosophy with **`Data Vectorizing, Query Embedding and RAG`**, extended with **`LLM query-workflow visualization`** (live LLM tool traces), a **`ReAct-style agent`**, and a **`Multi-cloud Auto Deploy/Teardown`** system (`AWS`, `GCP`, etc, plus `local` parity; `Kubernetes` and `non-Kubernetes` deployment paradigms) built from **`OpenTofu/Terraform IaC`** and **clean Python-base orchestration and automation**. Getting this system working end-to-end was more challenging, educational and fun than I anticipated, with many lessons learned captured in the [war stories](#war-stories).
+This repository is the 2nd Generation System of [ultra-fru-genai-analytics](https://github.com/horselord-joe-8053/ultra-fru-genai-analytics): same domain and data philosophy with **`Data Vectorizing, Query Embedding and RAG`**, extended with **`LLM query-workflow visualization`** (live LLM tool traces), a **`ReAct-style agent`**, and a **`Multi-cloud Auto Deploy/Teardown`** system (for `AWS`, `GCP`, etc, plus `local` parity; options of `Kubernetes` and `non-Kubernetes` deployment paradigms) built on **`OpenTofu/Terraform IaC`** and **Python-based orchestration**. 
+Getting this system working end-to-end was more challenging, educational and much more fun than I anticipated, with many lessons learned captured in the [war stories](#war-stories).
 
 ---
 
