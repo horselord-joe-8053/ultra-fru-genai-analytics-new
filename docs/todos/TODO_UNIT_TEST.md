@@ -1,5 +1,7 @@
 ## Unit Test Strategy (Project-Specific)
 
+**Implemented (2026-05-21):** `tests/` pytest suite, `requirements-dev.txt`, `.coveragerc`, CI workflow `.github/workflows/unit-tests.yml`. Run: `pip install -r requirements-dev.txt` then `pytest -m "not integration"`. See [tests/README.md](../../tests/README.md) and [cursor_gen/refactor_plan/completed/REFACTOR_UNIT_TEST_COVERAGE.md](../../cursor_gen/refactor_plan/completed/REFACTOR_UNIT_TEST_COVERAGE.md).
+
 This document summarizes **where to focus unit tests in this repo** and how to structure them by type and priority, using the same table style as our other docs.
 
 ---
@@ -17,7 +19,7 @@ This document summarizes **where to focus unit tests in this repo** and how to s
 </tr>
 <tr>
 <td style="background:#e3f2fd"><strong>① API layer</strong></td>
-<td style="background:#e8f5e9">• <code>core_app/backend/api/app.py</code><br>• FastAPI routers (REST + SSE)</td>
+<td style="background:#e8f5e9">• <code>core_app/backend/api/app.py</code><br>• Flask routes (REST + SSE)</td>
 <td style="background:#e8f5e9">• Health/ready endpoints<br>• Main analytics/query endpoints (happy path + 4xx/5xx)<br>• SSE streaming behavior (small, deterministic streams)</td>
 <td style="background:#e8f5e9"><span style="background:#2e7d32;color:white;padding:1px 4px;font-size:0.85em">top</span></td>
 </tr>

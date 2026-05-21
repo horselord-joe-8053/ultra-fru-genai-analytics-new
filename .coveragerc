@@ -1,0 +1,21 @@
+[run]
+source =
+    core_app/backend
+    tools/cloud_shared
+    tools/aws/scope_shared
+    orchestrator.py
+omit =
+    */tests/*
+    */__pycache__/*
+    */site-packages/*
+    core_app/backend/spark_jobs/*
+    tools/aws/scope_*/**/*
+    tools/gcp/**/*
+    docs/**
+
+[report]
+precision = 1
+show_missing = True
+skip_covered = False
+# Staged gate: raise as suite grows (target 45+ on included modules, then repo-wide).
+fail_under = 15

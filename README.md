@@ -426,6 +426,7 @@ Index: [docs/war_stories/README.md](docs/war_stories/README.md).
 <tr><td style="background:#e3f2fd"><strong>Another cloud provider</strong></td><td style="background:#fff3e0"><a href="docs/WHAT_TO_DO_TO_BUILD_FOR_ANOTHER_CLOUD_PROVIDER.md">docs/WHAT_TO_DO_TO_BUILD_FOR_ANOTHER_CLOUD_PROVIDER.md</a></td></tr>
 <tr><td style="background:#e3f2fd"><strong>Config schema</strong></td><td style="background:#e8f5e9"><a href="docs/CONFIG_SCHEMA.md">docs/CONFIG_SCHEMA.md</a></td></tr>
 <tr><td style="background:#e3f2fd"><strong>Orchestrator</strong></td><td style="background:#fff3e0"><code>orchestrator.py</code> module docstring</td></tr>
+<tr><td style="background:#e3f2fd"><strong>Unit tests</strong></td><td style="background:#e8f5e9"><a href="tests/README.md">tests/README.md</a> · <code>pytest -m "not integration"</code></td></tr>
 </tbody>
 </table>
 

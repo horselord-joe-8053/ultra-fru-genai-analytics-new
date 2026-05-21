@@ -1,0 +1,17 @@
+scope_default:
+  regional_default:
+    network:
+      public_subnet_cidrs: ["10.0.1.0/24"]
+  us-east-1:
+    network:
+      azs: [us-east-1a]
+kube:
+  regional_default:
+    compute:
+      min_node_count: 2
+  us-east-1: {}
+nonkube:
+  regional_default:
+    compute:
+      min_instance_count: 1
+  us-east-1: {}
