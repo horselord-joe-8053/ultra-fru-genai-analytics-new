@@ -9,18 +9,18 @@ This repository is the 2nd Generation System of [ultra-fru-genai-analytics](http
 <h2 id="table-of-contents" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">📋 Table of Contents</h2>
 
 - [🧠 1. What this project is](#what-this-is)
-- [✨ 2. Golden separation](#golden-separation)
-- [📦 3. Notable stacks](#notable-stacks)
-  - [3.1 Spark + Delta Lake](#spark-delta)
-  - [3.2 PostgreSQL + pgvector](#pgvector)
-  - [3.3 AWS Bedrock](#aws-bedrock)
-  - [3.4 Google Gemini](#google-gemini)
-  - [3.5 OpenTofu / Terraform IaC](#opentofu-iac)
-- [⚡ 4. Capabilities](#capabilities)
-  - [4.1 Conversational agent](#capabilities-agent)
-  - [4.2 Web UI](#capabilities-ui)
-  - [4.3 Operations](#capabilities-ops)
-- [🧩 5. Architecture at a glance](#architecture)
+- [🧩 2. Architecture at a glance](#architecture)
+- [✨ 3. Golden separation](#golden-separation)
+- [📦 4. Notable stacks](#notable-stacks)
+  - [4.1 Spark + Delta Lake](#spark-delta)
+  - [4.2 PostgreSQL + pgvector](#pgvector)
+  - [4.3 AWS Bedrock](#aws-bedrock)
+  - [4.4 Google Gemini](#google-gemini)
+  - [4.5 OpenTofu / Terraform IaC](#opentofu-iac)
+- [⚡ 5. Capabilities](#capabilities)
+  - [5.1 Conversational agent](#capabilities-agent)
+  - [5.2 Web UI](#capabilities-ui)
+  - [5.3 Operations](#capabilities-ops)
 - [🗂 6. Repository layout](#repo-layout)
 - [🛠 7. Prerequisites](#prerequisites)
 - [⚙️ 8. Configuration](#configuration)
@@ -51,7 +51,7 @@ FRU answers questions such as:
 - *“How many LG fridges did we sell last month?”*
 - *“Which stores consistently get negative delivery feedback?”*
 
-The system combines **batch** ([Spark + Delta Lake](#spark-delta)), **interactive** ([PostgreSQL + pgvector](#pgvector)), and **grounded narrative** ([AWS Bedrock](#aws-bedrock) / [Google Gemini](#google-gemini) / local Claude), deployed via [OpenTofu / Terraform](#opentofu-iac) — see [§3 Notable stacks](#notable-stacks).
+The system combines **batch** ([Spark + Delta Lake](#spark-delta)), **interactive** ([PostgreSQL + pgvector](#pgvector)), and **grounded narrative** ([AWS Bedrock](#aws-bedrock) / [Google Gemini](#google-gemini) / local Claude), deployed via [OpenTofu / Terraform](#opentofu-iac) — see [§2 Architecture](#architecture) and [§4 Notable stacks](#notable-stacks).
 
 Compared to the original [ultra-fru-genai-analytics](https://github.com/horselord-joe-8053/ultra-fru-genai-analytics) prototype, this repo adds:
 
@@ -70,99 +70,7 @@ Compared to the original [ultra-fru-genai-analytics](https://github.com/horselor
 
 ---
 
-<h2 id="golden-separation" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">✨ 2. Golden separation</h2>
-
-> **Spark does batch intelligence.**  
-> **pgvector + SQL do interactive intelligence.**  
-> **The LLM explains what was retrieved.**
-
-That split keeps cost, latency, and governance under control: heavy work stays in scheduled Spark jobs; the API path stays fast; the model never substitutes for missing data.
-
----
-
-<h2 id="notable-stacks" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">📦 3. Notable stacks</h2>
-
-Major libraries and platforms used in this repo (not an exhaustive dependency list). Spotlight sections below; app/UI/agent detail stays in [§4 Capabilities](#capabilities), runtime matrix in [§11 Deployment matrix](#deploy-matrix), and diagrams in [§5 Architecture](#architecture).
-
-<table>
-<thead>
-<tr style="background:#1565c0;color:white"><th>Lane</th><th>Stack</th><th>Detail</th><th>In repo</th></tr>
-</thead>
-<tbody>
-<tr><td style="background:#fff3e0"><strong>Batch</strong></td><td style="background:#fff3e0"><a href="#spark-delta">Spark + Delta Lake</a></td><td style="background:#fff3e0">Scheduled aggregates → <code>batch_analytics</code></td><td style="background:#e8f5e9"><code>core_app/analytics/</code></td></tr>
-<tr><td style="background:#ede7f6"><strong>Interactive</strong></td><td style="background:#ede7f6"><a href="#pgvector">PostgreSQL + pgvector</a></td><td style="background:#ede7f6">SQL + vector search (OpenAI embeddings)</td><td style="background:#e8f5e9"><code>schema_pgvector.sql</code>, agent tools</td></tr>
-<tr><td style="background:#e3f2fd"><strong>LLM (AWS)</strong></td><td style="background:#e3f2fd"><a href="#aws-bedrock">AWS Bedrock</a></td><td style="background:#e3f2fd">Claude via Bedrock</td><td style="background:#e8f5e9"><code>bedrock_client.py</code></td></tr>
-<tr><td style="background:#e8f5e9"><strong>LLM (GCP)</strong></td><td style="background:#e8f5e9"><a href="#google-gemini">Google Gemini API</a></td><td style="background:#e8f5e9">Gemini API key (not Vertex AI)</td><td style="background:#fff3e0"><code>gemini_api_client.py</code></td></tr>
-<tr><td style="background:#fff3e0"><strong>Deploy</strong></td><td style="background:#fff3e0"><a href="#opentofu-iac">OpenTofu / Terraform</a></td><td style="background:#fff3e0">IaC + Python orchestration</td><td style="background:#e8f5e9"><code>infra_terraform/</code>, <code>orchestrator.py</code></td></tr>
-<tr><td style="background:#e3f2fd"><strong>App</strong></td><td style="background:#e3f2fd">Flask · React/Vite · SSE</td><td style="background:#e3f2fd">API + UI + execution log stream</td><td style="background:#fff3e0"><a href="#capabilities">§4</a></td></tr>
-</tbody>
-</table>
-
-<h3 id="spark-delta" style="color:#00695c;font-size:1.05em;font-weight:600;margin-top:0.85em">3.1 Spark + Delta Lake</h3>
-
-<span style="background:#fff3e0;padding:2px 6px;font-weight:600">Batch lane</span> — Spark jobs read **Delta Lake** on **S3** or **GCS**, write JSON aggregates to PostgreSQL <code>batch_analytics</code> for <code>/analytics</code>.
-
-- **Job:** <code>core_app/analytics/jobs/run_analytics.py</code> · **image:** <code>core_app/analytics/docker/Dockerfile</code>
-- **Storage:** <code>DELTA_TABLE_PATH</code> · **Schedule:** K8s CronJob or EventBridge / Cloud Scheduler → [§11](#deploy-matrix)
-
-<h3 id="pgvector" style="color:#00695c;font-size:1.05em;font-weight:600;margin-top:0.85em">3.2 PostgreSQL + pgvector</h3>
-
-<span style="background:#ede7f6;padding:2px 6px;font-weight:600">Interactive lane</span> — one Postgres per env holds structured sales rows, **pgvector** embeddings on <code>customer_feedback</code>, and batch JSON. OpenAI <code>text-embedding-3-small</code> powers vectors on **all** clouds (independent of Bedrock/Gemini).
-
-- **Schema:** <code>core_app/sql/schema_pgvector.sql</code> · table <code>fru_sales_embeddings</code> (IVFFlat index)
-- **Agent:** <code>semantic_search</code> + SQL tools in [§4.1](#capabilities-agent) · deeper notes in [§13 Intelligence stack](#intelligence)
-
-<h3 id="aws-bedrock" style="color:#00695c;font-size:1.05em;font-weight:600;margin-top:0.85em">3.3 AWS Bedrock</h3>
-
-<span style="background:#e3f2fd;padding:2px 6px;font-weight:600">Narrative lane (AWS)</span> — Claude through **Amazon Bedrock** when <code>CLOUD_PROVIDER=aws</code>.
-
-- **Client:** <code>core_app/backend/env_utils/aws/bedrock_client.py</code>
-- **Config:** <code>AWS_BEDROCK_INFERENCE_PROFILE_ID</code> or <code>AWS_BEDROCK_MODEL_ID</code> · routed via <code>client_factory.py</code>
-
-<h3 id="google-gemini" style="color:#00695c;font-size:1.05em;font-weight:600;margin-top:0.85em">3.4 Google Gemini</h3>
-
-<span style="background:#e8f5e9;padding:2px 6px;font-weight:600">Narrative lane (GCP)</span> — <code>GCP_LLM_PROVIDER=gemini</code> + <code>GOOGLE_AI_API_KEY</code>; **Google AI Studio / Gemini API** (<code>google-genai</code>), **not Vertex AI**.
-
-- **Client:** <code>core_app/backend/env_utils/gcp/gemini_api_client.py</code>
-- **Alternative:** <code>GCP_LLM_PROVIDER=claude</code> on GCP (same factory)
-
-<h3 id="opentofu-iac" style="color:#00695c;font-size:1.05em;font-weight:600;margin-top:0.85em">3.5 OpenTofu / Terraform IaC</h3>
-
-<span style="background:#fff3e0;padding:2px 6px;font-weight:600">Deploy lane</span> — **OpenTofu** (or Terraform) modules under <code>infra_terraform/</code> provision VPC, Aurora/Cloud SQL, EKS/GKE, ECS/Cloud Run, CDN, schedulers, etc. <code>orchestrator.py</code> and <code>tools/{aws,gcp,local}/</code> run phased deploy/teardown/verify on top (not “Terraform only once”).
-
-- **Layout:** <code>infra_terraform/live_deploy/{aws,gcp}/</code> · shared <code>TF_DATA_DIR=tofu_data/</code>
-- **Flow:** [§10 Deploy model](#deploy-model) · cloud mapping [§11](#deploy-matrix) · lessons in [§15 War stories](#war-stories)
-
----
-
-<h2 id="capabilities" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">⚡ 4. Capabilities</h2>
-
-<h3 id="capabilities-agent" style="color:#00695c;font-size:1.05em;font-weight:600;margin-top:0.85em">4.1 Conversational agent</h3>
-
-When `USE_AGENT_QUERY=true`, `POST /query` and `GET /query/stream` route through `core_app/backend/agents/query_agent.py` (ReAct loop). Tools:
-
-- **`generate_sql`** — NL → SQL over `fru_sales_embeddings` / related tables.
-- **`execute_sql`** — run approved SQL and return rows.
-- **`semantic_search`** — pgvector search over `customer_feedback` embeddings.
-
-Entry API: `core_app/backend/api/app.py`.
-
-<h3 id="capabilities-ui" style="color:#00695c;font-size:1.05em;font-weight:600;margin-top:0.85em">4.2 Web UI</h3>
-
-- **Chat** — `core_app/frontend/src/components/Chat.tsx`
-- **Execution log** — `ExecutionPanel.tsx` consumes **Server-Sent Events** from `/query/stream` and shows each tool call, iteration, and token usage as the agent runs.
-- **Batch analytics** — `BatchAnalyticsPanel.tsx` polls `/analytics` (Spark-written JSON aggregates).
-- **Data management** — `DataManagement.tsx` for `/rawdata` CRUD on source rows.
-
-<h3 id="capabilities-ops" style="color:#00695c;font-size:1.05em;font-weight:600;margin-top:0.85em">4.3 Operations</h3>
-
-- **`orchestrator.py`** — unified `deploy` | `teardown` | `doctor` | `verify` for `aws`, `gcp`, `local`.
-- **Content-hash image skip** — avoid rebuilding/pushing API and Spark images when Docker context unchanged (see war story §27 in [WAR_STORIES_CLOUD_SHARED.md](docs/war_stories/WAR_STORIES_CLOUD_SHARED.md)).
-- **Explicit durable destroy** — long-lived VPC/DB/state buckets require `ALLOW_DURABLE_DESTROY=YES` (AWS) and matching GCP guards.
-
----
-
-<h2 id="architecture" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">🧩 5. Architecture at a glance</h2>
+<h2 id="architecture" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">🧩 2. Architecture at a glance</h2>
 
 Two **container images** (API + Spark), two **subsystems**, one **PostgreSQL** database per environment/region:
 
@@ -192,6 +100,100 @@ graph TD
 ```
 
 **Deeper diagrams (per cloud and scope):** [docs/learned/cloud_shared/ARCHITECTURE_AWS_GCP_GENERAL.md](docs/learned/cloud_shared/ARCHITECTURE_AWS_GCP_GENERAL.md) · [docs/CORE_APP_STRUCTURE.md](docs/CORE_APP_STRUCTURE.md).
+
+Design principle for the split between batch, interactive, and LLM paths: [§3 Golden separation](#golden-separation).
+
+---
+
+<h2 id="golden-separation" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">✨ 3. Golden separation</h2>
+
+> **Spark does batch intelligence.**  
+> **pgvector + SQL do interactive intelligence.**  
+> **The LLM explains what was retrieved.**
+
+That split keeps cost, latency, and governance under control: heavy work stays in scheduled Spark jobs; the API path stays fast; the model never substitutes for missing data.
+
+---
+
+<h2 id="notable-stacks" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">📦 4. Notable stacks</h2>
+
+Major libraries and platforms used in this repo (not an exhaustive dependency list). Start with [§2 Architecture](#architecture) for the end-to-end diagram; app/UI/agent detail in [§5 Capabilities](#capabilities); runtime matrix in [§11 Deployment matrix](#deploy-matrix).
+
+<table>
+<thead>
+<tr style="background:#1565c0;color:white"><th>Lane</th><th>Stack</th><th>Detail</th><th>In repo</th></tr>
+</thead>
+<tbody>
+<tr><td style="background:#fff3e0"><strong>Batch</strong></td><td style="background:#fff3e0"><a href="#spark-delta">Spark + Delta Lake</a></td><td style="background:#fff3e0">Scheduled aggregates → <code>batch_analytics</code></td><td style="background:#e8f5e9"><code>core_app/analytics/</code></td></tr>
+<tr><td style="background:#ede7f6"><strong>Interactive</strong></td><td style="background:#ede7f6"><a href="#pgvector">PostgreSQL + pgvector</a></td><td style="background:#ede7f6">SQL + vector search (OpenAI embeddings)</td><td style="background:#e8f5e9"><code>schema_pgvector.sql</code>, agent tools</td></tr>
+<tr><td style="background:#e3f2fd"><strong>LLM (AWS)</strong></td><td style="background:#e3f2fd"><a href="#aws-bedrock">AWS Bedrock</a></td><td style="background:#e3f2fd">Claude via Bedrock</td><td style="background:#e8f5e9"><code>bedrock_client.py</code></td></tr>
+<tr><td style="background:#e8f5e9"><strong>LLM (GCP)</strong></td><td style="background:#e8f5e9"><a href="#google-gemini">Google Gemini API</a></td><td style="background:#e8f5e9">Gemini API key (not Vertex AI)</td><td style="background:#fff3e0"><code>gemini_api_client.py</code></td></tr>
+<tr><td style="background:#fff3e0"><strong>Deploy</strong></td><td style="background:#fff3e0"><a href="#opentofu-iac">OpenTofu / Terraform</a></td><td style="background:#fff3e0">IaC + Python orchestration</td><td style="background:#e8f5e9"><code>infra_terraform/</code>, <code>orchestrator.py</code></td></tr>
+<tr><td style="background:#e3f2fd"><strong>App</strong></td><td style="background:#e3f2fd">Flask · React/Vite · SSE</td><td style="background:#e3f2fd">API + UI + execution log stream</td><td style="background:#fff3e0"><a href="#capabilities">§5</a></td></tr>
+</tbody>
+</table>
+
+<h3 id="spark-delta" style="color:#00695c;font-size:1.05em;font-weight:600;margin-top:0.85em">4.1 Spark + Delta Lake</h3>
+
+<span style="background:#fff3e0;padding:2px 6px;font-weight:600">Batch lane</span> — Spark jobs read **Delta Lake** on **S3** or **GCS**, write JSON aggregates to PostgreSQL <code>batch_analytics</code> for <code>/analytics</code>.
+
+- **Job:** <code>core_app/analytics/jobs/run_analytics.py</code> · **image:** <code>core_app/analytics/docker/Dockerfile</code>
+- **Storage:** <code>DELTA_TABLE_PATH</code> · **Schedule:** K8s CronJob or EventBridge / Cloud Scheduler → [§11](#deploy-matrix)
+
+<h3 id="pgvector" style="color:#00695c;font-size:1.05em;font-weight:600;margin-top:0.85em">4.2 PostgreSQL + pgvector</h3>
+
+<span style="background:#ede7f6;padding:2px 6px;font-weight:600">Interactive lane</span> — one Postgres per env holds structured sales rows, **pgvector** embeddings on <code>customer_feedback</code>, and batch JSON. OpenAI <code>text-embedding-3-small</code> powers vectors on **all** clouds (independent of Bedrock/Gemini).
+
+- **Schema:** <code>core_app/sql/schema_pgvector.sql</code> · table <code>fru_sales_embeddings</code> (IVFFlat index)
+- **Agent:** <code>semantic_search</code> + SQL tools in [§5.1](#capabilities-agent) · deeper notes in [§13 Intelligence stack](#intelligence)
+
+<h3 id="aws-bedrock" style="color:#00695c;font-size:1.05em;font-weight:600;margin-top:0.85em">4.3 AWS Bedrock</h3>
+
+<span style="background:#e3f2fd;padding:2px 6px;font-weight:600">Narrative lane (AWS)</span> — Claude through **Amazon Bedrock** when <code>CLOUD_PROVIDER=aws</code>.
+
+- **Client:** <code>core_app/backend/env_utils/aws/bedrock_client.py</code>
+- **Config:** <code>AWS_BEDROCK_INFERENCE_PROFILE_ID</code> or <code>AWS_BEDROCK_MODEL_ID</code> · routed via <code>client_factory.py</code>
+
+<h3 id="google-gemini" style="color:#00695c;font-size:1.05em;font-weight:600;margin-top:0.85em">4.4 Google Gemini</h3>
+
+<span style="background:#e8f5e9;padding:2px 6px;font-weight:600">Narrative lane (GCP)</span> — <code>GCP_LLM_PROVIDER=gemini</code> + <code>GOOGLE_AI_API_KEY</code>; **Google AI Studio / Gemini API** (<code>google-genai</code>), **not Vertex AI**.
+
+- **Client:** <code>core_app/backend/env_utils/gcp/gemini_api_client.py</code>
+- **Alternative:** <code>GCP_LLM_PROVIDER=claude</code> on GCP (same factory)
+
+<h3 id="opentofu-iac" style="color:#00695c;font-size:1.05em;font-weight:600;margin-top:0.85em">4.5 OpenTofu / Terraform IaC</h3>
+
+<span style="background:#fff3e0;padding:2px 6px;font-weight:600">Deploy lane</span> — **OpenTofu** (or Terraform) modules under <code>infra_terraform/</code> provision VPC, Aurora/Cloud SQL, EKS/GKE, ECS/Cloud Run, CDN, schedulers, etc. <code>orchestrator.py</code> and <code>tools/{aws,gcp,local}/</code> run phased deploy/teardown/verify on top (not “Terraform only once”).
+
+- **Layout:** <code>infra_terraform/live_deploy/{aws,gcp}/</code> · shared <code>TF_DATA_DIR=tofu_data/</code>
+- **Flow:** [§10 Deploy model](#deploy-model) · cloud mapping [§11](#deploy-matrix) · lessons in [§15 War stories](#war-stories)
+
+---
+
+<h2 id="capabilities" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">⚡ 5. Capabilities</h2>
+
+<h3 id="capabilities-agent" style="color:#00695c;font-size:1.05em;font-weight:600;margin-top:0.85em">5.1 Conversational agent</h3>
+
+When `USE_AGENT_QUERY=true`, `POST /query` and `GET /query/stream` route through `core_app/backend/agents/query_agent.py` (ReAct loop). Tools:
+
+- **`generate_sql`** — NL → SQL over `fru_sales_embeddings` / related tables.
+- **`execute_sql`** — run approved SQL and return rows.
+- **`semantic_search`** — pgvector search over `customer_feedback` embeddings.
+
+Entry API: `core_app/backend/api/app.py`.
+
+<h3 id="capabilities-ui" style="color:#00695c;font-size:1.05em;font-weight:600;margin-top:0.85em">5.2 Web UI</h3>
+
+- **Chat** — `core_app/frontend/src/components/Chat.tsx`
+- **Execution log** — `ExecutionPanel.tsx` consumes **Server-Sent Events** from `/query/stream` and shows each tool call, iteration, and token usage as the agent runs.
+- **Batch analytics** — `BatchAnalyticsPanel.tsx` polls `/analytics` (Spark-written JSON aggregates).
+- **Data management** — `DataManagement.tsx` for `/rawdata` CRUD on source rows.
+
+<h3 id="capabilities-ops" style="color:#00695c;font-size:1.05em;font-weight:600;margin-top:0.85em">5.3 Operations</h3>
+
+- **`orchestrator.py`** — unified `deploy` | `teardown` | `doctor` | `verify` for `aws`, `gcp`, `local`.
+- **Content-hash image skip** — avoid rebuilding/pushing API and Spark images when Docker context unchanged (see war story §27 in [WAR_STORIES_CLOUD_SHARED.md](docs/war_stories/WAR_STORIES_CLOUD_SHARED.md)).
+- **Explicit durable destroy** — long-lived VPC/DB/state buckets require `ALLOW_DURABLE_DESTROY=YES` (AWS) and matching GCP guards.
 
 ---
 
@@ -432,7 +434,7 @@ Schema: `core_app/sql/schema_pgvector.sql`. Sample CSV: `core_app/data/raw/fridg
 
 <h2 id="intelligence" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">🦾 13. Intelligence stack</h2>
 
-Online path (interactive Q&amp;A) — complements [§3 Notable stacks](#notable-stacks):
+Online path (interactive Q&amp;A) — complements [§4 Notable stacks](#notable-stacks):
 
 <table>
 <thead>
@@ -485,7 +487,8 @@ Index: [docs/war_stories/README.md](docs/war_stories/README.md).
 <tr style="background:#1565c0;color:white"><th>Topic</th><th>Document</th></tr>
 </thead>
 <tbody>
-<tr><td style="background:#e3f2fd"><strong>Notable stacks</strong></td><td style="background:#fff3e0"><a href="#notable-stacks">README §3</a> · Spark/Delta, pgvector, Bedrock, Gemini, OpenTofu</td></tr>
+<tr><td style="background:#e3f2fd"><strong>Architecture overview</strong></td><td style="background:#e8f5e9"><a href="#architecture">README §2</a> · Mermaid diagram + links to cloud-specific docs</td></tr>
+<tr><td style="background:#e3f2fd"><strong>Notable stacks</strong></td><td style="background:#fff3e0"><a href="#notable-stacks">README §4</a> · Spark/Delta, pgvector, Bedrock, Gemini, OpenTofu</td></tr>
 <tr><td style="background:#e3f2fd"><strong>Core app + data flow</strong></td><td style="background:#e8f5e9"><a href="docs/CORE_APP_STRUCTURE.md">docs/CORE_APP_STRUCTURE.md</a></td></tr>
 <tr><td style="background:#e3f2fd"><strong>Analytics + Delta</strong></td><td style="background:#e8f5e9"><a href="docs/learned/cloud_shared/ANALYTICS_AND_DATA.md">docs/learned/cloud_shared/ANALYTICS_AND_DATA.md</a></td></tr>
 <tr><td style="background:#e3f2fd"><strong>AWS/GCP architecture diagrams</strong></td><td style="background:#fff3e0"><a href="docs/learned/cloud_shared/ARCHITECTURE_AWS_GCP_GENERAL.md">docs/learned/cloud_shared/ARCHITECTURE_AWS_GCP_GENERAL.md</a></td></tr>
@@ -597,4 +600,4 @@ INTEGRATION_FULL_VERIFY=1 ./scripts/run_integration_tests.sh
 
 ---
 
-<p style="margin-top:1.5em;color:#546e7a;font-size:0.95em"><strong>Summary:</strong> FRU is a working enterprise GenAI analytics stack—grounded Q&amp;A over structured and unstructured fridge sales data—with serious investment in <strong>how</strong> it is built, deployed, observed, and torn down across clouds. See <a href="#notable-stacks">📦 3. Notable stacks</a>, then <a href="#quick-start">🚀 9. Quick start</a>, run <a href="#unit-tests">unit tests</a> and <a href="#integration-tests">integration tests</a> after local deploy, and use <a href="#war-stories">📚 15. War stories</a> when deploy or query paths break.</p>
+<p style="margin-top:1.5em;color:#546e7a;font-size:0.95em"><strong>Summary:</strong> FRU is a working enterprise GenAI analytics stack—grounded Q&amp;A over structured and unstructured fridge sales data—with serious investment in <strong>how</strong> it is built, deployed, observed, and torn down across clouds. Start with <a href="#architecture">🧩 2. Architecture</a> and <a href="#notable-stacks">📦 4. Notable stacks</a>, then <a href="#quick-start">🚀 9. Quick start</a>; run <a href="#unit-tests">unit tests</a> and <a href="#integration-tests">integration tests</a> after local deploy; use <a href="#war-stories">📚 15. War stories</a> when deploy or query paths break.</p>
