@@ -11,7 +11,7 @@ pytest -m "not integration"
 pytest -m "not integration" --cov --cov-report=term-missing
 ```
 
-If `pytest` reports `unrecognized arguments: --cov`, unset `PYTEST_DISABLE_PLUGIN_AUTOLOAD` in your shell (some dev environments set it to `1`).
+If `pytest` reports `unrecognized arguments: --cov`, your shell likely has `PYTEST_DISABLE_PLUGIN_AUTOLOAD` set (Conda/base often sets `1`). **Unset it** (`unset PYTEST_DISABLE_PLUGIN_AUTOLOAD`) — setting it to `0` still disables autoload. Or pass `-p pytest_cov` explicitly (same as CI).
 
 ## Integration tests (Docker + local deploy)
 

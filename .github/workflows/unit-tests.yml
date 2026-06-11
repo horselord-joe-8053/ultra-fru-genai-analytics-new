@@ -8,8 +8,6 @@ on:
 jobs:
   pytest:
     runs-on: ubuntu-latest
-    env:
-      PYTEST_DISABLE_PLUGIN_AUTOLOAD: "0"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -24,4 +22,4 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
       - name: Run unit tests with coverage
-        run: python -m pytest --cov --cov-report=term-missing -m "not integration"
+        run: python -m pytest -p pytest_cov --cov --cov-report=term-missing -m "not integration"
