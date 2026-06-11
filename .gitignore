@@ -1,4 +1,8 @@
 # Python
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
 __pycache__/
 *.py[cod]
 *$py.class
@@ -73,6 +77,10 @@ google-cloud-cli-darwin-arm.tar.gz
 tools/local/memo/
 .fru_local*.log
 .fru_local.pids
+
+# Cursor IDE / agent artifacts (local for now)
+.cursor/
+cursor_gen/
 
 # Project specific
 .DS_Store
