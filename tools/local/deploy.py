@@ -98,7 +98,7 @@ def _build_images(skip_spark: bool, no_cache: bool = False) -> int:
     app_cmd = ["docker", "build", "--progress=plain", "-f", "core_app/Dockerfile", "-t", "fru-api:local"]
     if no_cache:
         app_cmd.insert(2, "--no-cache")
-    app_cmd.append("core_app")
+    app_cmd.append(".")  # repo root; core_app/Dockerfile COPY paths are relative to root
     try:
         run_docker_with_progress(
             app_cmd, "Building API image (fru-api:local)", 1, total, cwd=PROJECT_ROOT

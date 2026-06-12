@@ -69,14 +69,15 @@ def get_optional_bool_env(var_name: str, default: bool = False) -> bool:
     Example:
         >>> use_agent = get_optional_bool_env("USE_AGENT_QUERY", False)
     """
-    value = os.environ.get(var_name, "").lower()
+    if var_name not in os.environ:
+        return default
+    value = os.environ[var_name].strip().lower()
     if value in ("true", "1", "yes", "on"):
         return True
-    elif value in ("false", "0", "no", "off", ""):
+    if value in ("false", "0", "no", "off"):
         return False
-    else:
-        # Invalid value, use default
-        return default
+    # Invalid value, use default
+    return default
 
 
 def get_required_int_env(var_name: str, description: str = "") -> int:

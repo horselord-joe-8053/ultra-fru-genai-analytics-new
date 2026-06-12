@@ -1111,9 +1111,15 @@ def query_stream():
             """Run agent in background thread."""
             try:
                 if not USE_AGENT_QUERY:
-                    # Feature explicitly disabled via configuration; surface this clearly so
-                    # UI and verify can distinguish it from real backend failures.
-                    msg = "Agent-based query processing is disabled by configuration (USE_AGENT_QUERY=false)"
+                    # Distinguish explicit opt-out from missing container env (common local nonkube gap).
+                    if "USE_AGENT_QUERY" not in os.environ:
+                        msg = (
+                            "Agent-based query processing is off: USE_AGENT_QUERY is not set "
+                            "in this container (expected true for agent UI). "
+                            "Set USE_AGENT_QUERY=true in compose/Terraform env."
+                        )
+                    else:
+                        msg = "Agent-based query processing is disabled by configuration (USE_AGENT_QUERY=false)"
                     event_queue.put(("error", {"message": msg}))
                     return
 
