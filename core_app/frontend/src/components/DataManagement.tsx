@@ -144,7 +144,17 @@ const DataManagement: React.FC = () => {
         throw new Error(err.error || `HTTP ${res.status}`);
       }
       setDialogOpen(false);
-      fetchData();
+      if (!editingRow) {
+        // New ids sort to the end (ORDER BY id); stay on current page and the row looks missing.
+        const newTotal = total + 1;
+        const lastPage = Math.max(
+          0,
+          Math.ceil(newTotal / paginationModel.pageSize) - 1
+        );
+        setPaginationModel((p) => ({ ...p, page: lastPage }));
+      } else {
+        fetchData();
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Save failed");
     } finally {

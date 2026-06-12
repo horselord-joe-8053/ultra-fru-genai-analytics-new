@@ -5,6 +5,7 @@ Used by AWS and GCP verify_all_deploy. Provider param is for VerifyRow only (aws
 HTTP 502/503 and ConnectionError are retriable; 403 = real failure.
 """
 import os
+import re
 import requests
 
 from tools.cloud_shared.logging import logger
@@ -22,6 +23,15 @@ from tools.cloud_shared.verify.verify_sse import (
     is_agent_disabled_by_config,
 )
 from tools.cloud_shared.verify.verify_summary import VerifyRow
+
+
+def _integers_in_text(text: str) -> list[int]:
+    return [int(m) for m in re.findall(r"\b(\d+)\b", text or "")]
+
+
+def _record_count_meets_minimum(observed: int | None, min_rec: int) -> bool:
+    """True when observed count is at least the seeded CSV floor (allows CRUD-added rows)."""
+    return observed is not None and observed >= min_rec
 
 
 def _fetch_agent_init_error(base_url: str) -> str | None:
@@ -71,12 +81,18 @@ def verify_api_endpoints(
     """
     Poll endpoints until all pass or timeout. Returns (ok, rows) for summary table.
     provider: aws or gcp (for VerifyRow). Timeouts default to verify_config values.
+
+    total_rec: minimum seeded row count from CSV; live DB/analytics may be higher after CRUD.
     """
     timeout_secs = timeout_secs or VERIFY_TIMEOUT_SEC
     heartbeat_interval_sec = heartbeat_interval_sec or VERIFY_HEARTBEAT_INTERVAL_SEC
     query_stream_timeout_sec = query_stream_timeout_sec or QUERY_STREAM_TIMEOUT_PER_REQUEST_SEC
+    min_rec = total_rec
 
-    logger.info(f"Validating API Endpoints at: {base_url} (timeout={timeout_secs}s, total_rec={total_rec})")
+    logger.info(
+        f"Validating API Endpoints at: {base_url} "
+        f"(timeout={timeout_secs}s, min_total_rec from CSV={min_rec})"
+    )
     use_agent_disabled_by_config = is_agent_disabled_by_config()
 
     def check_query_stream(r, url: str = ""):
@@ -119,8 +135,13 @@ def verify_api_endpoints(
             return False
         if "An error has occurred while processing your query" in answer:
             return False
-        if str(total_rec) not in answer:
-            raise RuntimeError(f"QueryStream answer does not contain total_rec={total_rec}: {answer[:100]}... at {url}")
+        nums = _integers_in_text(answer)
+        observed = max(nums) if nums else None
+        if not _record_count_meets_minimum(observed, min_rec):
+            raise RuntimeError(
+                f"QueryStream record count {observed} below seeded minimum {min_rec}: "
+                f"{answer[:100]}... at {url}"
+            )
         return True
 
     def check_analytics(r, url: str = ""):
@@ -133,8 +154,8 @@ def verify_api_endpoints(
                 if "No analytics data available yet" in err:
                     return False
                 raise RuntimeError(f"Analytics error (non-retriable): {err} at {url}")
-            total_records = data.get("total_records") or 0
-            return total_records == total_rec
+            total_records = int(data.get("total_records") or 0)
+            return _record_count_meets_minimum(total_records, min_rec)
         except RuntimeError:
             raise
         except Exception:
@@ -241,13 +262,13 @@ def verify_api_endpoints(
                 notes = (
                     "agent disabled by config (USE_AGENT_QUERY=false)"
                     if passed_via_disabled
-                    else f"total_rec={total_rec} in answer"
+                    else f"count>={min_rec} in answer"
                 )
             elif e["name"] == "Analytics":
                 try:
                     data = last_resp.get(e["name"])
                     total_records = data.json().get("total_records", 0) if data else 0
-                    notes = f"total_records={total_records}"
+                    notes = f"total_records={total_records} (min {min_rec})"
                 except Exception:
                     notes = "has data"
         else:

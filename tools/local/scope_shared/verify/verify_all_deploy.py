@@ -78,7 +78,10 @@ def main() -> int:
         frontend_url = os.environ.get("LOCAL_FRONTEND_URL") or f"http://localhost:{ports['frontend_port']}"
         frontend_url = frontend_url.rstrip("/")
 
-        logger.step(f"Full Verification Interface (local, scope={scope}, total_rec from CSV: {total_rec})")
+        logger.step(
+            f"Full Verification Interface (local, scope={scope}, "
+            f"min_total_rec from CSV: {total_rec})"
+        )
         logger.phase_start(1, 2, f"Endpoints (local, scope={scope})")
 
         ok, rows = verify_api_endpoints(

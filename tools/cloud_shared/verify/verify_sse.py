@@ -7,9 +7,8 @@ import json
 import os
 
 
-def parse_sse_complete_answer(text: str) -> str | None:
-    """Parse SSE stream; return answer from last event: complete data."""
-    last_answer = None
+def _iter_sse_events(text: str):
+    """Yield (event_type, data_json) for each SSE block in text."""
     for block in text.split("\n\n"):
         event_type = None
         data_json = None
@@ -21,7 +20,33 @@ def parse_sse_complete_answer(text: str) -> str | None:
                     data_json = json.loads(line[5:].strip())
                 except json.JSONDecodeError:
                     pass
-        if event_type == "complete" and data_json and "answer" in data_json:
+        if event_type and data_json is not None:
+            yield event_type, data_json
+
+
+def parse_sse_tool_call_complete_events(text: str) -> list[dict]:
+    """Parse SSE stream; return data dicts from tool_call_complete events."""
+    return [
+        data
+        for event_type, data in _iter_sse_events(text)
+        if event_type == "tool_call_complete"
+    ]
+
+
+def parse_sse_complete_data(text: str) -> dict | None:
+    """Parse SSE stream; return data dict from last event: complete."""
+    last = None
+    for event_type, data in _iter_sse_events(text):
+        if event_type == "complete":
+            last = data
+    return last
+
+
+def parse_sse_complete_answer(text: str) -> str | None:
+    """Parse SSE stream; return answer from last event: complete data."""
+    last_answer = None
+    for event_type, data_json in _iter_sse_events(text):
+        if event_type == "complete" and "answer" in data_json:
             last_answer = data_json.get("answer", "")
     return last_answer
 
@@ -29,18 +54,8 @@ def parse_sse_complete_answer(text: str) -> str | None:
 def parse_sse_error_message(text: str) -> str | None:
     """Parse SSE stream; return message from last event: error data."""
     last_msg = None
-    for block in text.split("\n\n"):
-        event_type = None
-        data_json = None
-        for line in block.split("\n"):
-            if line.startswith("event:"):
-                event_type = line[6:].strip()
-            elif line.startswith("data:"):
-                try:
-                    data_json = json.loads(line[5:].strip())
-                except json.JSONDecodeError:
-                    pass
-        if event_type == "error" and data_json and "message" in data_json:
+    for event_type, data_json in _iter_sse_events(text):
+        if event_type == "error" and "message" in data_json:
             last_msg = data_json.get("message", "")
     return last_msg
 

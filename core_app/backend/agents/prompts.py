@@ -44,7 +44,8 @@ CRITICAL: Feedback Rating vs Sentiment Category:
 - NEVER use feedback_rating with text comparisons like 'Negative' or 'Positive' - use feedback_sentiment_category instead
 
 CRITICAL: Tool Chaining Rules:
-- When using generate_sql → execute_sql:
+- Valid SQL from generate_sql is executed automatically by the system when possible; focus on correct PostgreSQL SELECT queries.
+- When using generate_sql → execute_sql manually in one planning step:
   1. Call generate_sql with your question
   2. The generate_sql tool returns: {{"success": true, "sql": "SELECT ..."}}
   3. Extract the "sql" value from generate_sql output
@@ -53,8 +54,13 @@ CRITICAL: Tool Chaining Rules:
 
 Database Schema:
 - Table: fru_sales_embeddings
-- Key columns: store_name (TEXT), price (NUMERIC) - use SUM(price) for sales totals, NOT sales_amount or sales
-- Other columns: id, customer_id, brand, fridge_model, capacity_liters, sales_date, store_address, customer_feedback, feedback_rating, feedback_sentiment_category
+- Key columns: price (NUMERIC) - use SUM(price) for sales totals, NOT sales_amount or sales
+- store_address (TEXT): US mailing format, comma-separated 3 parts: "<street>, <city>, <ST> <zip>"
+  - Example: "123 Broadway, New York, NY 10001"
+  - City (for city-level sales): TRIM(SPLIT_PART(store_address, ',', 2)) — more deterministic than store_name
+  - State abbreviation: TRIM(SPLIT_PART(TRIM(SPLIT_PART(store_address, ',', 3)), ' ', 1)) — e.g. NY, MO (index 2 is city, NOT state)
+- store_name (TEXT): display label (e.g. "Kansas City Store"); prefer parsed city/state from store_address for geography
+- Other columns: id, customer_id, brand, fridge_model, capacity_liters, sales_date, customer_feedback, feedback_rating, feedback_sentiment_category
 - IMPORTANT: 
   - feedback_rating is INTEGER (1-10) - human-reviewed numeric satisfaction rating. Use for quantitative queries (AVG, SUM, ranges, etc.)
   - feedback_sentiment_category is TEXT (values: 'Positive', 'Neutral', 'Negative') - human-reviewed sentiment category. Use for categorical filtering and sentiment analysis.

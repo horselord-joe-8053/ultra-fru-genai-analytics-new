@@ -1,10 +1,22 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+
+interface AnalyticsRunStatus {
+  last_attempt_at?: string | null;
+  last_success_at?: string | null;
+  last_error?: string | null;
+  last_exit_code?: number | null;
+  deploy_scope?: string | null;
+  is_stale?: boolean;
+  severity?: "ok" | "warning" | "error";
+  status_message?: string | null;
+}
 
 interface BatchAnalyticsData {
   id: number;
   last_updated_at: string;
   updated_by_scope?: string | null;
   analytics_run_interval_minutes?: number;
+  run_status?: AnalyticsRunStatus | null;
   sales_by_brand: Array<{
     brand: string;
     total_sales: number;
@@ -45,14 +57,20 @@ interface BatchAnalyticsPanelProps {
 const BatchAnalyticsPanel: React.FC<BatchAnalyticsPanelProps> = ({ onToggle, isVisible = true }) => {
   const [data, setData] = useState<BatchAnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const hasLoadedRef = useRef(false);
 
   // Use relative URL - CloudFront will proxy /analytics requests to ALB
   // In development, Vite proxy handles /analytics -> localhost:5000
   // In production, CloudFront cache behavior proxies /analytics -> ALB
   const fetchAnalytics = async () => {
     try {
-      setLoading(true);
+      if (hasLoadedRef.current) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
       setError(null);
       const resp = await fetch("/analytics");
       
@@ -105,6 +123,7 @@ const BatchAnalyticsPanel: React.FC<BatchAnalyticsPanelProps> = ({ onToggle, isV
       }
       
       setData(result);
+      hasLoadedRef.current = true;
     } catch (e: any) {
       console.error("Failed to fetch analytics:", e);
       // Check if error is due to HTML response
@@ -121,6 +140,7 @@ const BatchAnalyticsPanel: React.FC<BatchAnalyticsPanelProps> = ({ onToggle, isV
       setData(null);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -197,10 +217,11 @@ const BatchAnalyticsPanel: React.FC<BatchAnalyticsPanelProps> = ({ onToggle, isV
           <div className="flex items-center gap-2">
             <button
               onClick={fetchAnalytics}
-              className="text-xs text-blue-600 hover:underline"
-              title="Refresh"
+              disabled={refreshing}
+              className="text-xs text-blue-600 hover:underline disabled:opacity-50"
+              title="Reload snapshot from server (does not run Spark)"
             >
-              ↻
+              {refreshing ? "…" : "↻"}
             </button>
             {onToggle && (
               <button
@@ -229,6 +250,19 @@ const BatchAnalyticsPanel: React.FC<BatchAnalyticsPanelProps> = ({ onToggle, isV
           <p className="text-xs text-gray-400 mt-0.5">
             Analytics Run Interval: every {data.analytics_run_interval_minutes} min{data.analytics_run_interval_minutes !== 1 ? "s" : ""}
           </p>
+        )}
+        {data.run_status?.status_message && (
+          <div
+            className={`mt-2 text-[0.6875rem] leading-snug p-2 rounded border ${
+              data.run_status.severity === "error"
+                ? "bg-red-50 border-red-200 text-red-800"
+                : "bg-amber-50 border-amber-200 text-amber-900"
+            }`}
+            role="status"
+          >
+            {data.run_status.severity === "error" ? "Batch job error: " : ""}
+            {data.run_status.status_message}
+          </div>
         )}
       </div>
 

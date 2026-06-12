@@ -73,7 +73,11 @@ def main() -> int:
     logger.step(f"Starting local frontend(s) for scope(s): {', '.join(scopes)}")
     os.makedirs(MEMO_DIR, exist_ok=True)
     base_env = os.environ.copy()
-    base_env["PYTHONPATH"] = os.path.join(PROJECT_ROOT, "core_app")
+    # Scheduler imports tools.*; API code imports backend.* — need repo root + core_app.
+    py_paths = [PROJECT_ROOT, os.path.join(PROJECT_ROOT, "core_app")]
+    if base_env.get("PYTHONPATH"):
+        py_paths.append(base_env["PYTHONPATH"])
+    base_env["PYTHONPATH"] = os.pathsep.join(py_paths)
 
     pids_to_write = []
     api_port = None

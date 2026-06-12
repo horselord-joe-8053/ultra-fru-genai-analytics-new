@@ -31,6 +31,7 @@ def stack_is_up(base_url: str, timeout_sec: float = 3.0) -> bool:
 
 
 def expected_total_rec_from_csv() -> int | None:
+    """Minimum seeded row count; live DB may exceed after CRUD."""
     csv_path = REPO_ROOT / "core_app" / "data" / "raw" / "fridge_sales_with_rating.csv"
     if not csv_path.is_file():
         return None

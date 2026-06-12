@@ -12,7 +12,14 @@ from decimal import Decimal
 from datetime import datetime, date
 
 from backend.env_utils.cloud_shared.client_factory import claude_complete
-from backend.utils.display_truncate import is_sql_placeholder, truncate_for_exec_log
+from backend.utils.display_truncate import (
+    add_token_usage,
+    is_executable_select_sql,
+    is_sql_placeholder,
+    normalize_token_usage,
+    quote_for_exec_log,
+    resolve_execute_sql,
+)
 from .tools import SQLTool, SemanticSearchTool, SQLGeneratorTool
 from .logger import AgentLogger
 from .metrics import agent_metrics
@@ -167,6 +174,8 @@ class QueryAgent:
         should_break_early = False
         max_iterations_exceeded = False
         all_data_retrieval_tools_successful = True  # Track if all data retrieval tools executed successfully (no errors)
+        run_token_usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+        synthesis_tokens: Dict[str, Any] = {}
 
         # Store current question for fallback parameter mapping
         self._current_question = question
@@ -191,12 +200,14 @@ class QueryAgent:
                 logger.info(f"Previous tool results: {len(tool_results)} result(s)")
                 
                 planning_prompt = get_planning_prompt(question, [], tool_results)
+                planning_start = time.time()
                 planning_result = claude_complete(
                     system_prompt=self.system_prompt,
                     user_message=planning_prompt,
                     max_tokens=500
                 )
-                
+                planning_time = (time.time() - planning_start) * 1000
+
                 # Handle both dict (new format) and str (backward compatibility)
                 if isinstance(planning_result, dict):
                     agent_response = planning_result.get("text", "")
@@ -206,6 +217,21 @@ class QueryAgent:
                 else:
                     agent_response = planning_result
                     tokens = {}
+
+                normalized_plan_tokens = normalize_token_usage(tokens)
+                run_token_usage = add_token_usage(run_token_usage, tokens)
+                if progress_callback:
+                    progress_callback("tool_call_complete", {
+                        "iteration": iteration,
+                        "tool": "pseudo_tool#llm_plan",
+                        "input": {},
+                        "output": {
+                            "success": True,
+                            "summary": "Planning complete",
+                            "token_usage": normalized_plan_tokens,
+                        },
+                        "execution_time_ms": planning_time,
+                    })
                 
                 logger.log_thought(agent_response)
                 logger.info(f"Agent response (planning): {agent_response[:200]}...")
@@ -222,7 +248,7 @@ class QueryAgent:
                 # Execute tools
                 last_tool_name: Optional[str] = None
                 last_tool_output: Optional[Dict[str, Any]] = None
-                for tool_call in tool_calls:
+                for tool_idx, tool_call in enumerate(tool_calls):
                     tool_name = tool_call.get("tool")
                     tool_input = tool_call.get("input", {})
                     last_tool_name = tool_name
@@ -242,45 +268,45 @@ class QueryAgent:
                         logger.warning(f"Unknown tool: {tool_name}")
                         continue
                     
-                    # Execute tool
+                    if tool_name == "execute_sql":
+                        step = self._run_execute_sql_for_agent(
+                            tool_input,
+                            iteration,
+                            tool_results,
+                            logger,
+                            progress_callback,
+                        )
+                        tool_output = step["tool_output"]
+                        tool_time = step["tool_time_ms"]
+                        last_tool_output = tool_output
+                        if not tool_output.get("success"):
+                            all_data_retrieval_tools_successful = False
+                            logger.log_thought(
+                                f"Tool {tool_name} failed: {tool_output.get('error')}"
+                            )
+                        elif step["should_break_early"]:
+                            logger.info(
+                                f"✅ SQL execution succeeded with {tool_output.get('row_count')} rows. "
+                                "Breaking loop to proceed to synthesis."
+                            )
+                            should_break_early = True
+                            break
+                        continue
+
+                    # Execute non-execute_sql tools
                     tool = self.tools[tool_name]
                     tool_start = time.time()
-                    
-                    # Normalize parameter names for tool execution
                     normalized_input = self._normalize_tool_input(tool_name, tool_input)
-
-                    # Auto-extract SQL from previous generate_sql results if execute_sql is called without SQL
-                    if tool_name == "execute_sql":
-                        has_sql = normalized_input.get("sql_query") or normalized_input.get("sql")
-                        if not has_sql or (
-                            isinstance(has_sql, str)
-                            and has_sql.lower().startswith(
-                                ("(the sql", "the sql query", "[the sql")
-                            )
-                        ):
-                            # Look for SQL from previous generate_sql tool results
-                            logger.info(
-                                "🔗 execute_sql called without valid SQL. Searching previous tool results..."
-                            )
-                            for prev_result in reversed(tool_results):  # Check most recent first
-                                if prev_result.get("tool") == "generate_sql":
-                                    prev_output = prev_result.get("output", {}) or {}
-                                    if prev_output.get("success") and "sql" in prev_output:
-                                        sql = prev_output["sql"]
-                                        logger.info("✅ Found SQL from previous generate_sql result")
-                                        logger.info(f"   Extracted SQL: {sql[:200]}...")
-                                        normalized_input["sql_query"] = sql
-                                        break
-                            else:
-                                logger.warning(
-                                    "⚠️  No SQL found in previous tool results. execute_sql will likely fail."
-                                )
 
                     logger.info(f"Tool input (normalized): {normalized_input}")
                     
                     tool_output = tool.execute(**normalized_input)
                     tool_time = (time.time() - tool_start) * 1000
                     last_tool_output = tool_output
+                    if tool_output.get("tokens"):
+                        run_token_usage = add_token_usage(
+                            run_token_usage, tool_output.get("tokens")
+                        )
                     
                     logger.info(f"Tool execution result: Success={tool_output.get('success', False)}, Time={tool_time:.2f}ms")
                     if tool_output.get('success'):
@@ -291,17 +317,9 @@ class QueryAgent:
                     else:
                         logger.warning(f"  Error: {tool_output.get('error', 'Unknown error')}")
                     
-                    # Log tool call
                     logger.log_tool_call(tool_name, tool_input, tool_output, tool_time, iteration)
                     
-                    # Emit tool_call_complete event (THIS IS KEY - streams immediately after each tool)
                     if progress_callback:
-                        # Display-only payloads for SSE; agent log/tool_results keep raw input above.
-                        prior_sql = (
-                            self._latest_generate_sql_from_results(tool_results)
-                            if tool_name == "execute_sql"
-                            else None
-                        )
                         sse_output = self._build_sse_output_summary(tool_name, tool_output)
                         progress_callback("tool_call_complete", {
                             "iteration": iteration,
@@ -311,16 +329,13 @@ class QueryAgent:
                                 tool_input,
                                 normalized_input,
                                 tool_output,
-                                prior_generate_sql=prior_sql,
                             ),
                             "output": sse_output,
                             "execution_time_ms": tool_time
                         })
                     
-                    # Record metrics
                     agent_metrics.record_tool_call(tool_name, tool_time, tool_output.get("success", False))
                     
-                    # Store result
                     tool_results.append({
                         "tool": tool_name,
                         "input": tool_input,
@@ -328,18 +343,52 @@ class QueryAgent:
                         "summary": self._summarize_tool_result(tool_output)
                     })
                     
-                    # If tool failed, agent might want to try alternative
                     if not tool_output.get("success"):
-                        # Only track data retrieval tools (execute_sql, semantic_search)
                         if tool_name in ["execute_sql", "semantic_search"]:
                             all_data_retrieval_tools_successful = False
                         logger.log_thought(f"Tool {tool_name} failed: {tool_output.get('error')}")
-                    else:
-                        # If SQL execution succeeded with results, we can break early
-                        if tool_name == "execute_sql" and tool_output.get("success") and tool_output.get("row_count", 0) > 0:
-                            logger.info(f"✅ SQL execution succeeded with {tool_output.get('row_count')} rows. Breaking loop to proceed to synthesis.")
-                            should_break_early = True
-                            break
+                    elif (
+                        tool_name == "generate_sql"
+                        and tool_output.get("sql")
+                    ):
+                        remaining_tools = [
+                            tc.get("tool") for tc in tool_calls[tool_idx + 1 :]
+                        ]
+                        if "execute_sql" not in remaining_tools:
+                            gen_sql = str(tool_output["sql"])
+                            if is_executable_select_sql(gen_sql):
+                                auto_input = {"sql_query": gen_sql}
+                                logger.info(
+                                    "🔗 Auto-chaining execute_sql after successful generate_sql"
+                                )
+                                if progress_callback:
+                                    progress_callback("tool_call_start", {
+                                        "iteration": iteration,
+                                        "tool": "execute_sql",
+                                        "input": auto_input,
+                                    })
+                                step = self._run_execute_sql_for_agent(
+                                    auto_input,
+                                    iteration,
+                                    tool_results,
+                                    logger,
+                                    progress_callback,
+                                )
+                                last_tool_output = step["tool_output"]
+                                if not step["tool_output"].get("success"):
+                                    all_data_retrieval_tools_successful = False
+                                    logger.log_thought(
+                                        "Tool execute_sql failed: "
+                                        f"{step['tool_output'].get('error')}"
+                                    )
+                                elif step["should_break_early"]:
+                                    should_break_early = True
+                                    break
+                            else:
+                                logger.warning(
+                                    "⚠️  generate_sql output is not executable SELECT; "
+                                    "skipping auto-chain execute_sql"
+                                )
                 
                 # Break out of while loop if we broke from tool execution
                 if should_break_early:
@@ -370,7 +419,7 @@ class QueryAgent:
             )
 
             if not has_successful_sql:
-                # Look for the last successful generate_sql result with an SQL string
+                # Fallback when generate_sql ran but execute never chained (edge case).
                 last_sql: Optional[str] = None
                 for r in reversed(tool_results):
                     if r.get("tool") == "generate_sql":
@@ -379,69 +428,24 @@ class QueryAgent:
                             last_sql = out["sql"]
                             break
 
-                if last_sql:
+                if last_sql and is_executable_select_sql(str(last_sql)):
                     logger.info(
                         "[AUTO] No successful execute_sql found; running execute_sql "
                         "with SQL from last generate_sql result."
                     )
-                    tool = self.tools.get("execute_sql")
-                    if tool is not None:
-                        auto_start = time.time()
-                        try:
-                            auto_output = tool.execute(sql_query=last_sql)
-                            auto_time = (time.time() - auto_start) * 1000
-
-                            logger.info(
-                                f"[AUTO] execute_sql result: "
-                                f"Success={auto_output.get('success', False)}, "
-                                f"Rows={auto_output.get('row_count', 0)}, "
-                                f"Time={auto_time:.2f}ms"
-                            )
-
-                            # Log tool call and record metrics
-                            logger.log_tool_call(
-                                "execute_sql",
-                                {"sql_query": last_sql},
-                                auto_output,
-                                auto_time,
-                                iteration
-                            )
-                            
-                            # Emit tool_call_complete event for auto-executed SQL
-                            if progress_callback:
-                                auto_input = {"sql_query": last_sql}
-                                auto_normalized = {"sql_query": last_sql}
-                                progress_callback("tool_call_complete", {
-                                    "iteration": iteration,
-                                    "tool": "execute_sql",
-                                    "input": self._build_sse_tool_input(
-                                        "execute_sql", auto_input, auto_normalized, auto_output
-                                    ),
-                                    "output": self._build_sse_output_summary(
-                                        "execute_sql", auto_output
-                                    ),
-                                    "execution_time_ms": auto_time
-                                })
-                            
-                            agent_metrics.record_tool_call(
-                                "execute_sql",
-                                auto_time,
-                                auto_output.get("success", False),
-                            )
-
-                            tool_results.append(
-                                {
-                                    "tool": "execute_sql",
-                                    "input": {"sql_query": last_sql},
-                                    "output": auto_output,
-                                    "summary": self._summarize_tool_result(auto_output),
-                                }
-                            )
-                        except Exception as e:
-                            _safe_agent_error(
-                                logger,
-                                f"[AUTO] execute_sql failed with auto-generated SQL: {e}",
-                            )
+                    try:
+                        self._run_execute_sql_for_agent(
+                            {"sql_query": last_sql},
+                            iteration,
+                            tool_results,
+                            logger,
+                            progress_callback,
+                        )
+                    except Exception as e:
+                        _safe_agent_error(
+                            logger,
+                            f"[AUTO] execute_sql failed with auto-generated SQL: {e}",
+                        )
 
             # Synthesis phase: Generate final answer
             logger.info("===== SYNTHESIS PHASE =====")
@@ -533,10 +537,14 @@ class QueryAgent:
                 # Handle both dict (new format) and str (backward compatibility)
                 if isinstance(synthesis_result, dict):
                     final_answer = synthesis_result.get("text", "")
-                    synthesis_tokens = synthesis_result.get("tokens", {})
+                    synthesis_tokens = normalize_token_usage(
+                        synthesis_result.get("tokens", {})
+                    )
                 else:
                     final_answer = synthesis_result
-                    synthesis_tokens = {}
+                    synthesis_tokens = normalize_token_usage({})
+
+                run_token_usage = add_token_usage(run_token_usage, synthesis_tokens)
 
                 # Determine failure reason and generate appropriate message
                 # ALWAYS replace answer when no successful data, regardless of LLM output
@@ -636,7 +644,7 @@ class QueryAgent:
                 primary_sql_result = None
                 primary_semantic_result = None
                 primary_result_type = None
-                synthesis_tokens = {}
+                synthesis_tokens = normalize_token_usage({})
                 synthesis_start_time = time.time()
                 
                 # Determine appropriate message based on failure reason
@@ -696,9 +704,9 @@ class QueryAgent:
                 latency_ms=execution_time,
                 iterations=iteration,
                 success=True,
-                input_tokens=synthesis_tokens.get("input", 0),
-                output_tokens=synthesis_tokens.get("output", 0),
-                total_tokens=synthesis_tokens.get("total", 0)
+                input_tokens=run_token_usage["input_tokens"],
+                output_tokens=run_token_usage["output_tokens"],
+                total_tokens=run_token_usage["total_tokens"],
             )
             
             logger.end_query(success=True, answer=final_answer)
@@ -717,11 +725,7 @@ class QueryAgent:
                 "tool_calls": logger.tool_calls,
                 "execution_time_ms": execution_time,
                 "debug_info": logger.get_debug_info(),
-                "token_usage": {
-                    "input_tokens": synthesis_tokens.get("input", 0),
-                    "output_tokens": synthesis_tokens.get("output", 0),
-                    "total_tokens": synthesis_tokens.get("total", 0)
-                },
+                "token_usage": dict(run_token_usage),
                 # Add metadata about data availability
                 "data_available": has_successful_data,
                 "primary_result_type": primary_result_type,  # "sql", "semantic", or None
@@ -883,21 +887,130 @@ class QueryAgent:
         
         return normalized
     
+    def _run_execute_sql_for_agent(
+        self,
+        tool_input: Dict[str, Any],
+        iteration: int,
+        tool_results: List[Dict[str, Any]],
+        agent_logger: AgentLogger,
+        progress_callback: Optional[Callable[..., None]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Run execute_sql with resolution, logging, SSE, metrics, and tool_results append.
+
+        Shared by planner invoke, auto-chain after generate_sql, and post-loop AUTO fallback.
+        """
+        tool_name = "execute_sql"
+        normalized_input = self._normalize_tool_input(tool_name, tool_input)
+        self._apply_execute_sql_resolution(normalized_input, tool_results)
+
+        agent_logger.info(f"Tool input (normalized): {normalized_input}")
+
+        tool = self.tools[tool_name]
+        tool_start = time.time()
+        tool_output = tool.execute(**normalized_input)
+        tool_time = (time.time() - tool_start) * 1000
+
+        agent_logger.info(
+            f"Tool execution result: Success={tool_output.get('success', False)}, "
+            f"Time={tool_time:.2f}ms"
+        )
+        if tool_output.get("success"):
+            if "row_count" in tool_output:
+                agent_logger.info(
+                    f"  Rows returned: {tool_output.get('row_count', 0)}"
+                )
+            if "sql" in tool_output:
+                agent_logger.info(
+                    f"  SQL executed: {tool_output.get('sql', '')[:200]}..."
+                )
+        else:
+            agent_logger.warning(
+                f"  Error: {tool_output.get('error', 'Unknown error')}"
+            )
+
+        agent_logger.log_tool_call(
+            tool_name, tool_input, tool_output, tool_time, iteration
+        )
+
+        if progress_callback:
+            prior_sql = self._latest_generate_sql_from_results(tool_results)
+            progress_callback("tool_call_complete", {
+                "iteration": iteration,
+                "tool": tool_name,
+                "input": self._build_sse_tool_input(
+                    tool_name,
+                    tool_input,
+                    normalized_input,
+                    tool_output,
+                    prior_generate_sql=prior_sql,
+                ),
+                "output": self._build_sse_output_summary(tool_name, tool_output),
+                "execution_time_ms": tool_time,
+            })
+
+        agent_metrics.record_tool_call(
+            tool_name, tool_time, tool_output.get("success", False)
+        )
+
+        tool_results.append({
+            "tool": tool_name,
+            "input": tool_input,
+            "output": tool_output,
+            "summary": self._summarize_tool_result(tool_output),
+        })
+
+        should_break_early = (
+            tool_output.get("success")
+            and tool_output.get("row_count", 0) > 0
+        )
+        return {
+            "tool_output": tool_output,
+            "tool_time_ms": tool_time,
+            "should_break_early": should_break_early,
+        }
+
+    def _apply_execute_sql_resolution(
+        self,
+        normalized_input: Dict[str, Any],
+        tool_results: List[Dict[str, Any]],
+    ) -> None:
+        """Resolve execute_sql input: unwrap quoted literals; backfill from latest generate_sql."""
+        raw = normalized_input.get("sql_query") or normalized_input.get("sql")
+        prior = self._latest_generate_sql_from_results(tool_results)
+        resolved = resolve_execute_sql(str(raw) if raw else None, prior)
+        if resolved:
+            if raw and str(raw).strip() != resolved:
+                logger.info(
+                    "🔗 execute_sql input coerced (quoted/placeholder → generate_sql or unwrap)"
+                )
+            elif not raw or resolve_execute_sql(str(raw), None) is None:
+                logger.info("🔗 execute_sql backfilled from latest generate_sql result")
+            normalized_input["sql"] = resolved
+            normalized_input.pop("sql_query", None)
+            logger.info(f"   Resolved SQL: {resolved[:200]}...")
+        else:
+            logger.warning(
+                "⚠️  execute_sql: no executable SELECT after resolution; validation may fail."
+            )
+
     def _resolve_sql_for_sse_display(
         self,
         normalized_input: Dict[str, Any],
         tool_output: Dict[str, Any],
         prior_generate_sql: Optional[str] = None,
     ) -> Optional[str]:
-        """Pick real SQL for Execution Log display (after normalization / tool output)."""
-        sql = normalized_input.get("sql_query") or normalized_input.get("sql")
-        if sql and not is_sql_placeholder(str(sql)):
-            return str(sql)
+        """Pick SQL for Execution Log display (same resolver as execution path)."""
+        raw = normalized_input.get("sql_query") or normalized_input.get("sql")
+        resolved = resolve_execute_sql(
+            str(raw) if raw else None,
+            prior_generate_sql,
+        )
+        if resolved:
+            return resolved
         out_sql = tool_output.get("sql")
-        if out_sql and not is_sql_placeholder(str(out_sql)):
-            return str(out_sql)
-        if prior_generate_sql and not is_sql_placeholder(str(prior_generate_sql)):
-            return str(prior_generate_sql)
+        if out_sql:
+            return resolve_execute_sql(str(out_sql), None)
         return None
 
     def _latest_generate_sql_from_results(
@@ -926,7 +1039,7 @@ class QueryAgent:
                 normalized_input, tool_output, prior_generate_sql
             )
             if sql:
-                return {"sql_query": truncate_for_exec_log(sql)}
+                return {"sql_query": quote_for_exec_log(sql)}
         return dict(tool_input)
 
     def _build_sse_output_summary(
@@ -946,8 +1059,10 @@ class QueryAgent:
             and tool_output.get("success")
             and tool_output.get("sql")
         ):
-            preview = truncate_for_exec_log(str(tool_output["sql"]))
-            output_summary["summary"] = f"Generated SQL query: {preview}"
+            quoted = quote_for_exec_log(str(tool_output["sql"]))
+            output_summary["summary"] = f"Generated SQL query: {quoted}"
+        if tool_output.get("tokens"):
+            output_summary["token_usage"] = normalize_token_usage(tool_output["tokens"])
         return output_summary
 
     def _summarize_tool_result(self, result: Dict[str, Any]) -> str:

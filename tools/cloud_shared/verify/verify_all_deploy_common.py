@@ -52,7 +52,10 @@ def run_verify_all_deploy(
     verify_start = time.time()
 
     logger.operation_start("Verify", scope, env, region)
-    logger.step(f"Full Verification Interface (env: {env}, region: {region}, total_rec from CSV: {total_rec})")
+    logger.step(
+        f"Full Verification Interface (env: {env}, region: {region}, "
+        f"min_total_rec from CSV: {total_rec})"
+    )
 
     # Fetch URLs and print manual hint at start (one block for scope=all)
     scope_urls: dict[str, str] = {}

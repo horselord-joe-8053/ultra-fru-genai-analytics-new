@@ -3,7 +3,7 @@ Cloud-agnostic verification helpers.
 
 Modules:
   verify_config       - Timeouts, retriable HTTP codes (from env)
-  verify_csv          - get_total_rec_from_csv (expected records from fridge_sales CSV)
+  verify_csv          - get_total_rec_from_csv (minimum seeded count from fridge_sales CSV)
   verify_sse          - SSE parsing, QueryStream error classification
   verify_api_endpoints - Poll Health/Version/Frontend/QueryStream/Analytics
   verify_llm_client   - Local LLM client instantiation check

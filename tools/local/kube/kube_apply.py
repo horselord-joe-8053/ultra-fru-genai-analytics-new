@@ -153,6 +153,9 @@ data:
             "GOOGLE_MODEL": require_google_model(),
             "ENABLE_ANALYTICS_SCHEDULER": os.environ.get("ENABLE_ANALYTICS_SCHEDULER", "true"),
             "ANALYTICS_SCHEDULER_INTERVAL_SECONDS": str(interval_sec),
+            "OPENAI_EMBED_MODEL": os.environ.get(
+                "OPENAI_EMBED_MODEL", "text-embedding-3-small"
+            ),
         }
         _kubectl(["apply", "-f", "-"], input_text=render("api-deployment", api_subs))
         # Restart API pods so they pick up CLAUDE_MODEL/GOOGLE_MODEL from updated deployment

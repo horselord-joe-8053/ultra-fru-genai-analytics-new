@@ -484,6 +484,22 @@ def get_analytics():
 
                 # deploy_scope: which scheduler wrote this row (kube, nonkube). Old rows may have NULL.
                 result["updated_by_scope"] = result.get("deploy_scope") or None
+
+                try:
+                    from tools.cloud_shared.analytics_run_status import (
+                        build_run_status_ui,
+                        fetch_run_status,
+                    )
+
+                    result["run_status"] = build_run_status_ui(
+                        result.get("created_at"),
+                        interval_sec,
+                        fetch_run_status(),
+                    )
+                except Exception as status_exc:
+                    app.logger.warning(
+                        f"[{request_id}] analytics run_status unavailable: {status_exc}"
+                    )
                 
                 # Limit arrays to query_limit before returning
                 # This ensures API returns only what frontend needs, even if DB has more

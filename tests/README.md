@@ -53,7 +53,7 @@ Tests **skip** automatically if `/health` is unreachable (safe when Docker is of
 | `tests/unit/core_app/backend/` | Flask API, agents, env_utils |
 | `tests/unit/tools/cloud_shared/` | Shared deploy/verify helpers |
 | `tests/unit/tools/aws/scope_shared/` | AWS resource names, phases |
-| `tests/integration/` | Live local API: health, query stream, shared verify |
+| `tests/integration/` | Live local API: health, query stream, exec-log SSE (`test_exec_log_sse.py`), shared verify |
 
 ## Environment (unit)
 

@@ -65,6 +65,29 @@ const ExecutionPanel: React.FC<ExecutionPanelProps> = ({ state, onToggle, isVisi
     return SQL_PLACEHOLDER_MARKERS.some((marker) => lower.includes(marker));
   };
 
+  const displayToolName = (tool: string): string => {
+    if (tool === "pseudo_tool#llm_plan") {
+      return "llm_plan";
+    }
+    if (tool === "pseudo_tool#llm_synthesize_answer") {
+      return "llm_synthesize_answer";
+    }
+    return tool;
+  };
+
+  const formatTokenUsage = (usage: any): string => {
+    if (!usage) {
+      return "(no token info from the LLM)";
+    }
+    const inputTokens = usage.input_tokens ?? usage.input ?? 0;
+    const outputTokens = usage.output_tokens ?? usage.output ?? 0;
+    const totalTokens = usage.total_tokens ?? usage.total ?? 0;
+    if (inputTokens > 0 || outputTokens > 0 || totalTokens > 0) {
+      return `${inputTokens} in, ${outputTokens} out, ${totalTokens} total`;
+    }
+    return "(no token info from the LLM)";
+  };
+
   const getInputField = (input: any, tool: string, output?: any): string => {
     // Try to find the most relevant input field based on tool type
     if (tool === "generate_sql" || tool === "sql_generator") {
@@ -148,7 +171,7 @@ const ExecutionPanel: React.FC<ExecutionPanelProps> = ({ state, onToggle, isVisi
         {/* Part 2: Tool Calls */}
         {state.toolCalls.length > 0 && (
           <div className="mb-4">
-            <div className="text-gray-600 font-semibold mb-2">=== 2. Tool Calls ===</div>
+            <div className="text-gray-600 font-semibold mb-2">=== 2. Execution steps ===</div>
             {state.toolCalls.map((toolCall, index) => {
               const inputDisplay = getInputField(
                 toolCall.input,
@@ -166,7 +189,7 @@ const ExecutionPanel: React.FC<ExecutionPanelProps> = ({ state, onToggle, isVisi
                   <span className="text-gray-500">iteration:</span> {toolCall.iteration !== null && toolCall.iteration !== undefined ? toolCall.iteration : "final"}
                 </div>
                 <div className="text-gray-800 mb-1">
-                  <span className="text-gray-500">tool:</span> {toolCall.tool}
+                  <span className="text-gray-500">tool:</span> {displayToolName(toolCall.tool)}
                 </div>
                 {toolCall.tool !== "pseudo_tool#llm_synthesize_answer" && (
                   <div className="text-gray-800 mb-1" title={inputTitle}>
@@ -189,11 +212,10 @@ const ExecutionPanel: React.FC<ExecutionPanelProps> = ({ state, onToggle, isVisi
                     <span className="text-gray-500">output.answer:</span> {toolCall.output.answer.substring(0, 200)}{toolCall.output.answer.length > 200 ? "..." : ""}
                   </div>
                 )}
-                {toolCall.tool === "pseudo_tool#llm_synthesize_answer" && toolCall.output?.token_usage && (
-                  <div className="text-gray-800 mb-1">
-                    <span className="text-gray-500">output.token_usage:</span> {toolCall.output.token_usage.input_tokens || 0} input, {toolCall.output.token_usage.output_tokens || 0} output, {toolCall.output.token_usage.total_tokens || 0} total
-                  </div>
-                )}
+                <div className="text-gray-800 mb-1">
+                  <span className="text-gray-500">output.token_usage:</span>{" "}
+                  {formatTokenUsage(toolCall.output?.token_usage)}
+                </div>
                 {toolCall.output?.error && (
                   <div className="text-red-600 mb-1">
                     <span className="text-gray-500">output.error:</span> {toolCall.output.error}
@@ -228,7 +250,7 @@ const ExecutionPanel: React.FC<ExecutionPanelProps> = ({ state, onToggle, isVisi
         {/* Part 4: Token Usage */}
         {state.token_usage && (
           <div className="mb-4">
-            <div className="text-gray-600 font-semibold mb-2">=== 4. Token Usage Stats ===</div>
+            <div className="text-gray-600 font-semibold mb-2">=== 4. Token Usage Stats (all LLM steps) ===</div>
             <div className="text-gray-800 mb-1">
               <span className="text-gray-500">token_usage.input_tokens:</span> {state.token_usage.input_tokens}
             </div>
