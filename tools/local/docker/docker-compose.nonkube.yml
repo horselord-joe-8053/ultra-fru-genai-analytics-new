@@ -26,6 +26,7 @@ services:
       LOG_LEVEL: INFO
       ALLOWED_ORIGINS: "*"
       USE_AGENT_QUERY: ${USE_AGENT_QUERY:-true}
+      EXEC_LOG_SQL_PREVIEW_MAX_CHARS: ${EXEC_LOG_SQL_PREVIEW_MAX_CHARS:-150}
     ports:
       - "5001:5001"
     volumes:

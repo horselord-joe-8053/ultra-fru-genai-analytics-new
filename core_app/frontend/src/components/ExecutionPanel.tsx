@@ -48,13 +48,37 @@ const ExecutionPanel: React.FC<ExecutionPanelProps> = ({ state, onToggle, isVisi
     return String(value);
   };
 
-  const getInputField = (input: any, tool: string): string => {
+  const SQL_PLACEHOLDER_MARKERS = [
+    "(the sql",
+    "the sql query",
+    "[the sql",
+    "[will use",
+    "<will use",
+    "from generate_sql",
+  ];
+
+  const isSqlPlaceholder = (s: string): boolean => {
+    const lower = s.trim().toLowerCase();
+    if (!lower) {
+      return true;
+    }
+    return SQL_PLACEHOLDER_MARKERS.some((marker) => lower.includes(marker));
+  };
+
+  const getInputField = (input: any, tool: string, output?: any): string => {
     // Try to find the most relevant input field based on tool type
     if (tool === "generate_sql" || tool === "sql_generator") {
       return input?.query || input?.question || formatValue(input);
     }
     if (tool === "execute_sql") {
-      return input?.sql_query || input?.sql || formatValue(input);
+      const raw = input?.sql_query || input?.sql;
+      if (raw && !isSqlPlaceholder(String(raw))) {
+        return String(raw);
+      }
+      if (output?.sql) {
+        return String(output.sql);
+      }
+      return raw ? String(raw) : formatValue(input);
     }
     if (tool === "semantic_search") {
       const parts: string[] = [];
@@ -125,7 +149,18 @@ const ExecutionPanel: React.FC<ExecutionPanelProps> = ({ state, onToggle, isVisi
         {state.toolCalls.length > 0 && (
           <div className="mb-4">
             <div className="text-gray-600 font-semibold mb-2">=== 2. Tool Calls ===</div>
-            {state.toolCalls.map((toolCall, index) => (
+            {state.toolCalls.map((toolCall, index) => {
+              const inputDisplay = getInputField(
+                toolCall.input,
+                toolCall.tool,
+                toolCall.output
+              );
+              const inputTitle =
+                toolCall.tool === "execute_sql" && toolCall.output?.sql
+                  ? String(toolCall.output.sql)
+                  : undefined;
+
+              return (
               <div key={index} className="mb-3 border-l-2 border-gray-300 pl-2">
                 <div className="text-gray-800 mb-1">
                   <span className="text-gray-500">iteration:</span> {toolCall.iteration !== null && toolCall.iteration !== undefined ? toolCall.iteration : "final"}
@@ -134,9 +169,9 @@ const ExecutionPanel: React.FC<ExecutionPanelProps> = ({ state, onToggle, isVisi
                   <span className="text-gray-500">tool:</span> {toolCall.tool}
                 </div>
                 {toolCall.tool !== "pseudo_tool#llm_synthesize_answer" && (
-                  <div className="text-gray-800 mb-1">
+                  <div className="text-gray-800 mb-1" title={inputTitle}>
                     <span className="text-gray-500">input.{toolCall.tool === "generate_sql" ? "query" : toolCall.tool === "execute_sql" ? "sql_query" : "params"}:</span>{" "}
-                    {getInputField(toolCall.input, toolCall.tool)}
+                    {inputDisplay}
                   </div>
                 )}
                 {toolCall.tool === "pseudo_tool#llm_synthesize_answer" && (
@@ -168,7 +203,8 @@ const ExecutionPanel: React.FC<ExecutionPanelProps> = ({ state, onToggle, isVisi
                   <span className="text-gray-500">execution_time_ms:</span> {toolCall.execution_time_ms.toFixed(2)}
                 </div>
               </div>
-            ))}
+            );
+            })}
           </div>
         )}
 

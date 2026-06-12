@@ -12,6 +12,7 @@ from decimal import Decimal
 from datetime import datetime, date
 
 from backend.env_utils.cloud_shared.client_factory import claude_complete
+from backend.utils.display_truncate import is_sql_placeholder, truncate_for_exec_log
 from .tools import SQLTool, SemanticSearchTool, SQLGeneratorTool
 from .logger import AgentLogger
 from .metrics import agent_metrics
@@ -295,22 +296,24 @@ class QueryAgent:
                     
                     # Emit tool_call_complete event (THIS IS KEY - streams immediately after each tool)
                     if progress_callback:
-                        # Create summary for output
-                        output_summary = {
-                            "success": tool_output.get("success", False),
-                            "summary": self._summarize_tool_result(tool_output),
-                            "error": tool_output.get("error"),
-                            "row_count": tool_output.get("row_count"),
-                        }
-                        # Preserve SQL if present
-                        if "sql" in tool_output:
-                            output_summary["sql"] = tool_output["sql"]
-                        
+                        # Display-only payloads for SSE; agent log/tool_results keep raw input above.
+                        prior_sql = (
+                            self._latest_generate_sql_from_results(tool_results)
+                            if tool_name == "execute_sql"
+                            else None
+                        )
+                        sse_output = self._build_sse_output_summary(tool_name, tool_output)
                         progress_callback("tool_call_complete", {
                             "iteration": iteration,
                             "tool": tool_name,
-                            "input": tool_input,
-                            "output": output_summary,
+                            "input": self._build_sse_tool_input(
+                                tool_name,
+                                tool_input,
+                                normalized_input,
+                                tool_output,
+                                prior_generate_sql=prior_sql,
+                            ),
+                            "output": sse_output,
                             "execution_time_ms": tool_time
                         })
                     
@@ -406,20 +409,17 @@ class QueryAgent:
                             
                             # Emit tool_call_complete event for auto-executed SQL
                             if progress_callback:
-                                output_summary = {
-                                    "success": auto_output.get("success", False),
-                                    "summary": self._summarize_tool_result(auto_output),
-                                    "error": auto_output.get("error"),
-                                    "row_count": auto_output.get("row_count"),
-                                }
-                                if "sql" in auto_output:
-                                    output_summary["sql"] = auto_output["sql"]
-                                
+                                auto_input = {"sql_query": last_sql}
+                                auto_normalized = {"sql_query": last_sql}
                                 progress_callback("tool_call_complete", {
                                     "iteration": iteration,
                                     "tool": "execute_sql",
-                                    "input": {"sql_query": last_sql},
-                                    "output": output_summary,
+                                    "input": self._build_sse_tool_input(
+                                        "execute_sql", auto_input, auto_normalized, auto_output
+                                    ),
+                                    "output": self._build_sse_output_summary(
+                                        "execute_sql", auto_output
+                                    ),
                                     "execution_time_ms": auto_time
                                 })
                             
@@ -883,6 +883,73 @@ class QueryAgent:
         
         return normalized
     
+    def _resolve_sql_for_sse_display(
+        self,
+        normalized_input: Dict[str, Any],
+        tool_output: Dict[str, Any],
+        prior_generate_sql: Optional[str] = None,
+    ) -> Optional[str]:
+        """Pick real SQL for Execution Log display (after normalization / tool output)."""
+        sql = normalized_input.get("sql_query") or normalized_input.get("sql")
+        if sql and not is_sql_placeholder(str(sql)):
+            return str(sql)
+        out_sql = tool_output.get("sql")
+        if out_sql and not is_sql_placeholder(str(out_sql)):
+            return str(out_sql)
+        if prior_generate_sql and not is_sql_placeholder(str(prior_generate_sql)):
+            return str(prior_generate_sql)
+        return None
+
+    def _latest_generate_sql_from_results(
+        self, tool_results: List[Dict[str, Any]]
+    ) -> Optional[str]:
+        """Most recent successful generate_sql SQL string, for display fallback."""
+        for result in reversed(tool_results):
+            if result.get("tool") != "generate_sql":
+                continue
+            output = result.get("output", {}) or {}
+            if output.get("success") and output.get("sql"):
+                return str(output["sql"])
+        return None
+
+    def _build_sse_tool_input(
+        self,
+        tool_name: str,
+        tool_input: Dict[str, Any],
+        normalized_input: Dict[str, Any],
+        tool_output: Dict[str, Any],
+        prior_generate_sql: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Build tool_call_complete input for UI (display-only; does not affect execution)."""
+        if tool_name == "execute_sql":
+            sql = self._resolve_sql_for_sse_display(
+                normalized_input, tool_output, prior_generate_sql
+            )
+            if sql:
+                return {"sql_query": truncate_for_exec_log(sql)}
+        return dict(tool_input)
+
+    def _build_sse_output_summary(
+        self, tool_name: str, tool_output: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Build tool_call_complete output for UI (display summary; full sql kept when present)."""
+        output_summary: Dict[str, Any] = {
+            "success": tool_output.get("success", False),
+            "summary": self._summarize_tool_result(tool_output),
+            "error": tool_output.get("error"),
+            "row_count": tool_output.get("row_count"),
+        }
+        if "sql" in tool_output:
+            output_summary["sql"] = tool_output["sql"]
+        if (
+            tool_name == "generate_sql"
+            and tool_output.get("success")
+            and tool_output.get("sql")
+        ):
+            preview = truncate_for_exec_log(str(tool_output["sql"]))
+            output_summary["summary"] = f"Generated SQL query: {preview}"
+        return output_summary
+
     def _summarize_tool_result(self, result: Dict[str, Any]) -> str:
         """Create a summary of tool result for agent."""
         if not result.get("success"):
