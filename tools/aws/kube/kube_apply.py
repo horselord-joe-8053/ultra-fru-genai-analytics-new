@@ -17,9 +17,14 @@ import sys
 _repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 if _repo_root not in sys.path:
     sys.path.insert(0, _repo_root)
+from tools.cloud_shared.embedding_deploy_env import (
+    api_deployment_embedding_subs,
+    modelark_secret_entries,
+)
 from tools.cloud_shared.analytics_schedule import (
     get_required_analytics_scheduler_interval_seconds,
     seconds_to_cron,
+)
 )
 from tools.cloud_shared.env import load_dotenv, require
 from tools.cloud_shared.k8s_j2_render import render
@@ -162,6 +167,10 @@ data:
             except Exception as e:
                 print(f"WARN: Could not fetch OPENAI_API_KEY: {e}")
         openai_b64 = base64.b64encode(openai_key.encode()).decode()
+        app_data = {"OPENAI_API_KEY": openai_b64}
+        for k, v in modelark_secret_entries().items():
+            app_data[k] = base64.b64encode(v.encode()).decode()
+        data_lines = "\n".join(f"  {key}: {val}" for key, val in app_data.items())
         app_secret_yml = f"""apiVersion: v1
 kind: Secret
 metadata:
@@ -169,7 +178,7 @@ metadata:
   namespace: {K8S_NAMESPACE}
 type: Opaque
 data:
-  OPENAI_API_KEY: {openai_b64}
+{data_lines}
 """
         kubectl(["apply", "-f", "-"], input_text=app_secret_yml)
 
@@ -245,7 +254,9 @@ data:
                 "AWS_BEDROCK_REGION": os.getenv("AWS_BEDROCK_REGION", "us-east-1").strip(),
                 "ENABLE_ANALYTICS_SCHEDULER": os.getenv("ENABLE_ANALYTICS_SCHEDULER", "true"),
                 "ANALYTICS_SCHEDULER_INTERVAL_SECONDS": str(interval_sec),
+                "OPENAI_EMBED_MODEL": os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small"),
             }
+            api_subs.update(api_deployment_embedding_subs())
             txt = render("api-deployment", api_subs)
             kubectl(["apply","-f","-"], input_text=txt)
             txt = render("api-service", {"cloud_provider": "aws", "use_elb": args.elb})

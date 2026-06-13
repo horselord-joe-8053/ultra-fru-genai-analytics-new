@@ -14,9 +14,9 @@ import time
 import pandas as pd
 import psycopg2
 from openai import OpenAI
+from backend.env_utils.cloud_shared.embedding_factory import create_embedding_client
+from backend.env_utils.cloud_shared.embedding_profiles import get_active_pgvector_column
 from backend.utils.env_helpers import get_optional_env, get_required_env
-
-OPENAI_MODEL = get_required_env("OPENAI_EMBED_MODEL", "OpenAI embedding model")
 
 
 def get_openai_client() -> OpenAI:
@@ -24,8 +24,7 @@ def get_openai_client() -> OpenAI:
 
 
 def embed_texts(client: OpenAI, texts):
-    resp = client.embeddings.create(model=OPENAI_MODEL, input=texts)
-    return [item.embedding for item in resp.data]
+    return create_embedding_client(openai_client=client).embed_texts(texts)
 
 
 def main():
@@ -69,11 +68,12 @@ def main():
                 except (ValueError, TypeError):
                     feedback_rating_int = None
 
-                cur.execute("""
+                embed_col = get_active_pgvector_column()
+                cur.execute(f"""
                     INSERT INTO fru_sales_embeddings
                     (id, customer_id, brand, fridge_model, capacity_liters, price, sales_date,
                      store_name, store_address, customer_feedback, feedback_rating,
-                     feedback_sentiment_category, embedding)
+                     feedback_sentiment_category, {embed_col})
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::vector)
                     ON CONFLICT (id) DO UPDATE SET
                       customer_id = EXCLUDED.customer_id,
@@ -87,7 +87,7 @@ def main():
                       customer_feedback = EXCLUDED.customer_feedback,
                       feedback_rating = EXCLUDED.feedback_rating,
                       feedback_sentiment_category = EXCLUDED.feedback_sentiment_category,
-                      embedding = EXCLUDED.embedding
+                      {embed_col} = EXCLUDED.{embed_col}
                 """, (
                     cleaned["ID"], cleaned.get("CUSTOMER_ID", ""), cleaned["BRAND"],
                     cleaned["FRIDGE_MODEL"], cleaned.get("CAPACITY_LITERS"),

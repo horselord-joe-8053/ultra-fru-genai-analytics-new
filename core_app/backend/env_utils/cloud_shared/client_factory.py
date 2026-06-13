@@ -25,12 +25,20 @@ def create_llm_client() -> LLMClient:
     Create the appropriate LLM client based on environment.
 
     Logic:
+    0. If LLM_INFERENCE_PROVIDER=modelark → ModelArk client (BytePlus).
     1. If CLOUD_PROVIDER is explicitly set → call only that provider's get_llm_client(); raise if None.
     2. If unset → try aws → gcp → local (cloud-first) until one returns non-None.
     3. Raise ValueError if no client found.
 
     GCP: gcp.get_llm_client() chooses Claude vs Gemini via GCP_LLM_PROVIDER (Option B).
     """
+    inference = os.environ.get("LLM_INFERENCE_PROVIDER", "").strip().lower()
+    if inference == "modelark":
+        from backend.env_utils.byteplus.modelark_client import ModelArkClient
+
+        logger.info("Creating LLM client for LLM_INFERENCE_PROVIDER=modelark")
+        return ModelArkClient()
+
     explicit = os.environ.get("CLOUD_PROVIDER", "").strip().lower()
 
     # Explicit provider: try only that provider

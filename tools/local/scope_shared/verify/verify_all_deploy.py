@@ -84,12 +84,14 @@ def main() -> int:
         )
         logger.phase_start(1, 2, f"Endpoints (local, scope={scope})")
 
+        verify_profile = (os.environ.get("VERIFY_PROFILE") or "").strip() or None
         ok, rows = verify_api_endpoints(
             base_url=base_url,
             total_rec=total_rec,
             scope="local",
             provider="local",
             skip_frontend=True,
+            verify_profile=verify_profile,
         )
 
         # Frontend (local) for this scope

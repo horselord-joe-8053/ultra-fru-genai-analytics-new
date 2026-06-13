@@ -64,6 +64,22 @@ def test_query_stream_smoke(require_stack, base_url: str, total_rec: int | None)
             )
 
 
+@pytest.mark.embedding_profile
+def test_query_stream_semantic_smoke(require_stack, base_url: str):
+    """Optional: semantic query path when EMBEDDING_ACTIVE_PROFILE=skylark_2048 + ARK_* set."""
+    profile = os.environ.get("EMBEDDING_ACTIVE_PROFILE", "openai_1536")
+    if profile != "skylark_2048" or not os.environ.get("ARK_API_KEY", "").strip():
+        pytest.skip("Set EMBEDDING_ACTIVE_PROFILE=skylark_2048 and ARK_API_KEY for ModelArk semantic test")
+    timeout = int(os.environ.get("INTEGRATION_QUERY_STREAM_TIMEOUT", "120"))
+    url = f"{base_url}/query/stream?query=find%20customer%20feedback%20about%20noise"
+    r = requests.get(url, timeout=timeout)
+    assert r.status_code == 200
+    answer = parse_sse_complete_answer(r.text)
+    if answer is None:
+        err = parse_sse_error_message(r.text)
+        pytest.fail(f"Semantic QueryStream failed: {err or r.text[:200]}")
+
+
 def test_analytics_endpoint_responds(require_stack, base_url: str):
     """Analytics may return 'no data yet' before first Spark run; we only require HTTP 200 + JSON."""
     r = requests.get(f"{base_url}/analytics", timeout=15)

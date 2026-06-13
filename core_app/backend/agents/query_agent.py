@@ -72,7 +72,6 @@ class QueryAgent:
                     "customer_feedback": "TEXT",
                     "feedback_rating": "INTEGER",
                     "feedback_sentiment_category": "TEXT",
-                    "embedding": "VECTOR(1536)"
                 }
             }
         self.schema_info = schema_info

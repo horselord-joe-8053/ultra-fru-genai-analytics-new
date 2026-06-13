@@ -174,12 +174,12 @@ def get_openai_client() -> OpenAI:
 
 
 def embed_text(text: str) -> List[float]:
-    """Get an OpenAI embedding for a single text string."""
+    """Get an embedding for a single text string (active EMBEDDING_ACTIVE_PROFILE)."""
+    from backend.env_utils.cloud_shared.embedding_factory import create_embedding_client
+
     try:
-        client = get_openai_client()
-        model = get_required_env("OPENAI_EMBED_MODEL", "OpenAI embedding model (e.g., text-embedding-3-small)")
-        resp = client.embeddings.create(model=model, input=[text])
-        return resp.data[0].embedding
+        client = create_embedding_client(openai_client=get_openai_client())
+        return client.embed_texts([text])[0]
     except OpenAIError as e:
         app.logger.error(f"OpenAI embedding error: {e}")
         raise ValueError(f"Failed to generate embedding: {e}")
@@ -254,11 +254,14 @@ def pgvector_search_feedback(query_text: str, limit: int = 30) -> List[Dict[str,
         app.logger.error(f"Failed to generate embedding: {e}")
         raise
 
+    from backend.env_utils.cloud_shared.embedding_profiles import get_active_pgvector_column
+
+    embed_col = get_active_pgvector_column()
     sql = (
         "SELECT id, brand, fridge_model, price, sales_date, store_name, "
         "customer_feedback, feedback_rating, feedback_sentiment_category "
-        "FROM fru_sales_embeddings "
-        "ORDER BY embedding <-> %s::vector "
+        f"FROM fru_sales_embeddings "
+        f"ORDER BY {embed_col} <-> %s::vector "
         "LIMIT %s;"
     )
 
@@ -282,14 +285,16 @@ def pgvector_search_feedback(query_text: str, limit: int = 30) -> List[Dict[str,
 
 
 def _upsert_embeddings_for_rows(conn, rows: List[Dict[str, Any]]) -> None:
-    """Upsert rows into fru_sales_embeddings (embed CUSTOMER_FEEDBACK via OpenAI)."""
+    """Upsert rows into fru_sales_embeddings (embed CUSTOMER_FEEDBACK via active profile)."""
+    from backend.env_utils.cloud_shared.embedding_factory import create_embedding_client
+    from backend.env_utils.cloud_shared.embedding_profiles import get_active_pgvector_column
+
     if not rows:
         return
     texts = [r.get("CUSTOMER_FEEDBACK") or r.get("customer_feedback") or "" for r in rows]
-    embeddings = []
-    for t in texts:
-        vec = embed_text(t)
-        embeddings.append(vec)
+    embed_client = create_embedding_client(openai_client=get_openai_client())
+    embeddings = embed_client.embed_texts(texts)
+    embed_col = get_active_pgvector_column()
     with conn.cursor() as cur:
         for row_data, embedding in zip(rows, embeddings):
             def _v(k: str) -> Any:
@@ -301,11 +306,11 @@ def _upsert_embeddings_for_rows(conn, rows: List[Dict[str, Any]]) -> None:
             except (ValueError, TypeError):
                 feedback_rating_int = None
             cur.execute(
-                """
+                f"""
                 INSERT INTO fru_sales_embeddings
                 (id, customer_id, brand, fridge_model, capacity_liters, price, sales_date,
                  store_name, store_address, customer_feedback, feedback_rating,
-                 feedback_sentiment_category, embedding)
+                 feedback_sentiment_category, {embed_col})
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::vector)
                 ON CONFLICT (id) DO UPDATE SET
                   customer_id = EXCLUDED.customer_id,
@@ -319,7 +324,7 @@ def _upsert_embeddings_for_rows(conn, rows: List[Dict[str, Any]]) -> None:
                   customer_feedback = EXCLUDED.customer_feedback,
                   feedback_rating = EXCLUDED.feedback_rating,
                   feedback_sentiment_category = EXCLUDED.feedback_sentiment_category,
-                  embedding = EXCLUDED.embedding
+                  {embed_col} = EXCLUDED.{embed_col}
                 """,
                 (
                     fid,
@@ -552,13 +557,29 @@ def health():
         # Return 200 even if DB is down for skeleton health check
         return jsonify(status), 200
 
-    # Check OpenAI API key
+    # Embedding profile + provider credentials
     try:
-        get_required_env("OPENAI_API_KEY")
-        status["openai"] = "configured"
-    except ValueError:
-        status["openai"] = "not_configured"
-    
+        from backend.env_utils.cloud_shared.embedding_profiles import get_active_profile
+
+        profile = get_active_profile()
+        status["embedding_profile"] = profile.name
+        status["embedding_provider"] = profile.provider
+        if profile.provider == "modelark":
+            try:
+                get_required_env("ARK_API_KEY")
+                get_required_env(profile.model_env)
+                status["modelark_embeddings"] = "configured"
+            except ValueError:
+                status["modelark_embeddings"] = "not_configured"
+        else:
+            try:
+                get_required_env("OPENAI_API_KEY")
+                status["openai"] = "configured"
+            except ValueError:
+                status["openai"] = "not_configured"
+    except Exception as e:
+        status["embedding_profile_error"] = str(e)
+
     # Check cloud credentials (provider-agnostic: AWS, GCP, or local)
     creds_status = _check_credentials_status()
     status.update(creds_status)
@@ -1109,7 +1130,14 @@ def query_stream():
     if USE_AGENT_QUERY and query_agent is None:
         ensure_agent()
 
-    app.logger.info(f"[{request_id}] Streaming query: '{question}'")
+    try:
+        from backend.env_utils.cloud_shared.embedding_profiles import get_active_profile_name
+
+        app.logger.info(
+            f"[{request_id}] Streaming query: '{question}' (embedding_profile={get_active_profile_name()})"
+        )
+    except Exception:
+        app.logger.info(f"[{request_id}] Streaming query: '{question}'")
     
     def generate():
         """Generator that yields SSE events as they happen."""

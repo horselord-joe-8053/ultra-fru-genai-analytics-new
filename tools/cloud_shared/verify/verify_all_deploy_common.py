@@ -81,7 +81,14 @@ def run_verify_all_deploy(
 
         base_url = scope_urls.get(s)
         if base_url:
-            ok, rows = verify_api_endpoints(base_url, total_rec, scope=s, provider=provider)
+            verify_profile = (os.environ.get("VERIFY_PROFILE") or "").strip() or None
+            ok, rows = verify_api_endpoints(
+                base_url,
+                total_rec,
+                scope=s,
+                provider=provider,
+                verify_profile=verify_profile,
+            )
             all_rows.extend(rows)
             if not ok:
                 logger.error(f"[VERIFICATION FAILED] API endpoints are not responding correctly ({s})")

@@ -41,6 +41,7 @@ A curated list of **non-trivial technical war stories**, capturing real lessons 
 <tr><td style="background:#e3f2fd;padding:8px;text-align:right">3</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-3">3. Execution Log token usage — dual key shapes and backend run totals</a></td><td style="padding:8px;background:#fff3e0">SSE showed 0 tokens while section 4 was non-zero; normalize + accumulate on the server</td></tr>
 <tr><td style="background:#e3f2fd;padding:8px;text-align:right">4</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-4">4. City vs state in store_address — schema hints beat guessing SPLIT_PART indices</a></td><td style="padding:8px;background:#e8f5e9">LLM used index 2 for “state”; document 3-part address layout + few-shot city/state SQL</td></tr>
 <tr><td style="background:#e3f2fd;padding:8px;text-align:right">5</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-5">5. A capable Claude still needs semantic schema — thin column lists are not enough</a></td><td style="padding:8px;background:#fff3e0">generate_sql saw names/types only; world knowledge ≠ your table’s encoding</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">6</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-6">6. Docker Desktop Kubernetes can keep a stale API image in containerd</a></td><td style="padding:8px;background:#e8f5e9"><code>docker build</code> updates Docker Engine but kube node may not pick up the new digest until import</td></tr>
 </tbody>
 </table>
 
@@ -542,3 +543,36 @@ Longer-term alternative (not required for the lesson): normalized `city` / `stat
 <h3 id="war-story-5-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">5.5 Takeaway</h3>
 
 If you pay for a frontier model and still get confidently wrong analytics, check **what you told it about your tables** before blaming model IQ. Text-to-SQL at production quality needs **semantic schema enrichment** — layout, examples, and tests — on top of raw column lists. Smarter models reduce variance; they do not absolve you of encoding **your** data model in the prompt.
+
+---
+
+<h2 id="war-story-6" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">6. Docker Desktop Kubernetes can keep a stale API image in containerd</h2>
+
+**creation:** 260521 · **last_updated:** 260521 · **keywords:** docker desktop, kubernetes, containerd, local deploy, stale image, fru-api · **difficulty:** 6 · **significance:** 8
+
+<h3 id="war-story-6-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">6.1 Context</h3>
+
+Local **kube** scope builds `fru-api:local` with `docker build`, applies manifests, and rolls out `deployment/fru-api`. After embedding-profile and SQL-agent changes, the API on NodePort `30080` still behaved like an **older** build: missing schema hints, wrong SQL dialect helpers, and no profile-aware semantic search — even though `docker images` showed a fresh `fru-api:local` on the host.
+
+<h3 id="war-story-6-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">6.2 Root Cause</h3>
+
+Docker Desktop’s embedded Kubernetes node (`desktop-control-plane`) runs **containerd**, not the Docker Engine graph the CLI updates. `kubectl rollout restart` re-pulls the image **from the node’s image store**. If that store still holds an older digest tagged `fru-api:local`, pods come back with stale code while `docker build` on the host succeeded.
+
+<h3 id="war-story-6-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">6.3 Key Insight</h3>
+
+“Image rebuilt” ≠ “kube workload updated” on Docker Desktop. Treat **import into the k8s node** as part of the local kube deploy loop whenever API behavior does not match the latest build.
+
+<h3 id="war-story-6-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">6.4 Resolution</h3>
+
+After `docker build -t fru-api:local`, pipe the tarball into the control-plane containerd namespace:
+
+```bash
+docker save fru-api:local | docker exec -i desktop-control-plane ctr -n k8s.io images import -
+kubectl rollout restart deployment/fru-api -n fru-kube
+```
+
+Automated in `tools/local/deploy.py` (`_import_api_image_to_kube_node()`). Documented in `docs/BYTEPLUS_AWS_GCP_REFERENCE.md` and the ModelArk refactor plan.
+
+<h3 id="war-story-6-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">6.5 Takeaway</h3>
+
+For local k8s on Docker Desktop, add an explicit **host → node image sync** step to your deploy checklist. Symptom: code changes “do nothing” after rollout; fix: verify pod image digest or import before blaming application logic.

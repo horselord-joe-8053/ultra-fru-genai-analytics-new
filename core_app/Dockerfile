@@ -30,6 +30,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy Backend Code
 COPY core_app/backend /app/backend
+COPY config /app/config
 
 # Copy shared registry tag logic (used by /version endpoint; DRY with deploy)
 COPY tools/__init__.py /app/tools/

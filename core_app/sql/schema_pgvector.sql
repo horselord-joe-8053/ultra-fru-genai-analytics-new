@@ -30,12 +30,13 @@ CREATE TABLE IF NOT EXISTS fru_sales_embeddings (
     customer_feedback TEXT,
     feedback_rating INTEGER,
     feedback_sentiment_category TEXT,
-    embedding VECTOR(1536)
+    embedding_openai_1536 VECTOR(1536),
+    embedding_skylark_2048 VECTOR(2048)
 );
 
-CREATE INDEX IF NOT EXISTS fru_sales_embeddings_ivfflat
+CREATE INDEX IF NOT EXISTS fru_sales_embeddings_ivfflat_openai
 ON fru_sales_embeddings
-USING ivfflat (embedding vector_cosine_ops)
+USING ivfflat (embedding_openai_1536 vector_cosine_ops)
 WITH (lists = 100);
 
 CREATE INDEX IF NOT EXISTS fru_sales_embeddings_customer_id_idx 

@@ -11,6 +11,13 @@ from psycopg2.extras import RealDictCursor
 from psycopg2 import Error as Psycopg2Error
 from openai import OpenAI
 
+from backend.env_utils.cloud_shared.embedding_factory import create_embedding_client
+from backend.env_utils.cloud_shared.embedding_profiles import (
+    get_active_pgvector_column,
+    get_active_profile_name,
+    is_embedding_column,
+)
+
 from .base_tool import BaseTool
 
 logger = logging.getLogger(__name__)
@@ -30,7 +37,8 @@ class SemanticSearchTool(BaseTool):
         """
         # Build description dynamically from schema_info if available
         if schema_info and "columns" in schema_info:
-            excluded_columns = {"id", "embedding"}
+            excluded_columns = {c for c in schema_info["columns"] if is_embedding_column(c)}
+            excluded_columns.add("id")
             filterable_cols = [
                 col for col, col_type in schema_info["columns"].items()
                 if col not in excluded_columns and "TEXT" in str(col_type).upper()
@@ -48,15 +56,15 @@ class SemanticSearchTool(BaseTool):
         self.schema_info = schema_info
     
     def _embed_text(self, text: str) -> List[float]:
-        """Generate embedding for text using OpenAI."""
-        from backend.utils.env_helpers import get_required_env
-        model = get_required_env("OPENAI_EMBED_MODEL", "OpenAI embedding model (e.g., text-embedding-3-small)")
+        """Generate embedding via active profile (OpenAI or ModelArk)."""
         try:
-            response = self.openai_client.embeddings.create(
-                model=model,
-                input=text
+            client = create_embedding_client(openai_client=self.openai_client)
+            logger.info(
+                "[SemanticSearchTool] Embedding profile=%s column=%s",
+                get_active_profile_name(),
+                get_active_pgvector_column(),
             )
-            return response.data[0].embedding
+            return client.embed_texts([text])[0]
         except Exception as e:
             logger.error(f"Failed to generate embedding: {e}")
             raise ValueError(f"Embedding generation failed: {e}")
@@ -146,10 +154,9 @@ class SemanticSearchTool(BaseTool):
                 filterable_columns = set()
                 if self.schema_info and "columns" in self.schema_info:
                     excluded_columns = {
-                        "id",                # Primary key
-                        "embedding",         # Vector column (searched, not filtered)
-                        "customer_feedback"  # This is the text column being searched semantically, not filtered
+                        c for c in self.schema_info["columns"] if is_embedding_column(c)
                     }
+                    excluded_columns.update({"id", "customer_feedback"})
                     for col_name, col_type in self.schema_info["columns"].items():
                         if col_name not in excluded_columns and "TEXT" in str(col_type).upper():
                             filterable_columns.add(col_name)
@@ -178,7 +185,8 @@ class SemanticSearchTool(BaseTool):
             # Cast embedding parameter to vector type for pgvector operator
             # Without ::vector cast, psycopg2 passes Python list as numeric[], causing:
             # "operator does not exist: vector <-> numeric[]"
-            sql += "ORDER BY embedding <-> %s::vector LIMIT %s;"
+            embed_col = get_active_pgvector_column()
+            sql += f"ORDER BY {embed_col} <-> %s::vector LIMIT %s;"
             params.extend([embedding, limit])
             
             logger.info(f"[SemanticSearchTool] SQL query: {sql[:200]}...")

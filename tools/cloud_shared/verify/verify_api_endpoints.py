@@ -67,6 +67,16 @@ def _debug_query_stream_response(resp: requests.Response, total_rec: int) -> Non
         logger.warning(f"DEBUG_VERIFY_QUERY_STREAM write failed: {ex}")
 
 
+# Optional verify presets: extra QueryStream checks beyond default SQL count query.
+VERIFY_PROFILES: dict[str, dict] = {
+    "modelark_pgvector": {
+        "semantic_query": (
+            "/query/stream?query=find%20customer%20feedback%20about%20noise"
+        ),
+    },
+}
+
+
 def verify_api_endpoints(
     base_url: str,
     total_rec: int,
@@ -77,6 +87,7 @@ def verify_api_endpoints(
     query_stream_timeout_sec: int | None = None,
     skip_frontend: bool = False,
     endpoint_names: list[str] | None = None,
+    verify_profile: str | None = None,
 ) -> tuple[bool, list[VerifyRow]]:
     """
     Poll endpoints until all pass or timeout. Returns (ok, rows) for summary table.
@@ -94,6 +105,28 @@ def verify_api_endpoints(
         f"(timeout={timeout_secs}s, min_total_rec from CSV={min_rec})"
     )
     use_agent_disabled_by_config = is_agent_disabled_by_config()
+
+    def check_query_stream_semantic(r, url: str = ""):
+        """Semantic path: complete SSE answer without agent init failure."""
+        if r.status_code != 200:
+            return False
+        if "Agent-based query processing is disabled" in (r.text or ""):
+            err_msg = parse_sse_error_message(r.text) or ""
+            if is_agent_disabled_by_config() or "disabled by configuration" in err_msg.lower():
+                return True
+            real_reason = _fetch_agent_init_error(base_url)
+            if real_reason:
+                raise RuntimeError(f"QueryStreamSemantic init failed: {real_reason} at {url}")
+            return False
+        err_msg = parse_sse_error_message(r.text)
+        if err_msg and is_non_retriable_query_error(err_msg):
+            raise RuntimeError(f"QueryStreamSemantic error: {err_msg[:200]} at {url}")
+        answer = parse_sse_complete_answer(r.text)
+        if answer is None:
+            return False
+        if "An error has occurred while processing your query" in answer:
+            return False
+        return len(answer.strip()) > 0
 
     def check_query_stream(r, url: str = ""):
         if r.status_code != 200:
@@ -168,6 +201,22 @@ def verify_api_endpoints(
         {"path": "/query/stream?query=total%20number%20of%20record", "name": "QueryStream", "check": check_query_stream, "timeout": query_stream_timeout_sec},
         {"path": "/analytics", "name": "Analytics", "check": check_analytics, "timeout": 10},
     ]
+    if verify_profile:
+        preset = VERIFY_PROFILES.get(verify_profile)
+        if not preset:
+            raise ValueError(
+                f"Unknown verify_profile={verify_profile!r}; known: {sorted(VERIFY_PROFILES)}"
+            )
+        semantic_path = preset.get("semantic_query")
+        if semantic_path:
+            endpoints.append(
+                {
+                    "path": semantic_path,
+                    "name": "QueryStreamSemantic",
+                    "check": check_query_stream_semantic,
+                    "timeout": query_stream_timeout_sec,
+                }
+            )
     if skip_frontend:
         endpoints = [e for e in endpoints if e["name"] != "Frontend"]
     if endpoint_names is not None:

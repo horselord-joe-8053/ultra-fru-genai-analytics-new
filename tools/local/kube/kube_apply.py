@@ -18,6 +18,10 @@ from tools.cloud_shared.analytics_schedule import (
     get_required_analytics_scheduler_interval_seconds,
     seconds_to_cron,
 )
+from tools.cloud_shared.embedding_deploy_env import (
+    api_deployment_embedding_subs,
+    modelark_secret_entries,
+)
 from tools.cloud_shared.env import load_dotenv
 from tools.cloud_shared.k8s_j2_render import render
 
@@ -99,7 +103,9 @@ data:
         openai_key = os.environ.get("OPENAI_API_KEY", "sk-placeholder")
         claude_key = os.environ.get("CLAUDE_API_KEY", openai_key)
         app_secret = {"OPENAI_API_KEY": openai_key, "CLAUDE_API_KEY": claude_key}
+        app_secret.update(modelark_secret_entries())
         app_b64 = {k: base64.b64encode(v.encode()).decode() for k, v in app_secret.items()}
+        secret_data_lines = "\n".join(f"  {k}: {v}" for k, v in app_b64.items())
         app_secret_yml = f"""apiVersion: v1
 kind: Secret
 metadata:
@@ -107,8 +113,7 @@ metadata:
   namespace: {K8S_NAMESPACE}
 type: Opaque
 data:
-  OPENAI_API_KEY: {app_b64['OPENAI_API_KEY']}
-  CLAUDE_API_KEY: {app_b64['CLAUDE_API_KEY']}
+{secret_data_lines}
 """
         _kubectl(["apply", "-f", "-"], input_text=app_secret_yml)
 
@@ -157,6 +162,7 @@ data:
                 "OPENAI_EMBED_MODEL", "text-embedding-3-small"
             ),
         }
+        api_subs.update(api_deployment_embedding_subs())
         _kubectl(["apply", "-f", "-"], input_text=render("api-deployment", api_subs))
         # Restart API pods so they pick up CLAUDE_MODEL/GOOGLE_MODEL from updated deployment
         _kubectl(["rollout", "restart", "deployment/fru-api", "-n", K8S_NAMESPACE])

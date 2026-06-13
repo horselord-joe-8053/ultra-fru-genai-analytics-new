@@ -3,7 +3,8 @@ Shared verification config: timeouts and constants.
 
 Used by verify_api_endpoints. Override via .env:
   VERIFY_TIMEOUT_SEC, VERIFY_HEARTBEAT_INTERVAL_SEC,
-  VERIFY_QUERY_STREAM_TIMEOUT_PER_REQUEST_SEC
+  VERIFY_QUERY_STREAM_TIMEOUT_PER_REQUEST_SEC,
+  VERIFY_PROFILE (e.g. modelark_pgvector — only when EMBEDDING_ACTIVE_PROFILE=skylark_2048 + ARK_* set)
 """
 from tools.cloud_shared.env import get_int_env
 

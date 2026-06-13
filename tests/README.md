@@ -43,8 +43,11 @@ Tests **skip** automatically if `/health` is unreachable (safe when Docker is of
 | `INTEGRATION_VERIFY_TIMEOUT_SEC` | Poll timeout for verify helper (default `90` smoke, `300` full) |
 | `INTEGRATION_QUERY_STREAM_TIMEOUT` | Per-request timeout for `/query/stream` (default `120`) |
 | `INTEGRATION_TOTAL_REC` | Expected row count when CSV path differs |
+| `EMBEDDING_ACTIVE_PROFILE` | Embedding lane for integration (`openai_1536` default) |
+| `ARK_API_KEY` / `ARK_EMBEDDING_MODEL_ID` | Required for `skylark_2048` / `test_modelark_embedding_profile.py` |
+| `VERIFY_PROFILE=modelark_pgvector` | Full verify adds semantic QueryStream (see `verify_api_endpoints`) |
 
-**CI:** Unit workflow excludes integration (`-m "not integration"`). Optional [`.github/workflows/integration-tests.yml`](../.github/workflows/integration-tests.yml) is **manual** (`workflow_dispatch`) and documents the same prerequisites.
+**CI:** Unit workflow excludes integration (`-m "not integration"`). Optional [`.github/workflows/integration-tests.yml`](../.github/workflows/integration-tests.yml) is **manual** (`workflow_dispatch`) and documents the same prerequisites; set `ARK_*` only for ModelArk integration runs.
 
 ## Layout
 

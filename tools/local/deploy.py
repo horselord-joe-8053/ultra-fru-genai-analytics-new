@@ -70,6 +70,37 @@ def _docker_compose(*args: str, files: tuple[str, ...] | None = None) -> int:
     return rc
 
 
+def _import_api_image_to_kube_node() -> None:
+    """Sync fru-api:local into Docker Desktop k8s containerd (avoids stale digest on rollout)."""
+    import subprocess
+
+    check = subprocess.run(
+        ["docker", "inspect", "desktop-control-plane"],
+        capture_output=True,
+    )
+    if check.returncode != 0:
+        logger.info("desktop-control-plane not found; skipping k8s image import")
+        return
+    logger.info("Importing fru-api:local into Docker Desktop Kubernetes node...")
+    proc = subprocess.Popen(
+        ["docker", "save", "fru-api:local"],
+        stdout=subprocess.PIPE,
+    )
+    import_proc = subprocess.Popen(
+        ["docker", "exec", "-i", "desktop-control-plane", "ctr", "-n", "k8s.io", "images", "import", "-"],
+        stdin=proc.stdout,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if proc.stdout:
+        proc.stdout.close()
+    out, err = import_proc.communicate()
+    if import_proc.returncode != 0:
+        logger.warning(f"k8s image import failed: {err.decode(errors='replace')[:300]}")
+    else:
+        logger.info("k8s image import complete")
+
+
 def _wait_for_postgres(timeout_sec: int = 60) -> bool:
     pw = os.environ.get("PGPASSWORD", "")
     if not pw:
@@ -236,6 +267,7 @@ def main() -> int:
                 return 1
         elif scope == "kube":
             logger.step("Deploying local kube (Docker Desktop Kubernetes)")
+            _import_api_image_to_kube_node()
             if _run([sys.executable, "tools/local/kube/kube_apply.py", "--phase", "bootstrap"]) != 0:
                 return 1
             if not args.skip_spark:

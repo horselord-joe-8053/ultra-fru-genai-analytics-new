@@ -1,0 +1,21 @@
+# Canonical embedding profiles for FRU analytics (one active per environment).
+# Column naming: embedding_{model_slug}_{dimension}
+# See docs/BYTEPLUS_AWS_GCP_REFERENCE.md
+#
+# >>> SWITCH LANE: set EMBEDDING_ACTIVE_PROFILE in .env to one of the keys below.
+#     openai_1536  — default; OPENAI_API_KEY only
+#     skylark_2048 — ModelArk; also needs ARK_API_KEY + ARK_EMBEDDING_MODEL_ID in .env
+
+openai_1536:
+  provider: openai
+  model_slug: openai
+  model_env: OPENAI_EMBED_MODEL
+  dimension: 1536
+  pgvector_column: embedding_openai_1536
+
+skylark_2048:
+  provider: modelark
+  model_slug: skylark
+  model_env: ARK_EMBEDDING_MODEL_ID
+  dimension: 2048
+  pgvector_column: embedding_skylark_2048

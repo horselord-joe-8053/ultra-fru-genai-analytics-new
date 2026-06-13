@@ -132,7 +132,10 @@ def load_embeddings(
     When csv_path is None, reads from fru_sales_raw. When csv_path is given, reads from CSV (legacy).
     Returns row count. Idempotent: skips if data exists and not force.
     """
-    openai_model = os.getenv("OPENAI_EMBED_MODEL") or require("OPENAI_EMBED_MODEL")
+    from backend.env_utils.cloud_shared.embedding_factory import create_embedding_client
+    from backend.env_utils.cloud_shared.embedding_profiles import get_active_pgvector_column
+
+    embed_col = get_active_pgvector_column()
 
     # Idempotency: skip if data exists and not force
     if not force:
@@ -190,8 +193,9 @@ def load_embeddings(
 
     if config:
         step(f"Connecting to DB {config['host']}:{config['port']}/{config['dbname']}")
-    info("Initializing OpenAI client")
+    info("Initializing embedding client (active profile)")
     openai_client = OpenAI()
+    embed_client = create_embedding_client(openai_client=openai_client)
     batch_size = 64
     success_count = 0
     num_batches = (len(rows) + batch_size - 1) // batch_size
@@ -200,12 +204,11 @@ def load_embeddings(
     with conn.cursor() as cur:
         for batch_idx, i in enumerate(range(0, len(rows), batch_size), 1):
             batch = rows[i : i + batch_size]
-            step(f"Batch {batch_idx}/{num_batches}: fetching embeddings from OpenAI...")
+            step(f"Batch {batch_idx}/{num_batches}: fetching embeddings...")
             texts = [r.get("CUSTOMER_FEEDBACK") or "" for r in batch]
             try:
-                info(f"Calling OpenAI embeddings API (model={openai_model}, n={len(texts)} texts)")
-                resp = openai_client.embeddings.create(model=openai_model, input=texts)
-                embeddings = [item.embedding for item in resp.data]
+                info(f"Calling embedding API (n={len(texts)} texts, column={embed_col})")
+                embeddings = embed_client.embed_texts(texts)
             except Exception as e:
                 error(f"Batch {batch_idx}/{num_batches} OpenAI call failed: {e}")
                 raise
@@ -219,11 +222,11 @@ def load_embeddings(
                     feedback_rating_int = None
 
                 cur.execute(
-                    """
+                    f"""
                     INSERT INTO fru_sales_embeddings
                     (id, customer_id, brand, fridge_model, capacity_liters, price, sales_date,
                      store_name, store_address, customer_feedback, feedback_rating,
-                     feedback_sentiment_category, embedding)
+                     feedback_sentiment_category, {embed_col})
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::vector)
                     ON CONFLICT (id) DO UPDATE SET
                       customer_id = EXCLUDED.customer_id,
@@ -237,7 +240,7 @@ def load_embeddings(
                       customer_feedback = EXCLUDED.customer_feedback,
                       feedback_rating = EXCLUDED.feedback_rating,
                       feedback_sentiment_category = EXCLUDED.feedback_sentiment_category,
-                      embedding = EXCLUDED.embedding
+                      {embed_col} = EXCLUDED.{embed_col}
                     """,
                     (
                         cleaned["ID"],

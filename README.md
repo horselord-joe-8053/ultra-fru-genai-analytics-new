@@ -143,7 +143,7 @@ Major libraries and platforms used in this repo (not an exhaustive dependency li
 
 <h3 id="pgvector" style="color:#00695c;font-size:1.05em;font-weight:600;margin-top:0.85em">4.2 PostgreSQL + pgvector</h3>
 
-<span style="background:#ede7f6;padding:2px 6px;font-weight:600">Interactive lane</span> — one Postgres per env holds structured sales rows, **pgvector** embeddings on <code>customer_feedback</code>, and batch JSON. OpenAI <code>text-embedding-3-small</code> powers vectors on **all** clouds (independent of Bedrock/Gemini).
+<span style="background:#ede7f6;padding:2px 6px;font-weight:600">Interactive lane</span> — one Postgres per env holds structured sales rows, **pgvector** embeddings on <code>customer_feedback</code>, and batch JSON. Default profile <code>openai_1536</code> uses OpenAI <code>text-embedding-3-small</code>; optional ModelArk profile — see [§4.6](#byteplus-modelark).
 
 - **Schema:** <code>core_app/sql/schema_pgvector.sql</code> · table <code>fru_sales_embeddings</code> (IVFFlat index)
 - **Agent:** <code>semantic_search</code> + SQL tools in [§5.1](#capabilities-agent) · deeper notes in [§13 Intelligence stack](#intelligence)
@@ -168,6 +168,15 @@ Major libraries and platforms used in this repo (not an exhaustive dependency li
 
 - **Layout:** <code>infra_terraform/live_deploy/{aws,gcp}/</code> · shared <code>TF_DATA_DIR=tofu_data/</code>
 - **Flow:** [§10 Deploy model](#deploy-model) · cloud mapping [§11](#deploy-matrix) · lessons in [§15 War stories](#war-stories)
+
+<h3 id="byteplus-modelark" style="color:#00695c;font-size:1.05em;font-weight:600;margin-top:0.85em">4.6 BytePlus ModelArk + embedding profiles</h3>
+
+<span style="background:#fce4ec;padding:2px 6px;font-weight:600">Interactive lane (optional)</span> — **embedding profiles** select one pgvector column and embed API per environment (`EMBEDDING_ACTIVE_PROFILE`). Default **`openai_1536`** preserves OpenAI `text-embedding-3-small`; **`skylark_2048`** uses ModelArk embeddings into `embedding_skylark_2048`.
+
+- **Config:** <code>config/embedding_profiles.yaml</code> · resolver <code>embedding_profiles.py</code> · factory <code>embedding_factory.py</code>
+- **ModelArk:** <code>core_app/backend/env_utils/byteplus/</code> — set <code>ARK_API_KEY</code>, <code>ARK_EMBEDDING_MODEL_ID</code>; optional chat via <code>LLM_INFERENCE_PROVIDER=modelark</code>
+- **Docs:** [BYTEPLUS_AWS_GCP_REFERENCE.md](docs/BYTEPLUS_AWS_GCP_REFERENCE.md) · [BYTEPLUS_LOCAL_DEV.md](docs/BYTEPLUS_LOCAL_DEV.md)
+- **Verify:** <code>tools/cloud_shared/verify/verify_embedding_profile.py</code> · semantic E2E preset <code>verify_profile=modelark_pgvector</code>
 
 ---
 

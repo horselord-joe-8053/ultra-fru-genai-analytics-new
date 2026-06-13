@@ -2,7 +2,13 @@
 import os
 from pathlib import Path
 
-__all__ = ["load_dotenv", "require", "get_int_env", "EnvVarNotFound"]
+__all__ = [
+    "load_dotenv",
+    "require",
+    "get_int_env",
+    "EnvVarNotFound",
+    "validate_active_embedding_profile_env",
+]
 
 
 class EnvVarNotFound(Exception):
@@ -53,3 +59,24 @@ def get_int_env(name: str, default: int) -> int:
         return int(v)
     except ValueError:
         return default
+
+
+def validate_active_embedding_profile_env() -> None:
+    """
+    Ensure credentials exist for the active EMBEDDING_ACTIVE_PROFILE.
+
+    Raises EnvVarNotFound when provider is modelark (ARK_*) or openai (OPENAI_API_KEY).
+    No-op when profile config cannot be loaded (e.g. tools-only context without backend).
+    """
+    try:
+        from backend.env_utils.cloud_shared.embedding_profiles import get_active_profile
+
+        profile = get_active_profile()
+    except Exception:
+        return
+
+    if profile.provider == "modelark":
+        require("ARK_API_KEY")
+        require(profile.model_env)
+    elif profile.provider == "openai":
+        require("OPENAI_API_KEY")
