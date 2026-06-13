@@ -1,0 +1,15 @@
+{
+  "name": "@floor35/coverage-collectors",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Portable frontend coverage collectors (Vitest/Playwright). Subpackage of utils/coverage_kit — pair with Python reporters in ../reporters/.",
+  "exports": {
+    ".": "./index.ts",
+    "./paths": "./paths.ts",
+    "./playwright-dump": "./playwright-dump.ts"
+  },
+  "peerDependencies": {
+    "@playwright/test": "^1.54.0"
+  }
+}

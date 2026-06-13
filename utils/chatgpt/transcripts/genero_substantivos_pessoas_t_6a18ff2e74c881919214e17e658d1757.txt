@@ -1,0 +1,188 @@
+----- EXTRACTED FROM: https://chatgpt.com/s/t_6a18ff2e74c881919214e17e658d1757 -----
+----- METHOD: Playwright innerText ( /s/t_ link; no backend-api UUID) -----
+
+This is a copy of a shared ChatGPT conversation
+
+Report conversation
+
+No. Professions are just the most visible subgroup.
+
+The broader linguistic concept is:
+
+Common-gender nouns
+
+Substantivos comuns de dois gêneros
+
+These nouns have one fixed form, and the article determines the gender:
+
+o artista / a artista
+
+o estudante / a estudante
+
+o gerente / a gerente
+
+o dentista / a dentista
+
+o jornalista / a jornalista
+
+This is probably the category you're trying to capture.
+
+A better conceptual model
+
+Portuguese nouns referring to people can be divided into:
+
+1. Common-gender nouns (comum de dois gêneros)
+
+Same noun form.
+
+Masculine	Feminine
+o artista	a artista
+o estudante	a estudante
+o gerente	a gerente
+o colega	a colega
+o cliente	a cliente
+
+The article tells you the gender.
+
+2. Two-form nouns (biformes)
+
+The noun itself changes.
+
+Masculine	Feminine
+o professor	a professora
+o brasileiro	a brasileira
+o cantor	a cantora
+o médico	a médica
+
+This is the largest category.
+
+3. Epicene nouns (epicenos)
+
+Animals whose grammatical gender never changes.
+
+Noun
+a cobra
+a girafa
+o tigre
+o jacaré
+
+If you need to specify biological sex:
+
+a cobra macho
+
+a cobra fêmea
+
+4. Overcommon nouns (sobrecomuns)
+
+People, but always one grammatical gender regardless of the person's sex.
+
+Noun
+a pessoa
+a vítima
+a criança
+o indivíduo
+o cônjuge
+
+Examples:
+
+a criança pode ser menino ou menina.
+
+a vítima pode ser homem ou mulher.
+
+Your "-ista / -ante / -ente" observation
+
+You have noticed a real pattern:
+
+-ista
+
+Very often common-gender:
+
+artista
+
+dentista
+
+jornalista
+
+pianista
+
+tenista
+
+ciclista
+
+-ante
+
+Often common-gender:
+
+estudante
+
+representante
+
+comerciante
+
+amante
+
+-ente
+
+Often common-gender:
+
+gerente
+
+cliente
+
+presidente
+
+adolescente
+
+though some nouns ending in -ente are not people:
+
+a mente
+
+a corrente
+
+and therefore don't belong to this pattern.
+
+Gentílicos are also frequently common-gender
+
+This is the part most grammar books don't emphasize.
+
+Many gentílicos have identical masculine/feminine forms:
+
+Masculine	Feminine
+o paulista	a paulista
+o belga	a belga
+o vietnamita	a vietnamita
+o croata	a croata
+o canadense	a canadense
+
+Others are biforme:
+
+Masculine	Feminine
+o brasileiro	a brasileira
+o chinês	a chinesa
+o francês	a francesa
+o japonês	a japonesa
+For your spreadsheet
+
+I would rename that category from:
+
+Same Word as Masculine and Feminine - gentílico/animated noun
+
+to:
+
+Substantivos comuns de dois gêneros
+
+(same form, article determines gender)
+
+Then list common subpatterns:
+
+Ending	Usually common-gender?	Examples
+-ista	Very often	artista, dentista, jornalista
+-ante	Often	estudante, representante
+-ente	Often	gerente, cliente, presidente
+-ense	Very often (gentílicos)	canadense, fluminense, costarriquense
+-ita	Often (gentílicos)	vietnamita, israelita
+
+This captures the real grammatical concept rather than just professions.
+
+Voice
+By messaging ChatGPT, an AI chatbot, you agree to our Terms and have read our Privacy Policy.
