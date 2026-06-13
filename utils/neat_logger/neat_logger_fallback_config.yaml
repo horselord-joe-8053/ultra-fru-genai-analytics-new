@@ -1,0 +1,22 @@
+# =============================================================================
+# neat_logger — fallback defaults when env overrides are unset.
+#
+# ``log_root`` is relative to the repository root (the directory containing
+# ``apps/`` and ``config/``). Resolved with ``REPO_ROOT`` env when set, else an
+# intrinsic path inferred from ``utils/neat_logger/``.
+#
+# Env overrides (optional): NEAT_LOGGER_LOG_ROOT, NEAT_LOGGER_LOG_OUTPUT,
+# NEAT_LOGGER_LOG_FILE_NAME, NEAT_LOGGER_HEARTBEAT_INTERVAL_SEC
+# Legacy: NEAT_LOGGER_LOG_OUTPUT still overrides ``log_output`` if set after merge.
+#
+# Supported keys:
+#   log_root        — directory for ``log_file_name`` (created if missing).
+#   log_output      — "stdout" | "file" | "both"
+#   log_file_name   — basename under log_root (e.g. api.log).
+#   heartbeat_interval_sec — default Heartbeat interval when omitted.
+# =============================================================================
+
+log_root: logs
+log_output: both
+log_file_name: api.log
+heartbeat_interval_sec: 20.0

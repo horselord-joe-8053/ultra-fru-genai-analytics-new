@@ -63,9 +63,9 @@ def get_int_env(name: str, default: int) -> int:
 
 def validate_active_embedding_profile_env() -> None:
     """
-    Ensure credentials exist for the active EMBEDDING_ACTIVE_PROFILE.
+    Ensure credentials exist for the active EMBEDDING_ACTIVE_PROFILE (search lane only).
 
-    Raises EnvVarNotFound when provider is modelark (ARK_*) or openai (OPENAI_API_KEY).
+    Storage lanes may need additional credentials (e.g. both OPENAI and ARK for dual-column sync).
     No-op when profile config cannot be loaded (e.g. tools-only context without backend).
     """
     try:

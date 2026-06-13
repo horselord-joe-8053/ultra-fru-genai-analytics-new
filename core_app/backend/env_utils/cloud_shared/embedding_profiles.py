@@ -1,8 +1,8 @@
 """
 Load and validate embedding profiles from config/embedding_profiles.yaml.
 
-One active profile per environment (EMBEDDING_ACTIVE_PROFILE). Drives pgvector column
-selection and create_embedding_client() dispatch.
+EMBEDDING_ACTIVE_PROFILE selects the search/read lane only (semantic ANN column).
+All profile columns are write targets via embedding_sync (never gated by active profile).
 """
 from __future__ import annotations
 

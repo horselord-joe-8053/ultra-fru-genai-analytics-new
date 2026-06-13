@@ -171,10 +171,10 @@ Major libraries and platforms used in this repo (not an exhaustive dependency li
 
 <h3 id="byteplus-modelark" style="color:#00695c;font-size:1.05em;font-weight:600;margin-top:0.85em">4.6 BytePlus ModelArk + embedding profiles</h3>
 
-<span style="background:#fce4ec;padding:2px 6px;font-weight:600">Interactive lane (optional)</span> — **embedding profiles** select one pgvector column and embed API per environment (`EMBEDDING_ACTIVE_PROFILE`). Default **`openai_1536`** preserves OpenAI `text-embedding-3-small`; **`skylark_2048`** uses ModelArk embeddings into `embedding_skylark_2048`.
+<span style="background:#fce4ec;padding:2px 6px;font-weight:600">Interactive lane (optional)</span> — **Storage:** all profile columns in <code>embedding_profiles.yaml</code> populated via <code>embedding_sync</code> (CRUD + bootstrap). **Search:** <code>EMBEDDING_ACTIVE_PROFILE</code> selects which pgvector column ANN reads (default <code>openai_1536</code>; <code>skylark_2048</code> for ModelArk search).
 
 - **Config:** <code>config/embedding_profiles.yaml</code> · resolver <code>embedding_profiles.py</code> · factory <code>embedding_factory.py</code>
-- **ModelArk:** <code>core_app/backend/env_utils/byteplus/</code> — set <code>ARK_API_KEY</code>, <code>ARK_EMBEDDING_MODEL_ID</code>; optional chat via <code>LLM_INFERENCE_PROVIDER=modelark</code>
+- **ModelArk:** <code>core_app/backend/env_utils/byteplus/</code> — set <code>ARK_API_KEY</code>, <code>ARK_EMBEDDING_MODEL_ID</code>; chat via <code>LLM_INFERENCE_PROVIDER</code> (<code>claude</code> default, <code>modelark</code> opt-in)
 - **Docs:** [BYTEPLUS_AWS_GCP_REFERENCE.md](docs/BYTEPLUS_AWS_GCP_REFERENCE.md) · [BYTEPLUS_LOCAL_DEV.md](docs/BYTEPLUS_LOCAL_DEV.md)
 - **Verify:** <code>tools/cloud_shared/verify/verify_embedding_profile.py</code> · semantic E2E preset <code>verify_profile=modelark_pgvector</code>
 
@@ -306,7 +306,7 @@ cp .env.example .env   # edit keys
 python orchestrator.py deploy --provider local --scope all
 ```
 
-API default: `http://localhost:5001` (from `LOCAL_SERVER_PORT`). Frontend: Vite on ports in `config/local/local_deploy_config.yaml`.
+API (nonkube, nginx+Flask bundle): `http://localhost:5001`. **Dev frontend (Vite, hot reload):** ports in `config/local/local_deploy_config.yaml` (nonkube **5174**, kube **5173**). See [docs/learned/local/LOCAL_PORTS_AND_UI_ENTRY_POINTS.md](docs/learned/local/LOCAL_PORTS_AND_UI_ENTRY_POINTS.md).
 
 Optional smoke after deploy (requires Docker + running API — see [§17.2 Integration tests](#integration-tests)):
 
@@ -555,7 +555,7 @@ If <code>--cov</code> fails, unset <code>PYTEST_DISABLE_PLUGIN_AUTOLOAD</code> (
 
 Live HTTP checks against the API started by [§9.1 Local](#quick-local). Tests **skip** when <code>/health</code> is unreachable (safe if Docker is off).
 
-**Prerequisites:** Docker running → <code>python orchestrator.py deploy --provider local --scope all</code> → API at <code>http://localhost:5001</code> (<code>LOCAL_SERVER_PORT</code>).
+**Prerequisites:** Docker running → <code>python orchestrator.py deploy --provider local --scope all</code> → nonkube API at <code>http://localhost:5001</code>; dev UI at Vite ports in <code>config/local/local_deploy_config.yaml</code> (see [local ports guide](docs/learned/local/LOCAL_PORTS_AND_UI_ENTRY_POINTS.md)).
 
 **Run:**
 

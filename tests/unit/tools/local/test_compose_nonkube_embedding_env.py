@@ -10,6 +10,7 @@ COMPOSE_PATH = REPO_ROOT / "tools/local/docker/docker-compose.nonkube.yml"
 
 REQUIRED_KEYS = {
     "EMBEDDING_ACTIVE_PROFILE",
+    "LLM_INFERENCE_PROVIDER",
     "ARK_API_KEY",
     "ARK_BASE_URL",
     "ARK_EMBEDDING_MODEL_ID",
@@ -24,3 +25,4 @@ def test_nonkube_compose_declares_modelark_env():
     assert REQUIRED_KEYS.issubset(set(env.keys()))
     assert "${EMBEDDING_ACTIVE_PROFILE" in env["EMBEDDING_ACTIVE_PROFILE"]
     assert "${ARK_API_KEY" in env["ARK_API_KEY"]
+    assert "${LLM_INFERENCE_PROVIDER" in env["LLM_INFERENCE_PROVIDER"]

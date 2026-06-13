@@ -1,6 +1,8 @@
 # Refactor Plan: Image Tag Handling (Cross-Scope, Cross-Provider, DRY)
 
-**Last updated:** 2026-03-16
+**Last updated:** 2026-06-13
+
+> **Local nonkube tag stamping (2026-06-13):** Semantic local build tags (`APP_IMAGE_TAG` via `generate_image_tag("local")`, `/version` precedence) are implemented in **`cursor_gen/refactor_plans/wip/REFACTOR_LOCAL_UI_DEPLOY_UX.md`** Phase 1. This todo doc remains the cross-provider registry resolver design; local compose no longer shows `[unknown]` when deploy sets `APP_IMAGE_TAG`.
 
 ## Goals
 

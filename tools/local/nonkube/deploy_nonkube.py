@@ -80,8 +80,10 @@ def run_deploy_nonkube(skip_spark: bool = False) -> int:
             return 1
 
     logger.success("Local nonkube deploy complete")
-    logger.info("API: http://localhost:5001")
-    logger.info("Frontend: http://localhost:5001 (served by API)")
+    from tools.local.scope_shared.local_deploy_config import get_ports_for_scope
+    p = get_ports_for_scope("nonkube")
+    logger.info(f"API (nginx+Flask): http://localhost:{p['api_port']} — bundled production UI+API")
+    logger.info(f"Dev frontend (Vite): http://localhost:{p['frontend_port']} — preferred for local UI work")
     return 0
 
 

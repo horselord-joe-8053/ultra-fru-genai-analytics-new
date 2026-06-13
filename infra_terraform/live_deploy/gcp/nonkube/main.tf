@@ -70,6 +70,7 @@ module "cloud_run" {
     CLOUD_PROVIDER                        = "gcp"
     GCP_LLM_PROVIDER                     = var.llm_provider
     LLM_PROVIDER                         = var.llm_provider
+    LLM_INFERENCE_PROVIDER               = var.llm_inference_provider
     CLAUDE_MODEL                         = var.claude_model
     CLOUD_REGION                         = var.gcp_region
     LOG_LEVEL                            = var.log_level

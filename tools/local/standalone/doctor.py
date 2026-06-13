@@ -57,6 +57,15 @@ def _check_claude_model() -> list[str]:
     return errs
 
 
+def _check_modelark_chat_env() -> list[str]:
+    """Require ModelArk chat env when LLM_INFERENCE_PROVIDER=modelark."""
+    errs = []
+    for var in ("ARK_API_KEY", "ARK_CHAT_MODEL_ID"):
+        if not (os.environ.get(var) or "").strip():
+            errs.append(f"{var} must be set when LLM_INFERENCE_PROVIDER=modelark")
+    return errs
+
+
 def main() -> int:
     logger.step("Local doctor (preflight)")
 
@@ -82,19 +91,35 @@ def main() -> int:
     if not any(v for v in ("PGPASSWORD", "OPENAI_API_KEY") if not os.environ.get(v)):
         logger.info("[doctor] Required env vars present")
 
-    # 3. Claude model / API (if CLAUDE_API_KEY present)
-    logger.info("[doctor] Checking CLAUDE_MODEL/Claude API (if configured)...")
-    t1 = time.time()
-    claude_errs = _check_claude_model()
-    errors.extend(claude_errs)
-    dt1 = time.time() - t1
-    if claude_errs:
-        logger.error(f"[doctor] Claude check failed (elapsed {dt1:.1f}s)")
+    # 3. Chat inference provider checks
+    from core_app.backend.env_utils.cloud_shared.llm_inference_config import (
+        get_llm_inference_provider,
+    )
+
+    llm_inference = get_llm_inference_provider()
+    logger.info(f"[doctor] LLM_INFERENCE_PROVIDER={llm_inference}")
+
+    if llm_inference == "modelark":
+        logger.info("[doctor] Checking ModelArk chat env (ARK_API_KEY, ARK_CHAT_MODEL_ID)...")
+        modelark_errs = _check_modelark_chat_env()
+        errors.extend(modelark_errs)
+        if modelark_errs:
+            logger.error("[doctor] ModelArk chat env check failed")
+        else:
+            logger.info("[doctor] ModelArk chat env OK")
     else:
-        logger.info(f"[doctor] Claude check OK/Skipped (elapsed {dt1:.1f}s)")
+        logger.info("[doctor] Checking CLAUDE_MODEL/Claude API (if configured)...")
+        t1 = time.time()
+        claude_errs = _check_claude_model()
+        errors.extend(claude_errs)
+        dt1 = time.time() - t1
+        if claude_errs:
+            logger.error(f"[doctor] Claude check failed (elapsed {dt1:.1f}s)")
+        else:
+            logger.info(f"[doctor] Claude check OK/Skipped (elapsed {dt1:.1f}s)")
 
     # 4. Optional LLM keys hint
-    if not os.environ.get("CLAUDE_API_KEY") and not os.environ.get("GOOGLE_AI_API_KEY"):
+    if llm_inference == "claude" and not os.environ.get("CLAUDE_API_KEY") and not os.environ.get("GOOGLE_AI_API_KEY"):
         logger.warning("No CLAUDE_API_KEY or GOOGLE_AI_API_KEY; set CLOUD_PROVIDER=local and CLAUDE_API_KEY for /query")
 
     # 5. CSV presence

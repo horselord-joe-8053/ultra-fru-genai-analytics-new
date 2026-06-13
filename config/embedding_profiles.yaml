@@ -1,10 +1,6 @@
-# Canonical embedding profiles for FRU analytics (one active per environment).
+# Canonical embedding profiles — all keys are write/storage lanes (embedding_sync).
+# EMBEDDING_ACTIVE_PROFILE in .env selects search/read lane only.
 # Column naming: embedding_{model_slug}_{dimension}
-# See docs/BYTEPLUS_AWS_GCP_REFERENCE.md
-#
-# >>> SWITCH LANE: set EMBEDDING_ACTIVE_PROFILE in .env to one of the keys below.
-#     openai_1536  — default; OPENAI_API_KEY only
-#     skylark_2048 — ModelArk; also needs ARK_API_KEY + ARK_EMBEDDING_MODEL_ID in .env
 
 openai_1536:
   provider: openai

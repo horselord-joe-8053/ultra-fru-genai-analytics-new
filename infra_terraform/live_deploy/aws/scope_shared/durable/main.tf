@@ -76,4 +76,5 @@ output "aurora_cluster_arn"         { value = module.aurora.cluster_arn }
 output "openai_api_key_secret_arn"   { value = data.terraform_remote_state.durable_with_cooloff.outputs.openai_api_key_secret_arn }
 output "db_password_secret_arn"      { value = data.terraform_remote_state.durable_with_cooloff.outputs.db_password_secret_arn }
 output "db_password_plain_secret_arn" { value = data.terraform_remote_state.durable_with_cooloff.outputs.db_password_plain_secret_arn }
+output "ark_api_key_secret_arn"      { value = data.terraform_remote_state.durable_with_cooloff.outputs.ark_api_key_secret_arn }
 output "db_secret_arn" { value = data.terraform_remote_state.durable_with_cooloff.outputs.db_secret_arn }

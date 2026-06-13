@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 import urllib.error
 import urllib.request
 from typing import List
@@ -43,6 +44,18 @@ class ModelArkEmbeddingClient(EmbeddingClient):
 
     def _post_json(self, path: str, payload: dict) -> dict:
         url = f"{self.base_url}{path}"
+        text_len = 0
+        if path.endswith("/multimodal"):
+            inputs = payload.get("input") or []
+            if inputs and isinstance(inputs[0], dict):
+                text_len = len(inputs[0].get("text") or "")
+        else:
+            inp = payload.get("input")
+            if isinstance(inp, list) and inp:
+                text_len = sum(len(str(x)) for x in inp)
+            elif isinstance(inp, str):
+                text_len = len(inp)
+        t0 = time.monotonic()
         req = urllib.request.Request(
             url,
             data=json.dumps(payload).encode("utf-8"),
@@ -54,9 +67,30 @@ class ModelArkEmbeddingClient(EmbeddingClient):
         )
         try:
             with urllib.request.urlopen(req, timeout=120) as resp:
-                return json.loads(resp.read().decode("utf-8"))
+                data = json.loads(resp.read().decode("utf-8"))
+            elapsed_ms = int((time.monotonic() - t0) * 1000)
+            logger.info(
+                "modelark_embed: profile=%s path=%s model=%s text_chars=%d http=%d ms=%d",
+                self.profile_name,
+                path,
+                payload.get("model", self.model_id),
+                text_len,
+                resp.status,
+                elapsed_ms,
+            )
+            return data
         except urllib.error.HTTPError as e:
             body = e.read().decode("utf-8", errors="replace")
+            elapsed_ms = int((time.monotonic() - t0) * 1000)
+            logger.warning(
+                "modelark_embed: profile=%s path=%s model=%s http=%d ms=%d body=%s",
+                self.profile_name,
+                path,
+                payload.get("model", self.model_id),
+                e.code,
+                elapsed_ms,
+                body[:500],
+            )
             raise RuntimeError(f"ModelArk embeddings HTTP {e.code}: {body}") from e
 
     def _validate_vector(self, vec: List[float]) -> List[float]:
@@ -82,6 +116,12 @@ class ModelArkEmbeddingClient(EmbeddingClient):
             raise RuntimeError(
                 f"ModelArk multimodal response missing data.embedding: {data!r}"
             )
+        logger.info(
+            "modelark_embed: profile=%s response_dim=%d expected_dim=%d",
+            self.profile_name,
+            len(vec),
+            self.dimension,
+        )
         return self._validate_vector(vec)
 
     def _embed_openai_compatible_batch(self, texts: List[str]) -> List[List[float]]:

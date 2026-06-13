@@ -43,6 +43,8 @@ def test_api_deployment_renders_embedding_and_modelark_env(monkeypatch):
     assert "name: ARK_EMBEDDING_MODEL_ID" in yaml_text
     assert 'value: "skylark-embed"' in yaml_text
     assert "name: ARK_API_KEY" in yaml_text
+    assert "name: LLM_INFERENCE_PROVIDER" in yaml_text
+    assert 'value: "claude"' in yaml_text or "LLM_INFERENCE_PROVIDER" in yaml_text
     assert "secretKeyRef" in yaml_text
     assert "key: ARK_API_KEY" in yaml_text
     assert "optional: true" in yaml_text

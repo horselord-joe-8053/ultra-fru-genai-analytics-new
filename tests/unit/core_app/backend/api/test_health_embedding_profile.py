@@ -25,6 +25,10 @@ def test_health_modelark_configured_when_profile_and_ark_set(monkeypatch):
 
     monkeypatch.setattr(app_module, "get_db_conn", lambda: conn)
     monkeypatch.setattr(app_module, "return_db_conn", lambda c: None)
+    monkeypatch.setattr(
+        "backend.services.embedding_sync.embedding_column_population_counts",
+        lambda c: {"total_rows": 201, "openai_1536": 201, "skylark_2048": 200},
+    )
 
     client = app_module.app.test_client()
     resp = client.get("/health")
@@ -32,5 +36,6 @@ def test_health_modelark_configured_when_profile_and_ark_set(monkeypatch):
     data = resp.get_json()
     assert data.get("embedding_profile") == "skylark_2048"
     assert data.get("modelark_embeddings") == "configured"
+    assert data.get("embedding_columns_populated", {}).get("total_rows") == 201
 
     get_profiles.cache_clear()

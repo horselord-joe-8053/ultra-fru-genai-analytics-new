@@ -55,14 +55,45 @@ const Chat: React.FC<ChatProps> = ({ messages, onSend, loading }) => {
         return apiPort ? `Proxy: localhost:${window.location.port} → localhost:${apiPort}` : null;
       })();
 
+  const chatModelLine = versionInfo?.chat_model
+    ? `Chat model: ${versionInfo.chat_model}`
+    : versionInfo?.chat_model_error
+      ? `Chat model: (${versionInfo.chat_model_error})`
+      : null;
+  const embeddingLine = versionInfo?.embedding_model
+    ? `Embedding: ${versionInfo.embedding_profile ?? "default"} → ${versionInfo.embedding_model}`
+    : versionInfo?.embedding_model_error
+      ? `Embedding: (${versionInfo.embedding_model_error})`
+      : versionInfo?.embedding_profile
+        ? `Embedding profile: ${versionInfo.embedding_profile}`
+        : null;
+
+  const isBundledApiUi =
+    versionInfo?.cloud_provider === "local" &&
+    versionInfo?.scope === "nonkube" &&
+    !import.meta.env.DEV;
+  const devFrontendPort =
+    versionInfo?.dev_frontend_port ??
+    (import.meta.env.DEV && window.location.port ? Number(window.location.port) : null);
+
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between px-4 py-3 border-b bg-gray-50">
         <div>
           <h1 className="text-lg font-semibold">FRU Analytics Assistant</h1>
+          {isBundledApiUi && (
+            <p className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-0.5 mt-1 inline-block">
+              Bundled UI from API container
+              {devFrontendPort != null
+                ? ` — for dev, use Vite on port ${devFrontendPort}`
+                : " — for dev, use the Vite dev server (see local_deploy_config.yaml)"}
+            </p>
+          )}
           <div className="text-[10px] text-gray-400 font-mono leading-tight space-y-0.5">
             <p>Build: {buildLine}</p>
             {deployLine && <p>{deployLine}</p>}
+            {chatModelLine && <p>{chatModelLine}</p>}
+            {embeddingLine && <p>{embeddingLine}</p>}
             {proxyLine && <p>{proxyLine}</p>}
           </div>
           <p className="text-xs text-gray-500">

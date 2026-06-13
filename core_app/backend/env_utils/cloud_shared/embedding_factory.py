@@ -1,9 +1,13 @@
 """
-Factory for embedding clients driven by EMBEDDING_ACTIVE_PROFILE.
+Factory for embedding clients driven by embedding_profiles.yaml.
+
+Write paths (embedding_sync, CRUD) must pass explicit profile= to create_embedding_client().
+Default (active profile) is for query-time search and user-question embedding only.
 """
 from __future__ import annotations
 
 import logging
+import time
 from typing import Optional
 
 from openai import OpenAI
@@ -41,9 +45,22 @@ class OpenAIEmbeddingClient(EmbeddingClient):
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
         if not texts:
             return []
+        total_chars = sum(len(t) for t in texts)
+        t0 = time.monotonic()
         response = self._client.embeddings.create(model=self._model, input=texts)
         ordered = sorted(response.data, key=lambda d: d.index)
-        return [d.embedding for d in ordered]
+        vectors = [d.embedding for d in ordered]
+        elapsed_ms = int((time.monotonic() - t0) * 1000)
+        logger.info(
+            "openai_embed: profile=%s model=%s batch=%d chars=%d dim=%d ms=%d",
+            self.profile_name,
+            self._model,
+            len(texts),
+            total_chars,
+            len(vectors[0]) if vectors else 0,
+            elapsed_ms,
+        )
+        return vectors
 
 
 def create_embedding_client(

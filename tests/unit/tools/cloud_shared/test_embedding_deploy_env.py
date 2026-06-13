@@ -31,12 +31,20 @@ def test_modelark_secret_entries_includes_key(monkeypatch):
 
 
 def test_api_deployment_embedding_subs_skylark(monkeypatch):
+    monkeypatch.delenv("LLM_INFERENCE_PROVIDER", raising=False)
     monkeypatch.setenv("EMBEDDING_ACTIVE_PROFILE", "skylark_2048")
     monkeypatch.setenv("ARK_EMBEDDING_MODEL_ID", "ep-embed")
     monkeypatch.setenv("ARK_CHAT_MODEL_ID", "ep-chat")
     monkeypatch.setenv("ARK_BASE_URL", "https://ark.example/api/v3")
     subs = api_deployment_embedding_subs()
     assert subs["EMBEDDING_ACTIVE_PROFILE"] == "skylark_2048"
+    assert subs["LLM_INFERENCE_PROVIDER"] == "claude"
     assert subs["ARK_EMBEDDING_MODEL_ID"] == "ep-embed"
     assert subs["ARK_CHAT_MODEL_ID"] == "ep-chat"
     assert subs["ARK_BASE_URL"] == "https://ark.example/api/v3"
+
+
+def test_api_deployment_embedding_subs_modelark_chat(monkeypatch):
+    monkeypatch.setenv("LLM_INFERENCE_PROVIDER", "modelark")
+    subs = api_deployment_embedding_subs()
+    assert subs["LLM_INFERENCE_PROVIDER"] == "modelark"

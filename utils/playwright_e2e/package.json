@@ -1,0 +1,19 @@
+{
+  "name": "@floor35/playwright-e2e",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Portable Playwright helpers (auth, mock router, stack guard) copyable across repos.",
+  "exports": {
+    ".": "./index.ts",
+    "./stack": "./stack.ts",
+    "./auth": "./auth.ts",
+    "./mock-router": "./mock-router.ts",
+    "./config": "./config.ts",
+    "./api-client": "./api-client.ts",
+    "./artifacts": "./artifacts.ts"
+  },
+  "peerDependencies": {
+    "@playwright/test": "^1.54.0"
+  }
+}

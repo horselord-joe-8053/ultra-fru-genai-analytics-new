@@ -35,7 +35,7 @@
 GCP db_setup was already refactored per `docs/REFACTOR_DB_SETUP_DRY.md`:
 - `db_common.py` uses `FORCE_DROP_TABLES` from `setup_database_utils`, `parse_sql_statements` from cloud_shared
 - `load.py` provides shared `load_embeddings()`
-- AWS continues to use RDS Data API path (host-based)
+- AWS uses RDS Data API path with **dual-column** `embedding_sync_rds` (see `cursor_gen/refactor_plans/completed/REFACTOR_DUAL_EMBEDDING_SYNC.md` Phase 8)
 
 ---
 

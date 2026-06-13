@@ -41,7 +41,14 @@ resource "aws_secretsmanager_secret" "db_password_plain" {
   tags                    = module.tags.common_tags
 }
 
+resource "aws_secretsmanager_secret" "ark_api_key" {
+  name                    = "${var.prefix}/${var.env}/ark_api_key-${var.aws_region}"
+  recovery_window_in_days = 30
+  tags                    = module.tags.common_tags
+}
+
 output "openai_api_key_secret_arn"   { value = aws_secretsmanager_secret.openai_api_key.arn }
 output "db_password_secret_arn"      { value = aws_secretsmanager_secret.db_password.arn }
 output "db_password_plain_secret_arn" { value = aws_secretsmanager_secret.db_password_plain.arn }
+output "ark_api_key_secret_arn"      { value = aws_secretsmanager_secret.ark_api_key.arn }
 output "db_secret_arn" { value = aws_secretsmanager_secret.db_password.arn }

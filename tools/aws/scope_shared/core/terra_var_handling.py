@@ -24,6 +24,10 @@ MAP = {
     "AWS_BEDROCK_INFERENCE_PROFILE_ID": "bedrock_inference_profile_id",
     "AWS_BEDROCK_MODEL_ID": "bedrock_model_id",
     "AWS_BEDROCK_REGION": "bedrock_region",
+    "ARK_BASE_URL": "ark_base_url",
+    "ARK_EMBEDDING_MODEL_ID": "ark_embedding_model_id",
+    "ARK_CHAT_MODEL_ID": "ark_chat_model_id",
+    "LLM_INFERENCE_PROVIDER": "llm_inference_provider",
 }
 
 def get_base_vars(env: str, region: str | None = None):

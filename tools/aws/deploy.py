@@ -265,7 +265,7 @@ def main():
         # Migration: remove secrets from durable state (moved to durable_with_cooloff).
         # Prevents durable apply from destroying them. Safe if not in state.
         from tools.aws.scope_shared.core.terra_runner import get_terra_env
-        for res in ["aws_secretsmanager_secret.openai_api_key", "aws_secretsmanager_secret.db_password", "aws_secretsmanager_secret.db_password_plain"]:
+        for res in ["aws_secretsmanager_secret.openai_api_key", "aws_secretsmanager_secret.db_password", "aws_secretsmanager_secret.db_password_plain", "aws_secretsmanager_secret.ark_api_key"]:
             try:
                 subprocess.run(
                     [os.getenv("FRU_TF_BIN", "tofu"), "state", "rm", res],

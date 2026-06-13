@@ -36,6 +36,7 @@ from tools.cloud_shared.docker.build_context_hash import (
     store_build_hash,
 )
 from tools.cloud_shared.docker.build_skip_decision import decide_build_skip
+from tools.cloud_shared.image_tag import generate_image_tag
 from tools.local.scope_shared.local_deploy_config import get_memo_dir, get_ports_for_scope
 
 load_dotenv()
@@ -257,6 +258,14 @@ def main() -> int:
         if not args.skip_spark and skip_result.spark_hash:
             store_build_hash(MEMO_DIR, spark_key, "local", skip_result.spark_hash, "latest")
 
+    # Same tag shape as cloud (fru_local_<date>_<sha>_...) for /version Build line
+    if not (os.environ.get("APP_IMAGE_TAG") or "").strip():
+        os.environ["APP_IMAGE_TAG"] = generate_image_tag("local")
+        logger.info(f"APP_IMAGE_TAG for local deploy: {os.environ['APP_IMAGE_TAG']}")
+    nonkube_ports = get_ports_for_scope("nonkube")
+    os.environ.setdefault("LOCAL_DEV_FRONTEND_PORT", str(nonkube_ports["frontend_port"]))
+    os.environ.setdefault("LOCAL_API_PUBLIC_PORT", str(nonkube_ports["api_port"]))
+
     scopes = ["nonkube", "kube"] if args.scope == "all" else [args.scope]
 
     for scope in scopes:
@@ -277,7 +286,8 @@ def main() -> int:
     logger.success("Local deploy complete")
     if "nonkube" in scopes:
         p = get_ports_for_scope("nonkube")
-        logger.info(f"Nonkube API: http://localhost:{p['api_port']}  Frontend: http://localhost:{p['frontend_port']}")
+        logger.info(f"Nonkube API (bundled UI+API): http://localhost:{p['api_port']}")
+        logger.info(f"Nonkube dev frontend (Vite): http://localhost:{p['frontend_port']}")
     if "kube" in scopes:
         p = get_ports_for_scope("kube")
         logger.info(f"Kube API: http://localhost:{p['api_port']} (NodePort)  Frontend: http://localhost:{p['frontend_port']}")

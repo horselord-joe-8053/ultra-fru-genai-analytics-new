@@ -80,6 +80,23 @@ variable "bedrock_region" {
   default     = "us-east-1"
   description = "Bedrock API region (models live here; may differ from aws_region). Default us-east-1 for Anthropic models."
 }
+variable "ark_base_url" {
+  type    = string
+  default = "https://ark.ap-southeast.bytepluses.com/api/v3"
+}
+variable "ark_embedding_model_id" {
+  type    = string
+  default = ""
+}
+variable "ark_chat_model_id" {
+  type    = string
+  default = ""
+}
+variable "llm_inference_provider" {
+  type        = string
+  default     = "claude"
+  description = "Chat inference backend: claude (default) or modelark."
+}
 
 variable "tf_state_bucket" { type = string }
 variable "tf_state_bucket_region" { type = string }

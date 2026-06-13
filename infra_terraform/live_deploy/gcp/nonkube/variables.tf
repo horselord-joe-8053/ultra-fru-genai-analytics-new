@@ -33,6 +33,11 @@ variable "claude_model" {
   default     = "claude-3-5-haiku-20241022"
   description = "Claude model ID when GCP_LLM_PROVIDER=claude (e.g. claude-3-5-haiku-20241022, claude-3-5-sonnet-20241022)."
 }
+variable "llm_inference_provider" {
+  type        = string
+  default     = "claude"
+  description = "Chat inference backend: claude (default) or modelark."
+}
 variable "openai_embed_model" {
   type    = string
   default = "text-embedding-3-small"

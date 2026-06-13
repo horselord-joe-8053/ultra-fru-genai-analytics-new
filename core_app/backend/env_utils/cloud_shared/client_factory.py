@@ -5,11 +5,11 @@ or falls back to aws → gcp → local (cloud-first).
 
 Applicable environment: [local] [aws {ecs | eks}] [gcp {cloud-run | gke}]
 
+Chat backend: LLM_INFERENCE_PROVIDER (default claude) selects ModelArk vs cloud Claude path.
 GCP provider choice (claude vs gemini): handled inside gcp.get_llm_client() via GCP_LLM_PROVIDER.
-Factory stays generic; no provider-specific override here.
 """
 from backend.env_utils.cloud_shared.interfaces.llm_client import LLMClient
-from backend.env_utils.cloud_shared.provider import get_cloud_provider
+from backend.env_utils.cloud_shared.llm_inference_config import get_llm_inference_provider
 from typing import Optional, Dict, Any
 import os
 import logging
@@ -25,46 +25,46 @@ def create_llm_client() -> LLMClient:
     Create the appropriate LLM client based on environment.
 
     Logic:
-    0. If LLM_INFERENCE_PROVIDER=modelark → ModelArk client (BytePlus).
-    1. If CLOUD_PROVIDER is explicitly set → call only that provider's get_llm_client(); raise if None.
-    2. If unset → try aws → gcp → local (cloud-first) until one returns non-None.
-    3. Raise ValueError if no client found.
+    1. Resolve LLM_INFERENCE_PROVIDER (default claude).
+    2. modelark → ModelArkClient.
+    3. claude → CLOUD_PROVIDER explicit dispatch or cloud-first fallback.
 
     GCP: gcp.get_llm_client() chooses Claude vs Gemini via GCP_LLM_PROVIDER (Option B).
     """
-    inference = os.environ.get("LLM_INFERENCE_PROVIDER", "").strip().lower()
-    if inference == "modelark":
+    provider = get_llm_inference_provider()
+    logger.info("Creating LLM client for LLM_INFERENCE_PROVIDER=%s", provider)
+
+    if provider == "modelark":
         from backend.env_utils.byteplus.modelark_client import ModelArkClient
 
-        logger.info("Creating LLM client for LLM_INFERENCE_PROVIDER=modelark")
         return ModelArkClient()
 
     explicit = os.environ.get("CLOUD_PROVIDER", "").strip().lower()
 
-    # Explicit provider: try only that provider
     if explicit in ("aws", "gcp", "local"):
         client = _get_provider_client(explicit)
         if client is not None:
-            logger.info("Creating LLM client for provider=%s", explicit)
+            logger.info("Creating LLM client for CLOUD_PROVIDER=%s", explicit)
             return client
         raise ValueError(
-            f"No LLM client available for CLOUD_PROVIDER={explicit}. "
+            f"No LLM client available for LLM_INFERENCE_PROVIDER=claude and "
+            f"CLOUD_PROVIDER={explicit}. "
             f"Check env vars: AWS needs CLOUD_REGION + Bedrock config; "
-            f"GCP needs GOOGLE_AI_API_KEY; local needs CLAUDE_API_KEY."
+            f"GCP needs GOOGLE_AI_API_KEY or CLAUDE_API_KEY; local needs CLAUDE_API_KEY."
         )
 
-    # Fallback: try in order (cloud-first)
     for p in _FALLBACK_ORDER:
         client = _get_provider_client(p)
         if client is not None:
-            logger.info("Creating LLM client (fallback provider=%s)", p)
+            logger.info("Creating LLM client (fallback CLOUD_PROVIDER=%s)", p)
             return client
 
     raise ValueError(
-        "No LLM client available. Set one of:\n"
+        "No LLM client available for LLM_INFERENCE_PROVIDER=claude. Set one of:\n"
         "  - CLOUD_PROVIDER=aws + CLOUD_REGION + AWS_BEDROCK_INFERENCE_PROFILE_ID or AWS_BEDROCK_MODEL_ID\n"
         "  - CLOUD_PROVIDER=gcp + GOOGLE_AI_API_KEY\n"
-        "  - CLOUD_PROVIDER=local + CLAUDE_API_KEY"
+        "  - CLOUD_PROVIDER=local + CLAUDE_API_KEY\n"
+        "Or set LLM_INFERENCE_PROVIDER=modelark with ARK_API_KEY + ARK_CHAT_MODEL_ID."
     )
 
 

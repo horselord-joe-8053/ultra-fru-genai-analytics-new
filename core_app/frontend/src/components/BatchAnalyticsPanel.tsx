@@ -11,12 +11,20 @@ interface AnalyticsRunStatus {
   status_message?: string | null;
 }
 
+interface AnalyticsResponseMeta {
+  server_time?: string;
+  reload_does?: string;
+  reload_does_not?: string;
+  run_new_batch?: string;
+}
+
 interface BatchAnalyticsData {
   id: number;
   last_updated_at: string;
   updated_by_scope?: string | null;
   analytics_run_interval_minutes?: number;
   run_status?: AnalyticsRunStatus | null;
+  meta?: AnalyticsResponseMeta | null;
   sales_by_brand: Array<{
     brand: string;
     total_sales: number;
@@ -59,7 +67,18 @@ const BatchAnalyticsPanel: React.FC<BatchAnalyticsPanelProps> = ({ onToggle, isV
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reloadMeta, setReloadMeta] = useState<AnalyticsResponseMeta | null>(null);
+  const [lastReloadAt, setLastReloadAt] = useState<string | null>(null);
   const hasLoadedRef = useRef(false);
+
+  const applyMeta = (meta: AnalyticsResponseMeta | null | undefined) => {
+    if (meta?.reload_does || meta?.reload_does_not) {
+      setReloadMeta(meta);
+    }
+    if (meta?.server_time) {
+      setLastReloadAt(meta.server_time);
+    }
+  };
 
   // Use relative URL - CloudFront will proxy /analytics requests to ALB
   // In development, Vite proxy handles /analytics -> localhost:5000
@@ -105,7 +124,8 @@ const BatchAnalyticsPanel: React.FC<BatchAnalyticsPanelProps> = ({ onToggle, isV
       }
       
       const result = JSON.parse(text);
-      
+      applyMeta(result.meta);
+
       // Check if response contains an error message (backend returns 200 with error field when no data)
       if (result.error && (resp.status === 200 || resp.status === 404)) {
         setError(result.error || "Analytics data not available yet. Waiting for first batch run...");
@@ -192,12 +212,36 @@ const BatchAnalyticsPanel: React.FC<BatchAnalyticsPanelProps> = ({ onToggle, isV
     return (
       <div className="h-full flex flex-col p-3">
         <h2 className="text-sm font-semibold mb-2">Batch Analytics</h2>
+        {refreshing && (
+          <p className="text-xs text-blue-600 mb-2" role="status">
+            Reloading snapshot from server…
+          </p>
+        )}
         <div className="text-xs text-red-600">{error}</div>
+        {reloadMeta && (
+          <div className="mt-2 text-[0.6875rem] text-gray-600 leading-snug space-y-1">
+            <p>
+              <span className="font-medium text-gray-700">↻ Reload does:</span>{" "}
+              {reloadMeta.reload_does}
+            </p>
+            <p>
+              <span className="font-medium text-gray-700">↻ Reload does not:</span>{" "}
+              {reloadMeta.reload_does_not}
+            </p>
+            {reloadMeta.run_new_batch && (
+              <p>
+                <span className="font-medium text-gray-700">New batch data:</span>{" "}
+                {reloadMeta.run_new_batch}
+              </p>
+            )}
+          </div>
+        )}
         <button
           onClick={fetchAnalytics}
-          className="mt-2 text-xs text-blue-600 hover:underline"
+          disabled={refreshing}
+          className="mt-2 text-xs text-blue-600 hover:underline disabled:opacity-50"
         >
-          Retry
+          {refreshing ? "Reloading…" : "Retry"}
         </button>
       </div>
     );
@@ -219,7 +263,11 @@ const BatchAnalyticsPanel: React.FC<BatchAnalyticsPanelProps> = ({ onToggle, isV
               onClick={fetchAnalytics}
               disabled={refreshing}
               className="text-xs text-blue-600 hover:underline disabled:opacity-50"
-              title="Reload snapshot from server (does not run Spark)"
+              title={
+                reloadMeta?.reload_does_not ??
+                "Reload snapshot from server (does not run Spark)"
+              }
+              aria-label="Reload analytics snapshot"
             >
               {refreshing ? "…" : "↻"}
             </button>
@@ -238,6 +286,39 @@ const BatchAnalyticsPanel: React.FC<BatchAnalyticsPanelProps> = ({ onToggle, isV
         <p className="text-[0.6875rem] text-gray-500">
           Spark + Delta offline analytics
         </p>
+        {refreshing && (
+          <p className="text-xs text-blue-600 mt-1" role="status">
+            Reloading snapshot… (no Spark job started)
+          </p>
+        )}
+        {!refreshing && lastReloadAt && (
+          <p className="text-xs text-gray-400 mt-1">
+            Snapshot checked {formatRelativeTime(lastReloadAt)}
+          </p>
+        )}
+        {(reloadMeta || data.meta) && (
+          <details className="mt-1 text-[0.6875rem] text-gray-600">
+            <summary className="cursor-pointer text-gray-500 hover:text-gray-700">
+              What does ↻ reload do?
+            </summary>
+            <div className="mt-1 pl-2 border-l-2 border-gray-200 space-y-1 leading-snug">
+              <p>
+                <span className="font-medium text-gray-700">Does:</span>{" "}
+                {(reloadMeta ?? data.meta)?.reload_does}
+              </p>
+              <p>
+                <span className="font-medium text-gray-700">Does not:</span>{" "}
+                {(reloadMeta ?? data.meta)?.reload_does_not}
+              </p>
+              {(reloadMeta ?? data.meta)?.run_new_batch && (
+                <p>
+                  <span className="font-medium text-gray-700">Fresh batch:</span>{" "}
+                  {(reloadMeta ?? data.meta)?.run_new_batch}
+                </p>
+              )}
+            </div>
+          </details>
+        )}
         {data.last_updated_at && (
           <p className="text-xs text-gray-400 mt-1">
             Updated {formatRelativeTime(data.last_updated_at)}

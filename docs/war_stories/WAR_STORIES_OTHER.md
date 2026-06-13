@@ -42,6 +42,13 @@ A curated list of **non-trivial technical war stories**, capturing real lessons 
 <tr><td style="background:#e3f2fd;padding:8px;text-align:right">4</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-4">4. City vs state in store_address — schema hints beat guessing SPLIT_PART indices</a></td><td style="padding:8px;background:#e8f5e9">LLM used index 2 for “state”; document 3-part address layout + few-shot city/state SQL</td></tr>
 <tr><td style="background:#e3f2fd;padding:8px;text-align:right">5</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-5">5. A capable Claude still needs semantic schema — thin column lists are not enough</a></td><td style="padding:8px;background:#fff3e0">generate_sql saw names/types only; world knowledge ≠ your table’s encoding</td></tr>
 <tr><td style="background:#e3f2fd;padding:8px;text-align:right">6</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-6">6. Docker Desktop Kubernetes can keep a stale API image in containerd</a></td><td style="padding:8px;background:#e8f5e9"><code>docker build</code> updates Docker Engine but kube node may not pick up the new digest until import</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">7</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-7-dual-embedding-sync">7. Dual-column storage vs single-column search</a></td><td style="padding:8px;background:#fff3e0">Populate all YAML profile columns on write; active profile is search-only</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">8</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-8-aws-rds-bootstrap">8. AWS bootstrap: RDS Data API dual-column sync without VPC job</a></td><td style="padding:8px;background:#e8f5e9">Shared embedding_sync_core + RDS adapter; bootstrap HTTPS vs ECS psycopg2 steady state</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">9</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-9-llm-inference-env">9. LLM_INFERENCE_PROVIDER: .env value ignored in Docker nonkube</a></td><td style="padding:8px;background:#fff3e0">Explicit chat provider enum + compose/kube/terraform must pass env into API process</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">10</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-10-spark-bootstrap-oom">10. Local Spark bootstrap exit 137 — shared Docker RAM and host schedulers</a></td><td style="padding:8px;background:#e8f5e9">OOM kill, not Spark logic; overlapping <code>docker run</code> + zombie JVMs on ~7.6 GiB host</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">11</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-11-analytics-worker-design">11. Compose analytics-worker — singleton owner for local nonkube Spark</a></td><td style="padding:8px;background:#fff3e0">Replace host <code>scheduler_local.py</code> + nested <code>docker run</code> with one Compose service + Forbid</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">12</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-12-local-vs-cloud-spark-scheduling">12. Why local uses a persistent worker but cloud keeps ephemeral tasks</a></td><td style="padding:8px;background:#e8f5e9">Shared laptop RAM vs isolated Fargate/Cloud Run memory — same job code, different wrappers</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">13</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-13-local-dual-ui-entry">13. Local nonkube — two UI entry points (Vite vs nginx bundle)</a></td><td style="padding:8px;background:#fff3e0">5001 serves UI+API by design; 5174 is dev Vite — not a routing bug</td></tr>
 </tbody>
 </table>
 
@@ -576,3 +583,339 @@ Automated in `tools/local/deploy.py` (`_import_api_image_to_kube_node()`). Docum
 <h3 id="war-story-6-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">6.5 Takeaway</h3>
 
 For local k8s on Docker Desktop, add an explicit **host → node image sync** step to your deploy checklist. Symptom: code changes “do nothing” after rollout; fix: verify pod image digest or import before blaming application logic.
+
+---
+
+<h2 id="war-story-7-dual-embedding-sync" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">7. Dual-column storage vs single-column search; Skylark multimodal API</h2>
+
+**creation:** 260621 · **last_updated:** 260621 · **keywords:** embedding profiles, pgvector, ModelArk, multimodal, CRUD, embedding_sync · **difficulty:** 7 · **significance:** 8
+
+<h3 id="war-story-7-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">7.1 Context</h3>
+
+Embedding profiles introduced `embedding_openai_1536` and `embedding_skylark_2048`, with `EMBEDDING_ACTIVE_PROFILE` selecting the ANN search column. Initial ingest and CRUD only embedded the **active** column; CSV backfill missed API-added rows (201 DB rows vs 200 CSV). Skylark backfill against `/embeddings` returned HTTP 500.
+
+<h3 id="war-story-7-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">7.2 Root Cause</h3>
+
+Two separate issues: (1) **write path** tied to active profile and CSV source of truth; (2) `skylark-embedding-vision-*` requires **`/embeddings/multimodal`** with `{type:text}` input, not OpenAI-style batch `/embeddings`.
+
+<h3 id="war-story-7-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">7.3 Key Insight</h3>
+
+Split **storage** (populate all YAML profile columns via `embedding_sync` from DB) from **search** (`EMBEDDING_ACTIVE_PROFILE` read-only). Never gate CRUD or bootstrap embeds on the active env var.
+
+<h3 id="war-story-7-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">7.4 Resolution</h3>
+
+`backend.services.embedding_sync` syncs all credentialed profiles per row; scalar CSV load decoupled; `ModelArkEmbeddingClient` uses multimodal endpoint for vision models.
+
+<h3 id="war-story-7-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">7.5 Takeaway</h3>
+
+When adding a second embedding column, assume UI CRUD and non-CSV rows exist — backfill from **Postgres**, not the seed file. For BytePlus vision embed models, read the multimodal API doc before assuming OpenAI-compatible `/embeddings`.
+
+<h2 id="war-story-8-aws-rds-bootstrap" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">8. AWS bootstrap: RDS Data API dual-column sync without VPC job</h2>
+
+**creation:** 260621 · **last_updated:** 260621 · **keywords:** AWS, RDS Data API, Aurora, embedding_sync_rds, bootstrap, psycopg2, ECS · **difficulty:** 7 · **significance:** 8
+
+<h3 id="war-story-8-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">8.1 Context</h3>
+
+Phases 0–7 shipped dual-column `embedding_sync` for local, GCP, and API CRUD. AWS deploy bootstrap still used `load_openai_embeddings_to_pgvector_rds_api.py` writing legacy column `embedding` — broken after `001_embedding_profiles.sql`.
+
+<h3 id="war-story-8-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">8.2 Root Cause</h3>
+
+Bootstrap path was never ported when schema moved to `embedding_openai_1536` / `embedding_skylark_2048`. Deploy runs from laptop (no TCP to private Aurora); reusing psycopg2 `embedding_sync` in a one-off ECS task was rejected as extra infra.
+
+<h3 id="war-story-8-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">8.3 Key Insight</h3>
+
+Split **transport** from **orchestration**: `embedding_sync_core` holds the profile loop; `embedding_sync_rds` implements `execute_statement` UPDATEs. Bootstrap = Data API from outside VPC; steady-state CRUD = ECS psycopg2 — same storage rules, different wire.
+
+<h3 id="war-story-8-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">8.4 Resolution</h3>
+
+Refactored RDS ETL: scalars → `sync_all_embeddings_rds`. `setup_database.py` applies migration 001, verifies `embedding_openai_1536`, passes `ARK_*` to ETL. ECS nonkube gets `ark_api_key` Secrets Manager + ModelArk env vars.
+
+<h3 id="war-story-8-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">8.5 Takeaway</h3>
+
+When the same business logic must run over RDS Data API and psycopg2, extract a transport-agnostic core and test both adapters — do not fork the profile loop. Match the existing deploy workflow (laptop + HTTPS) before adding VPC one-off tasks.
+
+<h2 id="war-story-9-llm-inference-env" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">9. LLM_INFERENCE_PROVIDER: .env value ignored in Docker nonkube</h2>
+
+**creation:** 260521 · **last_updated:** 260521 · **keywords:** LLM_INFERENCE_PROVIDER, ModelArk, docker-compose, env contract, chat provider, claude · **difficulty:** 5 · **significance:** 7
+
+<h3 id="war-story-9-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">9.1 Context</h3>
+
+Phase 3 added `if LLM_INFERENCE_PROVIDER=modelark` in `client_factory.py`. Operators set `modelark` in root `.env` expecting BytePlus chat, but local Docker nonkube still used Claude.
+
+<h3 id="war-story-9-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">9.2 Root Cause</h3>
+
+`docker-compose.nonkube.yml` never passed `LLM_INFERENCE_PROVIDER` into the API container — only vars explicitly listed in `environment:` reach the process. The knob was documented as “optional” under the BytePlus block, so unset-vs-claude semantics were implicit.
+
+<h3 id="war-story-9-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">9.3 Key Insight</h3>
+
+Chat inference is a **fourth axis** orthogonal to `EMBEDDING_ACTIVE_PROFILE`. A boolean-style env check is not enough: need an allowlist (`claude` | `modelark`, default `claude`), central resolver (`llm_inference_config.py`), and **deploy wiring** (compose, kube j2, Terraform) so runtime matches `.env`.
+
+<h3 id="war-story-9-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">9.4 Resolution</h3>
+
+Added `get_llm_inference_provider()`, refactored factory dispatch, dedicated envex section, compose `${LLM_INFERENCE_PROVIDER:-claude}`, kube/terraform env vars, doctor branches per provider, `/health` and `/version` expose resolved provider.
+
+<h3 id="war-story-9-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">9.5 Takeaway</h3>
+
+For every operator-facing env knob, trace **.env → deploy manifest → container env → factory**. If any hop is missing, the feature works in direct `python` runs but fails in Docker — add a static compose/k8s unit test that asserts the key is declared.
+
+---
+
+<h2 id="war-story-10-spark-bootstrap-oom" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">10. Local Spark bootstrap exit 137 — shared Docker RAM and host schedulers</h2>
+
+**creation:** 260613 · **last_updated:** 260613 · **keywords:** Spark, Docker Desktop, OOM, exit 137, scheduler_local, docker run, batch_analytics, local nonkube · **difficulty:** 7 · **significance:** 8
+
+<h3 id="war-story-10-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">10.1 Context</h3>
+
+After a full local `scope=all` deploy with `--force-refresh-data` and `--force-build`, embedding sync succeeded (400 vectors, 200 rows), but Spark bootstrap failed with a single line: `[ERROR] Spark bootstrap failed`. The Batch Analytics UI showed “No analytics data available yet.” Chat and ModelArk query paths worked; only the batch pipeline was missing.
+
+Deploy had run `tools/local/nonkube/deploy_nonkube.py`, which executes:
+
+```bash
+docker run --rm ... fru-spark:local spark-submit ... /opt/fru/jobs/run_analytics.py
+```
+
+Logs showed Spark starting (`[STEP] FRU Batch Analytics START`, Delta writes, stage 11 at ~32/50 tasks) then silence — no Python traceback.
+
+<h3 id="war-story-10-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">10.2 Root Cause</h3>
+
+Reproduction confirmed **exit code 137** (SIGKILL). On Docker Desktop the VM has ~**7.65 GiB** total memory shared by API, Postgres, and every Spark container.
+
+<table>
+<thead>
+<tr style="background:#1565c0;color:white"><th style="padding:8px">Contributor</th><th style="padding:8px">What happened</th><th style="padding:8px">Effect</th></tr>
+</thead>
+<tbody>
+<tr><td style="background:#e3f2fd;padding:8px"><strong>Per-tick <code>docker run</code></strong></td><td style="background:#fff3e0;padding:8px"><code>scheduler_local.py</code> launches a <strong>new</strong> JVM every <code>ANALYTICS_SCHEDULER_INTERVAL_SECONDS</code> (default 180s)</td><td style="background:#ffebee;padding:8px">Each container ~1.8–2.0 GiB while running</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px"><strong>No Forbid</strong></td><td style="background:#fff3e0;padding:8px">Scheduler does not check if a previous Spark container is still alive</td><td style="background:#ffebee;padding:8px">Job &gt; 3 min → overlapping containers</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px"><strong>Duplicate schedulers</strong></td><td style="background:#fff3e0;padding:8px">Multiple <code>start_local</code> runs left <strong>3</strong> <code>scheduler_local.py</code> PIDs on the host</td><td style="background:#ffebee;padding:8px">3× tick rate → more concurrent <code>docker run</code></td></tr>
+<tr><td style="background:#e3f2fd;padding:8px"><strong>Zombie Spark containers</strong></td><td style="background:#fff3e0;padding:8px">16-hour-old <code>fru-spark:local</code> containers still holding ~3.6 GiB</td><td style="background:#ffebee;padding:8px">Less headroom for bootstrap</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px"><strong>Bootstrap race</strong></td><td style="background:#fff3e0;padding:8px">Deploy bootstrap concurrent with scheduler-triggered runs</td><td style="background:#ffebee;padding:8px">Bootstrap is the run that loses the OOM lottery</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px"><strong>Delta bloat (secondary)</strong></td><td style="background:#fff3e0;padding:8px"><code>fru_delta</code> not wiped on <code>--force-refresh-data</code>; 257 parquet files, version ~28</td><td style="background:#fff3e0;padding:8px">Heavier scans; not primary kill signal</td></tr>
+</tbody>
+</table>
+
+The deploy script only checked subprocess return code and logged a generic error — **137 was never surfaced**, so the failure looked like a Spark logic bug.
+
+<h3 id="war-story-10-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">10.3 Key Insight</h3>
+
+<span style="background:#e8f5e9;padding:2px 6px">Exit 137 on local Spark almost always means Docker OOM on a **shared-RAM laptop**, not a bug in <code>run_analytics.py</code>.</span>
+
+Ask: how many `fru-spark:local` containers are running? How many `scheduler_local.py` processes? What does `docker stats` show against the ~7.6 GiB cap?
+
+<h3 id="war-story-10-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">10.4 Resolution</h3>
+
+**Immediate workaround (verified):**
+
+```bash
+pkill -f 'tools/local/scheduler_local.py'
+docker ps -q --filter ancestor=fru-spark:local | xargs docker stop
+# single bootstrap run → ~2 min, success
+```
+
+`/analytics` then returned `total_records: 200`.
+
+**Planned structural fix:** refactor to Compose `analytics-worker` singleton — see [war story 11](#war-story-11-analytics-worker-design) and plan `REFACTOR_LOCAL_NONKUBE_SPARK_ANALYTICS_WORKER.md`.
+
+```mermaid
+flowchart LR
+  subgraph problem["Failure mode"]
+    S1["scheduler tick"]
+    S2["scheduler tick"]
+    B["bootstrap docker run"]
+    S1 --> C1["container ~2GiB"]
+    S2 --> C2["container ~2GiB"]
+    B --> C3["container ~2GiB"]
+    C1 --> OOM["Host OOM → 137"]
+    C2 --> OOM
+    C3 --> OOM
+  end
+```
+
+<h3 id="war-story-10-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">10.5 Takeaway</h3>
+
+When local Spark dies mid-log with no traceback, check **exit 137** and **container count** before debugging Delta or SQL. Band-aid cleanup before bootstrap helps once; steady state needs a **single scheduler owner** with Forbid semantics.
+
+---
+
+<h2 id="war-story-11-analytics-worker-design" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">11. Compose analytics-worker — singleton owner for local nonkube Spark</h2>
+
+**creation:** 260613 · **last_updated:** 260613 · **keywords:** design, system design, Spark, docker compose, local nonkube, scheduler, concurrency Forbid, batch_analytics · **difficulty:** 6 · **significance:** 8
+
+<h3 id="war-story-11-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">11.1 Context</h3>
+
+Local nonkube was meant to mirror cloud: “API in a container + scheduled Spark.” Cloud uses **platform schedulers** (EventBridge, Cloud Scheduler, K8s CronJob). Local implemented scheduling as a **Python script on the Mac host** that shells out to `docker run` — creating a second, unofficial control plane with no replica limit and no overlap policy.
+
+Local **kube** scope already had the right pattern: `spark-cronjob.yaml.j2` sets `concurrencyPolicy: Forbid`. Local **nonkube** did not.
+
+<h3 id="war-story-11-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">11.2 Root Cause</h3>
+
+**Architectural mismatch:** treating the laptop host as a mini-Kubernetes.
+
+| Anti-pattern | Why it fails locally |
+|--------------|----------------------|
+| Host-owned scheduler | Duplicate PIDs when operators re-run `start_local` |
+| `docker run` per job | Full JVM cold start + separate memory accounting per container |
+| Three entry points (deploy, start_local, scheduler) | No single source of truth for “is Spark running?” |
+| Bootstrap = another `docker run` | Races scheduled ticks during deploy |
+
+<h3 id="war-story-11-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">11.3 Key Insight</h3>
+
+<span style="background:#e8f5e9;padding:2px 6px">Local nonkube needs **one Compose service** that owns Spark scheduling — same *role* as kube CronJob, different *packaging* because Docker Desktop shares RAM.</span>
+
+Mental model alignment with cloud:
+
+- **Same job code:** `run_analytics.py`
+- **Same phases:** bootstrap once, then schedule
+- **Different wrapper:** persistent worker with in-process `spark-submit` + Forbid, not host `docker run`
+
+<h3 id="war-story-11-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">11.4 Resolution</h3>
+
+**Target architecture** (plan: `REFACTOR_LOCAL_NONKUBE_SPARK_ANALYTICS_WORKER.md`):
+
+<table>
+<thead>
+<tr style="background:#1565c0;color:white"><th style="padding:8px">Step</th><th style="padding:8px">Mechanism</th></tr>
+</thead>
+<tbody>
+<tr><td style="background:#e3f2fd;padding:8px">1</td><td style="background:#e8f5e9;padding:8px"><code>docker compose up -d postgres api</code></td></tr>
+<tr><td style="background:#e3f2fd;padding:8px">2</td><td style="background:#e8f5e9;padding:8px"><strong>Bootstrap:</strong> <code>compose run --rm analytics-worker --once</code></td></tr>
+<tr><td style="background:#e3f2fd;padding:8px">3</td><td style="background:#e8f5e9;padding:8px"><strong>Schedule:</strong> <code>compose up -d analytics-worker</code> (loop + Forbid)</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px">Retire</td><td style="background:#fff3e0;padding:8px"><code>scheduler_local.py</code> for nonkube; no host <code>docker run</code></td></tr>
+</tbody>
+</table>
+
+```mermaid
+flowchart TB
+  PG["postgres"]
+  API["api nonkube"]
+  AW["analytics-worker x1"]
+  PG --> AW
+  PG --> API
+  AW -->|"if child alive: SKIP"| FORBID{"Forbid"}
+  FORBID -->|"else"| SS["spark-submit run_analytics.py"]
+  SS --> DB["batch_analytics"]
+  SS --> DELTA["fru_delta volume"]
+```
+
+**Forbid rule:** if previous `spark-submit` subprocess still running at tick time, log skip and wait — equivalent to kube `concurrencyPolicy: Forbid`.
+
+**Cleanup vs Forbid (complementary, not either/or):**
+
+| Layer | When | What |
+|-------|------|------|
+| Deploy cleanup | Bootstrap time | Ensure no orphan containers before `--once` |
+| Worker Forbid | Every tick | Prevent overlap while worker is the sole owner |
+| Compose replicas = 1 | Always | Prevent duplicate worker services |
+
+<h3 id="war-story-11-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">11.5 Takeaway</h3>
+
+Do not patch local Spark with “kill zombies before deploy” alone. Give local nonkube a **first-class Compose scheduler** with Forbid — the same invariant kube already has — and delete host-side `docker run` loops.
+
+---
+
+<h2 id="war-story-12-local-vs-cloud-spark-scheduling" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">12. Why local uses a persistent worker but cloud keeps ephemeral tasks</h2>
+
+**creation:** 260613 · **last_updated:** 260613 · **keywords:** design, system design, Spark, local dev, AWS ECS, GCP Cloud Run, Fargate, memory, scheduling · **difficulty:** 5 · **significance:** 7
+
+<h3 id="war-story-12-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">12.1 Context</h3>
+
+After diagnosing local Spark OOM, we proposed a **Compose analytics-worker** (one container, loop inside, Forbid). A natural question: should AWS/GCP nonkube adopt the same pattern “for free” when we fix local?
+
+**Answer: no.** Cloud already schedules Spark correctly for its constraints. Local needs a different wrapper for **different hardware economics**.
+
+<h3 id="war-story-12-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">12.2 Root Cause of the confusion</h3>
+
+Both environments use “one Spark run = one container,” so they **look** the same. The difference is **who pays for memory and how it is isolated**:
+
+<table>
+<thead>
+<tr style="background:#1565c0;color:white"><th style="padding:8px"></th><th style="padding:8px">Local laptop</th><th style="padding:8px">Cloud (AWS/GCP nonkube)</th></tr>
+</thead>
+<tbody>
+<tr><td style="background:#e3f2fd;padding:8px"><strong>Memory model</strong></td><td style="background:#ffebee;padding:8px">**Shared pool** — Docker Desktop ~7.6 GiB for API + DB + N Spark JVMs</td><td style="background:#e8f5e9;padding:8px">**Per task** — Fargate / Cloud Run job gets its own limit (e.g. 2–4 GiB)</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px"><strong>Overlap failure</strong></td><td style="background:#ffebee;padding:8px">OOM kill (exit 137) — system crash</td><td style="background:#fff3e0;padding:8px">Extra cost, redundant writes — usually **no shared-node crash**</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px"><strong>Scheduler</strong></td><td style="background:#ffebee;padding:8px">Host script (fragile)</td><td style="background:#e8f5e9;padding:8px">EventBridge / Cloud Scheduler (managed)</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px"><strong>Idle cost</strong></td><td style="background:#e8f5e9;padding:8px">Laptop already on — worker RAM is “free” vs 3 JVMs</td><td style="background:#ffebee;padding:8px">24/7 worker = continuous billing; ephemeral = pay per run</td></tr>
+</tbody>
+</table>
+
+<h3 id="war-story-12-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">12.3 Key Insight</h3>
+
+**Analogy:**
+
+- **Local** = one small kitchen. Multiple full-size ovens at once overflow the counter → fire marshal (Docker) shuts one down.
+- **Cloud** = catering company that **rents one oven per job**. Two jobs at once costs double rent but does not collapse the building.
+
+So local optimizes for **minimum concurrent JVMs** (singleton worker). Cloud optimizes for **platform-native ephemeral tasks** (already implemented in OpenTofu modules).
+
+<h3 id="war-story-12-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">12.4 Resolution</h3>
+
+**What stays on cloud (no change from local refactor):**
+
+| Provider | Bootstrap | Schedule | Overlap |
+|----------|-----------|----------|---------|
+| AWS nonkube | ECS `run-task` once | EventBridge → RunTask | Allowed; isolated Fargate |
+| GCP nonkube | `gcloud run jobs execute` | Cloud Scheduler → same job | Independent executions |
+| AWS/GCP kube | K8s Job | CronJob `Forbid` | Built-in |
+
+**What changes locally only:** Compose `analytics-worker` replaces `scheduler_local.py` + `docker run`.
+
+**Optional cloud hardening (deferred):** AWS Step Functions guard or GCP “skip if execution running” — cost/ops optimization, not correctness.
+
+```mermaid
+flowchart LR
+  subgraph local["Local — cap RAM"]
+    W["1 worker container"]
+    W --> J1["spark-submit"]
+  end
+  subgraph cloud["Cloud — rent per run"]
+    EB["EventBridge / Scheduler"]
+    EB --> T1["task 1"]
+    EB --> T2["task 2 optional"]
+  end
+```
+
+<h3 id="war-story-12-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">12.5 Takeaway</h3>
+
+Same `run_analytics.py`, different schedulers: local needs a **memory-bounded singleton**; cloud needs **managed ephemeral tasks**. Porting the worker to AWS/GCP would add idle cost without fixing a problem Fargate already avoids.
+
+---
+
+<h2 id="war-story-13-local-dual-ui-entry" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">13. Local nonkube — two UI entry points (Vite vs nginx bundle)</h2>
+
+**creation:** 260613 · **last_updated:** 260613 · **keywords:** local dev, nginx, Vite, Docker Compose, UX, cloud parity, /version, APP_IMAGE_TAG · **difficulty:** 3 · **significance:** 6
+
+<h3 id="war-story-13-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">13.1 Context</h3>
+
+Operators opened `http://localhost:5001/` and saw the full Chat UI while deploy docs called 5001 “the API.” The config strip showed `Build: [unknown]` and Batch Analytics ↻ gave no hint that reload does not run Spark. Both 5174 (Vite) and 5001 showed `Scope: nonkube`, which felt redundant.
+
+<h3 id="war-story-13-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">13.2 Root Cause</h3>
+
+Local nonkube intentionally **mirrors cloud**: one container image runs nginx on the published port, serves the baked SPA, and proxies API routes to Flask on an internal port (`core_app/nginx.conf`). Separately, `start_local.py` runs Vite on another port for hot reload — a **second** entry point that was under-documented.
+
+| URL | Actual role |
+|-----|-------------|
+| **5001** | Production-style bundle (UI + API) |
+| **5174** | Dev Vite → proxies to 5001 |
+
+`APP_IMAGE_TAG` was not passed into Compose, so `/version` fell back to `[unknown]`. The ↻ button only called `GET /analytics` (PostgreSQL snapshot) with no in-panel explanation.
+
+<h3 id="war-story-13-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">13.3 Key Insight</h3>
+
+**Cloud parity creates local confusion unless you name both entry points.** Keeping 5001 published is correct for curl, integration tests, and bundled smoke; dev work should be steered to Vite via logs, docs, and an in-app banner when `import.meta.env.DEV` is false on local nonkube.
+
+<h3 id="war-story-13-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">13.4 Resolution</h3>
+
+| Change | Purpose |
+|--------|---------|
+| `generate_image_tag("local")` → `APP_IMAGE_TAG` in deploy + compose | Meaningful `Build:` line |
+| `/version` adds chat/embedding model fields + `dev_frontend_port` | Config strip + banner port from API |
+| `/analytics` `meta.reload_does` / `reload_does_not` | Batch Analytics ↻ expectations |
+| Deploy logs distinguish API (nginx+Flask) vs Vite | Operator clarity |
+| `docs/learned/local/LOCAL_PORTS_AND_UI_ENTRY_POINTS.md` | Canonical port guide |
+
+Scope label duplication (5174 vs 5001 both `nonkube`) was **deferred** — correct behavior, not a bug.
+
+<h3 id="war-story-13-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">13.5 Takeaway</h3>
+
+When a dev stack copies cloud’s “single container UI+API,” add an explicit **dev overlay** (Vite) and document both URLs. Treat `/version` as the UI’s source of truth for build stamp and runtime config hints.

@@ -1,23 +1,16 @@
 """
-Shared load logic for fru_sales_raw and fru_sales_embeddings (OpenAI embeddings + psycopg2).
+Shared load logic for fru_sales_raw and fru_sales_embeddings.
 
-Used by run_schema_and_load.py (container) and setup_database.py (host).
-Uses os.getenv() only – no backend.utils.env_helpers (container has no core_app).
+Flow: load_raw_from_csv → load_scalars_to_embeddings → embedding_sync (vectors).
 
-Flow: load_raw_from_csv (CSV → fru_sales_raw) then load_embeddings (fru_sales_raw → fru_sales_embeddings).
-
-Container-safe: when run inside the GCP db-setup image, tools/ is not in the image;
-we use minimal local stubs for require() and logging so the same code runs on host and in Cloud Run.
+Scalar load never reads EMBEDDING_ACTIVE_PROFILE; sync populates all credentialed profiles.
 """
 import os
 import sys
-import time
 
 import pandas as pd
-from openai import OpenAI
 from psycopg2.extras import RealDictCursor
 
-# Use shared tools when available (host); in container (Cloud Run job) tools/ is not in the image
 try:
     from tools.cloud_shared.logging.logger import info, success, error, step
     from tools.cloud_shared.env import require
@@ -43,6 +36,28 @@ REQUIRED_COLUMNS = [
     "SALES_DATE", "STORE_NAME", "STORE_ADDRESS", "CUSTOMER_FEEDBACK",
     "FEEDBACK_RATING", "FEEDBACK_SENTIMENT_CATEGORY",
 ]
+
+
+def _wire_backend_logging_for_bootstrap() -> None:
+    """Route backend.services / backend.env_utils INFO logs through neat_logger during bootstrap."""
+    import logging
+
+    class _NeatBridge(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            msg = self.format(record)
+            if record.levelno >= logging.WARNING:
+                error(msg)
+            else:
+                info(msg)
+
+    backend_log = logging.getLogger("backend")
+    if any(isinstance(h, _NeatBridge) for h in backend_log.handlers):
+        return
+    handler = _NeatBridge()
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    backend_log.addHandler(handler)
+    backend_log.setLevel(logging.INFO)
+    backend_log.propagate = False
 
 
 def load_raw_from_csv(
@@ -121,67 +136,59 @@ def load_raw_from_csv(
     return len(rows)
 
 
-def load_embeddings(
+def _rows_from_csv_or_raw(conn, csv_path: str | None) -> list[dict]:
+    if csv_path:
+        if not os.path.exists(csv_path):
+            error(f"CSV not found: {csv_path}")
+            raise FileNotFoundError(f"CSV not found: {csv_path}")
+        step(f"Reading CSV scalars from {csv_path}")
+        df = pd.read_csv(csv_path)
+        return df.to_dict(orient="records")
+    step("Reading scalars from fru_sales_raw")
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            "SELECT id, customer_id, brand, fridge_model, capacity_liters, price, sales_date, "
+            "store_name, store_address, customer_feedback, feedback_rating, feedback_sentiment_category "
+            "FROM fru_sales_raw"
+        )
+        raw_rows = cur.fetchall()
+    return [
+        {
+            "ID": r["id"],
+            "CUSTOMER_ID": r.get("customer_id") or "",
+            "BRAND": r["brand"],
+            "FRIDGE_MODEL": r["fridge_model"],
+            "CAPACITY_LITERS": r.get("capacity_liters"),
+            "PRICE": r["price"],
+            "SALES_DATE": r["sales_date"],
+            "STORE_NAME": r["store_name"],
+            "STORE_ADDRESS": r.get("store_address") or "",
+            "CUSTOMER_FEEDBACK": r.get("customer_feedback") or "",
+            "FEEDBACK_RATING": r.get("feedback_rating"),
+            "FEEDBACK_SENTIMENT_CATEGORY": r.get("feedback_sentiment_category") or "",
+        }
+        for r in raw_rows
+    ]
+
+
+def load_scalars_to_embeddings(
     conn,
     csv_path: str | None = None,
     config: dict | None = None,
     force: bool = False,
 ) -> int:
-    """
-    Load fru_sales_raw into fru_sales_embeddings via OpenAI embeddings.
-    When csv_path is None, reads from fru_sales_raw. When csv_path is given, reads from CSV (legacy).
-    Returns row count. Idempotent: skips if data exists and not force.
-    """
-    from backend.env_utils.cloud_shared.embedding_factory import create_embedding_client
-    from backend.env_utils.cloud_shared.embedding_profiles import get_active_pgvector_column
+    """Upsert scalar columns into fru_sales_embeddings (no embedding API)."""
+    from backend.services.embedding_sync import scalar_row_tuple, SCALAR_UPSERT_SQL
 
-    embed_col = get_active_pgvector_column()
-
-    # Idempotency: skip if data exists and not force
     if not force:
         with conn.cursor() as cur:
             cur.execute("SELECT COUNT(*) FROM fru_sales_embeddings;")
             existing = cur.fetchone()[0]
         if existing > 0:
-            step(f"Data already loaded ({existing} rows); skipping (use force=True to reload)")
+            step(f"Scalars already loaded ({existing} rows); skipping (use force=True to reload)")
             return existing
 
-    if csv_path:
-        if not os.path.exists(csv_path):
-            error(f"CSV not found: {csv_path}")
-            raise FileNotFoundError(f"CSV not found: {csv_path}")
-        step(f"Reading CSV from {csv_path}")
-        df = pd.read_csv(csv_path)
-        rows = df.to_dict(orient="records")
-    else:
-        step("Reading from fru_sales_raw")
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute(
-                "SELECT id, customer_id, brand, fridge_model, capacity_liters, price, sales_date, "
-                "store_name, store_address, customer_feedback, feedback_rating, feedback_sentiment_category "
-                "FROM fru_sales_raw"
-            )
-            raw_rows = cur.fetchall()
-        # Map lowercase to uppercase keys for compatibility with insert logic
-        rows = [
-            {
-                "ID": r["id"],
-                "CUSTOMER_ID": r.get("customer_id") or "",
-                "BRAND": r["brand"],
-                "FRIDGE_MODEL": r["fridge_model"],
-                "CAPACITY_LITERS": r.get("capacity_liters"),
-                "PRICE": r["price"],
-                "SALES_DATE": r["sales_date"],
-                "STORE_NAME": r["store_name"],
-                "STORE_ADDRESS": r.get("store_address") or "",
-                "CUSTOMER_FEEDBACK": r.get("customer_feedback") or "",
-                "FEEDBACK_RATING": r.get("feedback_rating"),
-                "FEEDBACK_SENTIMENT_CATEGORY": r.get("feedback_sentiment_category") or "",
-            }
-            for r in raw_rows
-        ]
-
-    info(f"Loaded {len(rows)} rows for embedding")
+    rows = _rows_from_csv_or_raw(conn, csv_path)
     if not rows:
         error("No rows to load")
         raise RuntimeError("No rows in fru_sales_raw or CSV")
@@ -193,75 +200,65 @@ def load_embeddings(
 
     if config:
         step(f"Connecting to DB {config['host']}:{config['port']}/{config['dbname']}")
-    info("Initializing embedding client (active profile)")
-    openai_client = OpenAI()
-    embed_client = create_embedding_client(openai_client=openai_client)
-    batch_size = 64
-    success_count = 0
-    num_batches = (len(rows) + batch_size - 1) // batch_size
-    step(f"Processing {len(rows)} rows in {num_batches} batches of {batch_size}")
+    step(f"Upserting {len(rows)} scalar rows into fru_sales_embeddings")
 
     with conn.cursor() as cur:
-        for batch_idx, i in enumerate(range(0, len(rows), batch_size), 1):
-            batch = rows[i : i + batch_size]
-            step(f"Batch {batch_idx}/{num_batches}: fetching embeddings...")
-            texts = [r.get("CUSTOMER_FEEDBACK") or "" for r in batch]
-            try:
-                info(f"Calling embedding API (n={len(texts)} texts, column={embed_col})")
-                embeddings = embed_client.embed_texts(texts)
-            except Exception as e:
-                error(f"Batch {batch_idx}/{num_batches} OpenAI call failed: {e}")
-                raise
+        for row_data in rows:
+            cur.execute(SCALAR_UPSERT_SQL, scalar_row_tuple(row_data))
+    conn.commit()
+    success(f"Scalar load complete. Total: {len(rows)} rows")
+    return len(rows)
 
-            for row_data, embedding in zip(batch, embeddings):
-                cleaned = {k: (None if pd.isna(v) else v) for k, v in row_data.items()}
-                feedback_rating = cleaned.get("FEEDBACK_RATING")
-                try:
-                    feedback_rating_int = int(feedback_rating) if feedback_rating is not None else None
-                except (ValueError, TypeError):
-                    feedback_rating_int = None
 
+def load_embeddings(
+    conn,
+    csv_path: str | None = None,
+    config: dict | None = None,
+    force: bool = False,
+) -> int:
+    """
+    Bootstrap: scalars then dual-profile embedding sync.
+    Backward-compatible name used by setup_database / run_schema_and_load.
+    """
+    from backend.services.embedding_sync import copy_raw_to_embeddings_scalars, sync_all_embeddings
+
+    if not force:
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM fru_sales_embeddings;")
+            existing = cur.fetchone()[0]
+        if existing > 0:
+            with conn.cursor() as cur:
                 cur.execute(
-                    f"""
-                    INSERT INTO fru_sales_embeddings
-                    (id, customer_id, brand, fridge_model, capacity_liters, price, sales_date,
-                     store_name, store_address, customer_feedback, feedback_rating,
-                     feedback_sentiment_category, {embed_col})
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::vector)
-                    ON CONFLICT (id) DO UPDATE SET
-                      customer_id = EXCLUDED.customer_id,
-                      brand = EXCLUDED.brand,
-                      fridge_model = EXCLUDED.fridge_model,
-                      capacity_liters = EXCLUDED.capacity_liters,
-                      price = EXCLUDED.price,
-                      sales_date = EXCLUDED.sales_date,
-                      store_name = EXCLUDED.store_name,
-                      store_address = EXCLUDED.store_address,
-                      customer_feedback = EXCLUDED.customer_feedback,
-                      feedback_rating = EXCLUDED.feedback_rating,
-                      feedback_sentiment_category = EXCLUDED.feedback_sentiment_category,
-                      {embed_col} = EXCLUDED.{embed_col}
-                    """,
-                    (
-                        cleaned["ID"],
-                        cleaned.get("CUSTOMER_ID", ""),
-                        cleaned["BRAND"],
-                        cleaned["FRIDGE_MODEL"],
-                        cleaned.get("CAPACITY_LITERS"),
-                        cleaned["PRICE"],
-                        cleaned["SALES_DATE"],
-                        cleaned["STORE_NAME"],
-                        cleaned.get("STORE_ADDRESS", ""),
-                        cleaned.get("CUSTOMER_FEEDBACK", ""),
-                        feedback_rating_int,
-                        cleaned.get("FEEDBACK_SENTIMENT_CATEGORY", ""),
-                        str(embedding),
-                    ),
+                    "SELECT COUNT(*) FROM fru_sales_embeddings WHERE embedding_openai_1536 IS NOT NULL"
                 )
-                success_count += 1
-            conn.commit()
-            info(f"Batch {batch_idx}/{num_batches} done: inserted {len(batch)} rows (total so far: {success_count})")
-            time.sleep(0.2)
+                has_vectors = cur.fetchone()[0]
+            if has_vectors > 0:
+                step(
+                    f"Data already loaded ({existing} rows, {has_vectors} with vectors); "
+                    "skipping (use force=True to reload)"
+                )
+                return existing
 
-    success(f"Load complete. Total: {success_count} rows")
-    return success_count
+    if csv_path:
+        load_scalars_to_embeddings(conn, csv_path=csv_path, config=config, force=True)
+    else:
+        copy_raw_to_embeddings_scalars(conn)
+
+    _wire_backend_logging_for_bootstrap()
+
+    step("Syncing embedding vectors for all available profiles")
+    result = sync_all_embeddings(conn, missing_only=False, force=True)
+    from backend.services.embedding_sync_log import format_sync_result_detail
+
+    for line in format_sync_result_detail(result):
+        if result.failed:
+            error(line)
+        else:
+            info(line)
+    if result.failed:
+        error(f"Embedding sync failed: {result.failed} row(s); see errors above")
+        raise RuntimeError(f"Embedding sync failed: {result.failed} failures")
+    success(f"Load complete. Embedded={result.embedded} skipped={result.skipped}")
+    with conn.cursor() as cur:
+        cur.execute("SELECT COUNT(*) FROM fru_sales_embeddings;")
+        return cur.fetchone()[0]

@@ -104,6 +104,8 @@ spec:
           value: "{{ OPENAI_EMBED_MODEL }}"
         - name: EMBEDDING_ACTIVE_PROFILE
           value: "{{ EMBEDDING_ACTIVE_PROFILE | default('openai_1536') }}"
+        - name: LLM_INFERENCE_PROVIDER
+          value: "{{ LLM_INFERENCE_PROVIDER | default('claude') }}"
         - name: ARK_BASE_URL
           value: "{{ ARK_BASE_URL | default('https://ark.ap-southeast.bytepluses.com/api/v3') }}"
         - name: ARK_EMBEDDING_MODEL_ID

@@ -14,6 +14,7 @@ class _FakeLLM:
 
 
 def test_create_llm_client_explicit_local(monkeypatch):
+    monkeypatch.setenv("LLM_INFERENCE_PROVIDER", "claude")
     monkeypatch.setenv("CLOUD_PROVIDER", "local")
     with patch(
         "backend.env_utils.local.get_llm_client",
@@ -24,6 +25,7 @@ def test_create_llm_client_explicit_local(monkeypatch):
 
 
 def test_create_llm_client_missing_raises(monkeypatch):
+    monkeypatch.setenv("LLM_INFERENCE_PROVIDER", "claude")
     monkeypatch.setenv("CLOUD_PROVIDER", "aws")
     with patch("backend.env_utils.aws.get_llm_client", return_value=None):
         with pytest.raises(ValueError, match="No LLM client"):

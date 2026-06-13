@@ -50,6 +50,7 @@ def _get_aws_outputs(env: str, region: str) -> dict:
         "openai_api_key": result.get("openai_api_key_secret_arn", {}).get("value"),
         "db_password": result.get("db_password_secret_arn", {}).get("value"),
         "db_password_plain": result.get("db_password_plain_secret_arn", {}).get("value"),
+        "ark_api_key": result.get("ark_api_key_secret_arn", {}).get("value"),
     }
 
 
@@ -150,6 +151,21 @@ def ensure_secrets(provider: str, env: str, region: str) -> None:
         logger.success("[SECRETS] OPENAI_API_KEY set")
     else:
         logger.warning("[SECRETS] OPENAI_API_KEY not set in .env; skipping")
+
+    ark = (os.getenv("ARK_API_KEY") or "").strip()
+    if ark:
+        if provider == "aws":
+            ref = outputs.get("ark_api_key")
+            if ref:
+                logger.info("[SECRETS] Setting ARK_API_KEY...")
+                _put_aws_secret(ref, ark, region)
+                logger.success("[SECRETS] ARK_API_KEY set")
+            else:
+                logger.warning("[SECRETS] ark_api_key_secret_arn not in durable outputs; run deploy durable_with_cooloff first")
+        else:
+            logger.warning("[SECRETS] ARK_API_KEY set in .env but GCP ark secret path not configured; skipping")
+    else:
+        logger.warning("[SECRETS] ARK_API_KEY not set in .env; skylark storage lane skipped at runtime")
 
     dbpw = (os.getenv("PGPASSWORD") or "").strip()
     if dbpw:

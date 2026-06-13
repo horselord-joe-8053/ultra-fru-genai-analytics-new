@@ -54,8 +54,12 @@ def run_deploy_nonkube(
 
     llm_provider = os.getenv("GCP_LLM_PROVIDER") or os.getenv("LLM_PROVIDER", "gemini")
     llm_provider = llm_provider.strip().lower()
+    from core_app.backend.env_utils.cloud_shared.llm_inference_config import (
+        get_llm_inference_provider,
+    )
     from core_app.backend.env_utils.cloud_shared.model_config import require_claude_model
     claude_model = require_claude_model().strip()
+    llm_inference = get_llm_inference_provider()
     img_tag = os.getenv("APP_IMAGE_TAG", "").strip()
     plan_vars = [
         f"-var=prefix={prefix}", f"-var=env={env}",
@@ -67,6 +71,7 @@ def run_deploy_nonkube(
         f"-var=delta_bucket_fallback={delta_bucket}",
         f"-var=llm_provider={llm_provider}",
         f"-var=claude_model={claude_model}",
+        f"-var=llm_inference_provider={llm_inference}",
         f"-var=spark_schedule_expression={seconds_to_cron(interval_sec)}",
         f"-var=analytics_scheduler_interval_seconds={interval_sec}",
     ]

@@ -284,65 +284,15 @@ def pgvector_search_feedback(query_text: str, limit: int = 30) -> List[Dict[str,
             return_db_conn(conn)
 
 
-def _upsert_embeddings_for_rows(conn, rows: List[Dict[str, Any]]) -> None:
-    """Upsert rows into fru_sales_embeddings (embed CUSTOMER_FEEDBACK via active profile)."""
-    from backend.env_utils.cloud_shared.embedding_factory import create_embedding_client
-    from backend.env_utils.cloud_shared.embedding_profiles import get_active_pgvector_column
+def _sync_row_embeddings(conn, row_id: str) -> dict:
+    """Dual-profile embed sync for one row (ignores EMBEDDING_ACTIVE_PROFILE)."""
+    from backend.services.embedding_sync import sync_embeddings_for_ids
 
-    if not rows:
-        return
-    texts = [r.get("CUSTOMER_FEEDBACK") or r.get("customer_feedback") or "" for r in rows]
-    embed_client = create_embedding_client(openai_client=get_openai_client())
-    embeddings = embed_client.embed_texts(texts)
-    embed_col = get_active_pgvector_column()
-    with conn.cursor() as cur:
-        for row_data, embedding in zip(rows, embeddings):
-            def _v(k: str) -> Any:
-                return row_data.get(k) or row_data.get(k.lower() if k.isupper() else k.upper())
-            fid = _v("ID") or _v("id")
-            feedback_rating = _v("FEEDBACK_RATING") or _v("feedback_rating")
-            try:
-                feedback_rating_int = int(feedback_rating) if feedback_rating is not None else None
-            except (ValueError, TypeError):
-                feedback_rating_int = None
-            cur.execute(
-                f"""
-                INSERT INTO fru_sales_embeddings
-                (id, customer_id, brand, fridge_model, capacity_liters, price, sales_date,
-                 store_name, store_address, customer_feedback, feedback_rating,
-                 feedback_sentiment_category, {embed_col})
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::vector)
-                ON CONFLICT (id) DO UPDATE SET
-                  customer_id = EXCLUDED.customer_id,
-                  brand = EXCLUDED.brand,
-                  fridge_model = EXCLUDED.fridge_model,
-                  capacity_liters = EXCLUDED.capacity_liters,
-                  price = EXCLUDED.price,
-                  sales_date = EXCLUDED.sales_date,
-                  store_name = EXCLUDED.store_name,
-                  store_address = EXCLUDED.store_address,
-                  customer_feedback = EXCLUDED.customer_feedback,
-                  feedback_rating = EXCLUDED.feedback_rating,
-                  feedback_sentiment_category = EXCLUDED.feedback_sentiment_category,
-                  {embed_col} = EXCLUDED.{embed_col}
-                """,
-                (
-                    fid,
-                    _v("CUSTOMER_ID") or "",
-                    _v("BRAND") or "Unknown",
-                    _v("FRIDGE_MODEL") or "Unknown",
-                    _v("CAPACITY_LITERS"),
-                    float(_v("PRICE") or 0) if _v("PRICE") is not None else 0.0,
-                    _v("SALES_DATE"),
-                    _v("STORE_NAME") or "Unknown",
-                    _v("STORE_ADDRESS") or "",
-                    _v("CUSTOMER_FEEDBACK") or "",
-                    feedback_rating_int,
-                    _v("FEEDBACK_SENTIMENT_CATEGORY") or "Neutral",
-                    str(embedding),
-                ),
-            )
-        conn.commit()
+    result = sync_embeddings_for_ids(conn, [row_id], force=True)
+    out = result.to_dict()
+    if result.warnings or result.errors:
+        app.logger.warning("Embedding sync for %s: %s", row_id, out)
+    return out
 
 
 def build_claude_system_prompt() -> str:
@@ -417,7 +367,8 @@ def get_analytics():
             app.logger.info(f"[{request_id}] Analytics skipped: database not configured (PGHOST not set)")
             return jsonify({
                 "error": "Analytics requires a database. Database not configured (PGHOST not set).",
-                "request_id": request_id
+                "request_id": request_id,
+                "meta": _analytics_response_meta(),
             }), 200
 
         conn = get_db_conn()
@@ -449,7 +400,8 @@ def get_analytics():
                     # that would serve frontend HTML instead of JSON
                     return jsonify({
                         "error": "No analytics data available yet. Analytics will be available after the first batch run.",
-                        "request_id": request_id
+                        "request_id": request_id,
+                        "meta": _analytics_response_meta(),
                     }), 200
                 
                 # Convert to dict and format
@@ -516,6 +468,7 @@ def get_analytics():
                     result["top_models"] = result["top_models"][:query_limit]
                 # feedback_analysis remains unlimited (not displayed in frontend, may be used elsewhere)
                 
+                result["meta"] = _analytics_response_meta()
                 app.logger.info(f"[{request_id}] Analytics data returned successfully (limited to {query_limit} items per category)")
                 return jsonify(result)
         finally:
@@ -542,22 +495,20 @@ def health():
     status = {"status": "ok"}
     
     # Check database connection (optional for skeleton verification)
+    conn = None
     try:
         conn = get_db_conn()
         with conn.cursor() as cur:
             cur.execute("SELECT 1;")
-        return_db_conn(conn)
         status["database"] = "connected"
     except Exception as e:
         status["database"] = "disconnected"
         status["database_error"] = str(e)
         app.logger.warning(f"Database health check failed: {e}")
-        # Include credentials status even when DB is down
         status.update(_check_credentials_status())
-        # Return 200 even if DB is down for skeleton health check
         return jsonify(status), 200
 
-    # Embedding profile + provider credentials
+    # Embedding profile + provider credentials (search lane only)
     try:
         from backend.env_utils.cloud_shared.embedding_profiles import get_active_profile
 
@@ -580,9 +531,26 @@ def health():
     except Exception as e:
         status["embedding_profile_error"] = str(e)
 
+    try:
+        from backend.services.embedding_sync import embedding_column_population_counts
+
+        status["embedding_columns_populated"] = embedding_column_population_counts(conn)
+    except Exception as e:
+        status["embedding_columns_populated_error"] = str(e)
+    finally:
+        if conn is not None:
+            return_db_conn(conn)
+
     # Check cloud credentials (provider-agnostic: AWS, GCP, or local)
     creds_status = _check_credentials_status()
     status.update(creds_status)
+
+    try:
+        from backend.env_utils.cloud_shared.llm_inference_config import get_llm_inference_provider
+
+        status["llm_inference_provider"] = get_llm_inference_provider()
+    except ValueError as e:
+        status["llm_inference_provider_error"] = str(e)
 
     return jsonify(status)
 
@@ -591,6 +559,85 @@ def _check_credentials_status() -> dict:
     """Delegate to env_utils; keeps boto3 and cloud SDK imports out of app.py."""
     from backend.env_utils.cloud_shared.credentials import check_credentials_status
     return check_credentials_status()
+
+
+def _analytics_response_meta() -> dict:
+    """UI hints for GET /analytics — reload vs Spark job (does not trigger batch run)."""
+    return {
+        "server_time": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "reload_does": "Fetches the latest batch_analytics snapshot already stored in PostgreSQL.",
+        "reload_does_not": "Does not start or wait for a new Spark/Delta batch job.",
+        "run_new_batch": "Wait for the scheduled analytics worker (or redeploy bootstrap), or check run_status below.",
+    }
+
+
+def _resolve_version_model_fields() -> dict:
+    """Resolved chat + embedding model ids for /version (UI config strip)."""
+    out: dict = {}
+    try:
+        from backend.env_utils.cloud_shared.llm_inference_config import get_llm_inference_provider
+
+        provider = get_llm_inference_provider()
+        out["llm_inference_provider"] = provider
+        cp = (os.environ.get("CLOUD_PROVIDER") or "local").strip().lower()
+        if provider == "modelark":
+            mid = (os.environ.get("ARK_CHAT_MODEL_ID") or "").strip()
+            out["chat_model"] = mid or None
+            if not mid:
+                out["chat_model_error"] = "ARK_CHAT_MODEL_ID not set"
+        elif cp == "aws":
+            mid = (
+                (os.environ.get("AWS_BEDROCK_INFERENCE_PROFILE_ID") or "").strip()
+                or (os.environ.get("AWS_BEDROCK_MODEL_ID") or "").strip()
+            )
+            out["chat_model"] = mid or None
+            if not mid:
+                out["chat_model_error"] = "AWS_BEDROCK_INFERENCE_PROFILE_ID or AWS_BEDROCK_MODEL_ID not set"
+        elif cp == "gcp":
+            gcp_llm = (
+                (os.environ.get("GCP_LLM_PROVIDER") or "").strip().lower()
+                or (os.environ.get("LLM_PROVIDER") or "gemini").strip().lower()
+            )
+            if gcp_llm == "claude":
+                mid = (os.environ.get("CLAUDE_MODEL") or "").strip()
+                out["chat_model"] = mid or None
+                if not mid:
+                    out["chat_model_error"] = "CLAUDE_MODEL not set"
+            else:
+                mid = (
+                    (os.environ.get("GOOGLE_MODEL") or "").strip()
+                    or (os.environ.get("GEMINI_MODEL") or "").strip()
+                )
+                out["chat_model"] = mid or None
+                if not mid:
+                    out["chat_model_error"] = "GOOGLE_MODEL or GEMINI_MODEL not set"
+        else:
+            mid = (os.environ.get("CLAUDE_MODEL") or "").strip()
+            out["chat_model"] = mid or None
+            if not mid:
+                out["chat_model_error"] = "CLAUDE_MODEL not set"
+    except ValueError as e:
+        out["llm_inference_provider_error"] = str(e)
+
+    try:
+        from backend.env_utils.cloud_shared.embedding_profiles import (
+            get_active_profile,
+            get_active_profile_name,
+            resolve_model_id,
+        )
+
+        profile = get_active_profile()
+        out["embedding_profile"] = get_active_profile_name()
+        out["embedding_provider"] = profile.provider
+        try:
+            out["embedding_model"] = resolve_model_id(profile)
+        except ValueError as e:
+            out["embedding_model"] = None
+            out["embedding_model_error"] = str(e)
+    except Exception as e:
+        out["embedding_profile_error"] = str(e)
+
+    return out
 
 
 def _version_proxy_info(
@@ -629,6 +676,28 @@ def _version_proxy_info(
     return f"{domain}:{port} → api:{api_p}"
 
 
+def _resolve_local_port_hints(scope: str | None, cloud_provider: str | None) -> dict:
+    """Optional dev UI port for local /version (bundled nginx UI banner)."""
+    if (cloud_provider or "").strip().lower() != "local":
+        return {}
+    hints: dict = {}
+    raw_fe = os.environ.get("LOCAL_DEV_FRONTEND_PORT", "").strip()
+    if raw_fe.isdigit():
+        hints["dev_frontend_port"] = int(raw_fe)
+    raw_api = os.environ.get("LOCAL_API_PUBLIC_PORT", "").strip()
+    if raw_api.isdigit():
+        hints["api_public_port"] = int(raw_api)
+    elif scope == "nonkube":
+        listen = os.environ.get("LOCAL_API_PUBLIC_PORT", "").strip()
+        if listen.isdigit():
+            hints["api_public_port"] = int(listen)
+        else:
+            port_env = os.environ.get("PORT", "").strip()
+            if port_env.isdigit():
+                hints["api_public_port"] = int(port_env)
+    return hints
+
+
 @app.route("/version", methods=["GET"])
 def version():
     """Returns container image version tag(s) as [tag1, tag2, ...].
@@ -649,7 +718,10 @@ def version():
         tag = os.environ.get("APP_IMAGE_TAG", "").strip()
         provider = (os.environ.get("CLOUD_PROVIDER", "") or "local").strip().lower()
         region = (os.environ.get("CLOUD_REGION", "") or "").strip() or None
-        if container_image and container_image != "unknown" and provider in ("gcp", "aws", "local"):
+        # Local: APP_IMAGE_TAG is the deploy stamp (fru_local_<date>_<sha>_...); Docker tag stays :local
+        if provider == "local" and tag:
+            tags = [tag]
+        elif container_image and container_image != "unknown" and provider in ("gcp", "aws", "local"):
             try:
                 from tools.cloud_shared.image_registry_tags import get_image_tags
                 tags = get_image_tags(container_image, provider, region)
@@ -679,6 +751,11 @@ def version():
     proxy_public_url = os.environ.get("PROXY_PUBLIC_URL", "").strip() or None
     proxy_info = _version_proxy_info(cloud_provider, scope, api_port, proxy_public_url)
 
+    model_fields = _resolve_version_model_fields()
+    llm_inference_provider = model_fields.pop("llm_inference_provider", None)
+    llm_inference_error = model_fields.pop("llm_inference_provider_error", None)
+    port_hints = _resolve_local_port_hints(scope, cloud_provider)
+
     return jsonify({
         "version": tags,
         "scope": scope,
@@ -686,8 +763,12 @@ def version():
         "region": region,
         "api_port": api_port,
         "proxy_info": proxy_info,
+        "llm_inference_provider": llm_inference_provider,
+        "llm_inference_provider_error": llm_inference_error,
         "agent_enabled": query_agent is not None,
         "agent_init_error": _agent_init_error,
+        **port_hints,
+        **model_fields,
     })
 
 
@@ -793,7 +874,9 @@ def rawdata_create():
                 ),
             )
             conn.commit()
-        # Sync to embeddings
+        # Sync scalars + dual-profile embeddings (not gated by EMBEDDING_ACTIVE_PROFILE)
+        from backend.services.embedding_sync import upsert_scalar_row
+
         row_for_embed = {
             "ID": id_val,
             "CUSTOMER_ID": body.get("customer_id", ""),
@@ -808,8 +891,12 @@ def rawdata_create():
             "FEEDBACK_RATING": int(body["feedback_rating"]) if body.get("feedback_rating") is not None else None,
             "FEEDBACK_SENTIMENT_CATEGORY": body.get("feedback_sentiment_category", "Neutral"),
         }
-        _upsert_embeddings_for_rows(conn, [row_for_embed])
-        return jsonify({"id": id_val, "message": "Created"}), 201
+        upsert_scalar_row(conn, row_for_embed)
+        embed_result = _sync_row_embeddings(conn, id_val)
+        resp = {"id": id_val, "message": "Created"}
+        if embed_result.get("warnings") or embed_result.get("errors"):
+            resp["embeddings_warning"] = embed_result
+        return jsonify(resp), 201
     except Psycopg2Error as e:
         if conn:
             conn.rollback()
@@ -861,6 +948,8 @@ def rawdata_update(id: str):
             if cur.rowcount == 0:
                 return jsonify({"error": "Not found"}), 404
             conn.commit()
+        from backend.services.embedding_sync import upsert_scalar_row
+
         row_for_embed = {
             "ID": id,
             "CUSTOMER_ID": body.get("customer_id", ""),
@@ -875,8 +964,12 @@ def rawdata_update(id: str):
             "FEEDBACK_RATING": int(body["feedback_rating"]) if body.get("feedback_rating") is not None else None,
             "FEEDBACK_SENTIMENT_CATEGORY": body.get("feedback_sentiment_category", "Neutral"),
         }
-        _upsert_embeddings_for_rows(conn, [row_for_embed])
-        return jsonify({"id": id, "message": "Updated"})
+        upsert_scalar_row(conn, row_for_embed)
+        embed_result = _sync_row_embeddings(conn, id)
+        resp = {"id": id, "message": "Updated"}
+        if embed_result.get("warnings") or embed_result.get("errors"):
+            resp["embeddings_warning"] = embed_result
+        return jsonify(resp)
     except Psycopg2Error as e:
         if conn:
             conn.rollback()
@@ -885,6 +978,50 @@ def rawdata_update(id: str):
         if conn:
             conn.rollback()
         app.logger.error(f"rawdata update error: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn:
+            return_db_conn(conn)
+
+
+@app.route("/admin/embeddings/sync", methods=["POST"])
+def admin_embeddings_sync():
+    """Operator endpoint: bulk or per-id embedding sync (requires ADMIN_API_KEY)."""
+    admin_key = os.environ.get("ADMIN_API_KEY", "").strip()
+    if not admin_key:
+        return jsonify({"error": "Admin embedding sync disabled (ADMIN_API_KEY unset)"}), 503
+    if request.headers.get("X-Admin-Api-Key", "") != admin_key:
+        return jsonify({"error": "Forbidden"}), 403
+    if not os.environ.get("PGHOST"):
+        return jsonify({"error": "Database not configured"}), 503
+
+    body = request.get_json(silent=True) or {}
+    scope = body.get("scope", "all")
+    missing_only = bool(body.get("missing_only", True))
+    force = bool(body.get("force", False))
+    profiles = body.get("profiles")
+    conn = None
+    try:
+        from backend.services.embedding_sync import sync_all_embeddings, sync_embeddings_for_ids
+
+        conn = get_db_conn()
+        if scope == "ids":
+            ids = body.get("ids") or []
+            if not ids:
+                return jsonify({"error": "ids required when scope=ids"}), 400
+            result = sync_embeddings_for_ids(
+                conn, [str(i) for i in ids], profiles=profiles, force=force
+            )
+        else:
+            result = sync_all_embeddings(
+                conn,
+                missing_only=missing_only,
+                force=force,
+                profiles=profiles,
+            )
+        return jsonify(result.to_dict())
+    except Exception as e:
+        app.logger.error(f"admin embeddings sync error: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
     finally:
         if conn:

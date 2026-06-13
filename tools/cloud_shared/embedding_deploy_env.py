@@ -21,12 +21,18 @@ def modelark_secret_entries() -> dict[str, str]:
     return {"ARK_API_KEY": key} if key else {}
 
 
+def llm_inference_provider_from_env(default: str = "claude") -> str:
+    raw = os.environ.get("LLM_INFERENCE_PROVIDER", default).strip().lower()
+    return raw or default
+
+
 def api_deployment_embedding_subs(
     default_profile: str = DEFAULT_EMBEDDING_PROFILE,
 ) -> dict[str, str]:
-    """Jinja subs for api-deployment.yaml.j2 embedding + ModelArk env block."""
+    """Jinja subs for api-deployment.yaml.j2 embedding + ModelArk + chat provider env block."""
     return {
         "EMBEDDING_ACTIVE_PROFILE": embedding_profile_from_env(default_profile),
+        "LLM_INFERENCE_PROVIDER": llm_inference_provider_from_env(),
         "ARK_BASE_URL": os.environ.get("ARK_BASE_URL", DEFAULT_ARK_BASE_URL).strip()
         or DEFAULT_ARK_BASE_URL,
         "ARK_EMBEDDING_MODEL_ID": os.environ.get("ARK_EMBEDDING_MODEL_ID", "").strip(),

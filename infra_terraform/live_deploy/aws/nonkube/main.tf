@@ -82,6 +82,10 @@ module "ecs" {
     AWS_BEDROCK_INFERENCE_PROFILE_ID     = var.bedrock_inference_profile_id
     AWS_BEDROCK_MODEL_ID                 = var.bedrock_model_id
     AWS_BEDROCK_REGION                   = var.bedrock_region
+    ARK_BASE_URL                         = var.ark_base_url
+    ARK_EMBEDDING_MODEL_ID               = var.ark_embedding_model_id
+    ARK_CHAT_MODEL_ID                    = var.ark_chat_model_id
+    LLM_INFERENCE_PROVIDER               = var.llm_inference_provider
   }, try(data.terraform_remote_state.shared_durable.outputs.aurora_endpoint, "") != "" ? {
     PGHOST     = data.terraform_remote_state.shared_durable.outputs.aurora_endpoint
     PGPORT     = tostring(data.terraform_remote_state.shared_durable.outputs.aurora_port)
@@ -90,10 +94,12 @@ module "ecs" {
   } : {})
 
   # Legacy pattern: use plain string secret for PGPASSWORD (ECS doesn't support JSON key extraction)
-  secret_arns = {
+  secret_arns = merge({
     OPENAI_API_KEY = data.terraform_remote_state.shared_durable.outputs.openai_api_key_secret_arn
     PGPASSWORD     = data.terraform_remote_state.shared_durable.outputs.db_password_plain_secret_arn
-  }
+  }, try(data.terraform_remote_state.shared_durable.outputs.ark_api_key_secret_arn, "") != "" ? {
+    ARK_API_KEY = data.terraform_remote_state.shared_durable.outputs.ark_api_key_secret_arn
+  } : {})
 
   aurora_endpoint               = try(data.terraform_remote_state.shared_durable.outputs.aurora_endpoint, "")
   aurora_port                   = tostring(try(data.terraform_remote_state.shared_durable.outputs.aurora_port, 5432))

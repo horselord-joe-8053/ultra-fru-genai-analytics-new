@@ -14,6 +14,14 @@ export interface BackendVersionInfo {
   region: string | null;
   api_port: number | null;
   proxy_info: string | null;
+  chat_model?: string | null;
+  chat_model_error?: string | null;
+  embedding_profile?: string | null;
+  embedding_model?: string | null;
+  embedding_model_error?: string | null;
+  llm_inference_provider?: string | null;
+  dev_frontend_port?: number | null;
+  api_public_port?: number | null;
 }
 
 interface VersionCache {
@@ -23,6 +31,14 @@ interface VersionCache {
   region: string | null;
   api_port: number | null;
   proxy_info: string | null;
+  chat_model?: string | null;
+  chat_model_error?: string | null;
+  embedding_profile?: string | null;
+  embedding_model?: string | null;
+  embedding_model_error?: string | null;
+  llm_inference_provider?: string | null;
+  dev_frontend_port?: number | null;
+  api_public_port?: number | null;
   timestamp: number;
 }
 
@@ -47,6 +63,14 @@ export async function getBackendVersion(forceRefresh: boolean = false): Promise<
             region: cache.region ?? null,
             api_port: cache.api_port ?? null,
             proxy_info: cache.proxy_info ?? null,
+            chat_model: cache.chat_model ?? null,
+            chat_model_error: cache.chat_model_error ?? null,
+            embedding_profile: cache.embedding_profile ?? null,
+            embedding_model: cache.embedding_model ?? null,
+            embedding_model_error: cache.embedding_model_error ?? null,
+            llm_inference_provider: cache.llm_inference_provider ?? null,
+            dev_frontend_port: cache.dev_frontend_port ?? null,
+            api_public_port: cache.api_public_port ?? null,
           };
         }
       }
@@ -111,6 +135,20 @@ export async function getBackendVersion(forceRefresh: boolean = false): Promise<
       region: data.region ?? null,
       api_port: apiPort,
       proxy_info: proxyInfo,
+      chat_model: data.chat_model ?? null,
+      chat_model_error: data.chat_model_error ?? null,
+      embedding_profile: data.embedding_profile ?? null,
+      embedding_model: data.embedding_model ?? null,
+      embedding_model_error: data.embedding_model_error ?? null,
+      llm_inference_provider: data.llm_inference_provider ?? null,
+      dev_frontend_port:
+        data.dev_frontend_port != null && Number.isInteger(Number(data.dev_frontend_port))
+          ? Number(data.dev_frontend_port)
+          : null,
+      api_public_port:
+        data.api_public_port != null && Number.isInteger(Number(data.api_public_port))
+          ? Number(data.api_public_port)
+          : null,
     };
 
     // Cache the result
@@ -122,6 +160,14 @@ export async function getBackendVersion(forceRefresh: boolean = false): Promise<
         region: result.region,
         api_port: result.api_port,
         proxy_info: result.proxy_info,
+        chat_model: result.chat_model,
+        chat_model_error: result.chat_model_error,
+        embedding_profile: result.embedding_profile,
+        embedding_model: result.embedding_model,
+        embedding_model_error: result.embedding_model_error,
+        llm_inference_provider: result.llm_inference_provider,
+        dev_frontend_port: result.dev_frontend_port,
+        api_public_port: result.api_public_port,
         timestamp: Date.now(),
       };
       localStorage.setItem(VERSION_CACHE_KEY, JSON.stringify(cache));
