@@ -44,7 +44,10 @@ def test_expand_model_defaults_prefers_default_embedding(monkeypatch):
 
 
 def test_api_deployment_embedding_subs_includes_model_defaults(monkeypatch):
-    monkeypatch.delenv("DEFAULT_EMBEDDING_PROFILE", raising=False)
+    monkeypatch.delenv("EMBEDDING_ACTIVE_PROFILE", raising=False)
+    monkeypatch.setenv("DEFAULT_EMBEDDING_PROFILE", "openai_1536")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.setenv("CLAUDE_API_KEY", "ck-test")
     monkeypatch.setenv("DEFAULT_CHAT_CHOICE", "claude_sonnet")
     subs = api_deployment_embedding_subs()
     assert subs["DEFAULT_CHAT_CHOICE"] == "claude_sonnet"
@@ -55,11 +58,20 @@ def test_api_deployment_embedding_subs_includes_model_defaults(monkeypatch):
 def test_api_deployment_embedding_subs_skylark(monkeypatch):
     monkeypatch.delenv("LLM_INFERENCE_PROVIDER", raising=False)
     monkeypatch.setenv("EMBEDDING_ACTIVE_PROFILE", "skylark_2048")
+    monkeypatch.setenv("DEFAULT_CHAT_CHOICE", "claude_haiku")
+    monkeypatch.setenv("ARK_API_KEY", "ark-test")
     monkeypatch.setenv("ARK_EMBEDDING_MODEL_ID", "ep-embed")
     monkeypatch.setenv("ARK_CHAT_MODEL_ID", "ep-chat")
     monkeypatch.setenv("ARK_BASE_URL", "https://ark.example/api/v3")
     subs = api_deployment_embedding_subs()
     assert subs["EMBEDDING_ACTIVE_PROFILE"] == "skylark_2048"
+    assert subs["DEFAULT_CHAT_CHOICE"] != "claude_haiku"
+    assert subs["DEFAULT_CHAT_CHOICE"] in (
+        "seed_lite",
+        "deepseek_flash",
+        "deepseek_pro",
+        "seed_pro",
+    )
     assert subs["LLM_INFERENCE_PROVIDER"] == "claude"
     assert subs["ARK_EMBEDDING_MODEL_ID"] == "ep-embed"
     assert subs["ARK_CHAT_MODEL_ID"] == "ep-chat"

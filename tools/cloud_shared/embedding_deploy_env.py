@@ -16,6 +16,34 @@ def embedding_profile_from_env(default: str = DEFAULT_EMBEDDING_PROFILE) -> str:
     return os.environ.get("EMBEDDING_ACTIVE_PROFILE", default).strip() or default
 
 
+def _coerce_default_chat_for_embedding(embed: str, chat: str) -> str:
+    """
+    Ensure (embed, chat) is a catalog stack before wiring container env.
+
+    Common misconfig: EMBEDDING_ACTIVE_PROFILE=skylark_2048 with DEFAULT_CHAT_CHOICE=claude_haiku
+    (Claude pairs only with openai_1536). Pick first enabled chat for the embedding lane.
+    """
+    try:
+        from backend.env_utils.cloud_shared.model_profiles import (
+            chat_choices_for_embedding,
+            is_valid_stack_pair,
+        )
+
+        if is_valid_stack_pair(embed, chat, conn=None):
+            return chat
+        choices = chat_choices_for_embedding(embed, conn=None)
+        if choices:
+            return choices[0]
+    except Exception:
+        pass
+    # YAML-only fallback when model_profiles cannot load (minimal deploy scripts)
+    if embed == "skylark_2048" and chat in ("claude_haiku", "claude_sonnet"):
+        return "seed_lite"
+    if embed == "openai_1536" and chat in ("seed_lite", "seed_pro", "deepseek_flash", "deepseek_pro"):
+        return DEFAULT_CHAT_CHOICE
+    return chat
+
+
 def expand_model_defaults_for_deploy(
     default_profile: str = DEFAULT_EMBEDDING_PROFILE,
 ) -> dict[str, str]:
@@ -31,6 +59,7 @@ def expand_model_defaults_for_deploy(
         or default_profile
     )
     chat = os.environ.get("DEFAULT_CHAT_CHOICE", DEFAULT_CHAT_CHOICE).strip() or DEFAULT_CHAT_CHOICE
+    chat = _coerce_default_chat_for_embedding(embed, chat)
     allow = os.environ.get("ALLOW_PER_REQUEST_MODEL_OVERRIDE", "true").strip().lower()
     if allow not in ("true", "false", "1", "0", "yes", "no"):
         allow = "true"
