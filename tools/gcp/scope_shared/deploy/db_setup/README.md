@@ -11,6 +11,8 @@ Helpers for running schema + load_data via Cloud Run Job when Cloud SQL is priva
 | `job_client.py` | gcloud wrappers: create/update job, execute, poll status |
 | `db_common.py` | Shared: get_db_config, connect_db, apply_schema |
 | `run_schema_and_load.py` | Entrypoint: schema + load_data + FRU_EMBEDDINGS_COUNT output |
-| `Dockerfile` | Image: schema + load_data, CSV, pandas, openai |
+| `Dockerfile` | Image: schema + load_data, CSV, pandas, OpenAI + `embedding_sync` (dual-profile columns) |
 
-Idempotent: load_data skips if data exists unless FRU_FORCE_REFRESH_DATA=true.
+Idempotent: load_data skips if data exists unless `FRU_FORCE_REFRESH_DATA=true` / `--force-refresh-data`.
+
+Also used by **local** deploy: `setup_database.py --env-only` with `PGHOST=localhost` (shared entry point, not GCP-only).

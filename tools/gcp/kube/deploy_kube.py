@@ -124,16 +124,19 @@ def run_deploy_kube(
     if args.apply and getattr(args, "gke_disable_deletion_protection", False) and zone:
         _run_gke_deletion_protection_migration(repo_root, env, region, prefix, gcp_proj, bucket)
 
-    # Ensure kubectl targets GKE (not stale AWS EKS context) before any kubectl calls
-    subprocess.run(
+    # Only read LB from kubectl when GKE credentials work — otherwise stale EKS/AWS context
+    # returns the wrong hostname and Terraform wires Cloud CDN to AWS NLB (disaster).
+    kubeconfig_ok = subprocess.run(
         [sys.executable, "tools/gcp/kube/gke_kubeconfig.py", "--env", env, "--region", region],
         cwd=repo_root,
         check=False,
         env={**os.environ, "CLOUD_REGION": region},
-    )
-    hostname_before = _try_get_lb_hostname_or_ip(env, region)
+    ).returncode == 0
+    hostname_before = _try_get_lb_hostname_or_ip(env, region) if kubeconfig_ok else ""
     if hostname_before:
         logger.info(f"[Kube] LB hostname known before apply: {hostname_before}; single apply (skip second)")
+    elif not kubeconfig_ok:
+        logger.info("[Kube] GKE cluster not reachable yet; skipping pre-apply ingress_hostname (first deploy)")
 
     from tools.cloud_shared.deploy_image_resolver import get_deploy_image_uris
     app_img, _ = get_deploy_image_uris("gcp", env, region)
@@ -152,8 +155,11 @@ def run_deploy_kube(
     if hostname_before:
         plan_vars.append(f"-var=ingress_hostname={hostname_before}")
 
-    # Target backend first when wiring API origin to fix FQDN<->IP migration destroy-order
-    target_first = "module.frontend.google_compute_backend_service.api_internet[0]" if hostname_before else None
+    # When wiring internet NEG, update backend service first (FQDN<->IP migration destroy order).
+    ingress_var = next((v for v in plan_vars if v.startswith("-var=ingress_hostname=")), None)
+    target_first = (
+        "module.frontend.google_compute_backend_service.api_internet[0]" if ingress_var else None
+    )
 
     def _apply():
         return run_deploy_stack(stack_path, plan_vars, region, env, args.apply, apply_target_first=target_first)
@@ -166,6 +172,14 @@ def run_deploy_kube(
 
     if not ok or not args.apply:
         return ok
+
+    # Cluster must exist before kube_apply; refresh credentials after first tofu apply.
+    subprocess.run(
+        [sys.executable, "tools/gcp/kube/gke_kubeconfig.py", "--env", env, "--region", region],
+        cwd=repo_root,
+        check=True,
+        env={**os.environ, "CLOUD_REGION": region},
+    )
 
     # kube_apply: bootstrap + schedule
     from tools.gcp.scope_shared.deploy.db_setup.config import get_tofu_output_json

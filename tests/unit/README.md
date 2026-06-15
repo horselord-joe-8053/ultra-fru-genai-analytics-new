@@ -14,6 +14,17 @@ Fast pytest tests with **no live API**, **no Docker**, and **no LLM calls**. Moc
 
 ```bash
 pytest -m "not integration"
+pytest -m "not integration" --cov --cov-report=term-missing
 ```
 
 See [`tests/README.md`](../README.md) for coverage and CI notes.
+
+## Layout
+
+| Path | Targets |
+|------|---------|
+| `tests/unit/core_app/backend/` | Flask API, agents, env_utils, services, ETL |
+| `tests/unit/tools/` | Deploy/verify helpers, compose/k8s env wiring |
+| `tests/unit/test_orchestrator_env.py` | Orchestrator env bootstrap |
+
+~200 tests collected with `-m "not integration"` (count drifts as suites grow).

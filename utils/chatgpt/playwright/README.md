@@ -1,11 +1,13 @@
 <h1 id="chatgpt-share-playwright-fetch-transcript" style="color:#0d47a1;font-size:1.5em;font-weight:700;border-bottom:2px solid #90caf9;padding-bottom:0.25em;margin-top:0">ChatGPT share: Playwright fetch + transcript</h1>
 
-All **working** code for this workflow lives in **`utils/chatgpt/playwright/`** (relative to the certificates project root that contains `gcp_pmle/`):
+All **working** code for this workflow lives in **`utils/chatgpt/playwright/`**.
 
 - **`fetch_share.mjs`** — headless Chromium GET of `https://chatgpt.com/backend-api/share/<uuid>` (accepts pretty `/share/<uuid>` or backend URL).
 - **`extract_transcript.mjs`** — turns saved share JSON into plain text (`linear_conversation` + multimodal `parts`).
 
 Plain **`curl`** / Python **`urllib`** often get **403** or challenge **HTML** on the same URL; this stack uses a **real browser** via Playwright.
+
+Parent HOWTO: [../HOWTO_EXTRACT_CHATGPT.md](../HOWTO_EXTRACT_CHATGPT.md)
 
 <h2 id="document-outline" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">Document outline</h2>
 

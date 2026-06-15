@@ -35,6 +35,7 @@ data "terraform_remote_state" "shared_nondurable" {
 locals {
   durable_network    = data.terraform_remote_state.shared_durable.outputs.network_id
   durable_subnetwork = "projects/${var.gcp_project_id}/regions/${var.gcp_region}/subnetworks/${data.terraform_remote_state.shared_durable.outputs.network_name}"
+  delta_bucket         = try(data.terraform_remote_state.shared_nondurable.outputs.delta_bucket_name, "")
 }
 
 module "tags" {
@@ -75,6 +76,16 @@ module "frontend" {
 # Created only when ingress_hostname is set (after kube_apply creates the LB).
 # Grant default compute SA read access to frontend bucket (proxy fetches static from GCS).
 data "google_project" "current" { project_id = var.gcp_project_id }
+
+# GKE Spark pods use the default compute SA (node metadata credentials). Grant write on the
+# shared delta bucket so kube scope can create gs://.../delta/kube/fru_sales/_delta_log.
+resource "google_storage_bucket_iam_member" "gke_spark_delta_write" {
+  count  = local.delta_bucket != "" ? 1 : 0
+  bucket = local.delta_bucket
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:${data.google_project.current.number}-compute@developer.gserviceaccount.com"
+}
+
 resource "google_storage_bucket_iam_member" "kube_proxy_read_frontend" {
   count  = var.ingress_hostname != null && var.ingress_hostname != "" ? 1 : 0
   bucket = module.frontend.bucket_name

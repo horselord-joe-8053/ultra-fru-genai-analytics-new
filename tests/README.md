@@ -36,7 +36,7 @@ pytest tests/integration -m integration -v
 
 | Variable | Purpose |
 |----------|---------|
-| `INTEGRATION_API_BASE_URL` | Override API base (default `http://localhost:${LOCAL_SERVER_PORT}`) |
+| `INTEGRATION_API_BASE_URL` | Override API base (default `http://localhost:5001`) |
 | `INTEGRATION_FULL_VERIFY=1` | Full `verify_api_endpoints` |
 | `INTEGRATION_VERIFY_TIMEOUT_SEC` | Poll timeout (default `90` smoke, `300` full) |
 | `INTEGRATION_QUERY_STREAM_TIMEOUT` | `/query/stream` timeout (default `120`) |
@@ -49,11 +49,13 @@ pytest tests/integration -m integration -v
 **Prerequisites:** External stack (`PLAYWRIGHT_EXTERNAL_STACK=1`), Vite on `5174` (nonkube) or `5173` (kube).
 
 ```bash
+./scripts/run_e2e_tests.sh
+# or:
 cd tests/e2e && npm install && npx playwright install chromium
 PLAYWRIGHT_EXTERNAL_STACK=1 npm run test:e2e:full-stack
 ```
 
-See [`tests/e2e/README.md`](e2e/README.md) for env vars and scenario catalog.
+Six tests across three specs (shell + S1–S4 + S5 CRUD). See [`tests/e2e/README.md`](e2e/README.md) for env vars and scenario catalog.
 
 ## Layout
 

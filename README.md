@@ -40,6 +40,7 @@ Getting this system working end-to-end was more challenging, educational and muc
 - [🧪 17. Testing (unit + integration + e2e)](#testing)
   - [17.1 Unit tests](#unit-tests)
   - [17.2 Integration tests (Docker)](#integration-tests)
+  - [17.3 E2E tests (Playwright)](#e2e-tests)
 - [🔗 18. Related repositories](#related-repos)
 
 ---
@@ -145,7 +146,7 @@ Major libraries and platforms used in this repo (not an exhaustive dependency li
 
 <span style="background:#ede7f6;padding:2px 6px;font-weight:600">Interactive lane</span> — one Postgres per env holds structured sales rows, **pgvector** embeddings on <code>customer_feedback</code>, and batch JSON. Default profile <code>openai_1536</code> uses OpenAI <code>text-embedding-3-small</code>; optional ModelArk profile — see [§4.6](#byteplus-modelark).
 
-- **Schema:** <code>core_app/sql/schema_pgvector.sql</code> · table <code>fru_sales_embeddings</code> (IVFFlat index)
+- **Schema:** <code>core_app/sql/schema_pgvector.sql</code> · table <code>fru_sales_embeddings</code> (dual profile columns + IVFFlat on <code>embedding_openai_1536</code>)
 - **Agent:** <code>semantic_search</code> + SQL tools in [§5.1](#capabilities-agent) · deeper notes in [§13 Intelligence stack](#intelligence)
 
 <h3 id="aws-bedrock" style="color:#00695c;font-size:1.05em;font-weight:600;margin-top:0.85em">4.3 AWS Bedrock</h3>
@@ -202,6 +203,7 @@ Entry API: `core_app/backend/api/app.py`.
 <h3 id="capabilities-ops" style="color:#00695c;font-size:1.05em;font-weight:600;margin-top:0.85em">5.3 Operations</h3>
 
 - **`orchestrator.py`** — unified `deploy` | `teardown` | `doctor` | `verify` for `aws`, `gcp`, `local`.
+- **Local kube helpers** — `tools/local/kube/local_k8s.py` (Docker Desktop K8s enable, image import, port-forward fallback).
 - **Content-hash image skip** — avoid rebuilding/pushing API and Spark images when Docker context unchanged (see war story §27 in [WAR_STORIES_CLOUD_SHARED.md](docs/war_stories/WAR_STORIES_CLOUD_SHARED.md)).
 - **Explicit durable destroy** — long-lived VPC/DB/state buckets require `ALLOW_DURABLE_DESTROY=YES` (AWS) and matching GCP guards.
 
@@ -215,24 +217,26 @@ fru-genai-analytics-new/
 ├── requirements.txt             # Python deps for app + tools
 ├── .env.example                 # env contract (copy to .env)
 ├── config/
+│   ├── embedding_profiles.yaml  # openai_1536 + skylark_2048 column map
 │   ├── local/local_deploy_config.yaml
 │   └── cloud/{aws,gcp}_deploy_config.yaml
-├── core_app/
-│   ├── backend/api/app.py       # Flask API
-│   ├── backend/agents/          # QueryAgent + prompts
-│   ├── backend/env_utils/       # cloud_shared factory (LLM, storage)
-│   ├── frontend/                # React + Vite
-│   ├── analytics/jobs/          # Spark batch (run_analytics.py)
-│   ├── sql/schema_pgvector.sql
-│   └── data/raw/                # sample CSV
+├── core_app/                    # API, agent, UI, Spark jobs (see core_app/README.md)
+├── tests/
+│   ├── unit/                    # pytest, mocked I/O
+│   ├── integration/{api,crud,embeddings,verify}/
+│   └── e2e/                     # Playwright full-stack specs
+├── demos/playwright_e2e/        # narrated stakeholder tour (not CI)
+├── scripts/
+│   ├── run_integration_tests.sh
+│   └── run_e2e_tests.sh
 ├── infra_terraform/
 │   ├── modules/{aws,gcp,cloud_shared}
 │   └── live_deploy/{aws,gcp}/scope_shared/{durable,nondurable,...}, {kube,nonkube}
 ├── tools/
 │   ├── aws/                     # deploy.py, teardown.py, verify, doctor
 │   ├── gcp/
-│   ├── local/                   # Compose + Docker Desktop k8s
-│   └── cloud_shared/            # shared deploy helpers, logging, env
+│   ├── local/                   # Compose, local_k8s.py, Docker Desktop k8s
+│   └── cloud_shared/            # delta_paths, verify, deploy helpers
 └── docs/
     ├── CORE_APP_STRUCTURE.md
     ├── GCP_AWS_REFERENCE.md
@@ -259,7 +263,7 @@ fru-genai-analytics-new/
 </tbody>
 </table>
 
-**macOS tip:** `brew install node python@3.12 docker` (and cloud CLIs as needed). ChatGPT share tooling under `docs/war_stories/chatgpt/playwright/` is **Node-only** — see [playwright/README.md](docs/war_stories/chatgpt/playwright/README.md).
+**macOS tip:** `brew install node python@3.12 docker` (and cloud CLIs as needed). ChatGPT share tooling: [utils/chatgpt/playwright/README.md](utils/chatgpt/playwright/README.md) · [HOWTO](utils/chatgpt/HOWTO_EXTRACT_CHATGPT.md).
 
 ---
 
@@ -411,7 +415,7 @@ infra_terraform/live_deploy/gcp/{kube,nonkube}
 <tr><td style="background:#e3f2fd"><strong>Spark schedule (nonkube)</strong></td><td style="background:#fff3e0">scheduler_local.py</td><td style="background:#fff3e0">EventBridge → ECS task</td><td style="background:#fff3e0">Cloud Scheduler → Cloud Run Job</td></tr>
 <tr><td style="background:#e3f2fd"><strong>Spark schedule (kube)</strong></td><td style="background:#e8f5e9">K8s CronJob</td><td style="background:#e8f5e9">EKS CronJob</td><td style="background:#e8f5e9">GKE CronJob</td></tr>
 <tr><td style="background:#e3f2fd"><strong>Database</strong></td><td style="background:#ede7f6">Postgres + pgvector (container)</td><td style="background:#ede7f6">Aurora PostgreSQL</td><td style="background:#ede7f6">Cloud SQL PostgreSQL</td></tr>
-<tr><td style="background:#e3f2fd"><strong>Object store / Delta</strong></td><td style="background:#e8f5e9">local path / MinIO-style</td><td style="background:#e8f5e9">S3</td><td style="background:#e8f5e9">GCS</td></tr>
+<tr><td style="background:#e3f2fd"><strong>Object store / Delta</strong></td><td style="background:#e8f5e9">Docker volume <code>fru_delta</code></td><td style="background:#e8f5e9">S3 (<code>delta/{scope}/</code> in dev)</td><td style="background:#e8f5e9">GCS (<code>delta/{scope}/</code> in dev)</td></tr>
 <tr><td style="background:#e3f2fd"><strong>State backend</strong></td><td style="background:#fff3e0">n/a</td><td style="background:#e8f5e9">S3 + DynamoDB lock</td><td style="background:#e8f5e9">GCS (no DynamoDB lock)</td></tr>
 <tr><td style="background:#e3f2fd"><strong>Default LLM</strong></td><td style="background:#fff3e0">Claude API</td><td style="background:#e8f5e9">Bedrock</td><td style="background:#e8f5e9">Gemini or Claude (<code>GCP_LLM_PROVIDER</code>)</td></tr>
 </tbody>
@@ -431,7 +435,7 @@ Schema: `core_app/sql/schema_pgvector.sql`. Sample CSV: `core_app/data/raw/fridg
 </thead>
 <tbody>
 <tr><td style="background:#e3f2fd"><code>fru_sales_raw</code></td><td style="background:#e8f5e9">Editable source rows (UI + <code>/rawdata</code> API)</td></tr>
-<tr><td style="background:#e3f2fd"><code>fru_sales_embeddings</code></td><td style="background:#fff3e0">Query plane: structured columns + <strong>embedding vector(1536)</strong> + IVFFlat index</td></tr>
+<tr><td style="background:#e3f2fd"><code>fru_sales_embeddings</code></td><td style="background:#fff3e0">Query plane: structured columns + <strong>embedding_openai_1536</strong> / <strong>embedding_skylark_2048</strong> (active profile selects search column)</td></tr>
 <tr><td style="background:#e3f2fd"><code>batch_analytics</code></td><td style="background:#e8f5e9">Spark-written JSON aggregates (<code>sales_by_brand</code>, <code>store_performance</code>, <code>feedback_analysis</code>, …)</td></tr>
 </tbody>
 </table>
@@ -480,9 +484,9 @@ Building multi-cloud **automatic deploy/teardown** surfaced many non-obvious fai
 </thead>
 <tbody>
 <tr><td style="background:#e3f2fd"><a href="docs/war_stories/WAR_STORIES_CLOUD_SHARED.md">WAR_STORIES_CLOUD_SHARED.md</a></td><td style="background:#fff3e0">Multi-cloud factory, deploy phases, Terraform/OpenTofu, K8s layout, SSE, image tags</td><td style="background:#e8f5e9">44</td></tr>
-<tr><td style="background:#e3f2fd"><a href="docs/war_stories/WAR_STORIES_AWS.md">WAR_STORIES_AWS.md</a></td><td style="background:#e8f5e9">EKS, ECS, CloudFront, Aurora, Bedrock, S3A, teardown orphans</td><td style="background:#fff3e0">43</td></tr>
-<tr><td style="background:#e3f2fd"><a href="docs/war_stories/WAR_STORIES_GCP.md">WAR_STORIES_GCP.md</a></td><td style="background:#fff3e0">GKE, Cloud Run, GCS state, Artifact Registry, Gemini/Claude auth</td><td style="background:#e8f5e9">9</td></tr>
-<tr><td style="background:#e3f2fd"><a href="docs/war_stories/WAR_STORIES_OTHER.md">WAR_STORIES_OTHER.md</a></td><td style="background:#e8f5e9">ChatGPT share JSON extraction, local Docker disk</td><td style="background:#fff3e0">2</td></tr>
+<tr><td style="background:#e3f2fd"><a href="docs/war_stories/WAR_STORIES_AWS.md">WAR_STORIES_AWS.md</a></td><td style="background:#e8f5e9">EKS, ECS, CloudFront, Aurora, Bedrock, S3A, Delta scope, teardown orphans</td><td style="background:#fff3e0">48</td></tr>
+<tr><td style="background:#e3f2fd"><a href="docs/war_stories/WAR_STORIES_GCP.md">WAR_STORIES_GCP.md</a></td><td style="background:#fff3e0">GKE, Cloud Run, GCS state, Artifact Registry, Gemini/Claude auth, db-setup image</td><td style="background:#e8f5e9">10</td></tr>
+<tr><td style="background:#e3f2fd"><a href="docs/war_stories/WAR_STORIES_OTHER.md">WAR_STORIES_OTHER.md</a></td><td style="background:#e8f5e9">Agent/execution log, embeddings, local Spark/UI, Playwright E2E, ChatGPT extract</td><td style="background:#fff3e0">14</td></tr>
 </tbody>
 </table>
 
@@ -507,7 +511,7 @@ Index: [docs/war_stories/README.md](docs/war_stories/README.md).
 <tr><td style="background:#e3f2fd"><strong>Another cloud provider</strong></td><td style="background:#fff3e0"><a href="docs/WHAT_TO_DO_TO_BUILD_FOR_ANOTHER_CLOUD_PROVIDER.md">docs/WHAT_TO_DO_TO_BUILD_FOR_ANOTHER_CLOUD_PROVIDER.md</a></td></tr>
 <tr><td style="background:#e3f2fd"><strong>Config schema</strong></td><td style="background:#e8f5e9"><a href="docs/CONFIG_SCHEMA.md">docs/CONFIG_SCHEMA.md</a></td></tr>
 <tr><td style="background:#e3f2fd"><strong>Orchestrator</strong></td><td style="background:#fff3e0"><code>orchestrator.py</code> module docstring</td></tr>
-<tr><td style="background:#e3f2fd"><strong>Testing</strong></td><td style="background:#e8f5e9"><a href="tests/README.md">tests/README.md</a> · unit <code>pytest -m "not integration"</code> · integration <code>./scripts/run_integration_tests.sh</code></td></tr>
+<tr><td style="background:#e3f2fd"><strong>Testing</strong></td><td style="background:#e8f5e9"><a href="tests/README.md">tests/README.md</a> · unit <code>pytest -m "not integration"</code> · integration <code>./scripts/run_integration_tests.sh</code> · e2e <code>./scripts/run_e2e_tests.sh</code></td></tr>
 </tbody>
 </table>
 
@@ -530,7 +534,7 @@ Index: [docs/war_stories/README.md](docs/war_stories/README.md).
 
 <h3 id="unit-tests" style="color:#00695c;font-size:1.05em;font-weight:600;margin-top:0.85em">17.1 Unit tests</h3>
 
-No AWS/GCP credentials or running Postgres. **~64 tests** under <code>tests/unit/</code> covering Flask helpers/routes (mocked), agents/tools, <code>tools/cloud_shared</code> parsers, and deploy helpers.
+No AWS/GCP credentials or running Postgres. **~200 tests** under <code>tests/unit/</code> covering Flask helpers/routes (mocked), agents/tools, embedding sync, <code>tools/cloud_shared</code> parsers, and deploy helpers.
 
 <table>
 <thead>
@@ -573,8 +577,11 @@ pytest tests/integration -m integration -v
 <tr style="background:#1565c0;color:white"><th>Module</th><th>Checks</th></tr>
 </thead>
 <tbody>
-<tr><td style="background:#e3f2fd"><code>test_query_flow.py</code></td><td style="background:#e8f5e9"><code>/health</code>, <code>/version</code>, <code>/query/stream</code> (SSE), <code>/analytics</code></td></tr>
-<tr><td style="background:#e3f2fd"><code>test_verify_against_local.py</code></td><td style="background:#fff3e0">Same <code>verify_api_endpoints</code> as <code>orchestrator.py verify --provider local</code> (smoke: Health + Version)</td></tr>
+<tr><td style="background:#e3f2fd"><code>api/test_query_flow.py</code></td><td style="background:#e8f5e9"><code>/health</code>, <code>/version</code>, <code>/query/stream</code> (SSE), <code>/analytics</code></td></tr>
+<tr><td style="background:#e3f2fd"><code>api/test_exec_log_sse.py</code></td><td style="background:#fff3e0">Execution log SSE shape, SQL preview, token fields</td></tr>
+<tr><td style="background:#e3f2fd"><code>crud/test_rawdata_crud.py</code></td><td style="background:#e8f5e9"><code>/rawdata</code> lifecycle + embedding on write</td></tr>
+<tr><td style="background:#e3f2fd"><code>embeddings/test_*</code></td><td style="background:#fff3e0">Dual-profile sync, ModelArk lane, RDS path (optional)</td></tr>
+<tr><td style="background:#e3f2fd"><code>verify/test_verify_against_local.py</code></td><td style="background:#e8f5e9">Same <code>verify_api_endpoints</code> as <code>orchestrator.py verify --provider local</code></td></tr>
 </tbody>
 </table>
 
@@ -593,7 +600,22 @@ INTEGRATION_FULL_VERIFY=1 ./scripts/run_integration_tests.sh
 
 **CI:** Unit tests gate every PR. Integration: manual [integration-tests.yml](.github/workflows/integration-tests.yml) (<code>workflow_dispatch</code>) — start the stack on the runner or use a self-hosted runner with deploy already up.
 
-**References:** [tests/README.md](tests/README.md) · [docs/todos/TODO_UNIT_TEST.md](docs/todos/TODO_UNIT_TEST.md) · [REFACTOR_UNIT_TEST_COVERAGE.md](cursor_gen/refactor_plan/completed/REFACTOR_UNIT_TEST_COVERAGE.md) · lineage [ultra-fru-genai-analytics](https://github.com/horselord-joe-8053/ultra-fru-genai-analytics) (<code>scripts/run_unit_tests.sh</code>, <code>module_test_verification/</code>).
+**References:** [tests/README.md](tests/README.md) · [tests/integration/README.md](tests/integration/README.md) · lineage [ultra-fru-genai-analytics](https://github.com/horselord-joe-8053/ultra-fru-genai-analytics).
+
+<h3 id="e2e-tests" style="color:#00695c;font-size:1.05em;font-weight:600;margin-top:0.85em">17.3 E2E tests (Playwright)</h3>
+
+Browser tests against the **Vite dev UI** + live API (needs LLM keys). Six specs in <code>tests/e2e/browser/full-stack/</code> (chat shell, S1–S4 scenarios, S5 CRUD journey).
+
+**Prerequisites:** <code>python orchestrator.py deploy --provider local --scope nonkube</code> · Vite on port <code>5174</code> (started by <code>start_local</code> or manually).
+
+```bash
+./scripts/run_e2e_tests.sh
+# or: cd tests/e2e && PLAYWRIGHT_EXTERNAL_STACK=1 npm run test:e2e:full-stack
+```
+
+Stakeholder **demo tour** (soft asserts, one long test): <code>demos/playwright_e2e/</code> — see [demos/playwright_e2e/README.md](demos/playwright_e2e/README.md).
+
+**References:** [tests/e2e/README.md](tests/e2e/README.md) · scenario catalog in <code>tests/e2e/support/scenarios.ts</code>.
 
 ---
 

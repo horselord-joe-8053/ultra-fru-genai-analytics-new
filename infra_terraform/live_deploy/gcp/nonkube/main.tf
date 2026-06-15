@@ -38,6 +38,8 @@ module "tags" {
   }
 }
 
+data "google_project" "current" { project_id = var.gcp_project_id }
+
 locals {
   delta_bucket = try(data.terraform_remote_state.shared_nondurable.outputs.delta_bucket_name, var.delta_bucket_fallback)
   cloud_sql_connection = (try(data.terraform_remote_state.shared_durable.outputs.cloud_sql_private_ip, "") != "" || try(data.terraform_remote_state.shared_durable.outputs.cloud_sql_connection_name, "") != "") ? {
@@ -130,6 +132,13 @@ module "spark_job" {
 
   secret_ids = local.secret_ids["PGPASSWORD"] != "" ? { PGPASSWORD = local.secret_ids["PGPASSWORD"] } : {}
   schedule   = var.spark_schedule_expression
+}
+
+# Cloud Run Spark job writes Delta under gs://.../delta/nonkube/ via the runtime SA.
+resource "google_storage_bucket_iam_member" "nonkube_spark_delta_write" {
+  bucket = local.delta_bucket
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:${data.google_project.current.number}-compute@developer.gserviceaccount.com"
 }
 
 module "frontend" {

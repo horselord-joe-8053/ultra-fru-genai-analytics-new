@@ -38,7 +38,11 @@ Shared fixtures: `tests/integration/conftest.py` (`base_url`, `require_stack`, `
 | Variable | Purpose |
 |----------|---------|
 | `INTEGRATION_API_BASE_URL` | Override API base (default `http://localhost:5001`) |
+| `INTEGRATION_FULL_VERIFY=1` | Run full `verify_api_endpoints` (QueryStream + Analytics) |
+| `INTEGRATION_VERIFY_TIMEOUT_SEC` | Poll timeout (default `90` smoke, `300` full) |
 | `INTEGRATION_QUERY_STREAM_TIMEOUT` | `/query/stream` timeout seconds (default `120`) |
-| `EMBEDDING_ACTIVE_PROFILE` | Embedding lane (`openai_1536` default) |
+| `INTEGRATION_TOTAL_REC` | Expected row count when CSV path differs |
+| `EMBEDDING_ACTIVE_PROFILE` | Embedding search lane (`openai_1536` default) |
+| `ARK_API_KEY` / `ARK_EMBEDDING_MODEL_ID` | ModelArk integration lane |
 
 See [`tests/README.md`](../README.md) for the full variable table.

@@ -48,6 +48,8 @@ A curated list of **non-trivial technical war stories**, capturing real lessons 
 <tr><td style="background:#e3f2fd;padding:8px;text-align:right">8</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-8">8. Service Networking Peering Teardown: Compute API vs Service Networking API</a></td><td style="padding:8px;background:#e8f5e9">Service Networking Peering Teardown: Compute API vs Service Networking API</td></tr>
 <tr><td style="background:#e3f2fd;padding:8px;text-align:right">9</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-9">9. Smart DB Loading Strategy: Verify-Only Fallback Instead of Fail-Fast</a></td><td style="padding:8px;background:#fff3e0">Smart DB Loading Strategy: Verify-Only Fallback Instead of Fail-Fast</td></tr>
 <tr><td style="background:#e3f2fd;padding:8px;text-align:right">10</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-10">10. GCP db-setup Image: Dual-Profile Sync Needs backend Package in Docker</a></td><td style="padding:8px;background:#e8f5e9">Minimal db-setup Dockerfile broke when load.py imported embedding_sync</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">11</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-11">11. GCP Kube Deploy: Stale EKS kubectl Context Wired AWS NLB into Cloud CDN</a></td><td style="padding:8px;background:#fff3e0">Pre-apply ingress_hostname from wrong kubectl context</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">12</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-12">12. GKE Spark Delta Write: devstorage.read_only OAuth Scope Blocks _delta_log</a></td><td style="padding:8px;background:#e8f5e9">DELTA_CANNOT_CREATE_LOG_PATH on gs:// despite bucket existing</td></tr>
 </tbody>
 </table>
 
@@ -712,5 +714,59 @@ Parity refactors that share Python modules across lanes must update **every** pa
 <h3 id="war-story-10-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">10.5 Takeaway</h3>
 
 When db bootstrap calls the same dual-profile sync as the API, treat the db-setup image as a **second API consumer** of `backend.services.embedding_sync` — copy backend + profile config, or keep load logic self-contained in the job tree.
+
+---
+
+<h2 id="war-story-11" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">11. GCP Kube Deploy: Stale EKS kubectl Context Wired AWS NLB into Cloud CDN</h2>
+
+**creation:** `<260615>`
+**last_updated:** `<260615>`
+
+**keywords:** GKE, kubectl, EKS, ingress_hostname, Cloud CDN, NEG, context, deploy
+**difficulty:** 6
+**significance:** 8
+
+<h3 id="war-story-11-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">11.1 Context</h3>
+
+First GCP kube deploy on a machine that had recently run AWS kube. `deploy_kube.py` called `gke_kubeconfig` (404 — cluster not created yet), then `_try_get_lb_hostname_or_ip()` via kubectl.
+
+<h3 id="war-story-11-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">11.2 Root Cause</h3>
+
+kubectl still pointed at **AWS EKS**. It returned the AWS NLB hostname (`…elb.us-east-1.amazonaws.com`), which was passed as `-var=ingress_hostname` to GCP Terraform. Cloud CDN created an INTERNET_FQDN NEG pointing at AWS.
+
+<h3 id="war-story-11-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">11.3 Resolution</h3>
+
+Only read LB hostname when `gke_kubeconfig` succeeds; run `gke_kubeconfig` again **after** GKE tofu apply. Manual recovery: gcloud backend-service swap FQDN→IP NEG, then `tofu apply` to destroy stale NEG.
+
+<h3 id="war-story-11-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">11.4 Takeaway</h3>
+
+Never trust kubectl for cross-cloud ingress wiring without verifying the active context matches the target cluster.
+
+---
+
+<h2 id="war-story-12" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">12. GKE Spark Delta Write: devstorage.read_only OAuth Scope Blocks _delta_log</h2>
+
+**creation:** `<260615>`
+**last_updated:** `<260615>`
+
+**keywords:** GKE, Spark, Delta, GCS, OAuth scope, devstorage.read_only, DELTA_CANNOT_CREATE_LOG_PATH, CronJob
+**difficulty:** 7
+**significance:** 8
+
+<h3 id="war-story-12-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">12.1 Context</h3>
+
+GCP kube UI showed chat working but Batch Analytics red error: `[DELTA_CANNOT_CREATE_LOG_PATH] Cannot create gs://…/delta/kube/fru_sales/_delta_log`. Nonkube Cloud Run Spark on the same bucket succeeded under `delta/nonkube/`.
+
+<h3 id="war-story-12-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">12.2 Root Cause</h3>
+
+GKE default node pool OAuth scopes include **`devstorage.read_only`**. Spark on GKE uses node metadata credentials (no explicit GCP key in the CronJob). Read-only scope blocks creating `_delta_log` even when the compute SA has project Editor. Cloud Run Jobs use the runtime SA directly and are not limited by GCE OAuth scopes.
+
+<h3 id="war-story-12-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">12.3 Resolution</h3>
+
+Grant `roles/storage.objectAdmin` on the delta bucket to the compute SA; replace the default node pool with one using `cloud-platform` OAuth scope (Terraform: dedicated `google_container_node_pool` with `oauth_scopes = ["https://www.googleapis.com/auth/cloud-platform"]`). Re-run the Spark CronJob on the new pool.
+
+<h3 id="war-story-12-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">12.4 Takeaway</h3>
+
+On GKE, **OAuth scopes on the node pool** constrain metadata credentials — bucket IAM alone is not enough when scope is read-only. Mirror AWS kube’s explicit object-store credentials story: either widen scopes / Workload Identity for Spark, or inject credentials like the AWS CronJob secret pattern.
 
 ---

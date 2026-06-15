@@ -51,22 +51,20 @@ def _try_get_lb_hostname_or_ip(env: str, region: str) -> str:
 def _poll_lb_hostname_or_ip(env: str, region: str, max_attempts: int = 60, interval_sec: int = 20) -> str:
     """Poll kubectl for LB hostname or IP. GKE LB can take 5–20 min."""
     logger.info(
-        "Polling for GKE LoadBalancer hostname or IP (kubectl get svc fru-api-svc); "
-        "up to %d attempts, %ds apart (~%d min total)",
-        max_attempts, interval_sec, max_attempts * interval_sec // 60,
+        f"Polling for GKE LoadBalancer hostname or IP (kubectl get svc fru-api-svc); "
+        f"up to {max_attempts} attempts, {interval_sec}s apart (~{max_attempts * interval_sec // 60} min total)"
     )
     for attempt in range(max_attempts):
         host_or_ip = _try_get_lb_hostname_or_ip(env, region)
         if host_or_ip:
-            logger.info("LoadBalancer ready: %s (after %d/%d attempts)", host_or_ip, attempt + 1, max_attempts)
+            logger.info(f"LoadBalancer ready: {host_or_ip} (after {attempt + 1}/{max_attempts} attempts)")
             return host_or_ip
         if attempt < max_attempts - 1:
-            logger.info("Waiting for LoadBalancer (attempt %d/%d, next check in %ds)...", attempt + 1, max_attempts, interval_sec)
+            logger.info(f"Waiting for LoadBalancer (attempt {attempt + 1}/{max_attempts}, next check in {interval_sec}s)...")
             time.sleep(interval_sec)
     logger.warning(
-        "LoadBalancer hostname/IP not available after %d attempts (~%d min). "
-        "GKE may still be provisioning; try again later.",
-        max_attempts, max_attempts * interval_sec // 60,
+        f"LoadBalancer hostname/IP not available after {max_attempts} attempts (~{max_attempts * interval_sec // 60} min). "
+        "GKE may still be provisioning; try again later."
     )
     return ""
 
