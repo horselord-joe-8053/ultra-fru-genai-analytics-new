@@ -1044,6 +1044,7 @@ Every new Flask route used by the dev UI **must** appear in **both** `vite.confi
 |-------|--------|
 | `nginx.conf` | Add `model-catalog` to proxied prefix list |
 | `vite.config.ts` | Proxy `/model-catalog` (already present) |
+| `core_app/kube_proxy/main.py` | Add `/model-catalog` to `API_PREFIXES` (GCP kube Cloud Run entry) |
 | Local kube | Rebuild `fru-api:local`, import into k8s, rollout restart; port-forward `:30080` when NodePort unreachable |
 | Guards | `verify_frontend_proxy.py`, `doctor.py`, `verify_api_endpoints` **ModelCatalog** check, unit test on `nginx.conf` |
 
