@@ -32,8 +32,18 @@ def test_model_catalog_route(app_client):
         with patch(
             "backend.env_utils.cloud_shared.model_profiles.build_model_catalog",
             return_value={
+                "cloud_provider": "local",
+                "allow_override": True,
+                "stacks": [
+                    {
+                        "embedding_profile": "openai_1536",
+                        "chat_choice": "claude_haiku",
+                        "enabled": True,
+                        "stack_group": "openai_claude",
+                    }
+                ],
                 "embeddings": [{"id": "openai_1536", "display": "text-embedding-3-small", "enabled": True}],
-                "chat": [{"id": "claude_haiku", "display": "claude-haiku", "enabled": True}],
+                "chat": [{"id": "claude_haiku", "display": "claude-haiku-4-5", "enabled": True}],
                 "defaults": {
                     "embedding_profile": get_default_embedding_profile_name(),
                     "chat_choice": get_default_chat_choice_name(),
@@ -45,4 +55,7 @@ def test_model_catalog_route(app_client):
     body = resp.get_json()
     assert "embeddings" in body
     assert "chat" in body
+    assert "stacks" in body
+    assert "cloud_provider" in body
+    assert "allow_override" in body
     assert "defaults" in body

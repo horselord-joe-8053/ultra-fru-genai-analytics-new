@@ -194,9 +194,16 @@ const ExecutionPanel: React.FC<ExecutionPanelProps> = ({ state, onToggle, isVisi
               </div>
             )}
             {state.modelContext && (
-              <div className="text-gray-600 mb-1 text-[0.65rem]">
-                Models: Embedding · {state.modelContext.embedding_profile} · Chat ·{" "}
-                {state.modelContext.chat_display || state.modelContext.chat_choice}
+              <div className="text-gray-600 mb-1 text-[0.65rem] space-y-0.5">
+                <div>
+                  <span className="text-gray-500">Embedded Model:</span>{" "}
+                  {state.modelContext.embedding_display ||
+                    state.modelContext.embedding_profile}
+                </div>
+                <div>
+                  <span className="text-gray-500">Chat Model:</span>{" "}
+                  {state.modelContext.chat_display || state.modelContext.chat_choice}
+                </div>
               </div>
             )}
           </div>

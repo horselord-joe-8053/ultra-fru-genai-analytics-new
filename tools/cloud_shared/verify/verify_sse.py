@@ -60,6 +60,15 @@ def parse_sse_error_message(text: str) -> str | None:
     return last_msg
 
 
+def parse_sse_model_context(text: str) -> dict | None:
+    """Parse SSE stream; return data dict from last event: model_context."""
+    last = None
+    for event_type, data in _iter_sse_events(text):
+        if event_type == "model_context":
+            last = data
+    return last
+
+
 def is_non_retriable_query_error(error_msg: str) -> bool:
     """
     True if error indicates non-retriable failure (model not found, bad config).

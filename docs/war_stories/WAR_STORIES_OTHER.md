@@ -50,6 +50,7 @@ A curated list of **non-trivial technical war stories**, capturing real lessons 
 <tr><td style="background:#e3f2fd;padding:8px;text-align:right">12</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-12-local-vs-cloud-spark-scheduling">12. Why local uses a persistent worker but cloud keeps ephemeral tasks</a></td><td style="padding:8px;background:#e8f5e9">Shared laptop RAM vs isolated Fargate/Cloud Run memory — same job code, different wrappers</td></tr>
 <tr><td style="background:#e3f2fd;padding:8px;text-align:right">13</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-13-local-dual-ui-entry">13. Local nonkube — two UI entry points (Vite vs nginx bundle)</a></td><td style="padding:8px;background:#fff3e0">5001 serves UI+API by design; 5174 is dev Vite — not a routing bug</td></tr>
 <tr><td style="background:#e3f2fd;padding:8px;text-align:right">14</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-14-playwright-e2e-scenarios">14. Playwright E2E — shared scenarios, F900 CRUD, batch panel ≠ chat path</a></td><td style="padding:8px;background:#e8f5e9">One scenario module for tests+demos; S5 asserts chat/SQL not Spark snapshot</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">15</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-15-model-stack-catalog">15. Model stack catalog — embed filters chat, display parity</a></td><td style="padding:8px;background:#fff3e0">YAML stacks + server validation; log labels match dropdowns</td></tr>
 </tbody>
 </table>
 
@@ -954,3 +955,35 @@ S5 e2e hard-asserts **grid row + chat answer (`new york`)**; Batch Analytics ↻
 <h3 id="war-story-14-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">14.5 Takeaway</h3>
 
 Treat browser e2e as a **third test category** with shared scenario data, not one-off specs. For CRUD → analytics stories, assert the **agent/SQL path** the user actually queries, not the Spark batch panel, unless you run a fresh batch job.
+
+---
+
+<h2 id="war-story-15-model-stack-catalog" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">15. Model stack catalog — embed filters chat, display parity in execution log</h2>
+
+**creation:** 260615 · **last_updated:** 260615 · **keywords:** design, model catalog, stacks, YAML, SSE model_context, execution log, Bedrock multi-model, deploy wiring · **difficulty:** 4 · **significance:** 6
+
+<h3 id="war-story-15-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">15.1 Context</h3>
+
+Per-request **Embedded Model** and **Chat Model** dropdowns were independent. Users could pick `skylark_2048` + `claude_haiku` — a pair that cannot work (different embed columns and inference vendors). The execution log showed logical ids (`openai_1536`) while the header showed human model slugs (`text-embedding-3-small`).
+
+<h3 id="war-story-15-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">15.2 Root Cause</h3>
+
+The first catalog pass listed **embeddings** and **chat** separately with no **allowlist of pairs**. The UI and SSE reused different fields: dropdown labels came from YAML `display`, but the log rendered `embedding_profile`. Bedrock used one global inference profile env var, so multiple Claude tiers could not be selected on AWS even if the dropdown showed them.
+
+<h3 id="war-story-15-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">15.3 Key Insight</h3>
+
+Treat **stacks** as the product contract: `(embedding_profile, chat_choice)` rows in YAML, filtered by cloud + creds + pgvector population, exposed as `stacks[]` on `/model-catalog`. One resolver — `resolve_chat_model_id` — feeds agent, SQL tool, doctor, and verify scripts. **Display strings** are the only user-facing labels in header and execution log; logical ids stay in query params and ops logs.
+
+<h3 id="war-story-15-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">15.4 Resolution</h3>
+
+| Layer | Change |
+|-------|--------|
+| YAML | `stacks:` + chat `model_id` / `bedrock_model_id` per profile |
+| API | `resolve_request_model_context` rejects invalid pairs (400); SSE `model_context` sends `embedding_display` / `chat_display` |
+| UI | Embed change recomputes allowed chat ids from `catalog.stacks` |
+| Bedrock | Per-request `model_id` overrides global inference profile when set |
+| Deploy | `expand_model_defaults_for_deploy()` passes `DEFAULT_*` + `ALLOW_PER_REQUEST_MODEL_OVERRIDE` through compose, kube j2, AWS/GCP Terraform |
+
+<h3 id="war-story-15-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">15.5 Takeaway</h3>
+
+When the UI exposes **two** model pickers that must compose a valid runtime stack, do not rely on client-side discipline alone — ship a **server-driven allowlist**, cascade the dependent dropdown, and use the **same display resolver** everywhere the user reads model names (header, execution log, doctor errors).

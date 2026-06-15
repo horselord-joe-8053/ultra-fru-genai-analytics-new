@@ -6,6 +6,7 @@ import pytest
 from tools.cloud_shared.embedding_deploy_env import (
     api_deployment_embedding_subs,
     embedding_profile_from_env,
+    expand_model_defaults_for_deploy,
     modelark_secret_entries,
 )
 
@@ -28,6 +29,27 @@ def test_modelark_secret_entries_omits_empty(monkeypatch):
 def test_modelark_secret_entries_includes_key(monkeypatch):
     monkeypatch.setenv("ARK_API_KEY", "ark-test")
     assert modelark_secret_entries() == {"ARK_API_KEY": "ark-test"}
+
+
+def test_expand_model_defaults_prefers_default_embedding(monkeypatch):
+    monkeypatch.setenv("DEFAULT_EMBEDDING_PROFILE", "skylark_2048")
+    monkeypatch.setenv("EMBEDDING_ACTIVE_PROFILE", "openai_1536")
+    monkeypatch.setenv("DEFAULT_CHAT_CHOICE", "seed_lite")
+    monkeypatch.setenv("ALLOW_PER_REQUEST_MODEL_OVERRIDE", "false")
+    subs = expand_model_defaults_for_deploy()
+    assert subs["DEFAULT_EMBEDDING_PROFILE"] == "skylark_2048"
+    assert subs["EMBEDDING_ACTIVE_PROFILE"] == "skylark_2048"
+    assert subs["DEFAULT_CHAT_CHOICE"] == "seed_lite"
+    assert subs["ALLOW_PER_REQUEST_MODEL_OVERRIDE"] == "false"
+
+
+def test_api_deployment_embedding_subs_includes_model_defaults(monkeypatch):
+    monkeypatch.delenv("DEFAULT_EMBEDDING_PROFILE", raising=False)
+    monkeypatch.setenv("DEFAULT_CHAT_CHOICE", "claude_sonnet")
+    subs = api_deployment_embedding_subs()
+    assert subs["DEFAULT_CHAT_CHOICE"] == "claude_sonnet"
+    assert "ALLOW_PER_REQUEST_MODEL_OVERRIDE" in subs
+    assert "DEFAULT_EMBEDDING_PROFILE" in subs
 
 
 def test_api_deployment_embedding_subs_skylark(monkeypatch):

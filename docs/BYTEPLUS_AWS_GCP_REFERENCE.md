@@ -85,7 +85,22 @@ curl -X POST http://localhost:5001/admin/embeddings/sync \
 
 `CLOUD_PROVIDER=aws|gcp` with `EMBEDDING_ACTIVE_PROFILE=skylark_2048` requires HTTPS egress to ModelArk and `ARK_API_KEY` in secrets. **Storage** still needs both `OPENAI_API_KEY` and `ARK_*` to populate both columns.
 
-Set `EMBEDDING_ACTIVE_PROFILE` in `.env` for **search lane only**; YAML deploy configs do not define the profile.
+Set `EMBEDDING_ACTIVE_PROFILE` in `.env` for **search lane only**; deploy passes `DEFAULT_*` via `expand_model_defaults_for_deploy()` (compose, kube j2, Terraform).
+
+## Model stacks (`config/model_profiles.yaml`)
+
+Per-request UI picks **logical** profile ids; YAML defines **legit (embed, chat) pairs** and concrete **model ids** per inference path.
+
+| Stack group | Embedding profile | Chat choices (examples) |
+|-------------|-------------------|-------------------------|
+| ModelArk | `skylark_2048` | `deepseek_flash`, `deepseek_pro`, `seed_lite`, `seed_pro` |
+| OpenAI + Claude | `openai_1536` | `claude_haiku`, `claude_sonnet` |
+
+- **`GET /model-catalog`** returns `stacks[]` filtered by cloud, credentials, and embed column population.
+- **`/query/stream`** validates the pair; execution log shows catalog **`display`** strings only.
+- **Verify:** `tools/cloud_shared/verify/verify_chat_profiles.py` (wired in `verify_all_deploy`); ModelArk loop in `tools/byteplus/standalone/verify_modelark.py`.
+
+Prod: set **`ALLOW_PER_REQUEST_MODEL_OVERRIDE=false`** so CloudFront UI uses deploy defaults only.
 
 ## AWS bootstrap vs steady state
 

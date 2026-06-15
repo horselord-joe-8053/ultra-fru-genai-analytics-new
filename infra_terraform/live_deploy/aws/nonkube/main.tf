@@ -87,6 +87,9 @@ module "ecs" {
     ARK_CHAT_MODEL_ID                    = var.ark_chat_model_id
     LLM_INFERENCE_PROVIDER               = var.llm_inference_provider
     EMBEDDING_ACTIVE_PROFILE             = var.embedding_active_profile
+    DEFAULT_EMBEDDING_PROFILE            = var.default_embedding_profile
+    DEFAULT_CHAT_CHOICE                  = var.default_chat_choice
+    ALLOW_PER_REQUEST_MODEL_OVERRIDE     = var.allow_per_request_model_override
   }, try(data.terraform_remote_state.shared_durable.outputs.aurora_endpoint, "") != "" ? {
     PGHOST     = data.terraform_remote_state.shared_durable.outputs.aurora_endpoint
     PGPORT     = tostring(data.terraform_remote_state.shared_durable.outputs.aurora_port)

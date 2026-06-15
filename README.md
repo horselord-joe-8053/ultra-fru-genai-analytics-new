@@ -290,7 +290,7 @@ cp .env.example .env
 <tr><td style="background:#e3f2fd"><strong>GCP LLM</strong></td><td style="background:#e8f5e9"><code>GCP_LLM_PROVIDER</code>, <code>GOOGLE_AI_API_KEY</code> or <code>CLAUDE_API_KEY</code></td><td style="background:#fff3e0">Gemini or Claude on GCP</td></tr>
 <tr><td style="background:#e3f2fd"><strong>Analytics</strong></td><td style="background:#e8f5e9"><code>DELTA_TABLE_PATH</code>, <code>ANALYTICS_SCHEDULER_INTERVAL_SECONDS</code></td><td style="background:#fff3e0">Spark + scheduler</td></tr>
 <tr><td style="background:#e3f2fd"><strong>Frontend layout</strong></td><td style="background:#e8f5e9"><code>VITE_FRONTEND_EXEC_LOG_PANEL_WIDTH_PERCENT=0.4</code>, <code>VITE_FRONTEND_BATCH_ANALYTIC_PANEL_WIDTH_PERCENT=0.2</code></td><td style="background:#fff3e0">MAIN tab **2:1** Execution Log : Batch Analytics at build time; user drag-resize persists in <code>localStorage</code></td></tr>
-<tr><td style="background:#e3f2fd"><strong>Model catalog</strong></td><td style="background:#e8f5e9"><code>config/model_profiles.yaml</code>, <code>DEFAULT_EMBEDDING_PROFILE</code>, <code>DEFAULT_CHAT_CHOICE</code>, <code>ALLOW_PER_REQUEST_MODEL_OVERRIDE</code></td><td style="background:#fff3e0"><code>GET /model-catalog</code>; per-request <code>embedding_profile</code> / <code>chat_choice</code> on <code>/query/stream</code></td></tr>
+<tr><td style="background:#e3f2fd"><strong>Model catalog</strong></td><td style="background:#e8f5e9"><code>config/model_profiles.yaml</code> (<code>stacks</code>, chat <code>model_id</code>s), <code>DEFAULT_EMBEDDING_PROFILE</code>, <code>DEFAULT_CHAT_CHOICE</code>, <code>ALLOW_PER_REQUEST_MODEL_OVERRIDE</code></td><td style="background:#fff3e0"><code>GET /model-catalog</code> (cloud-filtered <code>stacks[]</code>); embed choice filters chat dropdown; invalid pairs → 400 on <code>/query/stream</code>; execution log shows same <code>display</code> strings as header pickers</td></tr>
 <tr><td style="background:#e3f2fd"><strong>Terraform</strong></td><td style="background:#e8f5e9"><code>TF_STATE_BUCKET_COMPONENT</code>, <code>FRU_TF_BIN=tofu</code></td><td style="background:#fff3e0">Remote state</td></tr>
 </tbody>
 </table>
@@ -470,7 +470,7 @@ Routes never import Bedrock/Gemini directly (war story §31).
 
 <h2 id="query-viz" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">📐 14. Query workflow visualization</h2>
 
-For transparency and debugging, the UI subscribes to **`GET /query/stream?query=...`** (SSE). Each event corresponds to an agent step—tool name, inputs/outputs, iteration count—rendered in **Execution log** (`ExecutionPanel.tsx`). Semantic search steps show **`query_text`** (vector topic) and optional **`filters`**; **`model_context`** names the active embedding profile and chat model. Chat dropdowns load options from **`GET /model-catalog`**.
+For transparency and debugging, the UI subscribes to **`GET /query/stream?query=...`** (SSE). Each event corresponds to an agent step—tool name, inputs/outputs, iteration count—rendered in **Execution log** (`ExecutionPanel.tsx`). Semantic search steps show **`query_text`** (vector topic) and optional **`filters`**. The **`model_context`** SSE event carries **`embedding_display`** and **`chat_display`** (same human labels as the header dropdowns—not logical ids like `openai_1536`). **Embedded Model** filters **Chat Model** options via catalog **`stacks[]`**; the server rejects invalid pairs before streaming.
 
 Deploy verification uses **HEAD** (not GET) on the stream endpoint so status codes are not corrupted by streaming body bytes (war story §1 in [WAR_STORIES_CLOUD_SHARED.md](docs/war_stories/WAR_STORIES_CLOUD_SHARED.md)).
 
@@ -488,7 +488,7 @@ Building multi-cloud **automatic deploy/teardown** surfaced many non-obvious fai
 <tr><td style="background:#e3f2fd"><a href="docs/war_stories/WAR_STORIES_CLOUD_SHARED.md">WAR_STORIES_CLOUD_SHARED.md</a></td><td style="background:#fff3e0">Multi-cloud factory, deploy phases, Terraform/OpenTofu, K8s layout, SSE, image tags</td><td style="background:#e8f5e9">44</td></tr>
 <tr><td style="background:#e3f2fd"><a href="docs/war_stories/WAR_STORIES_AWS.md">WAR_STORIES_AWS.md</a></td><td style="background:#e8f5e9">EKS, ECS, CloudFront, Aurora, Bedrock, S3A, Delta scope, teardown orphans</td><td style="background:#fff3e0">48</td></tr>
 <tr><td style="background:#e3f2fd"><a href="docs/war_stories/WAR_STORIES_GCP.md">WAR_STORIES_GCP.md</a></td><td style="background:#fff3e0">GKE, Cloud Run, GCS state, Artifact Registry, Gemini/Claude auth, db-setup image</td><td style="background:#e8f5e9">10</td></tr>
-<tr><td style="background:#e3f2fd"><a href="docs/war_stories/WAR_STORIES_OTHER.md">WAR_STORIES_OTHER.md</a></td><td style="background:#e8f5e9">Agent/execution log, embeddings, local Spark/UI, Playwright E2E, ChatGPT extract</td><td style="background:#fff3e0">14</td></tr>
+<tr><td style="background:#e3f2fd"><a href="docs/war_stories/WAR_STORIES_OTHER.md">WAR_STORIES_OTHER.md</a></td><td style="background:#e8f5e9">Agent/execution log, embeddings, local Spark/UI, Playwright E2E, ChatGPT extract</td><td style="background:#fff3e0">15</td></tr>
 </tbody>
 </table>
 

@@ -60,9 +60,14 @@ def run_deploy_nonkube(
     from core_app.backend.env_utils.cloud_shared.model_config import require_claude_model
     claude_model = require_claude_model().strip()
     llm_inference = get_llm_inference_provider()
-    from tools.cloud_shared.embedding_deploy_env import api_deployment_embedding_subs, embedding_profile_from_env
+    from tools.cloud_shared.embedding_deploy_env import (
+        api_deployment_embedding_subs,
+        embedding_profile_from_env,
+        expand_model_defaults_for_deploy,
+    )
     embedding_profile = embedding_profile_from_env()
     ark_subs = api_deployment_embedding_subs()
+    model_defaults = expand_model_defaults_for_deploy()
     img_tag = os.getenv("APP_IMAGE_TAG", "").strip()
     plan_vars = [
         f"-var=prefix={prefix}", f"-var=env={env}",
@@ -76,6 +81,9 @@ def run_deploy_nonkube(
         f"-var=claude_model={claude_model}",
         f"-var=llm_inference_provider={llm_inference}",
         f"-var=embedding_active_profile={embedding_profile}",
+        f"-var=default_embedding_profile={model_defaults['DEFAULT_EMBEDDING_PROFILE']}",
+        f"-var=default_chat_choice={model_defaults['DEFAULT_CHAT_CHOICE']}",
+        f"-var=allow_per_request_model_override={model_defaults['ALLOW_PER_REQUEST_MODEL_OVERRIDE']}",
         f"-var=ark_base_url={ark_subs['ARK_BASE_URL']}",
         f"-var=ark_embedding_model_id={ark_subs['ARK_EMBEDDING_MODEL_ID']}",
         f"-var=ark_chat_model_id={ark_subs['ARK_CHAT_MODEL_ID']}",

@@ -1286,14 +1286,22 @@ def query_stream():
         return jsonify({"error": "Missing query parameter"}), 400
 
     model_context = None
+    conn = None
     try:
         from backend.env_utils.cloud_shared.model_profiles import resolve_request_model_context
 
-        model_context = resolve_request_model_context(embedding_profile, chat_choice)
+        if _connection_pool is not None:
+            conn = _connection_pool.getconn()
+        model_context = resolve_request_model_context(
+            embedding_profile, chat_choice, conn=conn
+        )
     except PermissionError as e:
         return jsonify({"error": str(e)}), 403
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
+    finally:
+        if conn is not None and _connection_pool is not None:
+            _connection_pool.putconn(conn)
 
     # Ensure agent is initialized before checking (handles cold start / lazy init)
     if USE_AGENT_QUERY and query_agent is None:

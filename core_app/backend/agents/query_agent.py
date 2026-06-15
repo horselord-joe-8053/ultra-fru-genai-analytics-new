@@ -184,6 +184,9 @@ class QueryAgent:
         llm_client = create_llm_client_for_choice(
             model_context.chat_choice if model_context else None
         )
+        chat_model_id = model_context.chat_model_id if model_context else None
+        if "generate_sql" in self.tools:
+            self.tools["generate_sql"].set_request_llm(llm_client, chat_model_id)
         embedding_profile_name = (
             model_context.embedding_profile if model_context else None
         )
@@ -236,6 +239,7 @@ class QueryAgent:
                 planning_result = llm_client.complete(
                     system_prompt=self.system_prompt,
                     user_message=planning_prompt,
+                    model_id=chat_model_id,
                     max_tokens=500,
                 )
                 planning_time = (time.time() - planning_start) * 1000
@@ -592,6 +596,7 @@ class QueryAgent:
                 synthesis_result = llm_client.complete(
                     system_prompt=self.system_prompt,
                     user_message=synthesis_prompt,
+                    model_id=chat_model_id,
                     max_tokens=2000,
                 )
                 

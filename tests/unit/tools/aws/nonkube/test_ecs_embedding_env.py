@@ -21,3 +21,6 @@ def test_nonkube_env_vars_include_embedding_active_profile():
     source = _NONKUBE_MAIN.read_text()
     assert "EMBEDDING_ACTIVE_PROFILE" in source
     assert "embedding_active_profile" in source
+    assert "DEFAULT_EMBEDDING_PROFILE" in source
+    assert "DEFAULT_CHAT_CHOICE" in source
+    assert "ALLOW_PER_REQUEST_MODEL_OVERRIDE" in source

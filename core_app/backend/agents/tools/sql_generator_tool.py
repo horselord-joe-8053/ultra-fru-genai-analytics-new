@@ -9,7 +9,6 @@ import re
 from typing import Dict, Any, Optional, Tuple
 
 from .base_tool import BaseTool
-from backend.env_utils.cloud_shared.client_factory import claude_complete
 from backend.utils.postgresql_sql import normalize_postgresql_sql
 
 logger = logging.getLogger(__name__)
@@ -23,8 +22,14 @@ class SQLGeneratorTool(BaseTool):
             name="generate_sql",
             description="Generate SQL SELECT queries from natural language questions. Returns a dict with 'sql' field containing the PostgreSQL SQL query. IMPORTANT: After generating SQL, you MUST call execute_sql with the 'sql' value from this tool's output."
         )
-        self.llm_client = llm_client  # Cloud-agnostic; stored for future use; currently uses claude_complete()
+        self.llm_client = llm_client
         self.schema_info = schema_info
+        self._request_model_id: Optional[str] = None
+
+    def set_request_llm(self, llm_client, model_id: Optional[str] = None) -> None:
+        """Per-query LLM client and resolved chat model id from RequestModelContext."""
+        self.llm_client = llm_client
+        self._request_model_id = model_id
     
     def _build_system_prompt(self) -> str:
         """Build system prompt for SQL generation."""
@@ -176,10 +181,11 @@ LIMIT 1;
             
             # Call Claude
             logger.info(f"[SQLGeneratorTool] Calling LLM to generate SQL...")
-            response_result = claude_complete(
+            response_result = self.llm_client.complete(
                 system_prompt=system_prompt,
                 user_message=user_message,
-                max_tokens=500
+                model_id=self._request_model_id,
+                max_tokens=500,
             )
             
             # Handle both dict (new format) and str (backward compatibility)

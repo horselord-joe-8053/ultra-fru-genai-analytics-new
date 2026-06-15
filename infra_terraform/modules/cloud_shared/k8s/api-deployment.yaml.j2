@@ -107,6 +107,12 @@ spec:
           value: "{{ OPENAI_EMBED_MODEL }}"
         - name: EMBEDDING_ACTIVE_PROFILE
           value: "{{ EMBEDDING_ACTIVE_PROFILE | default('openai_1536') }}"
+        - name: DEFAULT_EMBEDDING_PROFILE
+          value: "{{ DEFAULT_EMBEDDING_PROFILE | default(EMBEDDING_ACTIVE_PROFILE | default('openai_1536')) }}"
+        - name: DEFAULT_CHAT_CHOICE
+          value: "{{ DEFAULT_CHAT_CHOICE | default('claude_haiku') }}"
+        - name: ALLOW_PER_REQUEST_MODEL_OVERRIDE
+          value: "{{ ALLOW_PER_REQUEST_MODEL_OVERRIDE | default('true') }}"
         - name: LLM_INFERENCE_PROVIDER
           value: "{{ LLM_INFERENCE_PROVIDER | default('claude') }}"
         - name: ARK_BASE_URL

@@ -14,6 +14,7 @@ from typing import Callable
 from tools.cloud_shared.logging import logger
 from tools.cloud_shared.verify.verify_summary import VerifyRow, print_verify_summary
 from tools.cloud_shared.verify.verify_llm_client import verify_llm_client
+from tools.cloud_shared.verify.verify_chat_profiles import verify_chat_profiles
 from tools.cloud_shared.verify.verify_csv import get_total_rec_from_csv
 from tools.cloud_shared.verify.verify_api_endpoints import verify_api_endpoints
 
@@ -46,7 +47,7 @@ def run_verify_all_deploy(
 
     total_rec = get_total_rec_from_csv()
     scopes_to_verify = ["nonkube", "kube"] if scope == "all" else [scope]
-    verify_phases = [f"Endpoints ({s})" for s in scopes_to_verify] + ["LLM client"]
+    verify_phases = [f"Endpoints ({s})" for s in scopes_to_verify] + ["LLM client", "Chat profiles"]
     total_phases = len(verify_phases)
     all_rows: list[VerifyRow] = []
     phase_idx = 0
@@ -118,6 +119,20 @@ def run_verify_all_deploy(
 
     if not llm_ok:
         logger.error("[VERIFICATION FAILED] LLM client failed")
+        print_verify_summary(all_rows, env, total_rec)
+        logger.operation_end("Verify", scope, env, region, int(time.time() - verify_start), ok=False)
+        sys.exit(1)
+
+    phase_idx += 1
+    phase_start_time = time.time()
+    logger.phase_start(phase_idx, total_phases, "Chat profiles")
+    chat_ok, chat_rows = verify_chat_profiles()
+    all_rows.extend(chat_rows)
+    phase_secs = int(time.time() - phase_start_time)
+    logger.phase_end(phase_idx, total_phases, "Chat profiles", phase_secs)
+
+    if not chat_ok:
+        logger.error("[VERIFICATION FAILED] One or more chat profile smokes failed")
         print_verify_summary(all_rows, env, total_rec)
         logger.operation_end("Verify", scope, env, region, int(time.time() - verify_start), ok=False)
         sys.exit(1)

@@ -1,5 +1,5 @@
-# Model catalog: embedding lanes + chat choices + named composites.
-# Secrets and concrete model ids stay in .env only (model_env keys below).
+# Model catalog: embedding lanes, chat models (concrete ids), and legit (embed, chat) stacks.
+# Secrets (API keys) stay in .env only. Stack rows may restrict allowed_clouds.
 
 embeddings:
   openai_1536:
@@ -16,19 +16,62 @@ embeddings:
     pgvector_column: embedding_skylark_2048
 
 chat:
-  claude_haiku:
-    inference: claude
-    model_env: CLAUDE_MODEL
-    display: claude-haiku-4-5
+  # ModelArk — pair only with skylark_2048
+  deepseek_flash:
+    inference: modelark
+    model_id: deepseek-v4-flash-260425
+    display: deepseek-v4-flash-260425
+  deepseek_pro:
+    inference: modelark
+    model_id: deepseek-v4-pro-260425
+    display: deepseek-v4-pro-260425
   seed_lite:
     inference: modelark
-    model_env: ARK_CHAT_MODEL_ID
+    model_id: seed-2-0-lite-260228
     display: seed-2-0-lite-260228
+    model_env: ARK_CHAT_MODEL_ID
+  seed_pro:
+    inference: modelark
+    model_id: seed-2-0-pro-260328
+    display: seed-2-0-pro-260328
+  # Claude — pair only with openai_1536
+  claude_haiku:
+    inference: claude
+    model_id: claude-haiku-4-5
+    display: claude-haiku-4-5
+    model_env: CLAUDE_MODEL
+    bedrock_model_id: anthropic.claude-haiku-4-5-20251001-v1:0
+    bedrock_inference_profile_id: us.anthropic.claude-haiku-4-5-20251001-v1:0
+  claude_sonnet:
+    inference: claude
+    model_id: claude-sonnet-4-20250514
+    display: claude-sonnet-4-20250514
+    bedrock_model_id: anthropic.claude-sonnet-4-20250514-v1:0
 
-composites:
+stack_groups:
+  modelark:
+    display: ModelArk
+    allowed_clouds: [local, aws, gcp]
   openai_claude:
-    embedding: openai_1536
-    chat: claude_haiku
-  skylark_seed:
-    embedding: skylark_2048
+    display: OpenAI embed + Claude
+    allowed_clouds: [local, aws, gcp]
+
+stacks:
+  - embedding: skylark_2048
+    chat: deepseek_flash
+    group: modelark
+  - embedding: skylark_2048
+    chat: deepseek_pro
+    group: modelark
+  - embedding: skylark_2048
     chat: seed_lite
+    group: modelark
+  - embedding: skylark_2048
+    chat: seed_pro
+    group: modelark
+  - embedding: openai_1536
+    chat: claude_haiku
+    group: openai_claude
+  - embedding: openai_1536
+    chat: claude_sonnet
+    group: openai_claude

@@ -43,6 +43,21 @@ variable "embedding_active_profile" {
   default     = "openai_1536"
   description = "Search/read embedding lane (EMBEDDING_ACTIVE_PROFILE); must match .env."
 }
+variable "default_embedding_profile" {
+  type        = string
+  default     = "openai_1536"
+  description = "UI/catalog default embedding profile (DEFAULT_EMBEDDING_PROFILE)."
+}
+variable "default_chat_choice" {
+  type        = string
+  default     = "claude_haiku"
+  description = "UI/catalog default chat choice (DEFAULT_CHAT_CHOICE)."
+}
+variable "allow_per_request_model_override" {
+  type        = string
+  default     = "true"
+  description = "When false, stream ignores per-request embed/chat params (prod)."
+}
 variable "ark_base_url" {
   type    = string
   default = "https://ark.ap-southeast.bytepluses.com/api/v3"

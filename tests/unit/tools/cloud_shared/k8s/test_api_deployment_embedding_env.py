@@ -39,6 +39,9 @@ def test_api_deployment_renders_embedding_and_modelark_env(monkeypatch):
     monkeypatch.setenv("ARK_CHAT_MODEL_ID", "seed-lite")
     yaml_text = render("api-deployment", _minimal_local_api_subs())
     assert "name: EMBEDDING_ACTIVE_PROFILE" in yaml_text
+    assert "name: DEFAULT_EMBEDDING_PROFILE" in yaml_text
+    assert "name: DEFAULT_CHAT_CHOICE" in yaml_text
+    assert "name: ALLOW_PER_REQUEST_MODEL_OVERRIDE" in yaml_text
     assert 'value: "skylark_2048"' in yaml_text
     assert "name: ARK_EMBEDDING_MODEL_ID" in yaml_text
     assert 'value: "skylark-embed"' in yaml_text

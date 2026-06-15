@@ -24,9 +24,8 @@ def test_generator_normalizes_substring_index(sql_generator, monkeypatch):
         "FROM fru_sales_embeddings GROUP BY city ORDER BY total DESC LIMIT 1;"
     )
 
-    monkeypatch.setattr(
-        "backend.agents.tools.sql_generator_tool.claude_complete",
-        lambda **_kwargs: {"text": mysql_sql, "tokens": {}},
+    sql_generator.llm_client.complete = MagicMock(
+        return_value={"text": mysql_sql, "tokens": {}}
     )
 
     out = sql_generator.execute(question="Which city has the highest sales?")
