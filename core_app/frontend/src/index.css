@@ -6,3 +6,120 @@ body {
   @apply bg-gray-100;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
+
+/* Chat panel header: compact model selectors aligned with 10px deploy metadata */
+.chat-header-select-wrap {
+  position: relative;
+  display: inline-block;
+  vertical-align: middle;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: max-content;
+}
+
+.chat-header-select {
+  font-size: 10px;
+  line-height: 1.25;
+  padding: 1px 6px;
+  border: 1px solid #d1d5db;
+  border-radius: 3px;
+  background: #fff;
+  color: #6b7280;
+  min-width: 11rem;
+  max-width: 13rem;
+}
+
+.chat-header-select-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  width: 100%;
+  min-width: 11rem;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.chat-header-select-trigger:focus-visible {
+  outline: 1px solid #93c5fd;
+  outline-offset: 1px;
+}
+
+.chat-header-select-value {
+  flex: 1;
+  min-width: 0;
+}
+
+.chat-header-select-chevron {
+  flex-shrink: 0;
+  font-size: 8px;
+  line-height: 1;
+  color: #9ca3af;
+}
+
+.chat-header-select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Embed model names are longer than chat ids */
+.chat-header-select--embed,
+.chat-header-select--embed.chat-header-select-trigger {
+  min-width: 12.75rem;
+  max-width: 14rem;
+}
+
+.chat-header-select-menu {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  z-index: 50;
+  min-width: 100%;
+  width: max-content;
+  max-width: 14rem;
+  margin: 0;
+  padding: 2px 0;
+  list-style: none;
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 3px;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06);
+  font-family: inherit;
+  font-size: 10px;
+  line-height: 1.25;
+  color: #6b7280;
+}
+
+.chat-header-select-menu li {
+  padding: 3px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.chat-header-select-menu li:hover:not(.is-disabled) {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.chat-header-select-menu li.is-selected {
+  background: #f3f4f6;
+  color: #374151;
+  font-weight: 500;
+}
+
+.chat-header-select-menu li.is-selected::before {
+  content: "✓";
+  display: inline-block;
+  width: 0.85rem;
+  margin-right: 2px;
+  font-size: 9px;
+  color: #9ca3af;
+  font-weight: 400;
+}
+
+.chat-header-select-menu li.is-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}

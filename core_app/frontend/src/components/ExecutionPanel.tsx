@@ -1,15 +1,34 @@
+/**
+ * Execution log panel for MAIN tab: General Query, execution steps, performance stats.
+ * Section 2 renders when tool rows exist or an in-flight step is active (streaming UX).
+ */
 import React, { useEffect, useRef } from "react";
+
+export interface ModelContextInfo {
+  embedding_profile: string;
+  embedding_display: string;
+  chat_choice: string;
+  chat_display: string;
+}
 
 export interface ExecutionState {
   question: string | null;
   method: string | null;
+  modelContext: ModelContextInfo | null;
   toolCalls: Array<{
     iteration: number | null;
     tool: string;
     input: any;
     output: any;
     execution_time_ms: number;
+    status?: "running" | "complete";
   }>;
+  inProgressStep: {
+    iteration: number | null;
+    tool: string;
+    input: any;
+  } | null;
+  currentIteration: number | null;
   iterations: number | null;
   execution_time_ms: number | null;
   token_usage: {
@@ -36,7 +55,7 @@ const ExecutionPanel: React.FC<ExecutionPanelProps> = ({ state, onToggle, isVisi
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [state.toolCalls, state.iterations, state.execution_time_ms, state.token_usage]);
+  }, [state.toolCalls, state.inProgressStep, state.iterations, state.execution_time_ms, state.token_usage]);
 
   const formatValue = (value: any): string => {
     if (value === null || value === undefined) {
@@ -105,6 +124,15 @@ const ExecutionPanel: React.FC<ExecutionPanelProps> = ({ state, onToggle, isVisi
     }
     if (tool === "semantic_search") {
       const parts: string[] = [];
+      if (input?.query_text) {
+        parts.push(`query_text: ${input.query_text}`);
+      }
+      if (input?.filters && typeof input.filters === "object") {
+        parts.push(`filters: ${JSON.stringify(input.filters)}`);
+      }
+      if (input?.query_text_source) {
+        parts.push(`query_text_source: ${input.query_text_source}`);
+      }
       if (input?.feedback_rating_max !== undefined) {
         parts.push(`feedback_rating_max: ${input.feedback_rating_max}`);
       }
@@ -165,13 +193,22 @@ const ExecutionPanel: React.FC<ExecutionPanelProps> = ({ state, onToggle, isVisi
                 <span className="text-gray-500">method:</span> {state.method}
               </div>
             )}
+            {state.modelContext && (
+              <div className="text-gray-600 mb-1 text-[0.65rem]">
+                Models: Embedding · {state.modelContext.embedding_profile} · Chat ·{" "}
+                {state.modelContext.chat_display || state.modelContext.chat_choice}
+              </div>
+            )}
           </div>
         )}
 
         {/* Part 2: Tool Calls */}
-        {state.toolCalls.length > 0 && (
+        {(state.toolCalls.length > 0 || state.inProgressStep || state.currentIteration) && (
           <div className="mb-4">
             <div className="text-gray-600 font-semibold mb-2">=== 2. Execution steps ===</div>
+            {state.currentIteration != null && state.toolCalls.length === 0 && state.inProgressStep && (
+              <div className="mb-2 text-gray-500">Iteration {state.currentIteration} started…</div>
+            )}
             {state.toolCalls.map((toolCall, index) => {
               const inputDisplay = getInputField(
                 toolCall.input,
@@ -190,11 +227,27 @@ const ExecutionPanel: React.FC<ExecutionPanelProps> = ({ state, onToggle, isVisi
                 </div>
                 <div className="text-gray-800 mb-1">
                   <span className="text-gray-500">tool:</span> {displayToolName(toolCall.tool)}
+                  {toolCall.status === "running" && (
+                    <span className="text-blue-600 ml-1">(running…)</span>
+                  )}
                 </div>
                 {toolCall.tool !== "pseudo_tool#llm_synthesize_answer" && (
                   <div className="text-gray-800 mb-1" title={inputTitle}>
-                    <span className="text-gray-500">input.{toolCall.tool === "generate_sql" ? "query" : toolCall.tool === "execute_sql" ? "sql_query" : "params"}:</span>{" "}
-                    {inputDisplay}
+                    <span className="text-gray-500">input.
+                      {toolCall.tool === "generate_sql"
+                        ? "query"
+                        : toolCall.tool === "execute_sql"
+                          ? "sql_query"
+                          : toolCall.tool === "semantic_search"
+                            ? "query_text"
+                            : toolCall.tool === "pseudo_tool#llm_plan"
+                              ? "phase"
+                              : "params"}
+                      :
+                    </span>{" "}
+                    {toolCall.tool === "pseudo_tool#llm_plan" && toolCall.status === "running"
+                      ? "Planning (waiting for LLM…)"
+                      : inputDisplay}
                   </div>
                 )}
                 {toolCall.tool === "pseudo_tool#llm_synthesize_answer" && (
@@ -207,6 +260,8 @@ const ExecutionPanel: React.FC<ExecutionPanelProps> = ({ state, onToggle, isVisi
                     <span className="text-gray-500">output.summary:</span> {toolCall.output.summary}
                   </div>
                 )}
+                {toolCall.status !== "running" && (
+                <>
                 {toolCall.tool === "pseudo_tool#llm_synthesize_answer" && toolCall.output?.answer && (
                   <div className="text-gray-800 mb-1">
                     <span className="text-gray-500">output.answer:</span> {toolCall.output.answer.substring(0, 200)}{toolCall.output.answer.length > 200 ? "..." : ""}
@@ -222,8 +277,13 @@ const ExecutionPanel: React.FC<ExecutionPanelProps> = ({ state, onToggle, isVisi
                   </div>
                 )}
                 <div className="text-gray-800 mb-1">
-                  <span className="text-gray-500">execution_time_ms:</span> {toolCall.execution_time_ms.toFixed(2)}
+                  <span className="text-gray-500">execution_time_ms:</span>{" "}
+                  {toolCall.execution_time_ms != null
+                    ? toolCall.execution_time_ms.toFixed(2)
+                    : "—"}
                 </div>
+                </>
+                )}
               </div>
             );
             })}

@@ -86,7 +86,8 @@ CORS(app, resources={
     r"/rawdata/*": {"origins": allowed_origins},
     r"/metrics/agent": {"origins": allowed_origins},
     r"/health": {"origins": "*"},
-    r"/version": {"origins": allowed_origins}
+    r"/version": {"origins": allowed_origins},
+    r"/model-catalog": {"origins": allowed_origins},
 })
 
 
@@ -698,6 +699,25 @@ def _resolve_local_port_hints(scope: str | None, cloud_provider: str | None) -> 
     return hints
 
 
+@app.route("/model-catalog", methods=["GET"])
+def model_catalog():
+    """Embedding + chat choices for UI dropdowns (enabled flags reflect creds and column coverage)."""
+    conn = None
+    try:
+        from backend.env_utils.cloud_shared.model_profiles import build_model_catalog
+
+        if _connection_pool is not None:
+            conn = _connection_pool.getconn()
+        catalog = build_model_catalog(conn)
+        return jsonify(catalog)
+    except Exception as e:
+        app.logger.error("model-catalog failed: %s", e, exc_info=True)
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn is not None and _connection_pool is not None:
+            _connection_pool.putconn(conn)
+
+
 @app.route("/version", methods=["GET"])
 def version():
     """Returns container image version tag(s) as [tag1, tag2, ...].
@@ -1259,22 +1279,41 @@ def query_stream():
 
     request_id = str(uuid.uuid4())[:8]
     question = request.args.get("query", "")
+    embedding_profile = request.args.get("embedding_profile", "").strip() or None
+    chat_choice = request.args.get("chat_choice", "").strip() or None
 
     if not question:
         return jsonify({"error": "Missing query parameter"}), 400
+
+    model_context = None
+    try:
+        from backend.env_utils.cloud_shared.model_profiles import resolve_request_model_context
+
+        model_context = resolve_request_model_context(embedding_profile, chat_choice)
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
 
     # Ensure agent is initialized before checking (handles cold start / lazy init)
     if USE_AGENT_QUERY and query_agent is None:
         ensure_agent()
 
     try:
-        from backend.env_utils.cloud_shared.embedding_profiles import get_active_profile_name
+        from backend.env_utils.cloud_shared.llm_inference_config import get_llm_inference_provider
 
         app.logger.info(
-            f"[{request_id}] Streaming query: '{question}' (embedding_profile={get_active_profile_name()})"
+            f"[{request_id}] Streaming query: '{question}' "
+            f"(embedding_profile={model_context.embedding_profile}, "
+            f"chat_choice={model_context.chat_choice}, "
+            f"LLM_INFERENCE_PROVIDER={get_llm_inference_provider()})"
         )
     except Exception:
-        app.logger.info(f"[{request_id}] Streaming query: '{question}'")
+        app.logger.info(
+            f"[{request_id}] Streaming query: '{question}' "
+            f"(embedding_profile={model_context.embedding_profile}, "
+            f"chat_choice={model_context.chat_choice})"
+        )
     
     def generate():
         """Generator that yields SSE events as they happen."""
@@ -1315,8 +1354,9 @@ def query_stream():
                     return
                 
                 result = query_agent.process_query(
-                    question, 
-                    progress_callback=progress_callback
+                    question,
+                    progress_callback=progress_callback,
+                    model_context=model_context,
                 )
                 
                 # Emit complete only when agent succeeded (no error). Agent emits "error" via

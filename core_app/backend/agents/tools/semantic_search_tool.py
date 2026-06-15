@@ -15,6 +15,7 @@ from backend.env_utils.cloud_shared.embedding_factory import create_embedding_cl
 from backend.env_utils.cloud_shared.embedding_profiles import (
     get_active_pgvector_column,
     get_active_profile_name,
+    get_profiles,
     is_embedding_column,
 )
 
@@ -55,14 +56,22 @@ class SemanticSearchTool(BaseTool):
         self.openai_client = openai_client
         self.schema_info = schema_info
     
-    def _embed_text(self, text: str) -> List[float]:
-        """Generate embedding via active profile (OpenAI or ModelArk)."""
+    def _embed_text(self, text: str, embedding_profile: str | None = None) -> List[float]:
+        """Generate embedding via active or request-scoped profile."""
         try:
-            client = create_embedding_client(openai_client=self.openai_client)
+            profile = None
+            if embedding_profile:
+                profiles = get_profiles()
+                profile = profiles.get(embedding_profile)
+                if profile is None:
+                    raise ValueError(f"Unknown embedding_profile={embedding_profile!r}")
+            client = create_embedding_client(profile=profile, openai_client=self.openai_client)
+            col = profile.pgvector_column if profile else get_active_pgvector_column()
+            prof_name = profile.name if profile else get_active_profile_name()
             logger.info(
                 "[SemanticSearchTool] Embedding profile=%s column=%s",
-                get_active_profile_name(),
-                get_active_pgvector_column(),
+                prof_name,
+                col,
             )
             return client.embed_texts([text])[0]
         except Exception as e:
@@ -119,6 +128,7 @@ class SemanticSearchTool(BaseTool):
         logger.info(f"[SemanticSearchTool] ===== SEMANTIC SEARCH START =====")
         logger.info(f"[SemanticSearchTool] Query text: '{query_text}'")
         logger.info(f"[SemanticSearchTool] Limit: {limit}, Filters: {filters}")
+        embedding_profile = kwargs.get("embedding_profile")
         start_time = time.time()
         
         # Validate input
@@ -134,7 +144,7 @@ class SemanticSearchTool(BaseTool):
         try:
             # Generate embedding
             logger.info(f"[SemanticSearchTool] Generating embedding for query...")
-            embedding = self._embed_text(query_text)
+            embedding = self._embed_text(query_text, embedding_profile=embedding_profile)
             logger.info(f"[SemanticSearchTool] Embedding generated (dimension: {len(embedding)})")
             
             # Build SQL with optional filters
@@ -186,6 +196,10 @@ class SemanticSearchTool(BaseTool):
             # Without ::vector cast, psycopg2 passes Python list as numeric[], causing:
             # "operator does not exist: vector <-> numeric[]"
             embed_col = get_active_pgvector_column()
+            if embedding_profile:
+                prof = get_profiles().get(embedding_profile)
+                if prof:
+                    embed_col = prof.pgvector_column
             sql += f"ORDER BY {embed_col} <-> %s::vector LIMIT %s;"
             params.extend([embedding, limit])
             

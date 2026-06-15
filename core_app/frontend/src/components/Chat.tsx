@@ -2,16 +2,43 @@ import React, { useState, useRef, useEffect } from "react";
 import type { Message } from "../App";
 import { getBackendVersion } from "../utils/backendVersion";
 import type { BackendVersionInfo } from "../utils/backendVersion";
+import ChatHeaderSelect from "./ChatHeaderSelect";
+
+interface CatalogOption {
+  id: string;
+  display: string;
+  enabled: boolean;
+}
+
+interface ModelCatalog {
+  embeddings: CatalogOption[];
+  chat: CatalogOption[];
+  defaults: { embedding_profile: string; chat_choice: string };
+}
 
 interface ChatProps {
   messages: Message[];
   onSend: (text: string) => void;
   loading: boolean;
+  embeddingProfile: string;
+  chatChoice: string;
+  onEmbeddingProfileChange: (value: string) => void;
+  onChatChoiceChange: (value: string) => void;
 }
 
-const Chat: React.FC<ChatProps> = ({ messages, onSend, loading }) => {
+const Chat: React.FC<ChatProps> = ({
+  messages,
+  onSend,
+  loading,
+  embeddingProfile,
+  chatChoice,
+  onEmbeddingProfileChange,
+  onChatChoiceChange,
+}) => {
   const [input, setInput] = useState("");
   const [versionInfo, setVersionInfo] = useState<BackendVersionInfo | null>(null);
+  const [catalog, setCatalog] = useState<ModelCatalog | null>(null);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   function handleSubmit(e: React.FormEvent) {
@@ -32,6 +59,37 @@ const Chat: React.FC<ChatProps> = ({ messages, onSend, loading }) => {
       // If force refresh fails, try with cache
       getBackendVersion(false).then(setVersionInfo);
     });
+  }, []);
+
+  useEffect(() => {
+    setCatalogError(null);
+    fetch("/model-catalog")
+      .then(async (r) => {
+        if (!r.ok) {
+          throw new Error(`HTTP ${r.status}`);
+        }
+        const ct = r.headers.get("content-type") || "";
+        if (!ct.includes("application/json")) {
+          throw new Error("non-JSON response (check Vite proxy / nginx for /model-catalog)");
+        }
+        return r.json() as Promise<ModelCatalog>;
+      })
+      .then((data) => {
+        if (!data?.embeddings?.length || !data?.chat?.length) {
+          throw new Error("empty catalog");
+        }
+        setCatalog(data);
+        if (!embeddingProfile && data.defaults?.embedding_profile) {
+          onEmbeddingProfileChange(data.defaults.embedding_profile);
+        }
+        if (!chatChoice && data.defaults?.chat_choice) {
+          onChatChoiceChange(data.defaults.chat_choice);
+        }
+      })
+      .catch((err: unknown) => {
+        setCatalog(null);
+        setCatalogError(err instanceof Error ? err.message : "catalog fetch failed");
+      });
   }, []);
 
   const buildLine = versionInfo ? versionInfo.version : "loading...";
@@ -55,19 +113,6 @@ const Chat: React.FC<ChatProps> = ({ messages, onSend, loading }) => {
         return apiPort ? `Proxy: localhost:${window.location.port} → localhost:${apiPort}` : null;
       })();
 
-  const chatModelLine = versionInfo?.chat_model
-    ? `Chat model: ${versionInfo.chat_model}`
-    : versionInfo?.chat_model_error
-      ? `Chat model: (${versionInfo.chat_model_error})`
-      : null;
-  const embeddingLine = versionInfo?.embedding_model
-    ? `Embedding: ${versionInfo.embedding_profile ?? "default"} → ${versionInfo.embedding_model}`
-    : versionInfo?.embedding_model_error
-      ? `Embedding: (${versionInfo.embedding_model_error})`
-      : versionInfo?.embedding_profile
-        ? `Embedding profile: ${versionInfo.embedding_profile}`
-        : null;
-
   const isBundledApiUi =
     versionInfo?.cloud_provider === "local" &&
     versionInfo?.scope === "nonkube" &&
@@ -78,25 +123,60 @@ const Chat: React.FC<ChatProps> = ({ messages, onSend, loading }) => {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-4 py-3 border-b bg-gray-50">
-        <div>
-          <h1 className="text-lg font-semibold">FRU Analytics Assistant</h1>
-          {isBundledApiUi && (
-            <p className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-0.5 mt-1 inline-block">
-              Bundled UI from API container
-              {devFrontendPort != null
-                ? ` — for dev, use Vite on port ${devFrontendPort}`
-                : " — for dev, use the Vite dev server (see local_deploy_config.yaml)"}
-            </p>
-          )}
-          <div className="text-[10px] text-gray-400 font-mono leading-tight space-y-0.5">
+      <div className="px-4 py-2.5 border-b bg-gray-50">
+        <h1 className="text-base font-semibold text-gray-900 leading-tight">
+          FRU Analytics Assistant
+        </h1>
+
+        {isBundledApiUi && (
+          <p className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-0.5 mt-1 inline-block">
+            Bundled UI from API container
+            {devFrontendPort != null
+              ? ` — for dev, use Vite on port ${devFrontendPort}`
+              : " — for dev, use the Vite dev server (see local_deploy_config.yaml)"}
+          </p>
+        )}
+
+        <div className="mt-1.5 space-y-1">
+          <div className="text-[10px] text-gray-400 font-mono leading-snug space-y-0.5">
             <p>Build: {buildLine}</p>
             {deployLine && <p>{deployLine}</p>}
-            {chatModelLine && <p>{chatModelLine}</p>}
-            {embeddingLine && <p>{embeddingLine}</p>}
             {proxyLine && <p>{proxyLine}</p>}
           </div>
-          <p className="text-xs text-gray-500">
+
+          {catalog ? (
+            <div className="space-y-0.5 text-[10px] text-gray-500">
+              <label className="flex items-center gap-1.5 min-w-0">
+                <span className="text-gray-400 shrink-0 w-[6.75rem]">Embedded Model:</span>
+                <ChatHeaderSelect
+                  wide
+                  value={embeddingProfile}
+                  disabled={loading}
+                  title="Embedding profile for semantic search"
+                  options={catalog.embeddings}
+                  onChange={onEmbeddingProfileChange}
+                />
+              </label>
+              <label className="flex items-center gap-1.5 min-w-0">
+                <span className="text-gray-400 shrink-0 w-[6.75rem]">Chat Model:</span>
+                <ChatHeaderSelect
+                  value={chatChoice}
+                  disabled={loading}
+                  title="Chat model for planning and synthesis"
+                  options={catalog.chat}
+                  onChange={onChatChoiceChange}
+                />
+              </label>
+            </div>
+          ) : catalogError ? (
+            <p className="text-[10px] text-red-600 leading-snug">
+              Models unavailable ({catalogError})
+            </p>
+          ) : (
+            <p className="text-[10px] text-gray-400 leading-snug">Loading models…</p>
+          )}
+
+          <p className="text-[10px] text-gray-500 leading-snug pt-0.5">
             Ask about sales, brands, stores, and customer feedback.
           </p>
         </div>

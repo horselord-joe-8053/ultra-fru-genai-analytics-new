@@ -164,6 +164,27 @@ def main() -> int:
         else:
             logger.warning(f"[doctor] {e}")
 
+    # 7. Model catalog defaults (embedding + chat profiles from YAML)
+    logger.info("[doctor] Checking model catalog defaults (config/model_profiles.yaml)...")
+    try:
+        _core_app = os.path.join(_project_root, "core_app")
+        if _core_app not in sys.path:
+            sys.path.insert(0, _core_app)
+        from backend.env_utils.cloud_shared.model_profiles import (
+            validate_model_catalog_defaults,
+        )
+
+        catalog_errs = validate_model_catalog_defaults()
+        errors.extend(catalog_errs)
+        if catalog_errs:
+            for msg in catalog_errs:
+                logger.error(f"[doctor] {msg}")
+        else:
+            logger.info("[doctor] Model catalog defaults OK")
+    except Exception as e:
+        errors.append(f"Model catalog check failed: {e}")
+        logger.error(f"[doctor] Model catalog check failed: {e}")
+
     if errors:
         logger.error("[doctor] Preflight FAILED; see errors above.")
         return 1

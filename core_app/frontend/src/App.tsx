@@ -1,4 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
+/**
+ * MAIN tab shell: Chat | Execution Log | Batch Analytics.
+ * Initial panel widths come from Vite env (build-time); users can drag resize handles.
+ * Resized widths are not persisted — only panel visibility is stored in localStorage.
+ */
 import { ThemeProvider, createTheme } from "@mui/material/styles";
 import { Tabs, Tab, Box } from "@mui/material";
 import Chat from "./components/Chat";
@@ -28,7 +33,10 @@ const App: React.FC = () => {
   const [executionState, setExecutionState] = useState<ExecutionState>({
     question: null,
     method: null,
+    modelContext: null,
     toolCalls: [],
+    inProgressStep: null,
+    currentIteration: null,
     iterations: null,
     execution_time_ms: null,
     token_usage: null,
@@ -36,6 +44,12 @@ const App: React.FC = () => {
     isStreaming: false,
     error: null,
   });
+  const [embeddingProfile, setEmbeddingProfile] = useState<string>(() =>
+    localStorage.getItem("embeddingProfile") || ""
+  );
+  const [chatChoice, setChatChoice] = useState<string>(() =>
+    localStorage.getItem("chatChoice") || ""
+  );
   const eventSourceRef = useRef<EventSource | null>(null);
 
   // Calculate initial panel widths from percentage env vars
@@ -43,7 +57,7 @@ const App: React.FC = () => {
     const viewportWidth = window.innerWidth;
     
     const execLogPercent = parseFloat(
-      import.meta.env.VITE_FRONTEND_EXEC_LOG_PANEL_WIDTH_PERCENT || "0.3"
+      import.meta.env.VITE_FRONTEND_EXEC_LOG_PANEL_WIDTH_PERCENT || "0.4"
     );
     const batchAnalyticPercent = parseFloat(
       import.meta.env.VITE_FRONTEND_BATCH_ANALYTIC_PANEL_WIDTH_PERCENT || "0.2"
@@ -216,7 +230,10 @@ const App: React.FC = () => {
     setExecutionState({
       question: null,
       method: null,
+      modelContext: null,
       toolCalls: [],
+      inProgressStep: null,
+      currentIteration: null,
       iterations: null,
       execution_time_ms: null,
       token_usage: null,
@@ -225,16 +242,16 @@ const App: React.FC = () => {
       error: null,
     });
 
-    // Close any existing EventSource
+    const params = new URLSearchParams({ query: text });
+    if (embeddingProfile) params.set("embedding_profile", embeddingProfile);
+    if (chatChoice) params.set("chat_choice", chatChoice);
+
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
       eventSourceRef.current = null;
     }
 
-    // Start streaming execution log
-    const eventSource = new EventSource(
-      `/query/stream?query=${encodeURIComponent(text)}`
-    );
+    const eventSource = new EventSource(`/query/stream?${params.toString()}`);
     eventSourceRef.current = eventSource;
 
     // Handle SSE events
@@ -254,18 +271,94 @@ const App: React.FC = () => {
       }));
     });
 
-    eventSource.addEventListener("tool_call_complete", (event) => {
+    eventSource.addEventListener("model_context", (event) => {
       const data = JSON.parse(event.data);
       setExecutionState((prev) => ({
         ...prev,
-        toolCalls: [
-          ...prev.toolCalls,
-          {
-            iteration: data.iteration !== null && data.iteration !== undefined ? data.iteration : null,
+        modelContext: data,
+      }));
+    });
+
+    eventSource.addEventListener("iteration_start", (event) => {
+      const data = JSON.parse(event.data);
+      setExecutionState((prev) => ({
+        ...prev,
+        currentIteration: data.iteration ?? null,
+        inProgressStep: null,
+      }));
+    });
+
+    eventSource.addEventListener("tool_call_start", (event) => {
+      const data = JSON.parse(event.data);
+      setExecutionState((prev) => {
+        const filtered = prev.toolCalls.filter(
+          (tc) => !(tc.status === "running" && tc.tool === data.tool)
+        );
+        return {
+          ...prev,
+          inProgressStep: {
+            iteration: data.iteration ?? null,
             tool: data.tool,
             input: data.input,
-            output: data.output,
-            execution_time_ms: data.execution_time_ms,
+          },
+          toolCalls: [
+            ...filtered,
+            {
+              iteration: data.iteration ?? null,
+              tool: data.tool,
+              input: data.input,
+              output: {},
+              execution_time_ms: 0,
+              status: "running" as const,
+            },
+          ],
+        };
+      });
+    });
+
+    eventSource.addEventListener("tool_call_complete", (event) => {
+      const data = JSON.parse(event.data);
+      setExecutionState((prev) => {
+        const withoutRunning = prev.toolCalls.filter(
+          (tc) => !(tc.status === "running" && tc.tool === data.tool)
+        );
+        return {
+          ...prev,
+          inProgressStep: null,
+          toolCalls: [
+            ...withoutRunning,
+            {
+              iteration: data.iteration !== null && data.iteration !== undefined ? data.iteration : null,
+              tool: data.tool,
+              input: data.input,
+              output: data.output,
+              execution_time_ms: data.execution_time_ms,
+              status: "complete" as const,
+            },
+          ],
+        };
+      });
+    });
+
+    eventSource.addEventListener("synthesis_start", () => {
+      setExecutionState((prev) => ({
+        ...prev,
+        inProgressStep: {
+          iteration: null,
+          tool: "pseudo_tool#llm_synthesize_answer",
+          input: { question: prev.question },
+        },
+        toolCalls: [
+          ...prev.toolCalls.filter(
+            (tc) => tc.tool !== "pseudo_tool#llm_synthesize_answer" || tc.status !== "running"
+          ),
+          {
+            iteration: null,
+            tool: "pseudo_tool#llm_synthesize_answer",
+            input: { question: prev.question },
+            output: {},
+            execution_time_ms: 0,
+            status: "running" as const,
           },
         ],
       }));
@@ -384,7 +477,21 @@ const App: React.FC = () => {
     <div className="flex flex-1 min-h-0 overflow-hidden">
       {/* Chat Panel - Always visible, flexible width */}
       <div className="flex-1 border-r bg-white min-w-0">
-        <Chat messages={messages} onSend={sendQuery} loading={loading} />
+        <Chat
+          messages={messages}
+          onSend={sendQuery}
+          loading={loading}
+          embeddingProfile={embeddingProfile}
+          chatChoice={chatChoice}
+          onEmbeddingProfileChange={(v) => {
+            setEmbeddingProfile(v);
+            localStorage.setItem("embeddingProfile", v);
+          }}
+          onChatChoiceChange={(v) => {
+            setChatChoice(v);
+            localStorage.setItem("chatChoice", v);
+          }}
+        />
       </div>
 
       {/* Execution Log Panel with Resize Handle */}

@@ -32,6 +32,7 @@ Guidelines:
 - For quantitative questions (counts, sums, aggregations), use generate_sql then execute_sql
 - For qualitative questions (feedback, complaints, sentiment), use semantic_search
 - For complex questions requiring both, use multiple tools in sequence
+- For quantitative "how many / a lot / count" questions, prefer generate_sql + execute_sql (COUNT / ILIKE), not semantic_search alone
 - Always explain your reasoning and cite your sources
 - If a tool fails, try an alternative approach
 - Limit yourself to 5 tool calls maximum per query
@@ -42,6 +43,11 @@ CRITICAL: Feedback Rating vs Sentiment Category:
 - For "how many negative/positive/neutral" queries → use feedback_sentiment_category, NOT feedback_rating
 - For "average rating" queries → use AVG(feedback_rating) on the INTEGER column
 - NEVER use feedback_rating with text comparisons like 'Negative' or 'Positive' - use feedback_sentiment_category instead
+
+CRITICAL: semantic_search INPUT contract:
+- Always set query_text to the specific topic phrase (e.g. "water leaks", "noisy compressor"), not only sentiment filters
+- filters (e.g. feedback_sentiment_category) narrow rows; they do NOT replace vector search text
+- Example INPUT: {{"query_text": "water leaks dispenser", "filters": {{"feedback_sentiment_category": ["Negative"]}}, "limit": 50}}
 
 CRITICAL: Tool Chaining Rules:
 - Valid SQL from generate_sql is executed automatically by the system when possible; focus on correct PostgreSQL SELECT queries.
@@ -113,12 +119,25 @@ REMEMBER: Your job is to provide ACCURATE answers based on REAL data, not to be 
 """
 
 
+def _summarize_tool_result_for_planning(result: dict) -> str:
+    tool = result.get("tool", "?")
+    output = result.get("output") or {}
+    if not output.get("success"):
+        return f"{tool}: failed"
+    if tool == "semantic_search":
+        rc = output.get("row_count", 0)
+        if rc and rc > 0:
+            return f"{tool}: {rc} rows (do not call semantic_search again)"
+        return f"{tool}: 0 rows"
+    return result.get("summary") or "Completed"
+
+
 def get_planning_prompt(question: str, tools_info: list, previous_results: list = None) -> str:
     """Get prompt for agent planning phase."""
     context = ""
     if previous_results:
         context = "\n\nPrevious Results:\n" + "\n".join([
-            f"- {result['tool']}: {result.get('summary', 'Completed')}"
+            f"- {_summarize_tool_result_for_planning(result)}"
             for result in previous_results
         ])
     

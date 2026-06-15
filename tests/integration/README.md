@@ -26,7 +26,9 @@ Tests **skip** when `/health` is unreachable.
 
 | Subfolder | Focus |
 |-----------|--------|
-| `api/` | Health, version, query stream SSE, execution log |
+| `api/` | Health, version, query stream SSE, execution log, semantic SSE (`test_exec_log_semantic_sse.py`) |
+
+**SSE verify helpers:** `tools/cloud_shared/verify/verify_sse.py` exposes `parse_sse_events`, `semantic_search_completes`, `is_semantic_hit`, and `assert_no_semantic_after_first_hit` for integration tests that assert semantic_search contract and early-break behavior on live `/query/stream` responses.
 | `crud/` | `/rawdata` lifecycle (Data Management API) |
 | `embeddings/` | Dual-profile sync, ModelArk lane, RDS path |
 | `verify/` | `verify_against_local` smoke |

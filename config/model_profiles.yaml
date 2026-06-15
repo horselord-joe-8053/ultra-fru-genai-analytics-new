@@ -1,0 +1,34 @@
+# Model catalog: embedding lanes + chat choices + named composites.
+# Secrets and concrete model ids stay in .env only (model_env keys below).
+
+embeddings:
+  openai_1536:
+    provider: openai
+    model_slug: openai
+    model_env: OPENAI_EMBED_MODEL
+    dimension: 1536
+    pgvector_column: embedding_openai_1536
+  skylark_2048:
+    provider: modelark
+    model_slug: skylark
+    model_env: ARK_EMBEDDING_MODEL_ID
+    dimension: 2048
+    pgvector_column: embedding_skylark_2048
+
+chat:
+  claude_haiku:
+    inference: claude
+    model_env: CLAUDE_MODEL
+    display: claude-haiku-4-5
+  seed_lite:
+    inference: modelark
+    model_env: ARK_CHAT_MODEL_ID
+    display: seed-2-0-lite-260228
+
+composites:
+  openai_claude:
+    embedding: openai_1536
+    chat: claude_haiku
+  skylark_seed:
+    embedding: skylark_2048
+    chat: seed_lite

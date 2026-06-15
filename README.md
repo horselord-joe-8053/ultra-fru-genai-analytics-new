@@ -289,6 +289,8 @@ cp .env.example .env
 <tr><td style="background:#e3f2fd"><strong>AWS LLM</strong></td><td style="background:#e8f5e9"><code>AWS_BEDROCK_INFERENCE_PROFILE_ID</code>, <code>CLOUD_REGION</code></td><td style="background:#fff3e0">Bedrock Claude</td></tr>
 <tr><td style="background:#e3f2fd"><strong>GCP LLM</strong></td><td style="background:#e8f5e9"><code>GCP_LLM_PROVIDER</code>, <code>GOOGLE_AI_API_KEY</code> or <code>CLAUDE_API_KEY</code></td><td style="background:#fff3e0">Gemini or Claude on GCP</td></tr>
 <tr><td style="background:#e3f2fd"><strong>Analytics</strong></td><td style="background:#e8f5e9"><code>DELTA_TABLE_PATH</code>, <code>ANALYTICS_SCHEDULER_INTERVAL_SECONDS</code></td><td style="background:#fff3e0">Spark + scheduler</td></tr>
+<tr><td style="background:#e3f2fd"><strong>Frontend layout</strong></td><td style="background:#e8f5e9"><code>VITE_FRONTEND_EXEC_LOG_PANEL_WIDTH_PERCENT=0.4</code>, <code>VITE_FRONTEND_BATCH_ANALYTIC_PANEL_WIDTH_PERCENT=0.2</code></td><td style="background:#fff3e0">MAIN tab **2:1** Execution Log : Batch Analytics at build time; user drag-resize persists in <code>localStorage</code></td></tr>
+<tr><td style="background:#e3f2fd"><strong>Model catalog</strong></td><td style="background:#e8f5e9"><code>config/model_profiles.yaml</code>, <code>DEFAULT_EMBEDDING_PROFILE</code>, <code>DEFAULT_CHAT_CHOICE</code>, <code>ALLOW_PER_REQUEST_MODEL_OVERRIDE</code></td><td style="background:#fff3e0"><code>GET /model-catalog</code>; per-request <code>embedding_profile</code> / <code>chat_choice</code> on <code>/query/stream</code></td></tr>
 <tr><td style="background:#e3f2fd"><strong>Terraform</strong></td><td style="background:#e8f5e9"><code>TF_STATE_BUCKET_COMPONENT</code>, <code>FRU_TF_BIN=tofu</code></td><td style="background:#fff3e0">Remote state</td></tr>
 </tbody>
 </table>
@@ -468,7 +470,7 @@ Routes never import Bedrock/Gemini directly (war story §31).
 
 <h2 id="query-viz" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">📐 14. Query workflow visualization</h2>
 
-For transparency and debugging, the UI subscribes to **`GET /query/stream?query=...`** (SSE). Each event corresponds to an agent step—tool name, inputs/outputs, iteration count—rendered in **Execution log** (`ExecutionPanel.tsx`).
+For transparency and debugging, the UI subscribes to **`GET /query/stream?query=...`** (SSE). Each event corresponds to an agent step—tool name, inputs/outputs, iteration count—rendered in **Execution log** (`ExecutionPanel.tsx`). Semantic search steps show **`query_text`** (vector topic) and optional **`filters`**; **`model_context`** names the active embedding profile and chat model. Chat dropdowns load options from **`GET /model-catalog`**.
 
 Deploy verification uses **HEAD** (not GET) on the stream endpoint so status codes are not corrupted by streaming body bytes (war story §1 in [WAR_STORIES_CLOUD_SHARED.md](docs/war_stories/WAR_STORIES_CLOUD_SHARED.md)).
 

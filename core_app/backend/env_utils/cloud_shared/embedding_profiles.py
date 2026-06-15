@@ -45,6 +45,9 @@ def default_profiles_path() -> Path:
     override = os.environ.get("EMBEDDING_PROFILES_CONFIG", "").strip()
     if override:
         return Path(override)
+    model_profiles = _repo_root() / "config" / "model_profiles.yaml"
+    if model_profiles.is_file():
+        return model_profiles
     return _repo_root() / "config" / "embedding_profiles.yaml"
 
 
@@ -83,6 +86,9 @@ def load_profiles(path: Path | None = None) -> dict[str, EmbeddingProfile]:
         data = yaml.safe_load(f) or {}
     if not isinstance(data, dict):
         raise ValueError(f"Embedding profiles YAML must be a mapping: {cfg_path}")
+    # model_profiles.yaml nests under "embeddings"; legacy file is flat.
+    if "embeddings" in data and isinstance(data["embeddings"], dict):
+        data = data["embeddings"]
     profiles: dict[str, EmbeddingProfile] = {}
     for name, raw in data.items():
         if not isinstance(raw, dict):
@@ -97,7 +103,9 @@ def get_profiles() -> dict[str, EmbeddingProfile]:
 
 
 def get_active_profile_name() -> str:
-    return os.environ.get("EMBEDDING_ACTIVE_PROFILE", "openai_1536").strip() or "openai_1536"
+    from backend.env_utils.cloud_shared.model_profiles import get_default_embedding_profile_name
+
+    return get_default_embedding_profile_name()
 
 
 def get_active_profile() -> EmbeddingProfile:

@@ -194,9 +194,12 @@ def main() -> int:
     if not _wait_for_postgres():
         return 1
 
-    # 2. DB setup
+    # 2. DB setup (host TCP — use LOCAL_PG_HOST_PORT to avoid conflict with a native Postgres on 5432)
     logger.step("Running DB setup (schema, fru_sales_raw, embeddings)...")
-    os.environ["PGHOST"] = "localhost"
+    local_pg_port = (os.environ.get("LOCAL_PG_HOST_PORT") or "15432").strip() or "15432"
+    os.environ["PGHOST"] = "127.0.0.1"
+    os.environ["PGPORT"] = local_pg_port
+    logger.info(f"[local-deploy] DB setup via 127.0.0.1:{local_pg_port} (fru-postgres container)")
     csv_path = os.path.join(PROJECT_ROOT, "core_app", "data", "raw", "fridge_sales_with_rating.csv")
     if not os.path.exists(csv_path):
         logger.error(f"CSV not found: {csv_path}")

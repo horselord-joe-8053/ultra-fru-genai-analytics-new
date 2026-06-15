@@ -34,12 +34,17 @@ def test_process_query_emits_normalized_token_usage_and_run_total(
     ]
     call_idx = {"n": 0}
 
-    def fake_claude(*_args, **_kwargs):
+    def fake_complete(*_args, **_kwargs):
         idx = min(call_idx["n"], len(claude_calls) - 1)
         call_idx["n"] += 1
         return claude_calls[idx]
 
-    monkeypatch.setattr("backend.agents.query_agent.claude_complete", fake_claude)
+    mock_llm = MagicMock()
+    mock_llm.complete.side_effect = fake_complete
+    monkeypatch.setattr(
+        "backend.agents.query_agent.create_llm_client_for_choice",
+        lambda _choice=None: mock_llm,
+    )
     query_agent.tools["generate_sql"].execute = MagicMock(
         return_value={
             "success": True,

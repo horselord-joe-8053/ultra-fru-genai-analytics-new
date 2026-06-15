@@ -82,6 +82,26 @@ def _get_provider_client(provider: str) -> Optional[LLMClient]:
     return None
 
 
+def create_llm_client_for_choice(chat_choice: str | None = None) -> LLMClient:
+    """Create LLM client for catalog chat choice (per-request or default)."""
+    from backend.env_utils.cloud_shared.model_profiles import (
+        get_chat_profiles_dict,
+        get_default_chat_choice_name,
+    )
+
+    choice = (chat_choice or get_default_chat_choice_name()).strip()
+    chat_profiles = get_chat_profiles_dict()
+    if choice not in chat_profiles:
+        raise ValueError(f"Unknown chat_choice={choice!r}")
+    inference = chat_profiles[choice].inference
+    logger.info("Creating LLM client for chat_choice=%s inference=%s", choice, inference)
+    if inference == "modelark":
+        from backend.env_utils.byteplus.modelark_client import ModelArkClient
+
+        return ModelArkClient()
+    return create_llm_client()
+
+
 def claude_complete(
     system_prompt: str,
     user_message: str,

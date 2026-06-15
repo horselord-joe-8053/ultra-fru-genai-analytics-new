@@ -20,6 +20,16 @@ def _mock_execute_success(sql_query=None, **_kwargs):
     }
 
 
+def _mock_llm(monkeypatch, text: str):
+    mock_llm = MagicMock()
+    mock_llm.complete.return_value = {"text": text, "tokens": {}}
+    monkeypatch.setattr(
+        "backend.agents.query_agent.create_llm_client_for_choice",
+        lambda _choice=None: mock_llm,
+    )
+    return mock_llm
+
+
 def test_generate_sql_only_auto_chains_execute_in_same_iteration(
     query_agent, monkeypatch
 ):
@@ -28,12 +38,9 @@ def test_generate_sql_only_auto_chains_execute_in_same_iteration(
     def callback(event_type, data):
         events.append((event_type, data))
 
-    monkeypatch.setattr(
-        "backend.agents.query_agent.claude_complete",
-        lambda **_kwargs: {
-            "text": 'TOOL: generate_sql\nINPUT: {"query": "count rows"}',
-            "tokens": {},
-        },
+    _mock_llm(
+        monkeypatch,
+        'TOOL: generate_sql\nINPUT: {"query": "count rows"}',
     )
     query_agent.tools["generate_sql"].execute = MagicMock(
         return_value={
@@ -63,15 +70,12 @@ def test_generate_sql_only_auto_chains_execute_in_same_iteration(
 def test_planner_generate_then_execute_no_duplicate(
     query_agent, monkeypatch
 ):
-    monkeypatch.setattr(
-        "backend.agents.query_agent.claude_complete",
-        lambda **_kwargs: {
-            "text": (
-                'TOOL: generate_sql\nINPUT: {"query": "count rows"}\n'
-                'TOOL: execute_sql\nINPUT: {"sql_query": "[from generate_sql]"}'
-            ),
-            "tokens": {},
-        },
+    _mock_llm(
+        monkeypatch,
+        (
+            'TOOL: generate_sql\nINPUT: {"query": "count rows"}\n'
+            'TOOL: execute_sql\nINPUT: {"sql_query": "[from generate_sql]"}'
+        ),
     )
     query_agent.tools["generate_sql"].execute = MagicMock(
         return_value={
@@ -89,12 +93,9 @@ def test_planner_generate_then_execute_no_duplicate(
 
 
 def test_failed_generate_sql_skips_auto_execute(query_agent, monkeypatch):
-    monkeypatch.setattr(
-        "backend.agents.query_agent.claude_complete",
-        lambda **_kwargs: {
-            "text": 'TOOL: generate_sql\nINPUT: {"query": "count rows"}',
-            "tokens": {},
-        },
+    _mock_llm(
+        monkeypatch,
+        'TOOL: generate_sql\nINPUT: {"query": "count rows"}',
     )
     query_agent.tools["generate_sql"].execute = MagicMock(
         return_value={"success": False, "error": "LLM failed"}
@@ -108,15 +109,12 @@ def test_failed_generate_sql_skips_auto_execute(query_agent, monkeypatch):
 
 def test_planner_execute_sql_placeholder_still_resolved(query_agent, monkeypatch):
     sql = "SELECT AVG(feedback_rating) FROM fru_sales_embeddings;"
-    monkeypatch.setattr(
-        "backend.agents.query_agent.claude_complete",
-        lambda **_kwargs: {
-            "text": (
-                'TOOL: generate_sql\nINPUT: {"query": "average rating"}\n'
-                'TOOL: execute_sql\nINPUT: {"sql_query": "[will use generate_sql]"}'
-            ),
-            "tokens": {},
-        },
+    _mock_llm(
+        monkeypatch,
+        (
+            'TOOL: generate_sql\nINPUT: {"query": "average rating"}\n'
+            'TOOL: execute_sql\nINPUT: {"sql_query": "[will use generate_sql]"}'
+        ),
     )
     query_agent.tools["generate_sql"].execute = MagicMock(
         return_value={"success": True, "sql": sql}

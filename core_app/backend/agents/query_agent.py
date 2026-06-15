@@ -11,7 +11,8 @@ from typing import Dict, Any, Optional, List, Callable
 from decimal import Decimal
 from datetime import datetime, date
 
-from backend.env_utils.cloud_shared.client_factory import claude_complete
+from backend.env_utils.cloud_shared.client_factory import create_llm_client_for_choice
+from backend.env_utils.cloud_shared.model_profiles import RequestModelContext
 from backend.utils.display_truncate import (
     add_token_usage,
     is_executable_select_sql,
@@ -148,7 +149,12 @@ class QueryAgent:
             "context_results": context_results,
         }
     
-    def process_query(self, question: str, progress_callback: Optional[Callable[[str, Dict[str, Any]], None]] = None) -> Dict[str, Any]:
+    def process_query(
+        self,
+        question: str,
+        progress_callback: Optional[Callable[[str, Dict[str, Any]], None]] = None,
+        model_context: Optional[RequestModelContext] = None,
+    ) -> Dict[str, Any]:
         """
         Process a query using the agent.
         
@@ -167,6 +173,21 @@ class QueryAgent:
         if progress_callback:
             progress_callback("question", {"question": question})
             progress_callback("method", {"method": "agentic"})
+            if model_context:
+                progress_callback("model_context", {
+                    "embedding_profile": model_context.embedding_profile,
+                    "embedding_display": model_context.embedding_display,
+                    "chat_choice": model_context.chat_choice,
+                    "chat_display": model_context.chat_display,
+                })
+
+        llm_client = create_llm_client_for_choice(
+            model_context.chat_choice if model_context else None
+        )
+        embedding_profile_name = (
+            model_context.embedding_profile if model_context else None
+        )
+        successful_semantic_fingerprints: set[str] = set()
         
         tool_results: List[Dict[str, Any]] = []
         iteration = 0
@@ -197,13 +218,25 @@ class QueryAgent:
                 logger.info(f"===== ITERATION {iteration} =====")
                 logger.info(f"Planning phase: Generating tool calls for query: '{question}'")
                 logger.info(f"Previous tool results: {len(tool_results)} result(s)")
-                
+
+                if progress_callback:
+                    progress_callback("tool_call_start", {
+                        "iteration": iteration,
+                        "tool": "pseudo_tool#llm_plan",
+                        "input": {"phase": "planning"},
+                    })
+
+                logger.info(
+                    f"[AGENT] iteration={iteration} phase=planning_start "
+                    f"question={question[:120]!r} prior_tools={len(tool_results)}"
+                )
+
                 planning_prompt = get_planning_prompt(question, [], tool_results)
                 planning_start = time.time()
-                planning_result = claude_complete(
+                planning_result = llm_client.complete(
                     system_prompt=self.system_prompt,
                     user_message=planning_prompt,
-                    max_tokens=500
+                    max_tokens=500,
                 )
                 planning_time = (time.time() - planning_start) * 1000
 
@@ -238,6 +271,10 @@ class QueryAgent:
                 # Parse agent response to extract tool calls
                 tool_calls = self._parse_agent_response(agent_response)
                 logger.info(f"Parsed {len(tool_calls)} tool call(s) from agent response")
+                logger.info(
+                    f"[AGENT] iteration={iteration} phase=planning_done "
+                    f"elapsed_ms={planning_time:.0f} parsed_tools={len(tool_calls)}"
+                )
                 
                 if not tool_calls:
                     # Agent thinks it's done
@@ -297,6 +334,18 @@ class QueryAgent:
                     tool_start = time.time()
                     normalized_input = self._normalize_tool_input(tool_name, tool_input)
 
+                    if tool_name == "semantic_search" and embedding_profile_name:
+                        normalized_input["embedding_profile"] = embedding_profile_name
+
+                    if tool_name == "semantic_search":
+                        fp = self._semantic_search_fingerprint(normalized_input)
+                        if fp in successful_semantic_fingerprints:
+                            logger.info(
+                                f"Skipping duplicate semantic_search after prior hit: {fp}"
+                            )
+                            should_break_early = True
+                            break
+
                     logger.info(f"Tool input (normalized): {normalized_input}")
                     
                     tool_output = tool.execute(**normalized_input)
@@ -346,6 +395,19 @@ class QueryAgent:
                         if tool_name in ["execute_sql", "semantic_search"]:
                             all_data_retrieval_tools_successful = False
                         logger.log_thought(f"Tool {tool_name} failed: {tool_output.get('error')}")
+                    elif (
+                        tool_name == "semantic_search"
+                        and tool_output.get("row_count", 0) > 0
+                    ):
+                        successful_semantic_fingerprints.add(
+                            self._semantic_search_fingerprint(normalized_input)
+                        )
+                        logger.info(
+                            f"✅ semantic_search succeeded with {tool_output.get('row_count')} rows. "
+                            "Breaking loop to proceed to synthesis."
+                        )
+                        should_break_early = True
+                        break
                     elif (
                         tool_name == "generate_sql"
                         and tool_output.get("sql")
@@ -527,7 +589,7 @@ class QueryAgent:
                 logger.info("[SYNTHESIS] Calling LLM for final answer synthesis...")
                 # Increase max_tokens for synthesis to avoid truncation of complex answers
                 # 2000 tokens should be sufficient for most synthesis tasks
-                synthesis_result = claude_complete(
+                synthesis_result = llm_client.complete(
                     system_prompt=self.system_prompt,
                     user_message=synthesis_prompt,
                     max_tokens=2000,
@@ -833,6 +895,10 @@ class QueryAgent:
             # This handles cases where LLM doesn't provide proper parameters
             if "query_text" not in normalized and hasattr(self, '_current_question'):
                 normalized["query_text"] = self._current_question
+                logger.warning(
+                    f"[AGENT] semantic_search query_text={self._current_question[:120]!r} "
+                    f"source=fallback_question filters={normalized.get('filters')}"
+                )
             
             # Convert filter parameters to filters dict
             # semantic_search expects: filters={"store_name": ["value"]}
@@ -1024,6 +1090,20 @@ class QueryAgent:
                 return str(output["sql"])
         return None
 
+    def _semantic_search_fingerprint(self, normalized_input: Dict[str, Any]) -> str:
+        """Stable key for dedupe after a successful semantic_search hit."""
+        import json as _json
+
+        return _json.dumps(
+            {
+                "query_text": normalized_input.get("query_text"),
+                "filters": normalized_input.get("filters") or {},
+                "limit": normalized_input.get("limit", 50),
+            },
+            sort_keys=True,
+            default=str,
+        )
+
     def _build_sse_tool_input(
         self,
         tool_name: str,
@@ -1033,6 +1113,32 @@ class QueryAgent:
         prior_generate_sql: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Build tool_call_complete input for UI (display-only; does not affect execution)."""
+        if tool_name == "semantic_search":
+            sse: Dict[str, Any] = {}
+            query_text = normalized_input.get("query_text")
+            if query_text:
+                sse["query_text"] = query_text
+            raw_planner = (
+                tool_input.get("query_text")
+                or tool_input.get("question")
+                or tool_input.get("query")
+            )
+            if query_text and not raw_planner:
+                sse["query_text_source"] = "fallback_question"
+            else:
+                sse["query_text_source"] = "planner"
+            if normalized_input.get("filters"):
+                sse["filters"] = normalized_input["filters"]
+            if normalized_input.get("limit") is not None:
+                sse["limit"] = normalized_input["limit"]
+            for key in (
+                "feedback_sentiment_category",
+                "feedback_rating_min",
+                "feedback_rating_max",
+            ):
+                if key in tool_input:
+                    sse[key] = tool_input[key]
+            return sse
         if tool_name == "execute_sql":
             sql = self._resolve_sql_for_sse_display(
                 normalized_input, tool_output, prior_generate_sql

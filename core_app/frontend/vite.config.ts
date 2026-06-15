@@ -22,6 +22,7 @@ export default defineConfig({
       "/rawdata/*": { target: apiTarget, changeOrigin: true },
       "/health": { target: apiTarget, changeOrigin: true },
       "/version": { target: apiTarget, changeOrigin: true },
+      "/model-catalog": { target: apiTarget, changeOrigin: true },
     },
   },
 });
