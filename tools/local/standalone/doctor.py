@@ -164,7 +164,49 @@ def main() -> int:
         else:
             logger.warning(f"[doctor] {e}")
 
-    # 7. Model catalog defaults (embedding + chat profiles from YAML)
+    # 7. Live /model-catalog on local APIs (catches stale nginx bundle missing route)
+    logger.info("[doctor] Checking /model-catalog on local API ports (when reachable)...")
+    try:
+        from tools.local.scope_shared.local_deploy_config import get_ports_for_scope
+
+        for scope in ("nonkube", "kube"):
+            api_port = get_ports_for_scope(scope)["api_port"]
+            base = f"http://127.0.0.1:{api_port}"
+            if scope == "kube":
+                try:
+                    from tools.local.kube.local_k8s import ensure_kube_api_reachable
+
+                    base = ensure_kube_api_reachable(api_port, wait_timeout_sec=15)
+                except RuntimeError as e:
+                    logger.warning(f"[doctor] Kube API not reachable for model-catalog check: {e}")
+                    continue
+            try:
+                import requests
+
+                r = requests.get(f"{base.rstrip('/')}/model-catalog", timeout=10)
+                ct = (r.headers.get("content-type") or "").lower()
+                if r.status_code != 200 or "json" not in ct:
+                    errors.append(
+                        f"{scope} API :{api_port}/model-catalog returned non-JSON "
+                        f"(status={r.status_code}, content-type={ct!r}). "
+                        "Rebuild fru-api:local and restart the API (kube: import image + rollout restart)."
+                    )
+                else:
+                    stacks = r.json().get("stacks")
+                    if not isinstance(stacks, list):
+                        errors.append(f"{scope} API :{api_port}/model-catalog missing stacks[]")
+                    else:
+                        logger.info(
+                            f"[doctor] {scope} /model-catalog OK ({len(stacks)} stacks)"
+                        )
+            except requests.exceptions.ConnectionError:
+                logger.warning(f"[doctor] {scope} API :{api_port} not reachable; skip live catalog check")
+            except Exception as e:
+                errors.append(f"{scope} /model-catalog check failed: {e}")
+    except Exception as e:
+        logger.warning(f"[doctor] Live model-catalog check skipped: {e}")
+
+    # 8. Model catalog defaults (embedding + chat profiles from YAML)
     logger.info("[doctor] Checking model catalog defaults (config/model_profiles.yaml)...")
     try:
         _core_app = os.path.join(_project_root, "core_app")

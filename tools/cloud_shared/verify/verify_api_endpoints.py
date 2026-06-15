@@ -177,6 +177,26 @@ def verify_api_endpoints(
             )
         return True
 
+    def check_model_catalog(r, url: str = ""):
+        """UI dropdowns call GET /model-catalog — must be JSON with stacks[], not SPA HTML."""
+        if r.status_code != 200:
+            return False
+        ct = (r.headers.get("content-type") or "").lower()
+        if "json" not in ct:
+            raise RuntimeError(
+                f"ModelCatalog returned {ct!r} (expected JSON). "
+                "Rebuild fru-api image — nginx must proxy /model-catalog to Flask."
+            )
+        try:
+            data = r.json()
+        except Exception as ex:
+            raise RuntimeError(f"ModelCatalog body is not JSON at {url}: {ex}") from ex
+        if not isinstance(data.get("stacks"), list):
+            raise RuntimeError(
+                f"ModelCatalog JSON missing stacks[] at {url} — redeploy API with model_profiles.yaml"
+            )
+        return len(data["stacks"]) > 0
+
     def check_analytics(r, url: str = ""):
         if r.status_code != 200:
             return False
@@ -197,6 +217,12 @@ def verify_api_endpoints(
     endpoints = [
         {"path": "/health", "name": "Health", "check": lambda r, url=None: r.status_code == 200, "timeout": 10},
         {"path": "/version", "name": "Version", "check": lambda r, url=None: r.status_code == 200, "timeout": 10},
+        {
+            "path": "/model-catalog",
+            "name": "ModelCatalog",
+            "check": check_model_catalog,
+            "timeout": 15,
+        },
         {"path": "/", "name": "Frontend", "check": lambda r, url=None: r.status_code == 200 and "<html" in r.text.lower(), "timeout": 10},
         {"path": "/query/stream?query=total%20number%20of%20record", "name": "QueryStream", "check": check_query_stream, "timeout": query_stream_timeout_sec},
         {"path": "/analytics", "name": "Analytics", "check": check_analytics, "timeout": 10},

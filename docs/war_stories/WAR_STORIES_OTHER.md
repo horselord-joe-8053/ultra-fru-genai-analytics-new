@@ -1019,3 +1019,34 @@ Once the UI sends **per-request `chat_choice`**, the catalog profile's **`infere
 <h3 id="war-story-16-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">16.5 Takeaway</h3>
 
 When a deploy supports **multiple inference vendors**, trace the factory for **both** the default env path and the **per-request catalog path**. If only the default path respects the env knob, mixed-stack UI testing will look like a wrong model id when the real bug is **wrong client class**.
+
+---
+
+<h2 id="war-story-17-nginx-model-catalog-spa-fallback" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">17. Stale nginx bundle — `/model-catalog` served SPA HTML instead of JSON</h2>
+
+**creation:** 260616 · **last_updated:** 260616 · **keywords:** nginx, model-catalog, Vite proxy, local kube, CloudFront, dropdowns, fru-api image · **difficulty:** 4 · **significance:** 6
+
+<h3 id="war-story-17-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">17.1 Context</h3>
+
+After stack dropdowns shipped, local **kube** Vite (`5173`) showed `Models unavailable (non-JSON response … /model-catalog)` while `/version` and chat queries worked. Nonkube on `5174` had the same class of failure when the API container ran an old nginx config.
+
+<h3 id="war-story-17-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">17.2 Root Cause</h3>
+
+`core_app/nginx.conf` proxies API paths to Flask on `:5000`. The route list originally omitted **`model-catalog`**. Requests hit `location /` → `try_files` → **`index.html`**. Vite proxied that HTML as the catalog response; `Chat.tsx` correctly rejected non-JSON.
+
+<h3 id="war-story-17-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">17.3 Key Insight</h3>
+
+Every new Flask route used by the dev UI **must** appear in **both** `vite.config.ts` `server.proxy` **and** nginx's API `location ~` regex. Cloud lanes serve the same bundle — stale images fail the same way on CloudFront URLs.
+
+<h3 id="war-story-17-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">17.4 Resolution</h3>
+
+| Layer | Change |
+|-------|--------|
+| `nginx.conf` | Add `model-catalog` to proxied prefix list |
+| `vite.config.ts` | Proxy `/model-catalog` (already present) |
+| Local kube | Rebuild `fru-api:local`, import into k8s, rollout restart; port-forward `:30080` when NodePort unreachable |
+| Guards | `verify_frontend_proxy.py`, `doctor.py`, `verify_api_endpoints` **ModelCatalog** check, unit test on `nginx.conf` |
+
+<h3 id="war-story-17-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">17.5 Takeaway</h3>
+
+UI features backed by new API routes need a **three-way checklist**: Flask route, Vite proxy, nginx regex — plus **rebuild/redeploy** the `fru-api` image on every lane (local kube, ECS, GKE, Cloud Run bundle).
