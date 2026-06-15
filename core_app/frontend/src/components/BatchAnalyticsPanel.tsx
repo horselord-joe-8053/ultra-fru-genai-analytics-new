@@ -333,17 +333,22 @@ const BatchAnalyticsPanel: React.FC<BatchAnalyticsPanelProps> = ({ onToggle, isV
           </p>
         )}
         {data.run_status?.status_message && (
-          <div
-            className={`mt-2 text-[0.6875rem] leading-snug p-2 rounded border ${
+          <details
+            className={`mt-2 text-[0.6875rem] leading-snug rounded border ${
               data.run_status.severity === "error"
                 ? "bg-red-50 border-red-200 text-red-800"
                 : "bg-amber-50 border-amber-200 text-amber-900"
             }`}
-            role="status"
           >
-            {data.run_status.severity === "error" ? "Batch job error: " : ""}
-            {data.run_status.status_message}
-          </div>
+            <summary className="cursor-pointer px-2 py-1.5 font-medium hover:opacity-90">
+              {data.run_status.severity === "error"
+                ? "Batch job error"
+                : "Batch scheduler notice"}
+            </summary>
+            <div className="px-2 pb-2 pt-0 border-t border-current/10" role="status">
+              {data.run_status.status_message}
+            </div>
+          </details>
         )}
       </div>
 

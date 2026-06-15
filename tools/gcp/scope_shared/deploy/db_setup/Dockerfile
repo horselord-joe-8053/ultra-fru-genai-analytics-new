@@ -4,13 +4,19 @@
 # Build from repo root:
 #   docker build -f tools/gcp/scope_shared/deploy/db_setup/Dockerfile -t db-setup:latest .
 #
-# Contains: Python, psycopg2, pandas, openai, schema, parser, load script, CSV.
-# Env: PGHOST, PGPASSWORD, OPENAI_API_KEY, FRU_CSV_PATH, FRU_FORCE_REFRESH_DATA.
+# Contains: backend embedding_sync, schema, load script, CSV.
+# Env: PGHOST, PGPASSWORD, OPENAI_API_KEY, ARK_* (from deploy host), FRU_CSV_PATH.
 FROM python:3.11-slim
 
-RUN pip install --no-cache-dir psycopg2-binary pandas openai
+COPY core_app/requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 WORKDIR /app
+ENV PYTHONPATH=/app
+
+# Backend + profile config (dual-profile embedding_sync)
+COPY core_app/backend /app/backend
+COPY config /app/config
 
 # Schema
 COPY core_app/sql/schema_pgvector.sql /app/schema.sql

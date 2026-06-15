@@ -47,6 +47,7 @@ A curated list of **non-trivial technical war stories**, capturing real lessons 
 <tr><td style="background:#e3f2fd;padding:8px;text-align:right">7</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-7">7. GCP State Bucket Naming: project_id vs account_id</a></td><td style="padding:8px;background:#fff3e0">GCP State Bucket Naming: project_id vs account_id</td></tr>
 <tr><td style="background:#e3f2fd;padding:8px;text-align:right">8</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-8">8. Service Networking Peering Teardown: Compute API vs Service Networking API</a></td><td style="padding:8px;background:#e8f5e9">Service Networking Peering Teardown: Compute API vs Service Networking API</td></tr>
 <tr><td style="background:#e3f2fd;padding:8px;text-align:right">9</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-9">9. Smart DB Loading Strategy: Verify-Only Fallback Instead of Fail-Fast</a></td><td style="padding:8px;background:#fff3e0">Smart DB Loading Strategy: Verify-Only Fallback Instead of Fail-Fast</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">10</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-10">10. GCP db-setup Image: Dual-Profile Sync Needs backend Package in Docker</a></td><td style="padding:8px;background:#e8f5e9">Minimal db-setup Dockerfile broke when load.py imported embedding_sync</td></tr>
 </tbody>
 </table>
 
@@ -669,5 +670,47 @@ This is a **recovery path**, not a way to hide errors: the first failure is alwa
 <h3 id="war-story-9-sec-6" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">9.6 Takeaway</h3>
 
 (1) For long-running, async jobs that mutate shared state (e.g. DB), consider a **lightweight verification step** when the job “fails”—so you can distinguish “state is bad” from “job failed but state may still be good” (e.g. timeout after success). (2) Document this as a deliberate **recovery path** so future maintainers do not “fix” it by making the flow fail-fast and remove verify-only. (3) Keep the first failure visible in logs; only continue when the verification step explicitly confirms the desired state. (4) Reference: `tools/gcp/scope_shared/deploy/db_setup/cloud_job.py` (`run_verify_only` docstring) and `setup_database.py` (catch + verify-only blocks).
+
+---
+
+<h2 id="war-story-10" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">10. GCP db-setup Image: Dual-Profile Sync Needs backend Package in Docker</h2>
+
+**creation:** `<260615>`
+**last_updated:** `<260615>`
+
+**keywords:** Cloud Run Job, db-setup, Dockerfile, embedding_sync, ModuleNotFoundError, dual-profile
+**difficulty:** 4
+**significance:** 7
+
+<h3 id="war-story-10-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">10.1 Context</h3>
+
+First GCP nonkube deploy after billing recovery (2026-06-15). Durable stack (VPC, Cloud SQL, VPC connector) applied successfully. Phase 7 db-setup Cloud Run Job failed at **Phase 3: embeddings** despite schema + CSV load succeeding.
+
+<h3 id="war-story-10-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">10.2 Root Cause</h3>
+
+`load.py` was updated to use `backend.services.embedding_sync` (dual-profile bootstrap, same as AWS RDS ETL). The db-setup **Dockerfile** was still “minimal”: psycopg2/pandas/openai only — no `core_app/backend`, no `config/embedding_profiles.yaml`, no `PYTHONPATH=/app`.
+
+<table>
+<thead>
+<tr style="background:#1565c0;color:white"><th>Layer</th><th>AWS nonkube db load</th><th>GCP db-setup job (before fix)</th></tr>
+</thead>
+<tbody>
+<tr><td style="background:#e3f2fd">Runtime</td><td style="background:#e8f5e9">Host subprocess with `PYTHONPATH=core_app`</td><td style="background:#ffebee">Isolated container — only `/app/load.py`</td></tr>
+<tr><td style="background:#e3f2fd">embedding_sync</td><td style="background:#e8f5e9">Available via core_app on path</td><td style="background:#ffebee"><code>ModuleNotFoundError: backend</code></td></tr>
+</tbody>
+</table>
+
+<h3 id="war-story-10-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">10.3 Key Insight</h3>
+
+Parity refactors that share Python modules across lanes must update **every** packaging surface — not just the main API image. A “thin” job image is not thin once it imports app-layer sync code.
+
+<h3 id="war-story-10-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">10.4 Resolution</h3>
+
+- Dockerfile: `COPY core_app/backend`, `COPY config`, `core_app/requirements.txt`, `ENV PYTHONPATH=/app` (mirror main app image pattern).
+- `config.py`: pass `ARK_*` and `EMBEDDING_ACTIVE_PROFILE` from deploy-host `.env` into the job (GCP has no ARK Secret Manager slot yet).
+
+<h3 id="war-story-10-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">10.5 Takeaway</h3>
+
+When db bootstrap calls the same dual-profile sync as the API, treat the db-setup image as a **second API consumer** of `backend.services.embedding_sync` — copy backend + profile config, or keep load logic self-contained in the job tree.
 
 ---

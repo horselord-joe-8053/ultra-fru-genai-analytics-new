@@ -22,6 +22,7 @@ from tools.cloud_shared.analytics_schedule import (
     get_required_analytics_scheduler_interval_seconds,
     seconds_to_cron,
 )
+from tools.cloud_shared.delta_paths import gcs_delta_table_path
 from tools.cloud_shared.embedding_deploy_env import (
     api_deployment_embedding_subs,
     modelark_secret_entries,
@@ -114,7 +115,7 @@ def main():
     if not delta_bucket:
         raise SystemExit("delta_bucket not in nondurable outputs")
     delta_root = f"gs://{delta_bucket}/delta"
-    delta_table_path = args.delta_table_path or f"gs://{delta_bucket}/delta/fru_sales"
+    delta_table_path = args.delta_table_path or gcs_delta_table_path(delta_bucket, "kube")
 
     spark_base = nondurable.get("artifact_registry_spark_url", {}).get("value", "")
     app_base = nondurable.get("artifact_registry_app_url", {}).get("value", "")

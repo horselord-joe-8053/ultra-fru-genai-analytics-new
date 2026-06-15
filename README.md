@@ -37,7 +37,7 @@ Getting this system working end-to-end was more challenging, educational and muc
 - [📐 14. Query workflow visualization](#query-viz)
 - [📚 15. War stories](#war-stories)
 - [📖 16. Documentation map](#docs-map)
-- [🧪 17. Testing (unit + integration)](#testing)
+- [🧪 17. Testing (unit + integration + e2e)](#testing)
   - [17.1 Unit tests](#unit-tests)
   - [17.2 Integration tests (Docker)](#integration-tests)
 - [🔗 18. Related repositories](#related-repos)
@@ -513,9 +513,9 @@ Index: [docs/war_stories/README.md](docs/war_stories/README.md).
 
 ---
 
-<h2 id="testing" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">🧪 17. Testing (unit + integration)</h2>
+<h2 id="testing" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">🧪 17. Testing (unit + integration + e2e)</h2>
 
-**pytest** suite for fast refactors: **unit** tests mock DB/LLM/cloud (every PR); **integration** tests hit a live local API after Docker deploy (optional, manual CI).
+**pytest** suite for fast refactors: **unit** tests mock DB/LLM/cloud (every PR); **integration** tests hit a live local API after Docker deploy; **e2e** Playwright specs exercise the Vite UI (manual, needs LLM keys). See [`tests/README.md`](tests/README.md).
 
 <table>
 <thead>
@@ -524,6 +524,7 @@ Index: [docs/war_stories/README.md](docs/war_stories/README.md).
 <tbody>
 <tr><td style="background:#e3f2fd"><strong>Unit</strong></td><td style="background:#e8f5e9">Every PR, local dev</td><td style="background:#e8f5e9"><code>pytest -m "not integration"</code></td><td style="background:#e8f5e9"><span style="background:#c8e6c9;padding:2px 4px">no</span></td></tr>
 <tr><td style="background:#e3f2fd"><strong>Integration</strong></td><td style="background:#fff3e0">After local deploy</td><td style="background:#fff3e0"><code>./scripts/run_integration_tests.sh</code></td><td style="background:#fff3e0"><span style="background:#fff9c4;padding:2px 4px">yes</span></td></tr>
+<tr><td style="background:#e3f2fd"><strong>E2E (Playwright)</strong></td><td style="background:#fff3e0">Pre-release / demo</td><td style="background:#fff3e0"><code>./scripts/run_e2e_tests.sh</code></td><td style="background:#fff3e0"><span style="background:#fff9c4;padding:2px 4px">yes + LLM</span></td></tr>
 </tbody>
 </table>
 

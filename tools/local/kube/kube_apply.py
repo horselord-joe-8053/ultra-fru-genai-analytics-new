@@ -41,18 +41,10 @@ def _kubectl(args: list, input_text: str | None = None) -> None:
 
 
 def _ensure_local_k8s_context() -> None:
-    """Ensure kubectl context is Docker Desktop (or compatible local cluster)."""
-    out = subprocess.run(
-        ["kubectl", "config", "current-context"],
-        capture_output=True,
-        text=True,
-    )
-    ctx = (out.stdout or "").strip()
-    if not ctx:
-        print("Error: No kubectl context. Enable Kubernetes in Docker Desktop.", file=sys.stderr)
-        raise SystemExit(1)
-    if "docker" not in ctx.lower() and "kind" not in ctx.lower() and "minikube" not in ctx.lower():
-        print(f"Warning: Context '{ctx}' may not be local. Expected docker-desktop, kind-*, or minikube.")
+    """Ensure kubectl targets Docker Desktop (or kind/minikube) local cluster."""
+    from tools.local.kube.local_k8s import ensure_local_kubectl_context
+
+    ensure_local_kubectl_context()
 
 
 def main() -> None:

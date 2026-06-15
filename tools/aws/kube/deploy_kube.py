@@ -41,6 +41,7 @@ from tools.aws.scope_shared.deploy.k8s_deploy_helpers import (
     k8s_rollout_restart_api,
 )
 from tools.cloud_shared.deploy.wait_for_capacity import wait_for_kube_nodes_ready
+from tools.cloud_shared.delta_paths import aws_delta_table_path
 
 
 def _try_get_lb_hostname(env: str, region: str) -> str:
@@ -217,7 +218,7 @@ def run_deploy_kube(
     aurora_endpoint = durable.get("aurora_endpoint", {}).get("value", "")
     db_secret_arn = durable.get("db_password_plain_secret_arn", {}).get("value", "")
     openai_secret_arn = durable.get("openai_api_key_secret_arn", {}).get("value", "")
-    delta_table_path = f"s3a://{delta_bucket}/delta/fru_sales"
+    delta_table_path = aws_delta_table_path(delta_bucket, "kube")
 
     kube_apply_args = [
         "python", "tools/aws/kube/kube_apply.py", "--env", env, "--region", region, "--phase", "bootstrap",
@@ -286,7 +287,13 @@ def run_deploy_kube(
     )
 
     if hostname_to_use:
-        wait_for_dns_resolvable(hostname_to_use, timeout_seconds=120, check_interval_sec=5, heartbeat_interval_sec=30)
+        dns_wait = get_int_env("KUBE_DNS_WAIT_TIMEOUT_SEC", 1200)
+        wait_for_dns_resolvable(
+            hostname_to_use,
+            timeout_seconds=dns_wait,
+            check_interval_sec=5,
+            heartbeat_interval_sec=30,
+        )
         # LB target health checks can take 2-5 min; allow more retries
         verify_api_db_connected(
             f"http://{hostname_to_use}",

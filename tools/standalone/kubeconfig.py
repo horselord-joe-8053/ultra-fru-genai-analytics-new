@@ -35,11 +35,12 @@ def _run_local(env: str, region: str | None) -> None:
         timeout=10,
     )
     contexts = (out.stdout or "").strip().splitlines() if out.returncode == 0 else []
-    # Prefer docker-desktop, then kind-*, then minikube
-    for name in ("docker-desktop", "docker-edge"):
-        if name in contexts:
-            print(f"+ kubectl config use-context {name}")
-            subprocess.run(["kubectl", "config", "use-context", name], check=True, timeout=10)
+    # Prefer docker-desktop, kind-*, desktop-kubernetes (Docker Desktop kind mode)
+    for ctx in contexts:
+        low = ctx.lower()
+        if low in ("docker-desktop", "docker-edge", "desktop-kubernetes"):
+            print(f"+ kubectl config use-context {ctx}")
+            subprocess.run(["kubectl", "config", "use-context", ctx], check=True, timeout=10)
             return
     for ctx in contexts:
         if ctx.startswith("kind-") or ctx == "minikube":

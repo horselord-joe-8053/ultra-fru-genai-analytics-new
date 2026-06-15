@@ -51,7 +51,11 @@ BUILD_METADATA_PREFIX = f"build-metadata/{LOCAL_DEFAULT_REGION}"
 
 def _run(cmd: list[str], cwd: str | None = None, env: dict | None = None) -> int:
     e = env or os.environ.copy()
-    e.setdefault("PYTHONPATH", PROJECT_ROOT)
+    core_app = os.path.join(PROJECT_ROOT, "core_app")
+    existing = e.get("PYTHONPATH", "")
+    e["PYTHONPATH"] = os.pathsep.join(
+        [p for p in (core_app, PROJECT_ROOT, existing) if p]
+    )
     r = subprocess.run(cmd, cwd=cwd or PROJECT_ROOT, env=e)
     return r.returncode
 
@@ -71,35 +75,10 @@ def _docker_compose(*args: str, files: tuple[str, ...] | None = None) -> int:
     return rc
 
 
-def _import_api_image_to_kube_node() -> None:
-    """Sync fru-api:local into Docker Desktop k8s containerd (avoids stale digest on rollout)."""
-    import subprocess
+def _import_spark_image_to_kube_node() -> None:
+    from tools.local.kube.local_k8s import import_image_to_desktop_k8s
 
-    check = subprocess.run(
-        ["docker", "inspect", "desktop-control-plane"],
-        capture_output=True,
-    )
-    if check.returncode != 0:
-        logger.info("desktop-control-plane not found; skipping k8s image import")
-        return
-    logger.info("Importing fru-api:local into Docker Desktop Kubernetes node...")
-    proc = subprocess.Popen(
-        ["docker", "save", "fru-api:local"],
-        stdout=subprocess.PIPE,
-    )
-    import_proc = subprocess.Popen(
-        ["docker", "exec", "-i", "desktop-control-plane", "ctr", "-n", "k8s.io", "images", "import", "-"],
-        stdin=proc.stdout,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    if proc.stdout:
-        proc.stdout.close()
-    out, err = import_proc.communicate()
-    if import_proc.returncode != 0:
-        logger.warning(f"k8s image import failed: {err.decode(errors='replace')[:300]}")
-    else:
-        logger.info("k8s image import complete")
+    import_image_to_desktop_k8s("fru-spark:local")
 
 
 def _wait_for_postgres(timeout_sec: int = 60) -> bool:
@@ -142,7 +121,6 @@ def _build_images(skip_spark: bool, no_cache: bool = False) -> int:
     if not skip_spark:
         spark_cmd = [
             "docker", "build", "--progress=plain",
-            "--platform", "linux/amd64",
             "-f", "core_app/analytics/docker/Dockerfile",
             "-t", "fru-spark:local",
             "core_app",
@@ -276,12 +254,22 @@ def main() -> int:
                 return 1
         elif scope == "kube":
             logger.step("Deploying local kube (Docker Desktop Kubernetes)")
-            _import_api_image_to_kube_node()
+            from tools.local.kube.local_k8s import prepare_local_kube
+
+            prepare_local_kube(skip_spark=args.skip_spark)
             if _run([sys.executable, "tools/local/kube/kube_apply.py", "--phase", "bootstrap"]) != 0:
                 return 1
             if not args.skip_spark:
+                _import_spark_image_to_kube_node()
                 if _run([sys.executable, "tools/local/kube/kube_apply.py", "--phase", "schedule"]) != 0:
                     return 1
+            from tools.local.kube.local_k8s import ensure_kube_api_reachable
+
+            kube_ports = get_ports_for_scope("kube")
+            try:
+                ensure_kube_api_reachable(kube_ports["api_port"], wait_timeout_sec=180)
+            except RuntimeError as e:
+                logger.warning(str(e))
 
     logger.success("Local deploy complete")
     if "nonkube" in scopes:

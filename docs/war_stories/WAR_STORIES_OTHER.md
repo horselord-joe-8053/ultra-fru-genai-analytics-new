@@ -49,6 +49,7 @@ A curated list of **non-trivial technical war stories**, capturing real lessons 
 <tr><td style="background:#e3f2fd;padding:8px;text-align:right">11</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-11-analytics-worker-design">11. Compose analytics-worker — singleton owner for local nonkube Spark</a></td><td style="padding:8px;background:#fff3e0">Replace host <code>scheduler_local.py</code> + nested <code>docker run</code> with one Compose service + Forbid</td></tr>
 <tr><td style="background:#e3f2fd;padding:8px;text-align:right">12</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-12-local-vs-cloud-spark-scheduling">12. Why local uses a persistent worker but cloud keeps ephemeral tasks</a></td><td style="padding:8px;background:#e8f5e9">Shared laptop RAM vs isolated Fargate/Cloud Run memory — same job code, different wrappers</td></tr>
 <tr><td style="background:#e3f2fd;padding:8px;text-align:right">13</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-13-local-dual-ui-entry">13. Local nonkube — two UI entry points (Vite vs nginx bundle)</a></td><td style="padding:8px;background:#fff3e0">5001 serves UI+API by design; 5174 is dev Vite — not a routing bug</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">14</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-14-playwright-e2e-scenarios">14. Playwright E2E — shared scenarios, F900 CRUD, batch panel ≠ chat path</a></td><td style="padding:8px;background:#e8f5e9">One scenario module for tests+demos; S5 asserts chat/SQL not Spark snapshot</td></tr>
 </tbody>
 </table>
 
@@ -919,3 +920,37 @@ Scope label duplication (5174 vs 5001 both `nonkube`) was **deferred** — corre
 <h3 id="war-story-13-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">13.5 Takeaway</h3>
 
 When a dev stack copies cloud’s “single container UI+API,” add an explicit **dev overlay** (Vite) and document both URLs. Treat `/version` as the UI’s source of truth for build stamp and runtime config hints.
+
+---
+
+<h2 id="war-story-14-playwright-e2e-scenarios" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">14. Playwright E2E — shared scenarios, F900 CRUD, batch panel ≠ chat path</h2>
+
+**creation:** 260614 · **last_updated:** 260614 · **keywords:** Playwright, e2e, pytest layout, scenarios, F900, CRUD, batch analytics, external stack · **difficulty:** 3 · **significance:** 5
+
+<h3 id="war-story-14-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">14.1 Context</h3>
+
+FRU had solid pytest unit/integration coverage but no browser package. Product wanted five demo-grade flows (four chat queries + one Data Management CRUD loop) reusable in CI specs and stakeholder demos.
+
+<h3 id="war-story-14-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">14.2 Root Cause</h3>
+
+Without a shared scenario module, Playwright specs and demo scripts duplicate query strings and expectations — drift is guaranteed. S5 (insert $70k NYC sale, ask “best city”) tempts testers to assert on the Batch Analytics ↻ panel, but that panel reloads the **last Spark snapshot**, not live `/rawdata` rows.
+
+<h3 id="war-story-14-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">14.3 Key Insight</h3>
+
+Mirror portuguese-learn’s layering: **L0** UI locators, **L1** domain runners, **`support/scenarios.ts`** as the only catalog. Run against **external stack** (`PLAYWRIGHT_EXTERNAL_STACK=1`) on Vite port **5174**. Reserve **`F900`** above seed `F001–F200` for mutable CRUD e2e; always pre-delete and `finally` cleanup.
+
+<h3 id="war-story-14-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">14.4 Resolution</h3>
+
+| Piece | Location |
+|-------|----------|
+| Integration pytest subfolders | `tests/integration/{api,crud,embeddings,verify}/` |
+| Playwright package | `tests/e2e/` — `workers: 1`, soft LLM assertions |
+| Scenarios S1–S5 | `tests/e2e/support/scenarios.ts` |
+| Demo tour | `demos/playwright_e2e/sequences/analytics_assistant_tour.spec.ts` |
+| Run wrappers | `scripts/run_e2e_tests.sh`, `demos/playwright_e2e/scripts/run_demo.sh` |
+
+S5 e2e hard-asserts **grid row + chat answer (`new york`)**; Batch Analytics ↻ is **demo-only smoke**.
+
+<h3 id="war-story-14-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">14.5 Takeaway</h3>
+
+Treat browser e2e as a **third test category** with shared scenario data, not one-off specs. For CRUD → analytics stories, assert the **agent/SQL path** the user actually queries, not the Spark batch panel, unless you run a fresh batch job.

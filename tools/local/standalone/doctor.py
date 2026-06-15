@@ -132,6 +132,38 @@ def main() -> int:
     else:
         logger.info(f"[doctor] CSV present: {csv_path}")
 
+    # 6. Docker Desktop Kubernetes (required for scope=kube)
+    logger.info("[doctor] Checking Docker Desktop Kubernetes (scope=kube)...")
+    try:
+        from tools.local.kube.local_k8s import (
+            desktop_kubernetes_status,
+            ensure_local_kubectl_context,
+            is_desktop_kubernetes_running,
+        )
+
+        if is_desktop_kubernetes_running():
+            ensure_local_kubectl_context()
+            logger.info("[doctor] Docker Desktop Kubernetes running; kubectl context OK")
+        else:
+            status = desktop_kubernetes_status()
+            msg = (
+                "Docker Desktop Kubernetes is not running "
+                f"(state={status.get('State', 'unknown')}). "
+                "Enable: Docker Desktop → Settings → Kubernetes → Enable. "
+                "Or set FRU_AUTO_ENABLE_DESKTOP_K8S=1 on deploy."
+            )
+            if os.environ.get("FRU_DOCTOR_REQUIRE_KUBE", "").strip().lower() in ("1", "true", "yes"):
+                errors.append(msg)
+                logger.error(f"[doctor] {msg}")
+            else:
+                logger.warning(f"[doctor] {msg}")
+    except RuntimeError as e:
+        if os.environ.get("FRU_DOCTOR_REQUIRE_KUBE", "").strip().lower() in ("1", "true", "yes"):
+            errors.append(str(e))
+            logger.error(f"[doctor] {e}")
+        else:
+            logger.warning(f"[doctor] {e}")
+
     if errors:
         logger.error("[doctor] Preflight FAILED; see errors above.")
         return 1

@@ -48,6 +48,12 @@ def main() -> int:
     logger.step("Local teardown")
 
     if "kube" in scopes:
+        try:
+            from tools.local.kube.local_k8s import stop_kube_api_port_forward
+
+            stop_kube_api_port_forward()
+        except Exception:
+            pass
         logger.info("Pre-destroy kube (same sequence as AWS/GCP)...")
         run_k8s_cleanup()
         if os.path.exists(HOSTPATH_FRU_DELTA):

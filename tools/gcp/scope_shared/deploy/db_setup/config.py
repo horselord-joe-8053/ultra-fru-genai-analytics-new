@@ -94,6 +94,18 @@ def get_job_config(env: str, region: str, project_id: str | None = None, force: 
         "FRU_FORCE_REFRESH_DATA": "true" if force else "false",
         "OPENAI_EMBED_MODEL": os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small"),
     }
+    # ModelArk + active profile from deploy host .env (GCP has no ark Secret Manager slot yet)
+    from tools.cloud_shared.embedding_deploy_env import (
+        DEFAULT_ARK_BASE_URL,
+        embedding_profile_from_env,
+    )
+
+    env_vars["EMBEDDING_ACTIVE_PROFILE"] = embedding_profile_from_env()
+    env_vars["ARK_BASE_URL"] = os.getenv("ARK_BASE_URL", DEFAULT_ARK_BASE_URL).strip() or DEFAULT_ARK_BASE_URL
+    for key in ("ARK_API_KEY", "ARK_EMBEDDING_MODEL_ID"):
+        val = os.environ.get(key, "").strip()
+        if val:
+            env_vars[key] = val
 
     secret_ids = {
         "PGPASSWORD": db_password_secret_id,

@@ -1,6 +1,18 @@
 # Tests
 
-Pytest suite for FRU GenAI Analytics. **Unit** tests mock external I/O; **integration** tests hit a live local API (Docker).
+Pytest suite and Playwright browser E2E for FRU GenAI Analytics.
+
+## Categories
+
+| Category | Path | Runner | CI default |
+|----------|------|--------|--------------|
+| **Unit** | `tests/unit/` | pytest | Every PR (`pytest -m "not integration"`) |
+| **Integration** | `tests/integration/` | pytest + live API | Manual / nightly |
+| **E2E** | `tests/e2e/` | Playwright | Manual (full-stack needs LLM keys) |
+
+Category READMEs: [`unit/README.md`](unit/README.md) · [`integration/README.md`](integration/README.md) · [`e2e/README.md`](e2e/README.md)
+
+Live demos (stakeholder-paced): [`demos/playwright_e2e/README.md`](../demos/playwright_e2e/README.md)
 
 ## Unit tests (default PR / CI)
 
@@ -11,57 +23,55 @@ pytest -m "not integration"
 pytest -m "not integration" --cov --cov-report=term-missing
 ```
 
-If `pytest` reports `unrecognized arguments: --cov`, your shell likely has `PYTEST_DISABLE_PLUGIN_AUTOLOAD` set (Conda/base often sets `1`). **Unset it** (`unset PYTEST_DISABLE_PLUGIN_AUTOLOAD`) — setting it to `0` still disables autoload. Or pass `-p pytest_cov` explicitly (same as CI).
+If `pytest` reports `unrecognized arguments: --cov`, unset `PYTEST_DISABLE_PLUGIN_AUTOLOAD` or pass `-p pytest_cov`.
 
 ## Integration tests (Docker + local deploy)
 
-**Prerequisites**
-
-1. Docker Desktop (or Docker Engine) running.
-2. `.env` with keys (at least `OPENAI_API_KEY` if `USE_AGENT_QUERY=true`).
-3. Local stack up:
-
-```bash
-python orchestrator.py deploy --provider local --scope all
-# API: http://localhost:5001/health (LOCAL_SERVER_PORT)
-```
-
-**Run**
+**Prerequisites:** Docker, `.env` keys, `python orchestrator.py deploy --provider local --scope all`
 
 ```bash
 ./scripts/run_integration_tests.sh
-# or:
 pytest tests/integration -m integration -v
 ```
-
-Tests **skip** automatically if `/health` is unreachable (safe when Docker is off).
 
 | Variable | Purpose |
 |----------|---------|
 | `INTEGRATION_API_BASE_URL` | Override API base (default `http://localhost:${LOCAL_SERVER_PORT}`) |
-| `INTEGRATION_FULL_VERIFY=1` | Run full `verify_api_endpoints` (QueryStream + Analytics, needs ETL/data) |
-| `INTEGRATION_VERIFY_TIMEOUT_SEC` | Poll timeout for verify helper (default `90` smoke, `300` full) |
-| `INTEGRATION_QUERY_STREAM_TIMEOUT` | Per-request timeout for `/query/stream` (default `120`) |
+| `INTEGRATION_FULL_VERIFY=1` | Full `verify_api_endpoints` |
+| `INTEGRATION_VERIFY_TIMEOUT_SEC` | Poll timeout (default `90` smoke, `300` full) |
+| `INTEGRATION_QUERY_STREAM_TIMEOUT` | `/query/stream` timeout (default `120`) |
 | `INTEGRATION_TOTAL_REC` | Expected row count when CSV path differs |
-| `EMBEDDING_ACTIVE_PROFILE` | Embedding lane for integration (`openai_1536` default) |
-| `ARK_API_KEY` / `ARK_EMBEDDING_MODEL_ID` | Required for `skylark_2048` / `test_modelark_embedding_profile.py` |
-| `VERIFY_PROFILE=modelark_pgvector` | Full verify adds semantic QueryStream (see `verify_api_endpoints`) |
+| `EMBEDDING_ACTIVE_PROFILE` | Embedding lane (`openai_1536` default) |
+| `ARK_API_KEY` / `ARK_EMBEDDING_MODEL_ID` | ModelArk integration lane |
 
-**CI:** Unit workflow excludes integration (`-m "not integration"`). Optional [`.github/workflows/integration-tests.yml`](../.github/workflows/integration-tests.yml) is **manual** (`workflow_dispatch`) and documents the same prerequisites; set `ARK_*` only for ModelArk integration runs.
+## Playwright E2E (browser)
+
+**Prerequisites:** External stack (`PLAYWRIGHT_EXTERNAL_STACK=1`), Vite on `5174` (nonkube) or `5173` (kube).
+
+```bash
+cd tests/e2e && npm install && npx playwright install chromium
+PLAYWRIGHT_EXTERNAL_STACK=1 npm run test:e2e:full-stack
+```
+
+See [`tests/e2e/README.md`](e2e/README.md) for env vars and scenario catalog.
 
 ## Layout
 
 | Path | Targets |
 |------|---------|
-| `tests/unit/core_app/backend/` | Flask API, agents, env_utils |
-| `tests/unit/tools/cloud_shared/` | Shared deploy/verify helpers |
-| `tests/unit/tools/aws/scope_shared/` | AWS resource names, phases |
-| `tests/integration/` | Live local API: health, query stream, exec-log SSE (`test_exec_log_sse.py`), shared verify |
+| `tests/unit/core_app/backend/` | Flask API, agents, env_utils, services |
+| `tests/unit/tools/` | Deploy/verify helpers |
+| `tests/integration/api/` | Live API: health, query, exec log |
+| `tests/integration/crud/` | Rawdata CRUD |
+| `tests/integration/embeddings/` | Embedding sync lanes |
+| `tests/integration/verify/` | Deploy verify smoke |
+| `tests/e2e/` | Playwright specs + shared scenario helpers |
+| `tests/fixtures/` | Shared YAML snippets |
 
 ## Environment (unit)
 
-`tests/conftest.py` sets minimal env vars before importing `backend.api.app`. Override in a test with `monkeypatch.setenv` when needed.
+`tests/conftest.py` sets minimal env vars before importing `backend.api.app`. Override per test with `monkeypatch.setenv`.
 
 ## Coverage
 
-`.coveragerc` enforces staged `fail_under` (raise as coverage grows). CI runs `pytest --cov` on push/PR for unit tests only.
+`.coveragerc` enforces staged `fail_under`. CI runs `pytest --cov` on unit tests only.

@@ -28,6 +28,7 @@ MAP = {
     "ARK_EMBEDDING_MODEL_ID": "ark_embedding_model_id",
     "ARK_CHAT_MODEL_ID": "ark_chat_model_id",
     "LLM_INFERENCE_PROVIDER": "llm_inference_provider",
+    "EMBEDDING_ACTIVE_PROFILE": "embedding_active_profile",
 }
 
 def get_base_vars(env: str, region: str | None = None):

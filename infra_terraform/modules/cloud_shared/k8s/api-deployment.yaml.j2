@@ -26,6 +26,9 @@ spec:
       containers:
       - name: api
         image: {{ APP_IMAGE }}
+{% if cloud_provider == "local" %}
+        imagePullPolicy: Never
+{% endif %}
         ports:
         - containerPort: 5001
         livenessProbe:

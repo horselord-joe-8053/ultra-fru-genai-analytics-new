@@ -11,6 +11,7 @@ import time
 from typing import TYPE_CHECKING
 
 from tools.cloud_shared.logging import logger
+from tools.cloud_shared.delta_paths import gcs_delta_table_path
 from tools.gcp.provider_config_handler import get_gke_location, get_kube_compute_config
 from tools.gcp.scope_shared.core.backend import resolve_state_bucket
 from tools.gcp.scope_shared.core.resource_names import gke_cluster
@@ -181,7 +182,7 @@ def run_deploy_kube(
     )
     delta_bucket = nondurable.get("delta_bucket_name", {}).get("value", "")
     pg_host = durable.get("cloud_sql_private_ip", {}).get("value", "localhost")
-    delta_table = f"gs://{delta_bucket}/delta/fru_sales"
+    delta_table = gcs_delta_table_path(delta_bucket, "kube")
 
     kube_apply_args = [
         sys.executable, "tools/gcp/kube/kube_apply.py", "--env", env, "--region", region, "--phase", "bootstrap",

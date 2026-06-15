@@ -46,7 +46,8 @@ def record_run_attempt(
     scope = deploy_scope or os.environ.get("DEPLOY_SCOPE", "nonkube")
     err = (error or "").strip()
     if err:
-        err = err[-_MAX_ERROR_LEN:]
+        # Keep the start of the message (exception type + cause), not the stack tail.
+        err = err[:_MAX_ERROR_LEN]
 
     try:
         conn = psycopg2.connect(**cfg)
@@ -153,17 +154,40 @@ def build_run_status_ui(
     last_error = (row or {}).get("last_error")
     last_exit = (row or {}).get("last_exit_code")
     if last_error and last_exit not in (None, 0):
-        messages.append(str(last_error))
-        severity = "error"
+        err_text = str(last_error)
+        batch_fresh = bool(
+            batch_last_updated_at
+            and (now - batch_last_updated_at.astimezone(timezone.utc)).total_seconds()
+            <= stale_after_sec
+        )
+        if batch_fresh and (
+            "ConcurrentAppend" in err_text or "DELTA_CONCURRENT_APPEND" in err_text
+        ):
+            messages.append(
+                "A scheduled batch job hit a Delta write conflict (dev: kube and nonkube "
+                "share one table). Snapshot data below is still current."
+            )
+            severity = "warning"
+        else:
+            messages.append(err_text)
+            severity = "error"
 
     last_attempt = (row or {}).get("last_attempt_at")
+    batch_fresh = bool(
+        batch_last_updated_at
+        and (now - batch_last_updated_at.astimezone(timezone.utc)).total_seconds()
+        <= stale_after_sec
+    )
     if last_attempt:
         try:
             attempt_dt = datetime.fromisoformat(
                 str(last_attempt).replace("Z", "+00:00")
             )
             attempt_age = (now - attempt_dt).total_seconds()
-            if attempt_age > stale_after_sec:
+            # Stale attempt timestamp alone is not a failure signal when the snapshot
+            # is fresh (kube/nonkube cron may update batch_analytics without touching
+            # analytics_run_status yet, or run_status was written by another scope).
+            if attempt_age > stale_after_sec and not batch_fresh:
                 messages.append(
                     "Background analytics scheduler may not be running "
                     "(no recent job attempts)."
@@ -172,7 +196,7 @@ def build_run_status_ui(
                     severity = "warning"
         except (TypeError, ValueError):
             pass
-    elif batch_last_updated_at:
+    elif batch_last_updated_at and not batch_fresh:
         messages.append(
             "No scheduler run history in database; only the last successful snapshot is shown."
         )

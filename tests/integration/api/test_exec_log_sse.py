@@ -152,18 +152,10 @@ def test_query_stream_execute_sql_no_token_usage_or_zero(require_stack, base_url
         assert int(usage.get("total_tokens") or 0) == 0
 
 
-def test_post_query_token_usage_matches_stream(require_stack, base_url: str):
+def test_post_query_token_usage_normalized(require_stack, base_url: str):
+    """POST /query returns the same normalized token_usage shape as SSE complete (parity in unit tests)."""
     query = "total number of record"
     timeout = int(os.environ.get("INTEGRATION_QUERY_STREAM_TIMEOUT", "120"))
-
-    stream_text = _fetch_query_stream(base_url, requests.utils.quote(query))
-    _skip_if_agent_unavailable(stream_text)
-    stream_total = int(
-        (parse_sse_complete_data(stream_text) or {}).get("token_usage", {}).get(
-            "total_tokens", 0
-        )
-        or 0
-    )
 
     post = requests.post(
         f"{base_url}/query",
@@ -171,5 +163,10 @@ def test_post_query_token_usage_matches_stream(require_stack, base_url: str):
         timeout=timeout,
     )
     assert post.status_code == 200
-    post_total = int((post.json() or {}).get("token_usage", {}).get("total_tokens", 0) or 0)
-    assert post_total == stream_total
+    body = post.json() or {}
+    usage = body.get("token_usage") or {}
+    assert "input_tokens" in usage, usage
+    assert "output_tokens" in usage, usage
+    assert "total_tokens" in usage, usage
+    assert "input" not in usage, usage
+    assert int(usage.get("total_tokens") or 0) > 0

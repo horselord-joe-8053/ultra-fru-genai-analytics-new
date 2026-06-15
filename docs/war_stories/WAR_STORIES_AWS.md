@@ -81,6 +81,11 @@ A curated list of **non-trivial technical war stories**, capturing real lessons 
 <tr><td style="background:#e3f2fd;padding:8px;text-align:right">41</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-41">41. ECR Per-Region vs Centralized: Why We Keep Regional Repos</a></td><td style="padding:8px;background:#fff3e0">ECR Per-Region vs Centralized: Why We Keep Regional Repos</td></tr>
 <tr><td style="background:#e3f2fd;padding:8px;text-align:right">42</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-42">42. Smart Cross-Region Image Build Strategy: One Build, Many Regions</a></td><td style="padding:8px;background:#e8f5e9">Smart Cross-Region Image Build Strategy: One Build, Many Regions</td></tr>
 <tr><td style="background:#e3f2fd;padding:8px;text-align:right">43</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-43">43. First-Deploy Kube: NLB Hostname Not Ready — Extend Poll, Fail-Fast</a></td><td style="padding:8px;background:#fff3e0">First-Deploy Kube: NLB Hostname Not Ready — Extend Poll, Fail-Fast</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">44</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-44">44. ECS Nonkube Missing EMBEDDING_ACTIVE_PROFILE — Kube/Nonkube Deploy Parity</a></td><td style="padding:8px;background:#e8f5e9">Header showed OpenAI embed lane on ECS while kube had skylark from .env</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">45</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-45">45. Cloud Spark Jobs Skip analytics_run_status — False “No Scheduler History” Banner</a></td><td style="padding:8px;background:#fff3e0">batch_analytics populated; UI warned because only local scheduler wrote run status</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">46</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-46">46. Dev Dual-Scope Delta: ConcurrentAppendException — Per-Scope S3 Paths</a></td><td style="padding:8px;background:#e8f5e9">kube + nonkube Spark overwrote one Delta table; split paths by deploy_scope</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">47</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-47">47. Fresh batch_analytics vs Stale analytics_run_status — False Scheduler Warning</a></td><td style="padding:8px;background:#fff3e0">kube cron updated snapshots; singleton run_status stale → yellow banner</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">48</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-48">48. Kube CloudFront Stale Frontend After S3-Only Sync</a></td><td style="padding:8px;background:#e8f5e9">Manual frontend deploy without invalidation → old JS on kube URL</td></tr>
 </tbody>
 </table>
 
@@ -3264,6 +3269,183 @@ Result: CloudFront for kube has no API origin. All API paths (`/query`, `/analyt
 <h3 id="war-story-43-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">43.4 Takeaway</h3>
 
 On first deploy, NLB can take 5–10+ min. Extend the poll to 20 min and fail-fast so we never leave kube in a half-wired state. See War Stories 17, 36.
+
+---
+
+<h2 id="war-story-44" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">44. ECS Nonkube Missing EMBEDDING_ACTIVE_PROFILE — Kube/Nonkube Deploy Parity</h2>
+
+**creation:** `<260615>`
+**last_updated:** `<260615>`
+
+**keywords:** design, system design, ECS, EKS, EMBEDDING_ACTIVE_PROFILE, ModelArk, terraform, deploy wiring
+**difficulty:** 5
+**significance:** 8
+
+<h3 id="war-story-44-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">44.1 Context</h3>
+
+After AWS nonkube deploy PASS, the UI header showed `Chat model: seed-2-0-lite-260228` (correct) but `Embedding: openai_1536 → text-embedding-3-small` while `.env` set `EMBEDDING_ACTIVE_PROFILE=skylark_2048`. The kube lane on the same account showed the expected skylark profile.
+
+<h3 id="war-story-44-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">44.2 Root Cause</h3>
+
+Chat and embedding are **orthogonal axes**. Kube `api-deployment.yaml.j2` gets `EMBEDDING_ACTIVE_PROFILE` from `api_deployment_embedding_subs()` at apply time. AWS ECS nonkube Terraform passed `ARK_*` and `LLM_INFERENCE_PROVIDER` but **not** `EMBEDDING_ACTIVE_PROFILE`. The API fell back to default `openai_1536` in `embedding_profiles.py` even though ModelArk secrets and chat model were wired.
+
+<table>
+<thead>
+<tr style="background:#1565c0;color:white"><th>Deploy path</th><th>EMBEDDING_ACTIVE_PROFILE</th></tr>
+</thead>
+<tbody>
+<tr><td style="background:#e3f2fd">Kube (j2 + kube_apply)</td><td style="background:#e8f5e9"><span style="background:#c8e6c9;padding:2px 4px">✓</span> from `.env`</td></tr>
+<tr><td style="background:#e3f2fd">ECS nonkube (Terraform env_vars)</td><td style="background:#ffebee"><span style="background:#ffcdd2;padding:2px 4px">⚠</span> missing → default openai_1536</td></tr>
+</tbody>
+</table>
+
+<h3 id="war-story-44-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">44.3 Key Insight</h3>
+
+<span style="background:#e8f5e9;padding:2px 4px">Every deploy lane that starts API containers must pass the same embedding/search env contract</span> — not only LLM provider vars. `/version` embedding fields are the fastest parity check between kube and nonkube.
+
+<h3 id="war-story-44-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">44.4 Resolution</h3>
+
+- Added `embedding_active_profile` variable to `infra_terraform/live_deploy/aws/nonkube/`.
+- Mapped `EMBEDDING_ACTIVE_PROFILE` in `tools/aws/scope_shared/core/terra_var_handling.py`.
+- Unit test in `tests/unit/tools/aws/nonkube/test_ecs_embedding_env.py`.
+- Re-apply nonkube stack (`--skip-build` suffices — ECS task env only).
+
+Verification:
+
+```bash
+curl -sS https://<cloudfront>/version | jq '.embedding_profile,.embedding_model'
+# expect: "skylark_2048", "skylark-embedding-vision-251215"
+```
+
+<h3 id="war-story-44-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">44.5 Takeaway</h3>
+
+When adding a new runtime env knob, grep **all** deploy surfaces (compose, kube j2, ECS/GCP Terraform) — kube-only wiring creates silent profile drift that passes smoke tests but misroutes semantic search.
+
+---
+
+<h2 id="war-story-45" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">45. Cloud Spark Jobs Skip analytics_run_status — False “No Scheduler History” Banner</h2>
+
+**creation:** `<260615>`
+**last_updated:** `<260615>`
+
+**keywords:** Spark, batch_analytics, analytics_run_status, ECS EventBridge, CronJob, UI warning
+**difficulty:** 4
+**significance:** 6
+
+<h3 id="war-story-45-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">45.1 Context</h3>
+
+Both AWS nonkube and kube UIs showed batch analytics data plus a yellow banner: *“No scheduler run history in database; only the last successful snapshot is shown.”*
+
+<h3 id="war-story-45-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">45.2 Root Cause</h3>
+
+`build_run_status_ui()` warns when `batch_analytics` exists but `analytics_run_status.last_attempt_at` is null. Only `tools/local/scheduler_local.py` called `record_run_attempt()`. Cloud schedulers (ECS EventBridge → Spark task, K8s CronJob) populated snapshots without writing run-status rows.
+
+<h3 id="war-story-45-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">45.3 Resolution</h3>
+
+Added `record_run_attempt()` to `core_app/analytics/jobs/utils/save_to_db.py` (Spark image path, no backend deps). Called after successful/failed `batch_analytics` save; `run_analytics.py` records failures on uncaught exceptions. Requires Spark image rebuild + one job run to clear the banner.
+
+<h3 id="war-story-45-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">45.4 Takeaway</h3>
+
+Observability tables need the same multi-lane wiring as functional env vars — if only the local scheduler writes history, cloud deploys look “headless” even when Spark succeeds.
+
+---
+
+<h2 id="war-story-46" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">46. Dev Dual-Scope Delta: ConcurrentAppendException — Per-Scope S3 Paths</h2>
+
+**creation:** `<260615>`
+**last_updated:** `<260615>`
+
+**keywords:** design, system design, Delta Lake, Spark, ConcurrentAppend, kube, nonkube, S3
+**difficulty:** 5
+**significance:** 8
+
+<h3 id="war-story-46-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">46.1 Context</h3>
+
+With both AWS kube and nonkube schedulers running every 3 minutes in dev, Batch Analytics showed red `ConcurrentAppendException` errors. Snapshots in `batch_analytics` were still valid (often tagged `deploy_scope=kube`).
+
+<h3 id="war-story-46-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">46.2 Root Cause</h3>
+
+Both Spark jobs used the **same** `DELTA_TABLE_PATH` (`s3a://…/delta/fru_sales`) and `.mode("overwrite")`. Delta serializes concurrent writers — the loser raises `DELTA_CONCURRENT_APPEND`.
+
+<table>
+<thead>
+<tr style="background:#1565c0;color:white"><th>Lane</th><th>Before</th><th>After</th></tr>
+</thead>
+<tbody>
+<tr><td style="background:#e3f2fd">nonkube ECS</td><td style="background:#ffebee"><code>…/delta/fru_sales</code></td><td style="background:#e8f5e9"><code>…/delta/nonkube/fru_sales</code></td></tr>
+<tr><td style="background:#e3f2fd">kube CronJob</td><td style="background:#ffebee"><code>…/delta/fru_sales</code></td><td style="background:#e8f5e9"><code>…/delta/kube/fru_sales</code></td></tr>
+</tbody>
+</table>
+
+PostgreSQL `batch_analytics` remains shared; only the intermediate Delta copy is scoped.
+
+<h3 id="war-story-46-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">46.3 Key Insight</h3>
+
+Intermediate object-store tables are not always safe to share across deploy lanes even when the **authoritative** analytics snapshot is centralized in RDS.
+
+<h3 id="war-story-46-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">46.4 Resolution</h3>
+
+- Added `tools/cloud_shared/delta_paths.py` (`aws_delta_table_path`, `gcs_delta_table_path`).
+- Wired scope suffix in ECS Terraform, `kube_apply.py`, GCP Terraform/kube deploy.
+- Optional retry in `run_analytics.py` for transient conflicts (defense in depth).
+
+<h3 id="war-story-46-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">46.5 Takeaway</h3>
+
+When dev runs kube **and** nonkube against one bucket, give each lane its own Delta prefix — or accept periodic ConcurrentAppend failures.
+
+---
+
+<h2 id="war-story-47" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">47. Fresh batch_analytics vs Stale analytics_run_status — False Scheduler Warning</h2>
+
+**creation:** `<260615>`
+**last_updated:** `<260615>`
+
+**keywords:** analytics_run_status, batch_analytics, UI, scheduler, false positive
+**difficulty:** 4
+**significance:** 7
+
+<h3 id="war-story-47-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">47.1 Context</h3>
+
+After fixing ConcurrentAppend, UI still showed *“Background analytics scheduler may not be running”* while the panel read *“Updated 2 minutes ago by kube”* with 200 records.
+
+<h3 id="war-story-47-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">47.2 Root Cause</h3>
+
+`analytics_run_status` is a **singleton** row. Kube CronJob updated `batch_analytics` but did not refresh run-status timestamps as often as nonkube bootstrap. `build_run_status_ui()` flagged stale `last_attempt_at` (> 2.5× interval) **without** checking whether the snapshot itself was fresh.
+
+<h3 id="war-story-47-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">47.3 Resolution</h3>
+
+Suppress the stale-attempt warning when `batch_last_updated_at` is within the freshness window. Collapsible `<details>` for any remaining notices (default collapsed). Rebuilt API image + ECS/k8s rollout.
+
+<h3 id="war-story-47-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">47.4 Takeaway</h3>
+
+Treat **snapshot age** as the primary health signal; run-status timestamps are auxiliary and can lag across scopes in dev.
+
+---
+
+<h2 id="war-story-48" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">48. Kube CloudFront Stale Frontend After S3-Only Sync</h2>
+
+**creation:** `<260615>`
+**last_updated:** `<260615>`
+
+**keywords:** CloudFront, frontend, S3 sync, invalidation, kube, deploy parity
+**difficulty:** 3
+**significance:** 6
+
+<h3 id="war-story-48-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">48.1 Context</h3>
+
+Nonkube showed collapsible Batch Analytics notices; kube CloudFront URL appeared to use a different (older) UI despite both buckets receiving the same `index-*.js` hash in S3.
+
+<h3 id="war-story-48-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">48.2 Root Cause</h3>
+
+`deploy_frontend_to_s3()` alone does not invalidate CloudFront. Full `deploy_kube.py` / `deploy_nonkube.py` call `invalidate_cloudfront()` after sync; a **manual** kube frontend deploy skipped invalidation → edge cached old `index.html` referencing previous JS.
+
+<h3 id="war-story-48-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">48.3 Resolution</h3>
+
+Always pair S3 sync with CloudFront `/*` invalidation (distribution ID from kube Terraform output). See War Story 24 for SPA cache/MIME patterns.
+
+<h3 id="war-story-48-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">48.4 Takeaway</h3>
+
+**S3 sync ≠ user-visible deploy** for CloudFront-fronted SPAs — invalidate every time, including ad-hoc recovery scripts.
 
 ---
 

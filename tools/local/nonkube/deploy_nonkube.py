@@ -21,7 +21,11 @@ COMPOSE_PROJECT = "fru_local"
 
 def _run(cmd: list, env: dict | None = None) -> int:
     e = env or os.environ.copy()
-    e.setdefault("PYTHONPATH", PROJECT_ROOT)
+    core_app = os.path.join(PROJECT_ROOT, "core_app")
+    existing = e.get("PYTHONPATH", "")
+    e["PYTHONPATH"] = os.pathsep.join(
+        [p for p in (core_app, PROJECT_ROOT, existing) if p]
+    )
     r = subprocess.run(cmd, cwd=PROJECT_ROOT, env=e)
     return r.returncode
 

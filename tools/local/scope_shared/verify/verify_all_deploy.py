@@ -75,6 +75,13 @@ def main() -> int:
         base_url = os.environ.get("LOCAL_API_URL") or f"http://localhost:{ports['api_port']}"
         if not base_url.startswith("http"):
             base_url = f"http://{base_url}"
+        if scope == "kube":
+            from tools.local.kube.local_k8s import ensure_kube_api_reachable
+
+            try:
+                base_url = ensure_kube_api_reachable(ports["api_port"], wait_timeout_sec=120)
+            except RuntimeError as e:
+                logger.warning(str(e))
         frontend_url = os.environ.get("LOCAL_FRONTEND_URL") or f"http://localhost:{ports['frontend_port']}"
         frontend_url = frontend_url.rstrip("/")
 

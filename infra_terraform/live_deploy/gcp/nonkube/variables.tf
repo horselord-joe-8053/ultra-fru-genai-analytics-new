@@ -38,6 +38,23 @@ variable "llm_inference_provider" {
   default     = "claude"
   description = "Chat inference backend: claude (default) or modelark."
 }
+variable "embedding_active_profile" {
+  type        = string
+  default     = "openai_1536"
+  description = "Search/read embedding lane (EMBEDDING_ACTIVE_PROFILE); must match .env."
+}
+variable "ark_base_url" {
+  type    = string
+  default = "https://ark.ap-southeast.bytepluses.com/api/v3"
+}
+variable "ark_embedding_model_id" {
+  type    = string
+  default = ""
+}
+variable "ark_chat_model_id" {
+  type    = string
+  default = ""
+}
 variable "openai_embed_model" {
   type    = string
   default = "text-embedding-3-small"

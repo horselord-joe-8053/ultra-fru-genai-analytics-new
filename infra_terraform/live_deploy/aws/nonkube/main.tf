@@ -73,7 +73,7 @@ module "ecs" {
     OPENAI_EMBED_MODEL                   = var.openai_embed_model
     ENABLE_ANALYTICS_SCHEDULER           = var.enable_analytics_scheduler
     ANALYTICS_SCHEDULER_INTERVAL_SECONDS = tostring(var.analytics_scheduler_interval_seconds)
-    DELTA_TABLE_PATH                     = "s3a://${var.delta_bucket}/delta/fru_sales"
+    DELTA_TABLE_PATH                     = "s3a://${var.delta_bucket}/delta/nonkube/fru_sales"
     DELTA_LAKE_PACKAGE                   = var.delta_lake_package
     SPARK_HOME                           = var.spark_home
     CONTAINER_TYPE                       = "ecs"
@@ -86,6 +86,7 @@ module "ecs" {
     ARK_EMBEDDING_MODEL_ID               = var.ark_embedding_model_id
     ARK_CHAT_MODEL_ID                    = var.ark_chat_model_id
     LLM_INFERENCE_PROVIDER               = var.llm_inference_provider
+    EMBEDDING_ACTIVE_PROFILE             = var.embedding_active_profile
   }, try(data.terraform_remote_state.shared_durable.outputs.aurora_endpoint, "") != "" ? {
     PGHOST     = data.terraform_remote_state.shared_durable.outputs.aurora_endpoint
     PGPORT     = tostring(data.terraform_remote_state.shared_durable.outputs.aurora_port)

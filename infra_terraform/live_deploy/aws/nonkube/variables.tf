@@ -97,6 +97,11 @@ variable "llm_inference_provider" {
   default     = "claude"
   description = "Chat inference backend: claude (default) or modelark."
 }
+variable "embedding_active_profile" {
+  type        = string
+  default     = "openai_1536"
+  description = "Search/read embedding lane (EMBEDDING_ACTIVE_PROFILE); must match .env."
+}
 
 variable "tf_state_bucket" { type = string }
 variable "tf_state_bucket_region" { type = string }

@@ -15,3 +15,9 @@ def test_nonkube_env_vars_include_ark_embedding_model_id():
     source = _NONKUBE_MAIN.read_text()
     assert "ARK_EMBEDDING_MODEL_ID" in source
     assert "ARK_BASE_URL" in source
+
+
+def test_nonkube_env_vars_include_embedding_active_profile():
+    source = _NONKUBE_MAIN.read_text()
+    assert "EMBEDDING_ACTIVE_PROFILE" in source
+    assert "embedding_active_profile" in source

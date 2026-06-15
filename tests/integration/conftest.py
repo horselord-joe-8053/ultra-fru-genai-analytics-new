@@ -11,7 +11,12 @@ from pathlib import Path
 import pytest
 import requests
 
+from tools.cloud_shared.env import load_dotenv
+
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+
+# Unit tests/conftest.py sets placeholder PG/OpenAI env via setdefault; integration needs real .env.
+load_dotenv(str(REPO_ROOT / ".env"), override=True)
 
 
 def integration_base_url() -> str:

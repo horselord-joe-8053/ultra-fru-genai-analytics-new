@@ -86,6 +86,7 @@ def _get_gcp_outputs(env: str, region: str) -> dict:
         "db_password_plain": result.get("db_password_plain_secret_id", {}).get("value") or "",
         "google_ai_api_key": result.get("google_ai_api_key_secret_id", {}).get("value") or "",
         "claude_api_key": result.get("claude_api_key_secret_id", {}).get("value") or "",
+        "ark_api_key": result.get("ark_api_key_secret_id", {}).get("value") or "",
     }
 
 
@@ -163,7 +164,13 @@ def ensure_secrets(provider: str, env: str, region: str) -> None:
             else:
                 logger.warning("[SECRETS] ark_api_key_secret_arn not in durable outputs; run deploy durable_with_cooloff first")
         else:
-            logger.warning("[SECRETS] ARK_API_KEY set in .env but GCP ark secret path not configured; skipping")
+            ref = outputs.get("ark_api_key")
+            if ref:
+                logger.info("[SECRETS] Setting ARK_API_KEY...")
+                _put_gcp_secret(ref, ark, project_id)
+                logger.success("[SECRETS] ARK_API_KEY set")
+            else:
+                logger.warning("[SECRETS] ark_api_key_secret_id not in durable outputs; run durable_with_cooloff apply first")
     else:
         logger.warning("[SECRETS] ARK_API_KEY not set in .env; skylark storage lane skipped at runtime")
 
