@@ -11,6 +11,11 @@ import BatchAnalyticsPanel from "./components/BatchAnalyticsPanel";
 import ExecutionPanel, { ExecutionState } from "./components/ExecutionPanel";
 import DataManagement from "./components/DataManagement";
 import { handleBackendError } from "./utils/errorHandler";
+import {
+  stackLabelFromModelContext,
+  type StackLabel,
+} from "./utils/chatStackLabel";
+import type { ModelContextInfo } from "./components/ExecutionPanel";
 
 const theme = createTheme({
   palette: { mode: "light" },
@@ -19,6 +24,8 @@ const theme = createTheme({
 export interface Message {
   role: "user" | "assistant";
   text: string;
+  /** Display strings from SSE model_context for this request (REQ-4). */
+  stackLabel?: StackLabel;
 }
 
 export interface QueryResponse {
@@ -51,6 +58,8 @@ const App: React.FC = () => {
     localStorage.getItem("chatChoice") || ""
   );
   const eventSourceRef = useRef<EventSource | null>(null);
+  /** Per-stream model_context from SSE — not header dropdown state (REQ-4.5). */
+  const streamModelContextRef = useRef<ModelContextInfo | null>(null);
 
   // Calculate initial panel widths from percentage env vars
   const getInitialPanelWidths = () => {
@@ -186,33 +195,6 @@ const App: React.FC = () => {
     };
   }, [isResizing]);
 
-  // Sync Chat panel with Execution Log - update when answer arrives
-  useEffect(() => {
-    if (executionState.answer && executionState.question) {
-      // Find the last user message that matches this question
-      const userMessages = messages.filter(m => m.role === "user");
-      const lastUserMessage = userMessages[userMessages.length - 1];
-      
-      // Find the last assistant message
-      const assistantMessages = messages.filter(m => m.role === "assistant");
-      const lastAssistantMessage = assistantMessages[assistantMessages.length - 1];
-      
-      // Only add answer if:
-      // 1. Last user message matches the question
-      // 2. We haven't added this answer yet
-      if (lastUserMessage?.text === executionState.question &&
-          lastAssistantMessage?.text !== executionState.answer) {
-        setMessages((prev) => [
-          ...prev,
-          { 
-            role: "assistant", 
-            text: executionState.answer || "[No answer returned]" 
-          },
-        ]);
-      }
-    }
-  }, [executionState.answer, executionState.question, messages]);
-
   // Sync loading state with streaming status
   useEffect(() => {
     setLoading(executionState.isStreaming);
@@ -250,6 +232,7 @@ const App: React.FC = () => {
       eventSourceRef.current.close();
       eventSourceRef.current = null;
     }
+    streamModelContextRef.current = null;
 
     const eventSource = new EventSource(`/query/stream?${params.toString()}`);
     eventSourceRef.current = eventSource;
@@ -272,7 +255,8 @@ const App: React.FC = () => {
     });
 
     eventSource.addEventListener("model_context", (event) => {
-      const data = JSON.parse(event.data);
+      const data = JSON.parse(event.data) as ModelContextInfo;
+      streamModelContextRef.current = data;
       setExecutionState((prev) => ({
         ...prev,
         modelContext: data,
@@ -366,6 +350,16 @@ const App: React.FC = () => {
 
     eventSource.addEventListener("complete", (event) => {
       const data = JSON.parse(event.data);
+      const answerText = data.answer || "[No answer returned]";
+      const stackLabel = stackLabelFromModelContext(streamModelContextRef.current);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          text: answerText,
+          stackLabel,
+        },
+      ]);
       setExecutionState((prev) => ({
         ...prev,
         iterations: data.iterations,

@@ -33,6 +33,7 @@ const ChatHeaderSelect: React.FC<ChatHeaderSelectProps> = ({
 
   useEffect(() => {
     if (!open) return;
+    // Use click (not mousedown) for outside dismiss so option mousedown can close first.
     const onDocClick = (e: MouseEvent) => {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
         setOpen(false);
@@ -41,10 +42,10 @@ const ChatHeaderSelect: React.FC<ChatHeaderSelectProps> = ({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
     };
-    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("click", onDocClick);
     document.addEventListener("keydown", onKey);
     return () => {
-      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("click", onDocClick);
       document.removeEventListener("keydown", onKey);
     };
   }, [open]);
@@ -94,8 +95,9 @@ const ChatHeaderSelect: React.FC<ChatHeaderSelectProps> = ({
                 ]
                   .filter(Boolean)
                   .join(" ")}
-                onClick={() => {
+                onMouseDown={(e) => {
                   if (!opt.enabled) return;
+                  e.preventDefault();
                   onChange(opt.id);
                   setOpen(false);
                 }}

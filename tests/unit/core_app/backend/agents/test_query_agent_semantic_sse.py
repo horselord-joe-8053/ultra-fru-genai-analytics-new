@@ -36,6 +36,27 @@ def test_build_sse_semantic_includes_query_text_and_source(agent):
     assert "filters" in sse
 
 
+def test_build_sse_semantic_output_includes_top_preview(agent):
+    preview = {
+        "query_text": "water leakage",
+        "matches": [
+            {
+                "rank": 1,
+                "id": "F032",
+                "distance": 0.31,
+                "store_name": "Oakland Store",
+                "feedback_snippet": "water leaking from dispenser",
+            }
+        ],
+    }
+    out = agent._build_sse_output_summary(
+        "semantic_search",
+        {"success": True, "row_count": 50, "top_preview": preview},
+    )
+    assert out["top_preview"] == preview
+    assert "top 1 matches" in out["summary"]
+
+
 def test_semantic_fingerprint_stable(agent):
     a = agent._semantic_search_fingerprint(
         {"query_text": "x", "filters": {"brand": ["A"]}, "limit": 50}

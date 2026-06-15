@@ -38,8 +38,16 @@ def _all_creds(monkeypatch):
 
 
 def test_resolve_chat_model_id_local_claude(_local_claude_creds, monkeypatch):
-    monkeypatch.setenv("CLAUDE_MODEL", "claude-haiku-4-5")
+    monkeypatch.setenv("CLAUDE_MODEL", "claude-3-haiku-20240307")
     assert resolve_chat_model_id("claude_haiku") == "claude-haiku-4-5"
+    assert resolve_chat_model_id("claude_sonnet") == "claude-sonnet-4-5"
+
+
+def test_resolve_chat_model_id_aws_bedrock_sonnet(monkeypatch):
+    monkeypatch.setenv("CLOUD_PROVIDER", "aws")
+    monkeypatch.delenv("AWS_BEDROCK_INFERENCE_PROFILE_ID", raising=False)
+    mid = resolve_chat_model_id("claude_sonnet")
+    assert mid == "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
 
 
 def test_resolve_chat_model_id_aws_bedrock_haiku(monkeypatch):
@@ -109,4 +117,5 @@ def test_build_model_catalog_includes_stacks(_local_claude_creds):
 
 def test_request_context_includes_chat_model_id(_local_claude_creds):
     ctx = resolve_request_model_context("openai_1536", "claude_sonnet")
-    assert ctx.chat_model_id == "claude-sonnet-4-20250514"
+    assert ctx.chat_model_id == "claude-sonnet-4-5"
+    assert ctx.chat_display == "claude-sonnet-4-5"

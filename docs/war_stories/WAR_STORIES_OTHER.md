@@ -51,6 +51,7 @@ A curated list of **non-trivial technical war stories**, capturing real lessons 
 <tr><td style="background:#e3f2fd;padding:8px;text-align:right">13</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-13-local-dual-ui-entry">13. Local nonkube — two UI entry points (Vite vs nginx bundle)</a></td><td style="padding:8px;background:#fff3e0">5001 serves UI+API by design; 5174 is dev Vite — not a routing bug</td></tr>
 <tr><td style="background:#e3f2fd;padding:8px;text-align:right">14</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-14-playwright-e2e-scenarios">14. Playwright E2E — shared scenarios, F900 CRUD, batch panel ≠ chat path</a></td><td style="padding:8px;background:#e8f5e9">One scenario module for tests+demos; S5 asserts chat/SQL not Spark snapshot</td></tr>
 <tr><td style="background:#e3f2fd;padding:8px;text-align:right">15</td><td style="padding:8px;background:#fff3e0"><a href="#war-story-15-model-stack-catalog">15. Model stack catalog — embed filters chat, display parity</a></td><td style="padding:8px;background:#fff3e0">YAML stacks + server validation; log labels match dropdowns</td></tr>
+<tr><td style="background:#e3f2fd;padding:8px;text-align:right">16</td><td style="padding:8px;background:#e8f5e9"><a href="#war-story-16-catalog-inference-routing">16. Catalog inference vs global LLM_INFERENCE_PROVIDER</a></td><td style="padding:8px;background:#e8f5e9">Per-request Claude stack must not route through ModelArk when .env default is modelark</td></tr>
 </tbody>
 </table>
 
@@ -987,3 +988,34 @@ Treat **stacks** as the product contract: `(embedding_profile, chat_choice)` row
 <h3 id="war-story-15-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">15.5 Takeaway</h3>
 
 When the UI exposes **two** model pickers that must compose a valid runtime stack, do not rely on client-side discipline alone — ship a **server-driven allowlist**, cascade the dependent dropdown, and use the **same display resolver** everywhere the user reads model names (header, execution log, doctor errors).
+
+---
+
+<h2 id="war-story-16-catalog-inference-routing" style="color:#1565c0;margin-top:1.35em;margin-bottom:0.5em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px">16. Catalog inference vs global LLM_INFERENCE_PROVIDER — Claude on a ModelArk-default deploy</h2>
+
+**creation:** 260616 · **last_updated:** 260616 · **keywords:** design, model catalog, LLM_INFERENCE_PROVIDER, ModelArk, create_llm_client_for_choice, claude-sonnet-4-5, client_factory · **difficulty:** 5 · **significance:** 7
+
+<h3 id="war-story-16-sec-1" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">16.1 Context</h3>
+
+After the stack catalog shipped, operators could pick **OpenAI embed + Claude Sonnet** in the header while `.env` kept `LLM_INFERENCE_PROVIDER=modelark` for the default skylark lane. The query failed with **ModelArk HTTP 404** on an Anthropic id sent to BytePlus.
+
+<h3 id="war-story-16-sec-2" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">16.2 Root Cause</h3>
+
+`create_llm_client_for_choice()` read the profile's `inference: claude` but then called `create_llm_client()`, which still honored the **global** `LLM_INFERENCE_PROVIDER=modelark` and returned `ModelArkClient`. Separately, Sonnet YAML used a dated Sonnet 4 slug and `claude_haiku` wired `model_env: CLAUDE_MODEL`, flattening per-profile ids when Haiku and Sonnet should differ.
+
+<h3 id="war-story-16-sec-3" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">16.3 Key Insight</h3>
+
+Once the UI sends **per-request `chat_choice`**, the catalog profile's **`inference`** field is the dispatch axis — not the deploy-default provider env. Global `LLM_INFERENCE_PROVIDER` selects the **default stack** only; ModelArk and Claude profiles must stay symmetric.
+
+<h3 id="war-story-16-sec-4" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">16.4 Resolution</h3>
+
+| Layer | Change |
+|-------|--------|
+| `client_factory.py` | `_create_claude_path_client()`; `create_llm_client_for_choice` branches on YAML `inference` |
+| YAML | Sonnet → `claude-sonnet-4-5` + Bedrock `anthropic.claude-sonnet-4-5-20250929-v1:0`; removed shared `CLAUDE_MODEL` override on Haiku |
+| UI | `ChatHeaderSelect` closes on option `mousedown`; outside dismiss uses `click` |
+| Tests | Factory + resolver unit tests with `LLM_INFERENCE_PROVIDER=modelark` + `claude_sonnet` |
+
+<h3 id="war-story-16-sec-5" style="color:#00695c;margin-top:1.05em;margin-bottom:0.4em;font-weight:600">16.5 Takeaway</h3>
+
+When a deploy supports **multiple inference vendors**, trace the factory for **both** the default env path and the **per-request catalog path**. If only the default path respects the env knob, mixed-stack UI testing will look like a wrong model id when the real bug is **wrong client class**.

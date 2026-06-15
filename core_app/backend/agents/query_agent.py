@@ -22,6 +22,7 @@ from backend.utils.display_truncate import (
     resolve_execute_sql,
 )
 from .tools import SQLTool, SemanticSearchTool, SQLGeneratorTool
+from .tools.semantic_search_tool import default_semantic_search_limit
 from .logger import AgentLogger
 from .metrics import agent_metrics
 from .prompts import get_agent_system_prompt, get_planning_prompt, get_synthesis_prompt
@@ -942,6 +943,8 @@ class QueryAgent:
             
             if filters:
                 normalized["filters"] = filters
+            if normalized.get("limit") is None:
+                normalized["limit"] = default_semantic_search_limit()
         
         elif tool_name == "execute_sql":
             # Map "sql_query" or "query" to "sql"
@@ -1103,7 +1106,9 @@ class QueryAgent:
             {
                 "query_text": normalized_input.get("query_text"),
                 "filters": normalized_input.get("filters") or {},
-                "limit": normalized_input.get("limit", 50),
+                "limit": normalized_input.get(
+                    "limit", default_semantic_search_limit()
+                ),
             },
             sort_keys=True,
             default=str,
@@ -1173,6 +1178,8 @@ class QueryAgent:
             output_summary["summary"] = f"Generated SQL query: {quoted}"
         if tool_output.get("tokens"):
             output_summary["token_usage"] = normalize_token_usage(tool_output["tokens"])
+        if tool_name == "semantic_search" and tool_output.get("top_preview"):
+            output_summary["top_preview"] = tool_output["top_preview"]
         return output_summary
 
     def _summarize_tool_result(self, result: Dict[str, Any]) -> str:
@@ -1180,8 +1187,13 @@ class QueryAgent:
         if not result.get("success"):
             return f"Error: {result.get('error', 'Unknown error')}"
         
-        if "rows" in result:
-            return f"Retrieved {result.get('row_count', 0)} rows"
+        if "rows" in result or result.get("row_count") is not None:
+            count = result.get("row_count", 0)
+            preview = result.get("top_preview") or {}
+            shown = len(preview.get("matches") or [])
+            if shown:
+                return f"Retrieved {count} rows (top {shown} matches below)"
+            return f"Retrieved {count} rows"
         elif "sql" in result:
             return f"Generated SQL query"
         else:

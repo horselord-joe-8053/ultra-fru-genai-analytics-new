@@ -5,7 +5,9 @@ or falls back to aws → gcp → local (cloud-first).
 
 Applicable environment: [local] [aws {ecs | eks}] [gcp {cloud-run | gke}]
 
-Chat backend: LLM_INFERENCE_PROVIDER (default claude) selects ModelArk vs cloud Claude path.
+Chat backend: LLM_INFERENCE_PROVIDER (default claude) selects ModelArk vs cloud Claude path
+for deploy-default calls via create_llm_client(). Per-request catalog picks use
+create_llm_client_for_choice() and honor each profile's inference field (REQ-6).
 GCP provider choice (claude vs gemini): handled inside gcp.get_llm_client() via GCP_LLM_PROVIDER.
 """
 from backend.env_utils.cloud_shared.interfaces.llm_client import LLMClient
@@ -18,6 +20,35 @@ logger = logging.getLogger(__name__)
 
 # Fallback order when CLOUD_PROVIDER unset (cloud-first)
 _FALLBACK_ORDER = ("aws", "gcp", "local")
+
+
+def _create_claude_path_client() -> LLMClient:
+    """AWS/GCP/local Claude dispatch. Does not honor LLM_INFERENCE_PROVIDER=modelark."""
+    explicit = os.environ.get("CLOUD_PROVIDER", "").strip().lower()
+
+    if explicit in ("aws", "gcp", "local"):
+        client = _get_provider_client(explicit)
+        if client is not None:
+            logger.info("Creating Claude-path LLM client for CLOUD_PROVIDER=%s", explicit)
+            return client
+        raise ValueError(
+            f"No LLM client available for Claude path and CLOUD_PROVIDER={explicit}. "
+            f"Check env vars: AWS needs CLOUD_REGION + Bedrock config; "
+            f"GCP needs GOOGLE_AI_API_KEY or CLAUDE_API_KEY; local needs CLAUDE_API_KEY."
+        )
+
+    for p in _FALLBACK_ORDER:
+        client = _get_provider_client(p)
+        if client is not None:
+            logger.info("Creating Claude-path LLM client (fallback CLOUD_PROVIDER=%s)", p)
+            return client
+
+    raise ValueError(
+        "No LLM client available for Claude path. Set one of:\n"
+        "  - CLOUD_PROVIDER=aws + CLOUD_REGION + AWS_BEDROCK_INFERENCE_PROFILE_ID or AWS_BEDROCK_MODEL_ID\n"
+        "  - CLOUD_PROVIDER=gcp + GOOGLE_AI_API_KEY or CLAUDE_API_KEY\n"
+        "  - CLOUD_PROVIDER=local + CLAUDE_API_KEY"
+    )
 
 
 def create_llm_client() -> LLMClient:
@@ -39,33 +70,7 @@ def create_llm_client() -> LLMClient:
 
         return ModelArkClient()
 
-    explicit = os.environ.get("CLOUD_PROVIDER", "").strip().lower()
-
-    if explicit in ("aws", "gcp", "local"):
-        client = _get_provider_client(explicit)
-        if client is not None:
-            logger.info("Creating LLM client for CLOUD_PROVIDER=%s", explicit)
-            return client
-        raise ValueError(
-            f"No LLM client available for LLM_INFERENCE_PROVIDER=claude and "
-            f"CLOUD_PROVIDER={explicit}. "
-            f"Check env vars: AWS needs CLOUD_REGION + Bedrock config; "
-            f"GCP needs GOOGLE_AI_API_KEY or CLAUDE_API_KEY; local needs CLAUDE_API_KEY."
-        )
-
-    for p in _FALLBACK_ORDER:
-        client = _get_provider_client(p)
-        if client is not None:
-            logger.info("Creating LLM client (fallback CLOUD_PROVIDER=%s)", p)
-            return client
-
-    raise ValueError(
-        "No LLM client available for LLM_INFERENCE_PROVIDER=claude. Set one of:\n"
-        "  - CLOUD_PROVIDER=aws + CLOUD_REGION + AWS_BEDROCK_INFERENCE_PROFILE_ID or AWS_BEDROCK_MODEL_ID\n"
-        "  - CLOUD_PROVIDER=gcp + GOOGLE_AI_API_KEY\n"
-        "  - CLOUD_PROVIDER=local + CLAUDE_API_KEY\n"
-        "Or set LLM_INFERENCE_PROVIDER=modelark with ARK_API_KEY + ARK_CHAT_MODEL_ID."
-    )
+    return _create_claude_path_client()
 
 
 def _get_provider_client(provider: str) -> Optional[LLMClient]:
@@ -99,7 +104,11 @@ def create_llm_client_for_choice(chat_choice: str | None = None) -> LLMClient:
         from backend.env_utils.byteplus.modelark_client import ModelArkClient
 
         return ModelArkClient()
-    return create_llm_client()
+    if inference == "claude":
+        return _create_claude_path_client()
+    raise ValueError(
+        f"Unknown inference={inference!r} for chat_choice={choice!r} in model catalog"
+    )
 
 
 def claude_complete(

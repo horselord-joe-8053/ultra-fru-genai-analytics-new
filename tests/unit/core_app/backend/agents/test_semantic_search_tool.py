@@ -55,3 +55,62 @@ def test_semantic_search_sql_uses_active_profile_column(monkeypatch, profile_nam
     executed_sql = cursor.execute.call_args[0][0]
     assert column in executed_sql
     assert "ORDER BY" in executed_sql
+    assert "AS distance" in executed_sql
+
+
+def test_semantic_search_default_limit_is_25(monkeypatch):
+    monkeypatch.setenv("EMBEDDING_ACTIVE_PROFILE", "openai_1536")
+    monkeypatch.delenv("SEMANTIC_SEARCH_DEFAULT_LIMIT", raising=False)
+    pool, cursor = _mock_db_pool()
+    tool = SemanticSearchTool(pool, openai_client=MagicMock())
+    fake_vec = [0.0] * 1536
+    with patch(
+        "backend.agents.tools.semantic_search_tool.create_embedding_client"
+    ) as mock_factory:
+        mock_client = MagicMock()
+        mock_client.embed_texts.return_value = [fake_vec]
+        mock_factory.return_value = mock_client
+        tool.execute(query_text="water leakage")
+    params = cursor.execute.call_args[0][1]
+    assert params[-1] == 25
+
+
+def test_semantic_search_top_preview_truncates_feedback(monkeypatch):
+    monkeypatch.setenv("EMBEDDING_ACTIVE_PROFILE", "openai_1536")
+    long_feedback = "water " * 40
+    rows = [
+        {
+            "id": "F032",
+            "store_name": "Oakland Store",
+            "customer_feedback": long_feedback,
+            "distance": 0.312345,
+        },
+        {
+            "id": "F041",
+            "store_name": "Omaha Store",
+            "customer_feedback": "ice maker leaking water",
+            "distance": 0.401,
+        },
+    ]
+    pool, cursor = _mock_db_pool(rows=rows)
+    tool = SemanticSearchTool(pool, openai_client=MagicMock())
+    fake_vec = [0.0] * 1536
+    with patch(
+        "backend.agents.tools.semantic_search_tool.create_embedding_client"
+    ) as mock_factory:
+        mock_client = MagicMock()
+        mock_client.embed_texts.return_value = [fake_vec]
+        mock_factory.return_value = mock_client
+        result = tool.execute(query_text="water leakage")
+
+    assert result["success"] is True
+    preview = result["top_preview"]
+    assert preview["query_text"] == "water leakage"
+    assert len(preview["matches"]) == 2
+    assert len(preview["matches"]) <= 5
+    assert preview["matches"][0]["rank"] == 1
+    assert preview["matches"][0]["id"] == "F032"
+    assert preview["matches"][0]["distance"] == 0.312
+    assert preview["matches"][0]["store_name"] == "Oakland Store"
+    assert len(preview["matches"][0]["feedback_snippet"]) <= 72
+    assert preview["matches"][0]["feedback_snippet"].endswith("…")

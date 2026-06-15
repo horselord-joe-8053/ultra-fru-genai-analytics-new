@@ -147,6 +147,46 @@ const ExecutionPanel: React.FC<ExecutionPanelProps> = ({ state, onToggle, isVisi
     return formatValue(input);
   };
 
+  const renderSemanticTopPreview = (output: any) => {
+    const preview = output?.top_preview;
+    const matches = preview?.matches;
+    if (!Array.isArray(matches) || matches.length === 0) {
+      return null;
+    }
+    const queryText =
+      preview.query_text ||
+      output?.query_text ||
+      "search";
+    return (
+      <div className="mb-1 ml-1 pl-2 border-l border-gray-300 text-gray-700">
+        <div className="text-gray-500 mb-0.5">
+          output.top_matches for &quot;{queryText}&quot; (lower distance = closer):
+        </div>
+        {matches.map(
+          (m: {
+            rank: number;
+            id?: string;
+            distance: number | null;
+            store_name?: string;
+            feedback_snippet?: string;
+          }) => (
+            <div
+              key={`${m.rank}-${m.id ?? ""}`}
+              className="text-gray-800 truncate"
+              title={m.feedback_snippet}
+            >
+              #{m.rank}
+              {m.id ? ` ${m.id}` : ""}
+              {m.distance != null ? ` · d=${m.distance}` : " · d=?"}
+              {m.store_name ? ` · ${m.store_name}` : ""}
+              {m.feedback_snippet ? ` — "${m.feedback_snippet}"` : ""}
+            </div>
+          )
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="h-full flex flex-col bg-gray-50">
       <div className="p-3 border-b bg-white flex items-center justify-between">
@@ -267,6 +307,9 @@ const ExecutionPanel: React.FC<ExecutionPanelProps> = ({ state, onToggle, isVisi
                     <span className="text-gray-500">output.summary:</span> {toolCall.output.summary}
                   </div>
                 )}
+                {toolCall.tool === "semantic_search" &&
+                  toolCall.status !== "running" &&
+                  renderSemanticTopPreview(toolCall.output)}
                 {toolCall.status !== "running" && (
                 <>
                 {toolCall.tool === "pseudo_tool#llm_synthesize_answer" && toolCall.output?.answer && (

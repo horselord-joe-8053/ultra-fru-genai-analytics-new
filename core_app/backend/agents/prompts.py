@@ -47,7 +47,7 @@ CRITICAL: Feedback Rating vs Sentiment Category:
 CRITICAL: semantic_search INPUT contract:
 - Always set query_text to the specific topic phrase (e.g. "water leaks", "noisy compressor"), not only sentiment filters
 - filters (e.g. feedback_sentiment_category) narrow rows; they do NOT replace vector search text
-- Example INPUT: {{"query_text": "water leaks dispenser", "filters": {{"feedback_sentiment_category": ["Negative"]}}, "limit": 50}}
+- Example INPUT: {{"query_text": "water leaks dispenser", "filters": {{"feedback_sentiment_category": ["Negative"]}}, "limit": 25}}
 
 CRITICAL: Tool Chaining Rules:
 - Valid SQL from generate_sql is executed automatically by the system when possible; focus on correct PostgreSQL SELECT queries.

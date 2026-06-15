@@ -35,18 +35,20 @@ chat:
     model_id: seed-2-0-pro-260328
     display: seed-2-0-pro-260328
   # Claude — pair only with openai_1536
+  # Per-profile model_id below is authoritative for catalog picks. CLAUDE_MODEL in .env is
+  # deploy/doctor default only — not a shared override for all Claude profiles (REQ-7.3).
   claude_haiku:
     inference: claude
     model_id: claude-haiku-4-5
     display: claude-haiku-4-5
-    model_env: CLAUDE_MODEL
     bedrock_model_id: anthropic.claude-haiku-4-5-20251001-v1:0
     bedrock_inference_profile_id: us.anthropic.claude-haiku-4-5-20251001-v1:0
   claude_sonnet:
     inference: claude
-    model_id: claude-sonnet-4-20250514
-    display: claude-sonnet-4-20250514
-    bedrock_model_id: anthropic.claude-sonnet-4-20250514-v1:0
+    model_id: claude-sonnet-4-5
+    display: claude-sonnet-4-5
+    bedrock_model_id: anthropic.claude-sonnet-4-5-20250929-v1:0
+    bedrock_inference_profile_id: us.anthropic.claude-sonnet-4-5-20250929-v1:0
 
 stack_groups:
   modelark:

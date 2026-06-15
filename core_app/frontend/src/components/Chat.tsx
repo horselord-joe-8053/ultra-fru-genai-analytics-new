@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useMemo, useCallback } from "react"
 import type { Message } from "../App";
 import { getBackendVersion } from "../utils/backendVersion";
 import type { BackendVersionInfo } from "../utils/backendVersion";
+import { formatStackLabelLine } from "../utils/chatStackLabel";
 import ChatHeaderSelect from "./ChatHeaderSelect";
 
 interface CatalogOption {
@@ -321,7 +322,10 @@ const Chat: React.FC<ChatProps> = ({
             </span>
           </div>
         )}
-        {messages.map((m, i) => (
+        {messages.map((m, i) => {
+          const stackLine =
+            m.role === "assistant" ? formatStackLabelLine(m.stackLabel) : null;
+          return (
           <div
             key={i}
             className={`flex ${
@@ -336,9 +340,11 @@ const Chat: React.FC<ChatProps> = ({
               }`}
             >
               {m.text}
+              {stackLine && <div className="chat-stack-label">{stackLine}</div>}
             </div>
           </div>
-        ))}
+          );
+        })}
         {loading && (
           <div className="text-xs text-gray-400">Thinking…</div>
         )}
