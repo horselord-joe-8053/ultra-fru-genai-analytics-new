@@ -724,3 +724,23 @@ Details: [tests/README.md](tests/README.md) · demo tour: [demos/playwright_e2e/
 ---
 
 <p style="margin-top:1.5em;color:#546e7a;font-size:0.95em"><strong>Start here:</strong> <a href="#architecture">§1 Architecture</a> → <a href="#agent-query-flow">§3 Agent flow</a> → <a href="#deploy-pipeline">§5 Deploy pipeline</a> → <a href="#quick-start">§6 Quick start</a>. When deploy breaks, check <a href="docs/war_stories/README.md">war stories</a>.</p>
+
+---
+
+<h2 id="gen1-gen2-comparison" style="color:#1565c0;font-size:1.22em;font-weight:650;border-left:4px solid #42a5f5;padding-left:10px;margin-top:1.1em">Gen 1 vs Gen 2 (this repo)</h2>
+
+Same product (**Fridges R Us** conversational analytics: ReAct agent, PostgreSQL + pgvector, Spark batch on Delta). This repository is **Gen 2**; [ultra-fru-genai-analytics](https://github.com/horselord-joe-8053/ultra-fru-genai-analytics) is the earlier **Gen 1** line (separate git history).
+
+<table>
+<thead>
+<tr style="background:#1565c0;color:white"><th>Aspect</th><th>Gen 1 (legacy repo)</th><th>Gen 2 (this repo)</th></tr>
+</thead>
+<tbody>
+<tr><td style="background:#e3f2fd"><strong>Primary goal</strong></td><td style="background:#fff3e0">AWS-first working prototype</td><td style="background:#e8f5e9">Repeatable multi-cloud deploy and teardown</td></tr>
+<tr><td style="background:#e3f2fd"><strong>Cloud coverage</strong></td><td style="background:#fff3e0">AWS (local Docker for dev)</td><td style="background:#e8f5e9">Local, AWS, and GCP; additional providers documented as planned</td></tr>
+<tr><td style="background:#e3f2fd"><strong>Operations style</strong></td><td style="background:#fff3e0">Shell entrypoints and module-scoped Terragrunt</td><td style="background:#e8f5e9">Python-first orchestration and consolidated infrastructure layout</td></tr>
+<tr><td style="background:#e3f2fd"><strong>Testing</strong></td><td style="background:#fff3e0">Unit tests and manual integration paths</td><td style="background:#e8f5e9">Broader automated coverage including browser e2e</td></tr>
+<tr><td style="background:#e3f2fd"><strong>Models &amp; embeddings</strong></td><td style="background:#fff3e0">Bedrock + OpenAI baseline</td><td style="background:#e8f5e9">Configurable model stacks, catalog UI, OpenAI + ModelArk embedding profiles</td></tr>
+<tr><td style="background:#e3f2fd"><strong>Documentation</strong></td><td style="background:#fff3e0">Long README, monolithic war stories, guides</td><td style="background:#e8f5e9">Learned references and war stories organized by topic and cloud</td></tr>
+</tbody>
+</table>
