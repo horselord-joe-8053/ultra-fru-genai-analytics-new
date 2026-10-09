@@ -9,7 +9,7 @@ import re
 from typing import Dict, Any, Optional, Tuple
 
 from .base_tool import BaseTool
-from backend.env_utils.cloud_shared.client_factory import claude_complete
+from backend.utils.postgresql_sql import normalize_postgresql_sql
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +22,14 @@ class SQLGeneratorTool(BaseTool):
             name="generate_sql",
             description="Generate SQL SELECT queries from natural language questions. Returns a dict with 'sql' field containing the PostgreSQL SQL query. IMPORTANT: After generating SQL, you MUST call execute_sql with the 'sql' value from this tool's output."
         )
-        self.llm_client = llm_client  # Cloud-agnostic; stored for future use; currently uses claude_complete()
+        self.llm_client = llm_client
         self.schema_info = schema_info
+        self._request_model_id: Optional[str] = None
+
+    def set_request_llm(self, llm_client, model_id: Optional[str] = None) -> None:
+        """Per-query LLM client and resolved chat model id from RequestModelContext."""
+        self.llm_client = llm_client
+        self._request_model_id = model_id
     
     def _build_system_prompt(self) -> str:
         """Build system prompt for SQL generation."""
@@ -35,14 +41,18 @@ Database Schema:
 {schema_desc}
 
 Rules:
-1. Generate ONLY valid PostgreSQL SELECT queries
-2. Use the exact column names from the schema
-3. For aggregations, use SUM(price) for revenue, COUNT(*) for counts
-4. For region analysis, extract region from store_address (e.g., "New York, NY" → "Northeast")
-5. Always include appropriate WHERE clauses for filtering
-6. Use GROUP BY for aggregations
-7. Use ORDER BY for sorting (DESC for highest/biggest, ASC for lowest/smallest)
-8. Return ONLY the SQL query, no explanations or markdown
+1. Generate ONLY valid PostgreSQL SELECT queries (database is PostgreSQL, NOT MySQL)
+2. NEVER use MySQL-only functions: SUBSTRING_INDEX, IFNULL, GROUP_CONCAT, etc.
+3. Use PostgreSQL functions instead: SPLIT_PART, COALESCE, STRING_AGG
+4. Use the exact column names from the schema
+5. For aggregations, use SUM(price) for revenue, COUNT(*) for counts
+6. Location from store_address (see schema): city = TRIM(SPLIT_PART(store_address, ',', 2)); state abbr = TRIM(SPLIT_PART(TRIM(SPLIT_PART(store_address, ',', 3)), ' ', 1)). Index 2 is city, NOT state.
+7. Prefer store_address parsing over store_name for city/state geography; store_name is a display label (e.g. "Kansas City Store").
+8. For US region buckets, use CASE/LIKE on store_address or parsed city
+9. Always include appropriate WHERE clauses for filtering
+10. Use GROUP BY for aggregations
+11. Use ORDER BY for sorting (DESC for highest/biggest, ASC for lowest/smallest)
+12. Return ONLY the SQL query, no explanations or markdown
 
 Example:
 Question: "How many Samsung fridges were sold?"
@@ -62,6 +72,20 @@ FROM fru_sales_embeddings
 GROUP BY region
 ORDER BY total_sales DESC
 LIMIT 1;
+
+Question: "Which city has the highest total sales revenue?"
+SQL: SELECT TRIM(SPLIT_PART(store_address, ',', 2)) AS city, SUM(price) AS total_sales
+FROM fru_sales_embeddings
+GROUP BY TRIM(SPLIT_PART(store_address, ',', 2))
+ORDER BY total_sales DESC
+LIMIT 1;
+
+Question: "Which US state has the highest total sales revenue?"
+SQL: SELECT TRIM(SPLIT_PART(TRIM(SPLIT_PART(store_address, ',', 3)), ' ', 1)) AS state_abbr, SUM(price) AS total_sales
+FROM fru_sales_embeddings
+GROUP BY TRIM(SPLIT_PART(TRIM(SPLIT_PART(store_address, ',', 3)), ' ', 1))
+ORDER BY total_sales DESC
+LIMIT 1;
 """
     
     def _format_schema_info(self) -> str:
@@ -72,6 +96,17 @@ LIMIT 1;
         lines = [f"Table: {table}", ""]
         for col_name, col_type in columns.items():
             lines.append(f"  - {col_name}: {col_type}")
+
+        lines.extend([
+            "",
+            "store_address format (comma-separated, fixed 3-part US mailing layout):",
+            '  "<street>, <city>, <ST> <zip>"  e.g. "123 Broadway, New York, NY 10001"',
+            "  - Part 1 (index 1): street",
+            "  - Part 2 (index 2): city — TRIM(SPLIT_PART(store_address, ',', 2))",
+            "  - Part 3 (index 3): state abbr + zip — state is first token:",
+            "      TRIM(SPLIT_PART(TRIM(SPLIT_PART(store_address, ',', 3)), ' ', 1))  → NY, MO, CA, …",
+            "  - store_name is a label (e.g. \"Kansas City Store\"); use parsed city/state for geography.",
+        ])
         
         return "\n".join(lines)
     
@@ -146,10 +181,11 @@ LIMIT 1;
             
             # Call Claude
             logger.info(f"[SQLGeneratorTool] Calling LLM to generate SQL...")
-            response_result = claude_complete(
+            response_result = self.llm_client.complete(
                 system_prompt=system_prompt,
                 user_message=user_message,
-                max_tokens=500
+                model_id=self._request_model_id,
+                max_tokens=500,
             )
             
             # Handle both dict (new format) and str (backward compatibility)
@@ -165,8 +201,8 @@ LIMIT 1;
             logger.info(f"[SQLGeneratorTool] LLM response received: {len(response)} chars")
             logger.info(f"[SQLGeneratorTool] LLM response (full): {response}")
             
-            # Extract SQL
-            sql = self._extract_sql(response)
+            # Extract SQL and normalize MySQL-isms to PostgreSQL
+            sql = normalize_postgresql_sql(self._extract_sql(response))
             
             execution_time = (time.time() - start_time) * 1000
             
@@ -181,7 +217,8 @@ LIMIT 1;
             return {
                 "success": True,
                 "sql": sql,
-                "execution_time_ms": execution_time
+                "execution_time_ms": execution_time,
+                "tokens": tokens,
             }
         
         except Exception as e:

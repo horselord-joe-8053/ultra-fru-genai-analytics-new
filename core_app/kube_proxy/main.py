@@ -15,8 +15,15 @@ from google.cloud import storage
 
 app = Flask(__name__)
 
-# API paths that go to GKE LB (must match cloud_cdn path rules)
-API_PREFIXES = ("/query", "/analytics", "/rawdata", "/health", "/version")
+# API paths that go to GKE LB (must match nginx + vite proxy + verify_api_endpoints)
+API_PREFIXES = (
+    "/query",
+    "/analytics",
+    "/rawdata",
+    "/health",
+    "/version",
+    "/model-catalog",
+)
 _raw = os.environ.get("GKE_LB_URL", "").strip().rstrip("/")
 GKE_LB_URL = _raw if _raw.startswith("http") else f"http://{_raw}" if _raw else ""
 GCS_BUCKET = os.environ.get("GCS_BUCKET", "")

@@ -33,6 +33,43 @@ variable "claude_model" {
   default     = "claude-3-5-haiku-20241022"
   description = "Claude model ID when GCP_LLM_PROVIDER=claude (e.g. claude-3-5-haiku-20241022, claude-3-5-sonnet-20241022)."
 }
+variable "llm_inference_provider" {
+  type        = string
+  default     = "claude"
+  description = "Chat inference backend: claude (default) or modelark."
+}
+variable "embedding_active_profile" {
+  type        = string
+  default     = "openai_1536"
+  description = "Search/read embedding lane (EMBEDDING_ACTIVE_PROFILE); must match .env."
+}
+variable "default_embedding_profile" {
+  type        = string
+  default     = "openai_1536"
+  description = "UI/catalog default embedding profile (DEFAULT_EMBEDDING_PROFILE)."
+}
+variable "default_chat_choice" {
+  type        = string
+  default     = "claude_haiku"
+  description = "UI/catalog default chat choice (DEFAULT_CHAT_CHOICE)."
+}
+variable "allow_per_request_model_override" {
+  type        = string
+  default     = "true"
+  description = "When false, stream ignores per-request embed/chat params (prod)."
+}
+variable "ark_base_url" {
+  type    = string
+  default = "https://ark.ap-southeast.bytepluses.com/api/v3"
+}
+variable "ark_embedding_model_id" {
+  type    = string
+  default = ""
+}
+variable "ark_chat_model_id" {
+  type    = string
+  default = ""
+}
 variable "openai_embed_model" {
   type    = string
   default = "text-embedding-3-small"

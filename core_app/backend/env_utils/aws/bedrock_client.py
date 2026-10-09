@@ -41,6 +41,24 @@ class AWSBedrockClient(LLMClient):
             if self.inference_profile_id
             else require_bedrock_model_id()
         )
+
+    def _resolve_invoke_model_id(self, model_id: Optional[str] = None) -> str:
+        """Per-request model id from catalog overrides deploy-default inference profile."""
+        if model_id:
+            logger.info("Using Bedrock modelId from request: %s", model_id)
+            return model_id
+        if self.inference_profile_id:
+            logger.info(
+                "Using Bedrock inference profile (as modelId): %s",
+                self.inference_profile_id,
+            )
+            return self.inference_profile_id
+        if self.model_id:
+            logger.info("Using Bedrock model ID: %s", self.model_id)
+            return self.model_id
+        raise ValueError(
+            "Either AWS_BEDROCK_INFERENCE_PROFILE_ID or AWS_BEDROCK_MODEL_ID must be set"
+        )
     
     def complete(
         self,
@@ -50,19 +68,7 @@ class AWSBedrockClient(LLMClient):
         max_tokens: int = 2000
     ) -> Dict[str, Any]:
         """Generate completion using AWS Bedrock."""
-        # Use inference profile ID as modelId if available (preferred for Claude 3.5)
-        # If inference profile ID is set, use it as the modelId parameter
-        inference_profile_id = self.inference_profile_id
-        
-        # Fallback to model ID if no inference profile
-        if not inference_profile_id:
-            if model_id is None:
-                model_id = self.model_id
-                if not model_id:
-                    raise ValueError(
-                        "Either AWS_BEDROCK_INFERENCE_PROFILE_ID or AWS_BEDROCK_MODEL_ID must be set"
-                    )
-        
+        invoke_model_id = self._resolve_invoke_model_id(model_id)
         body = {
             "anthropic_version": "bedrock-2023-05-31",
             "max_tokens": max_tokens,
@@ -77,20 +83,12 @@ class AWSBedrockClient(LLMClient):
             ],
         }
 
-        # Build invoke_model parameters
         invoke_params = {
             "body": json.dumps(body),
             "accept": "application/json",
             "contentType": "application/json",
+            "modelId": invoke_model_id,
         }
-        
-        # Use inference profile ID as modelId if available
-        if inference_profile_id:
-            invoke_params["modelId"] = inference_profile_id
-            logger.info(f"Using Bedrock inference profile (as modelId): {inference_profile_id}")
-        else:
-            invoke_params["modelId"] = model_id
-            logger.info(f"Using Bedrock model ID: {model_id}")
 
         try:
             response = self.client.invoke_model(**invoke_params)
@@ -172,18 +170,7 @@ class AWSBedrockClient(LLMClient):
         max_tokens: int = 2000
     ) -> Iterator[Dict[str, Any]]:
         """Generate streaming completion using AWS Bedrock."""
-        # Use inference profile ID as modelId if available
-        inference_profile_id = self.inference_profile_id
-        
-        # Fallback to model ID if no inference profile
-        if not inference_profile_id:
-            if model_id is None:
-                model_id = self.model_id
-                if not model_id:
-                    raise ValueError(
-                        "Either AWS_BEDROCK_INFERENCE_PROFILE_ID or AWS_BEDROCK_MODEL_ID must be set"
-                    )
-        
+        invoke_model_id = self._resolve_invoke_model_id(model_id)
         body = {
             "anthropic_version": "bedrock-2023-05-31",
             "max_tokens": max_tokens,
@@ -202,12 +189,8 @@ class AWSBedrockClient(LLMClient):
             "body": json.dumps(body),
             "accept": "application/json",
             "contentType": "application/json",
+            "modelId": invoke_model_id,
         }
-        
-        if inference_profile_id:
-            invoke_params["modelId"] = inference_profile_id
-        else:
-            invoke_params["modelId"] = model_id
 
         try:
             response = self.client.invoke_model_with_response_stream(**invoke_params)

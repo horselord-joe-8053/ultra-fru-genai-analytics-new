@@ -36,7 +36,13 @@ from tools.cloud_shared.docker.build_context_hash import (
     store_build_hash,
 )
 from tools.cloud_shared.docker.build_skip_decision import decide_build_skip
-from tools.local.scope_shared.local_deploy_config import get_memo_dir, get_ports_for_scope
+from tools.cloud_shared.image_tag import generate_image_tag
+from tools.local.scope_shared.local_deploy_config import (
+    get_compose_delta_volume_name,
+    get_compose_project,
+    get_memo_dir,
+    get_ports_for_scope,
+)
 
 load_dotenv()
 
@@ -50,7 +56,11 @@ BUILD_METADATA_PREFIX = f"build-metadata/{LOCAL_DEFAULT_REGION}"
 
 def _run(cmd: list[str], cwd: str | None = None, env: dict | None = None) -> int:
     e = env or os.environ.copy()
-    e.setdefault("PYTHONPATH", PROJECT_ROOT)
+    core_app = os.path.join(PROJECT_ROOT, "core_app")
+    existing = e.get("PYTHONPATH", "")
+    e["PYTHONPATH"] = os.pathsep.join(
+        [p for p in (core_app, PROJECT_ROOT, existing) if p]
+    )
     r = subprocess.run(cmd, cwd=cwd or PROJECT_ROOT, env=e)
     return r.returncode
 
@@ -68,6 +78,12 @@ def _docker_compose(*args: str, files: tuple[str, ...] | None = None) -> int:
     else:
         logger.error(f"[local-deploy] docker compose failed (exit {rc}) after {elapsed:.1f}s")
     return rc
+
+
+def _import_spark_image_to_kube_node() -> None:
+    from tools.local.kube.local_k8s import import_image_to_desktop_k8s
+
+    import_image_to_desktop_k8s("fru-spark:local")
 
 
 def _wait_for_postgres(timeout_sec: int = 60) -> bool:
@@ -98,7 +114,7 @@ def _build_images(skip_spark: bool, no_cache: bool = False) -> int:
     app_cmd = ["docker", "build", "--progress=plain", "-f", "core_app/Dockerfile", "-t", "fru-api:local"]
     if no_cache:
         app_cmd.insert(2, "--no-cache")
-    app_cmd.append("core_app")
+    app_cmd.append(".")  # repo root; core_app/Dockerfile COPY paths are relative to root
     try:
         run_docker_with_progress(
             app_cmd, "Building API image (fru-api:local)", 1, total, cwd=PROJECT_ROOT
@@ -110,7 +126,6 @@ def _build_images(skip_spark: bool, no_cache: bool = False) -> int:
     if not skip_spark:
         spark_cmd = [
             "docker", "build", "--progress=plain",
-            "--platform", "linux/amd64",
             "-f", "core_app/analytics/docker/Dockerfile",
             "-t", "fru-spark:local",
             "core_app",
@@ -139,10 +154,11 @@ def _run_bootstrap_spark() -> int:
     r = subprocess.run(
         [
             "docker", "run", "--rm", "--user", "root",
-            "--network", f"{COMPOSE_PROJECT}_default",
+            "--network", f"{get_compose_project()}_default",
             "-e", "PGHOST=postgres", "-e", "PGPORT=5432", "-e", "PGUSER=postgres",
             "-e", f"PGPASSWORD={pw}", "-e", f"PGDATABASE={os.environ.get('PGDATABASE', 'fru_db')}",
-            "-e", "DELTA_TABLE_PATH=file:///tmp/delta/fru_sales", "-v", "fru_delta:/tmp/delta",
+            "-e", "DELTA_TABLE_PATH=file:///tmp/delta/fru_sales",
+            "-v", f"{get_compose_delta_volume_name()}:/tmp/delta",
             "fru-spark:local",
             "/opt/spark/bin/spark-submit",
             "--packages", packages,
@@ -184,9 +200,12 @@ def main() -> int:
     if not _wait_for_postgres():
         return 1
 
-    # 2. DB setup
+    # 2. DB setup (host TCP — use LOCAL_PG_HOST_PORT to avoid conflict with a native Postgres on 5432)
     logger.step("Running DB setup (schema, fru_sales_raw, embeddings)...")
-    os.environ["PGHOST"] = "localhost"
+    local_pg_port = (os.environ.get("LOCAL_PG_HOST_PORT") or "15432").strip() or "15432"
+    os.environ["PGHOST"] = "127.0.0.1"
+    os.environ["PGPORT"] = local_pg_port
+    logger.info(f"[local-deploy] DB setup via 127.0.0.1:{local_pg_port} (fru-postgres container)")
     csv_path = os.path.join(PROJECT_ROOT, "core_app", "data", "raw", "fridge_sales_with_rating.csv")
     if not os.path.exists(csv_path):
         logger.error(f"CSV not found: {csv_path}")
@@ -226,6 +245,14 @@ def main() -> int:
         if not args.skip_spark and skip_result.spark_hash:
             store_build_hash(MEMO_DIR, spark_key, "local", skip_result.spark_hash, "latest")
 
+    # Same tag shape as cloud (fru_local_<date>_<sha>_...) for /version Build line
+    if not (os.environ.get("APP_IMAGE_TAG") or "").strip():
+        os.environ["APP_IMAGE_TAG"] = generate_image_tag("local")
+        logger.info(f"APP_IMAGE_TAG for local deploy: {os.environ['APP_IMAGE_TAG']}")
+    nonkube_ports = get_ports_for_scope("nonkube")
+    os.environ.setdefault("LOCAL_DEV_FRONTEND_PORT", str(nonkube_ports["frontend_port"]))
+    os.environ.setdefault("LOCAL_API_PUBLIC_PORT", str(nonkube_ports["api_port"]))
+
     scopes = ["nonkube", "kube"] if args.scope == "all" else [args.scope]
 
     for scope in scopes:
@@ -236,16 +263,28 @@ def main() -> int:
                 return 1
         elif scope == "kube":
             logger.step("Deploying local kube (Docker Desktop Kubernetes)")
+            from tools.local.kube.local_k8s import prepare_local_kube
+
+            prepare_local_kube(skip_spark=args.skip_spark)
             if _run([sys.executable, "tools/local/kube/kube_apply.py", "--phase", "bootstrap"]) != 0:
                 return 1
             if not args.skip_spark:
+                _import_spark_image_to_kube_node()
                 if _run([sys.executable, "tools/local/kube/kube_apply.py", "--phase", "schedule"]) != 0:
                     return 1
+            from tools.local.kube.local_k8s import ensure_kube_api_reachable
+
+            kube_ports = get_ports_for_scope("kube")
+            try:
+                ensure_kube_api_reachable(kube_ports["api_port"], wait_timeout_sec=180)
+            except RuntimeError as e:
+                logger.warning(str(e))
 
     logger.success("Local deploy complete")
     if "nonkube" in scopes:
         p = get_ports_for_scope("nonkube")
-        logger.info(f"Nonkube API: http://localhost:{p['api_port']}  Frontend: http://localhost:{p['frontend_port']}")
+        logger.info(f"Nonkube API (bundled UI+API): http://localhost:{p['api_port']}")
+        logger.info(f"Nonkube dev frontend (Vite): http://localhost:{p['frontend_port']}")
     if "kube" in scopes:
         p = get_ports_for_scope("kube")
         logger.info(f"Kube API: http://localhost:{p['api_port']} (NodePort)  Frontend: http://localhost:{p['frontend_port']}")

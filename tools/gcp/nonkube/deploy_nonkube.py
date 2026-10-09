@@ -54,8 +54,20 @@ def run_deploy_nonkube(
 
     llm_provider = os.getenv("GCP_LLM_PROVIDER") or os.getenv("LLM_PROVIDER", "gemini")
     llm_provider = llm_provider.strip().lower()
+    from core_app.backend.env_utils.cloud_shared.llm_inference_config import (
+        get_llm_inference_provider,
+    )
     from core_app.backend.env_utils.cloud_shared.model_config import require_claude_model
     claude_model = require_claude_model().strip()
+    llm_inference = get_llm_inference_provider()
+    from tools.cloud_shared.embedding_deploy_env import (
+        api_deployment_embedding_subs,
+        embedding_profile_from_env,
+        expand_model_defaults_for_deploy,
+    )
+    embedding_profile = embedding_profile_from_env()
+    ark_subs = api_deployment_embedding_subs()
+    model_defaults = expand_model_defaults_for_deploy()
     img_tag = os.getenv("APP_IMAGE_TAG", "").strip()
     plan_vars = [
         f"-var=prefix={prefix}", f"-var=env={env}",
@@ -67,6 +79,14 @@ def run_deploy_nonkube(
         f"-var=delta_bucket_fallback={delta_bucket}",
         f"-var=llm_provider={llm_provider}",
         f"-var=claude_model={claude_model}",
+        f"-var=llm_inference_provider={llm_inference}",
+        f"-var=embedding_active_profile={embedding_profile}",
+        f"-var=default_embedding_profile={model_defaults['DEFAULT_EMBEDDING_PROFILE']}",
+        f"-var=default_chat_choice={model_defaults['DEFAULT_CHAT_CHOICE']}",
+        f"-var=allow_per_request_model_override={model_defaults['ALLOW_PER_REQUEST_MODEL_OVERRIDE']}",
+        f"-var=ark_base_url={ark_subs['ARK_BASE_URL']}",
+        f"-var=ark_embedding_model_id={ark_subs['ARK_EMBEDDING_MODEL_ID']}",
+        f"-var=ark_chat_model_id={ark_subs['ARK_CHAT_MODEL_ID']}",
         f"-var=spark_schedule_expression={seconds_to_cron(interval_sec)}",
         f"-var=analytics_scheduler_interval_seconds={interval_sec}",
     ]

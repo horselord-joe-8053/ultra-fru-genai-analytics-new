@@ -22,6 +22,11 @@ from tools.cloud_shared.analytics_schedule import (
     get_required_analytics_scheduler_interval_seconds,
     seconds_to_cron,
 )
+from tools.cloud_shared.delta_paths import gcs_delta_table_path
+from tools.cloud_shared.embedding_deploy_env import (
+    api_deployment_embedding_subs,
+    modelark_secret_entries,
+)
 from tools.cloud_shared.env import load_dotenv, require
 from tools.cloud_shared.k8s_deploy_helpers import JOB_BOOTSTRAP, K8S_NAMESPACE, check_k8s_bootstrap_job_succeeded
 from tools.cloud_shared.k8s_j2_render import render
@@ -110,7 +115,7 @@ def main():
     if not delta_bucket:
         raise SystemExit("delta_bucket not in nondurable outputs")
     delta_root = f"gs://{delta_bucket}/delta"
-    delta_table_path = args.delta_table_path or f"gs://{delta_bucket}/delta/fru_sales"
+    delta_table_path = args.delta_table_path or gcs_delta_table_path(delta_bucket, "kube")
 
     spark_base = nondurable.get("artifact_registry_spark_url", {}).get("value", "")
     app_base = nondurable.get("artifact_registry_app_url", {}).get("value", "")
@@ -168,6 +173,8 @@ data:
             app_data["CLAUDE_API_KEY"] = base64.b64encode(claude_key.encode()).decode()
         if google_key:
             app_data["GOOGLE_AI_API_KEY"] = base64.b64encode(google_key.encode()).decode()
+        for k, v in modelark_secret_entries().items():
+            app_data[k] = base64.b64encode(v.encode()).decode()
         data_lines = "\n".join(f"  {k}: {v}" for k, v in app_data.items())
         _kubectl(["apply", "-f", "-"], input_text=f"""apiVersion: v1
 kind: Secret
@@ -226,7 +233,9 @@ data:
             "ANALYTICS_SCHEDULER_INTERVAL_SECONDS": str(interval_sec),
             "APP_IMAGE_TAG": os.getenv("APP_IMAGE_TAG", ""),
             "PROXY_PUBLIC_URL": proxy_public_url,
+            "OPENAI_EMBED_MODEL": os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small"),
         }
+        api_subs.update(api_deployment_embedding_subs())
         _kubectl(["apply", "-f", "-"], input_text=render("api-deployment", api_subs))
         _kubectl(["apply", "-f", "-"], input_text=render("api-service", {"cloud_provider": "gcp"}))
 

@@ -73,7 +73,11 @@ def main() -> int:
     logger.step(f"Starting local frontend(s) for scope(s): {', '.join(scopes)}")
     os.makedirs(MEMO_DIR, exist_ok=True)
     base_env = os.environ.copy()
-    base_env["PYTHONPATH"] = os.path.join(PROJECT_ROOT, "core_app")
+    # Scheduler imports tools.*; API code imports backend.* — need repo root + core_app.
+    py_paths = [PROJECT_ROOT, os.path.join(PROJECT_ROOT, "core_app")]
+    if base_env.get("PYTHONPATH"):
+        py_paths.append(base_env["PYTHONPATH"])
+    base_env["PYTHONPATH"] = os.pathsep.join(py_paths)
 
     pids_to_write = []
     api_port = None
@@ -153,8 +157,17 @@ def main() -> int:
     logger.info(f"Local frontends started; API expected at {base_url} (readiness verified separately).")
     logger.success("Local API and frontend startup sequence completed")
     logger.info(
-        f"API: http://localhost:{api_port}  Frontend: http://localhost:{frontend_port} (scope={args.scope})"
+        f"Dev frontend (Vite): http://localhost:{frontend_port} (scope={args.scope})"
     )
+    if "nonkube" in scopes:
+        p = get_ports_for_scope("nonkube")
+        logger.info(
+            f"Bundled UI+API (nginx): http://localhost:{p['api_port']} "
+            f"if nonkube API container is running"
+        )
+    elif scopes == ["kube"]:
+        p = get_ports_for_scope("kube")
+        logger.info(f"Kube API (NodePort): http://localhost:{p['api_port']}")
     logger.info("Shutdown: python orchestrator.py deploy --provider local --shutdown-local (or teardown)")
     return 0
 

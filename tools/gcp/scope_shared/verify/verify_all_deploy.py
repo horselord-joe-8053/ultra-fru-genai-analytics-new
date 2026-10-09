@@ -49,12 +49,13 @@ def _extract_base_url_gcp(scope: str, stack_out: dict) -> str | None:
         url = stack_out.get("cloud_run_url", {}).get("value") or stack_out.get("service_url", {}).get("value")
         return url
     if scope == "kube":
+        # HTTPS entry: Cloud Run kube-proxy (GCS frontend + GKE API). Raw CDN IP is HTTP-only and GCS is private.
         url = stack_out.get("kube_base_url", {}).get("value")
         if url:
             return url
         cdn = stack_out.get("cloudfront_domain_name", {}).get("value")
         if cdn:
-            return f"http://{cdn}"
+            return cdn if cdn.startswith("http") else f"http://{cdn}"
         return None
     return None
 

@@ -57,6 +57,15 @@ def _check_claude_model() -> list[str]:
     return errs
 
 
+def _check_modelark_chat_env() -> list[str]:
+    """Require ModelArk chat env when LLM_INFERENCE_PROVIDER=modelark."""
+    errs = []
+    for var in ("ARK_API_KEY", "ARK_CHAT_MODEL_ID"):
+        if not (os.environ.get(var) or "").strip():
+            errs.append(f"{var} must be set when LLM_INFERENCE_PROVIDER=modelark")
+    return errs
+
+
 def main() -> int:
     logger.step("Local doctor (preflight)")
 
@@ -82,19 +91,35 @@ def main() -> int:
     if not any(v for v in ("PGPASSWORD", "OPENAI_API_KEY") if not os.environ.get(v)):
         logger.info("[doctor] Required env vars present")
 
-    # 3. Claude model / API (if CLAUDE_API_KEY present)
-    logger.info("[doctor] Checking CLAUDE_MODEL/Claude API (if configured)...")
-    t1 = time.time()
-    claude_errs = _check_claude_model()
-    errors.extend(claude_errs)
-    dt1 = time.time() - t1
-    if claude_errs:
-        logger.error(f"[doctor] Claude check failed (elapsed {dt1:.1f}s)")
+    # 3. Chat inference provider checks
+    from core_app.backend.env_utils.cloud_shared.llm_inference_config import (
+        get_llm_inference_provider,
+    )
+
+    llm_inference = get_llm_inference_provider()
+    logger.info(f"[doctor] LLM_INFERENCE_PROVIDER={llm_inference}")
+
+    if llm_inference == "modelark":
+        logger.info("[doctor] Checking ModelArk chat env (ARK_API_KEY, ARK_CHAT_MODEL_ID)...")
+        modelark_errs = _check_modelark_chat_env()
+        errors.extend(modelark_errs)
+        if modelark_errs:
+            logger.error("[doctor] ModelArk chat env check failed")
+        else:
+            logger.info("[doctor] ModelArk chat env OK")
     else:
-        logger.info(f"[doctor] Claude check OK/Skipped (elapsed {dt1:.1f}s)")
+        logger.info("[doctor] Checking CLAUDE_MODEL/Claude API (if configured)...")
+        t1 = time.time()
+        claude_errs = _check_claude_model()
+        errors.extend(claude_errs)
+        dt1 = time.time() - t1
+        if claude_errs:
+            logger.error(f"[doctor] Claude check failed (elapsed {dt1:.1f}s)")
+        else:
+            logger.info(f"[doctor] Claude check OK/Skipped (elapsed {dt1:.1f}s)")
 
     # 4. Optional LLM keys hint
-    if not os.environ.get("CLAUDE_API_KEY") and not os.environ.get("GOOGLE_AI_API_KEY"):
+    if llm_inference == "claude" and not os.environ.get("CLAUDE_API_KEY") and not os.environ.get("GOOGLE_AI_API_KEY"):
         logger.warning("No CLAUDE_API_KEY or GOOGLE_AI_API_KEY; set CLOUD_PROVIDER=local and CLAUDE_API_KEY for /query")
 
     # 5. CSV presence
@@ -106,6 +131,101 @@ def main() -> int:
         logger.error(f"[doctor] CSV not found: {csv_path}")
     else:
         logger.info(f"[doctor] CSV present: {csv_path}")
+
+    # 6. Docker Desktop Kubernetes (required for scope=kube)
+    logger.info("[doctor] Checking Docker Desktop Kubernetes (scope=kube)...")
+    try:
+        from tools.local.kube.local_k8s import (
+            desktop_kubernetes_status,
+            ensure_local_kubectl_context,
+            is_desktop_kubernetes_running,
+        )
+
+        if is_desktop_kubernetes_running():
+            ensure_local_kubectl_context()
+            logger.info("[doctor] Docker Desktop Kubernetes running; kubectl context OK")
+        else:
+            status = desktop_kubernetes_status()
+            msg = (
+                "Docker Desktop Kubernetes is not running "
+                f"(state={status.get('State', 'unknown')}). "
+                "Enable: Docker Desktop → Settings → Kubernetes → Enable. "
+                "Or set FRU_AUTO_ENABLE_DESKTOP_K8S=1 on deploy."
+            )
+            if os.environ.get("FRU_DOCTOR_REQUIRE_KUBE", "").strip().lower() in ("1", "true", "yes"):
+                errors.append(msg)
+                logger.error(f"[doctor] {msg}")
+            else:
+                logger.warning(f"[doctor] {msg}")
+    except RuntimeError as e:
+        if os.environ.get("FRU_DOCTOR_REQUIRE_KUBE", "").strip().lower() in ("1", "true", "yes"):
+            errors.append(str(e))
+            logger.error(f"[doctor] {e}")
+        else:
+            logger.warning(f"[doctor] {e}")
+
+    # 7. Live /model-catalog on local APIs (catches stale nginx bundle missing route)
+    logger.info("[doctor] Checking /model-catalog on local API ports (when reachable)...")
+    try:
+        from tools.local.scope_shared.local_deploy_config import get_ports_for_scope
+
+        for scope in ("nonkube", "kube"):
+            api_port = get_ports_for_scope(scope)["api_port"]
+            base = f"http://127.0.0.1:{api_port}"
+            if scope == "kube":
+                try:
+                    from tools.local.kube.local_k8s import ensure_kube_api_reachable
+
+                    base = ensure_kube_api_reachable(api_port, wait_timeout_sec=15)
+                except RuntimeError as e:
+                    logger.warning(f"[doctor] Kube API not reachable for model-catalog check: {e}")
+                    continue
+            try:
+                import requests
+
+                r = requests.get(f"{base.rstrip('/')}/model-catalog", timeout=10)
+                ct = (r.headers.get("content-type") or "").lower()
+                if r.status_code != 200 or "json" not in ct:
+                    errors.append(
+                        f"{scope} API :{api_port}/model-catalog returned non-JSON "
+                        f"(status={r.status_code}, content-type={ct!r}). "
+                        "Rebuild fru-api:local and restart the API (kube: import image + rollout restart)."
+                    )
+                else:
+                    stacks = r.json().get("stacks")
+                    if not isinstance(stacks, list):
+                        errors.append(f"{scope} API :{api_port}/model-catalog missing stacks[]")
+                    else:
+                        logger.info(
+                            f"[doctor] {scope} /model-catalog OK ({len(stacks)} stacks)"
+                        )
+            except requests.exceptions.ConnectionError:
+                logger.warning(f"[doctor] {scope} API :{api_port} not reachable; skip live catalog check")
+            except Exception as e:
+                errors.append(f"{scope} /model-catalog check failed: {e}")
+    except Exception as e:
+        logger.warning(f"[doctor] Live model-catalog check skipped: {e}")
+
+    # 8. Model catalog defaults (embedding + chat profiles from YAML)
+    logger.info("[doctor] Checking model catalog defaults (config/model_profiles.yaml)...")
+    try:
+        _core_app = os.path.join(_project_root, "core_app")
+        if _core_app not in sys.path:
+            sys.path.insert(0, _core_app)
+        from backend.env_utils.cloud_shared.model_profiles import (
+            validate_model_catalog_defaults,
+        )
+
+        catalog_errs = validate_model_catalog_defaults()
+        errors.extend(catalog_errs)
+        if catalog_errs:
+            for msg in catalog_errs:
+                logger.error(f"[doctor] {msg}")
+        else:
+            logger.info("[doctor] Model catalog defaults OK")
+    except Exception as e:
+        errors.append(f"Model catalog check failed: {e}")
+        logger.error(f"[doctor] Model catalog check failed: {e}")
 
     if errors:
         logger.error("[doctor] Preflight FAILED; see errors above.")

@@ -38,6 +38,12 @@ def test_get_optional_bool_env_falsey(monkeypatch):
     assert get_optional_bool_env("TEST_BOOL", True) is False
 
 
+def test_get_optional_bool_env_unset_uses_default(monkeypatch):
+    monkeypatch.delenv("TEST_BOOL", raising=False)
+    assert get_optional_bool_env("TEST_BOOL", True) is True
+    assert get_optional_bool_env("TEST_BOOL", False) is False
+
+
 def test_get_optional_int_env(monkeypatch):
     monkeypatch.setenv("TEST_INT", "42")
     assert get_optional_int_env("TEST_INT", 1) == 42

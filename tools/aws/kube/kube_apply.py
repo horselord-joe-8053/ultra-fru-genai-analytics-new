@@ -17,10 +17,15 @@ import sys
 _repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 if _repo_root not in sys.path:
     sys.path.insert(0, _repo_root)
+from tools.cloud_shared.embedding_deploy_env import (
+    api_deployment_embedding_subs,
+    modelark_secret_entries,
+)
 from tools.cloud_shared.analytics_schedule import (
     get_required_analytics_scheduler_interval_seconds,
     seconds_to_cron,
 )
+from tools.cloud_shared.delta_paths import aws_delta_table_path
 from tools.cloud_shared.env import load_dotenv, require
 from tools.cloud_shared.k8s_j2_render import render
 from tools.aws.scope_shared.core.backend import resolve_region
@@ -35,10 +40,20 @@ def kubectl(args, input_text=None):
 
 
 _WEBHOOK_NO_ENDPOINTS = "no endpoints available for service \"aws-load-balancer-webhook-service\""
+_WEBHOOK_TRANSIENT_MARKERS = (
+    _WEBHOOK_NO_ENDPOINTS,
+    "failed calling webhook",
+    "aws-load-balancer-webhook-service",
+    "x509: certificate signed by unknown authority",
+)
 
 
-def _kubectl_apply_with_webhook_retry(input_text: str, max_attempts: int = 6, interval_sec: int = 30) -> bool:
-    """Apply manifest with retry when AWS LB Controller webhook has no endpoints yet.
+def _webhook_error_retryable(combined: str) -> bool:
+    return any(m in combined for m in _WEBHOOK_TRANSIENT_MARKERS)
+
+
+def _kubectl_apply_with_webhook_retry(input_text: str, max_attempts: int = 12, interval_sec: int = 30) -> bool:
+    """Apply manifest with retry when AWS LB Controller webhook is not ready yet.
     Returns True if applied successfully, False if all retries failed."""
     for attempt in range(max_attempts):
         result = subprocess.run(
@@ -51,7 +66,7 @@ def _kubectl_apply_with_webhook_retry(input_text: str, max_attempts: int = 6, in
         combined = stdout + stderr
         if result.returncode == 0:
             return True
-        if _WEBHOOK_NO_ENDPOINTS in combined:
+        if _webhook_error_retryable(combined):
             if attempt < max_attempts - 1:
                 print(f"  [retry {attempt + 1}/{max_attempts}] Webhook not ready; waiting {interval_sec}s...")
                 time.sleep(interval_sec)
@@ -95,7 +110,7 @@ def main():
     ap.add_argument("--db-secret-arn", default="", help="AWS Secrets Manager ARN for db_password")
     ap.add_argument("--openai-secret-arn", default="", help="AWS Secrets Manager ARN for openai_api_key")
     ap.add_argument("--aws-region", default="", help="Region for pods (CLOUD_REGION)")
-    ap.add_argument("--delta-table-path", default="", help="DELTA_TABLE_PATH (s3a://bucket/delta/fru_sales)")
+    ap.add_argument("--delta-table-path", default="", help="DELTA_TABLE_PATH (s3a://bucket/delta/kube/fru_sales)")
     ap.add_argument("--delta-lake-package", default=None, help="DELTA_LAKE_PACKAGE")
     ap.add_argument("--bedrock-inference-profile-id", default="", help="AWS_BEDROCK_INFERENCE_PROFILE_ID")
     ap.add_argument("--bedrock-model-id", default="", help="AWS_BEDROCK_MODEL_ID from .env (required if no inference profile)")
@@ -162,6 +177,10 @@ data:
             except Exception as e:
                 print(f"WARN: Could not fetch OPENAI_API_KEY: {e}")
         openai_b64 = base64.b64encode(openai_key.encode()).decode()
+        app_data = {"OPENAI_API_KEY": openai_b64}
+        for k, v in modelark_secret_entries().items():
+            app_data[k] = base64.b64encode(v.encode()).decode()
+        data_lines = "\n".join(f"  {key}: {val}" for key, val in app_data.items())
         app_secret_yml = f"""apiVersion: v1
 kind: Secret
 metadata:
@@ -169,7 +188,7 @@ metadata:
   namespace: {K8S_NAMESPACE}
 type: Opaque
 data:
-  OPENAI_API_KEY: {openai_b64}
+{data_lines}
 """
         kubectl(["apply", "-f", "-"], input_text=app_secret_yml)
 
@@ -196,7 +215,7 @@ data:
         if not args.force and check_k8s_bootstrap_job_succeeded(args.env, region):
             print(f"[KUBE BOOTSTRAP] Skip: Job {JOB_BOOTSTRAP} already succeeded (idempotent)")
         else:
-            delta_table_path = args.delta_table_path or f"s3a://{delta_bucket}/delta/fru_sales"
+            delta_table_path = args.delta_table_path or aws_delta_table_path(delta_bucket, "kube")
             delta_lake_pkg = args.delta_lake_package or require("DELTA_LAKE_PACKAGE")
             delta_storage_pkg = require("DELTA_STORAGE_PACKAGE")
             hadoop_pkg = require("HADOOP_PACKAGE")
@@ -223,7 +242,7 @@ data:
         # Deploy API (always run - idempotent)
         try:
             interval_sec = get_required_analytics_scheduler_interval_seconds()
-            delta_table_path = args.delta_table_path or f"s3a://{delta_bucket}/delta/fru_sales"
+            delta_table_path = args.delta_table_path or aws_delta_table_path(delta_bucket, "kube")
             api_subs = {
                 "cloud_provider": "aws",
                 "APP_IMAGE": app_image,
@@ -245,7 +264,9 @@ data:
                 "AWS_BEDROCK_REGION": os.getenv("AWS_BEDROCK_REGION", "us-east-1").strip(),
                 "ENABLE_ANALYTICS_SCHEDULER": os.getenv("ENABLE_ANALYTICS_SCHEDULER", "true"),
                 "ANALYTICS_SCHEDULER_INTERVAL_SECONDS": str(interval_sec),
+                "OPENAI_EMBED_MODEL": os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small"),
             }
+            api_subs.update(api_deployment_embedding_subs())
             txt = render("api-deployment", api_subs)
             kubectl(["apply","-f","-"], input_text=txt)
             txt = render("api-service", {"cloud_provider": "aws", "use_elb": args.elb})
@@ -261,7 +282,7 @@ data:
     else:
         # Schedule phase: apply CronJob. Requires aws-credentials secret from bootstrap for S3 access.
         interval_sec = get_required_analytics_scheduler_interval_seconds()
-        delta_table_path = args.delta_table_path or f"s3a://{delta_bucket}/delta/fru_sales"
+        delta_table_path = args.delta_table_path or aws_delta_table_path(delta_bucket, "kube")
         delta_lake_pkg = args.delta_lake_package or require("DELTA_LAKE_PACKAGE")
         delta_storage_pkg = require("DELTA_STORAGE_PACKAGE")
         hadoop_pkg = require("HADOOP_PACKAGE")

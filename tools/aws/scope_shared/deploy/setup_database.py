@@ -30,6 +30,17 @@ from tools.cloud_shared.deploy.setup_database_utils import (
 
 load_dotenv()
 
+_repo_root = None
+
+
+def _ensure_core_app_path() -> None:
+    global _repo_root
+    if _repo_root is None:
+        _repo_root = get_repo_root()
+    core_app = os.path.join(_repo_root, "core_app")
+    if core_app not in sys.path:
+        sys.path.insert(0, core_app)
+
 
 def get_durable_outputs(env: str, region: str | None = None) -> dict:
     """Get Aurora-related outputs from durable stack."""
@@ -88,7 +99,10 @@ def ensure_pgvector(rds_client, cluster_arn: str, secret_arn: str, db_name: str)
 
 
 def init_schema(rds_client, cluster_arn: str, secret_arn: str, db_name: str, force: bool = False) -> None:
-    """Execute schema SQL statements via RDS Data API."""
+    """Execute schema SQL statements and migrations via RDS Data API."""
+    _ensure_core_app_path()
+    from backend.services.embedding_sync_rds import RdsDataConnection, apply_migrations_rds
+
     if force:
         for table in FORCE_DROP_TABLES:
             try:
@@ -102,6 +116,9 @@ def init_schema(rds_client, cluster_arn: str, secret_arn: str, db_name: str, for
                 pass
 
     statements = parse_schema_statements()
+    conn = RdsDataConnection(rds_client, cluster_arn, secret_arn, db_name)
+    apply_migrations_rds(conn)
+
     for i, stmt in enumerate(statements):
         try:
             rds_client.execute_statement(
@@ -114,19 +131,25 @@ def init_schema(rds_client, cluster_arn: str, secret_arn: str, db_name: str, for
         except Exception as e:
             logger.warning(f"Statement {i + 1} failed (may be idempotent): {e}")
 
-    # Schema verification (legacy parity)
+    # Schema verification: dual-column profile storage
     try:
         resp = rds_client.execute_statement(
             resourceArn=cluster_arn,
             secretArn=secret_arn,
             database=db_name,
-            sql="SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_schema='public' AND table_name='fru_sales_embeddings' AND column_name='embedding');",
+            sql=(
+                "SELECT EXISTS (SELECT FROM information_schema.columns "
+                "WHERE table_schema='public' AND table_name='fru_sales_embeddings' "
+                "AND column_name='embedding_openai_1536');"
+            ),
         )
         rec = resp.get("records", [[]])[0][0] if resp.get("records") else {}
-        has_embedding = rec.get("booleanValue") is True
-        if not has_embedding:
-            raise RuntimeError("Schema verification failed: embedding column missing from fru_sales_embeddings")
-        logger.success("Schema verification passed")
+        has_col = rec.get("booleanValue") is True
+        if not has_col:
+            raise RuntimeError(
+                "Schema verification failed: embedding_openai_1536 column missing from fru_sales_embeddings"
+            )
+        logger.success("Schema verification passed (embedding_openai_1536)")
     except RuntimeError:
         raise
     except Exception as e:
@@ -154,6 +177,10 @@ def load_data(env: str, cluster_arn: str, secret_arn: str, db_name: str, force: 
     env_vars["FRU_FORCE_REFRESH_DATA"] = "true" if force else "false"
     from tools.cloud_shared.env import require
     env_vars.setdefault("OPENAI_EMBED_MODEL", require("OPENAI_EMBED_MODEL"))
+    for key in ("ARK_API_KEY", "ARK_EMBEDDING_MODEL_ID", "ARK_BASE_URL", "ARK_CHAT_MODEL_ID"):
+        val = os.environ.get(key, "").strip()
+        if val:
+            env_vars[key] = val
     # ETL imports backend.* - need core_app on PYTHONPATH
     core_app = os.path.join(get_repo_root(), "core_app")
     env_vars["PYTHONPATH"] = core_app + (os.pathsep + env_vars.get("PYTHONPATH", "")) if env_vars.get("PYTHONPATH") else core_app
@@ -178,14 +205,20 @@ def load_data(env: str, cluster_arn: str, secret_arn: str, db_name: str, force: 
         except Exception:
             pass  # Table may not exist yet
 
-    logger.info("Loading data (embeddings)...")
+    logger.info("Loading data (scalars + dual-profile embeddings)...")
     result = subprocess.run(
         [sys.executable, etl_script],
         env=env_vars,
         cwd=get_repo_root(),
+        capture_output=True,
+        text=True,
     )
+    if result.stdout:
+        logger.info(result.stdout.strip())
+    if result.stderr:
+        logger.warning(result.stderr.strip())
     if result.returncode != 0:
-        raise RuntimeError("Data loading failed")
+        raise RuntimeError(f"Data loading failed: {result.stderr or result.stdout}")
     logger.success("Data loaded")
 
 

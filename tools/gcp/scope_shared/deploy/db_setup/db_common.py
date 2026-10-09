@@ -39,6 +39,32 @@ def connect_db(config: dict):
     )
 
 
+def apply_migrations(conn, migrations_dir: str | None = None) -> None:
+    """Apply SQL files in core_app/sql/migrations/ in sorted order (idempotent)."""
+    from tools.cloud_shared.deploy.setup_database_utils import get_repo_root
+    from tools.cloud_shared.logging.logger import info, step
+
+    root = migrations_dir or os.path.join(get_repo_root(), "core_app", "sql", "migrations")
+    if not os.path.isdir(root):
+        return
+    files = sorted(f for f in os.listdir(root) if f.endswith(".sql"))
+    if not files:
+        return
+    step(f"Applying {len(files)} migration(s) from {root}")
+    with conn.cursor() as cur:
+        for fname in files:
+            path = os.path.join(root, fname)
+            with open(path) as f:
+                sql = f.read()
+            try:
+                cur.execute(sql)
+                conn.commit()
+                info(f"Migration applied: {fname}")
+            except Exception as e:
+                conn.rollback()
+                raise RuntimeError(f"Migration {fname} failed: {e}") from e
+
+
 def apply_schema(conn, schema_path: str, force: bool = False) -> None:
     """Apply schema from schema_path. Drop FORCE_DROP_TABLES when force=True."""
     from tools.cloud_shared.logging.logger import info, success, error, step
@@ -60,6 +86,9 @@ def apply_schema(conn, schema_path: str, force: bool = False) -> None:
                 except Exception as e:
                     conn.rollback()
                     error(f"Drop {table}: {e}")
+        # Upgrade legacy DBs (embedding -> embedding_openai_1536) before indexes in schema SQL.
+        apply_migrations(conn)
+
         step("Applying schema statements...")
         for i, stmt in enumerate(statements):
             try:

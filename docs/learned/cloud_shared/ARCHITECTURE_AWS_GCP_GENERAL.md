@@ -1,17 +1,19 @@
-# Architecture: AWS & GCP — General Reference
+# Architecture: AWS, GCP & BytePlus (VKE) — General Reference
 
-Colored, detailed architecture diagrams for all four deployment modes. Covers **Subsystem A: API** (CDN → API → DB) and **Subsystem B: Spark-Delta** (bootstrap + periodic → Spark → Delta → `batch_analytics`). Based on deployment scripts and `infra_terraform/live_deploy/{aws,gcp}/` stacks. **Entrypoint:** `orchestrator.py deploy --provider {aws,gcp} --scope {kube,nonkube,all} [--cloud-region REGION]`.
+Colored, detailed architecture diagrams for deployment modes. Covers **Subsystem A: API** (CDN → API → DB) and **Subsystem B: Spark-Delta** (bootstrap + periodic → Spark → Delta → `batch_analytics`). Based on deployment scripts and `infra_terraform/live_deploy/{aws,gcp}/` stacks for **AWS and GCP** (implemented). **BytePlus (VKE)** column reflects the **planned** kube path in [REFACTOR_VKE_BYTEPLUS.md](../../cursor_gen/refactor_plans/REFACTOR_VKE_BYTEPLUS.md) mapped to [BytePlus VKE docs](https://docs.byteplus.com/en/docs/vke/What-is-Vital-Kubernetes-Engine) — not yet in `orchestrator.py` / `live_deploy/byteplus/`.
 
-**Stacks:** `infra_terraform/live_deploy/{aws,gcp}/scope_shared/{durable,durable_with_cooloff,nondurable}`, `{aws,gcp}/{kube,nonkube}`.
+**Entrypoint (implemented):** `orchestrator.py deploy --provider {aws,gcp} --scope {kube,nonkube,all} [--cloud-region REGION]`. **Planned:** `--provider byteplus --scope kube` (VKE only; nonkube deferred to VCI).
 
-**Color legend:** <span style="color:#1565c0">Subsystem A (API)</span> — blue tones. <span style="color:#e65100">Subsystem B (Spark-Delta)</span> — amber/orange tones. <span style="color:#6a1b9a">Shared</span> — DB.
+**Stacks (implemented):** `infra_terraform/live_deploy/{aws,gcp}/scope_shared/{durable,durable_with_cooloff,nondurable}`, `{aws,gcp}/{kube,nonkube}`.
+
+**Color legend:** <span style="color:#1565c0">Subsystem A (API)</span> — blue tones. <span style="color:#e65100">Subsystem B (Spark-Delta)</span> — amber/orange tones. <span style="color:#6a1b9a">Shared</span> — DB. All three kube diagrams (AWS, GCP, BytePlus) use the same palette; BytePlus is **planned** — see sources in §1.
 
 ---
 
-## 1. Kube-based (EKS vs GKE)
+## 1. Kube-based (EKS vs GKE vs VKE)
 
 <div style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-start; margin-bottom: 1rem;">
-<div style="flex: 1; min-width: 320px;">
+<div style="flex: 1; min-width: 280px;">
 
 ### AWS (EKS)
 
@@ -58,7 +60,7 @@ flowchart TB
 ```
 
 </div>
-<div style="flex: 1; min-width: 320px;">
+<div style="flex: 1; min-width: 280px;">
 
 ### GCP (GKE)
 
@@ -105,20 +107,90 @@ flowchart TB
 ```
 
 </div>
+<div style="flex: 1; min-width: 280px;">
+
+### BytePlus (VKE) — planned
+
+Same two-subsystem shape as EKS/GKE. **VKE** = [Vital Kubernetes Engine](https://docs.byteplus.com/en/docs/vke/What-is-Vital-Kubernetes-Engine): managed Kubernetes on BytePlus (nodes on **ECS** in **VPC**; **containerd** runtime per VKE docs). External exposure uses Kubernetes **LoadBalancer** Services backed by **CLB** or **NLB** ([LoadBalancer Service overview](https://docs.byteplus.com/api/docs/vke/LoadBalancer_service_overview)). Delta on **TOS** ([csi-tos](https://docs.byteplus.com/en/docs/vke/Using-static-TOS-Volumes) / refactor plan). DB target: **RDS for PostgreSQL** (refactor plan `bytepluscc`; [product overview](https://docs.byteplus.com/en/docs/RDS_for_PG/about_rds_for_postgresql)). Frontend: **TOS** static hosting + **BytePlus CDN / Pages** (refactor Phase 8; [Pages overview](https://docs.byteplus.com/en/docs/byteplus-cdn/host_static_pages_console_en)).
+
+```mermaid
+%%{init: {'theme':'base', 'themeVariables': {'fontSize':'9px', 'fontFamily':'sans-serif'}, 'flowchart': {'nodeSpacing':20, 'rankSpacing':24, 'padding':8, 'useMaxWidth':true}}}%%
+flowchart TB
+    subgraph subA5["Subsystem A: API"]
+        direction TB
+        U5["User"]
+        CDN5["CDN / Pages"]
+        LB5["CLB/NLB LB Svc"]
+        POD5["API Pods"]
+        U5 -->|"1"| CDN5
+        CDN5 -->|"2"| LB5
+        LB5 -->|"3"| POD5
+    end
+
+    subgraph subB5["Subsystem B: Spark-Delta"]
+        direction TB
+        BOOT5["Bootstrap Job (1×)"]
+        CRON5["CronJob"]
+        TOS5["TOS Delta"]
+        TOS5 -->|"5 read"| BOOT5
+        TOS5 -->|"5 read"| CRON5
+    end
+
+    RDS5["RDS PostgreSQL"]
+
+    POD5 -->|"4"| RDS5
+    BOOT5 -->|"6 write"| RDS5
+    CRON5 -->|"6 write"| RDS5
+    POD5 -.->|"read"| RDS5
+
+    style U5 fill:#e3f2fd,stroke:#1565c0
+    style CDN5 fill:#bbdefb,stroke:#1565c0
+    style LB5 fill:#90caf9,stroke:#1565c0
+    style POD5 fill:#64b5f6,stroke:#1565c0
+    style subA5 fill:#e8f4fd,stroke:#1565c0
+    style subB5 fill:#fff8e6,stroke:#e65100
+    style BOOT5 fill:#ffe0b2,stroke:#e65100
+    style CRON5 fill:#ffcc80,stroke:#e65100
+    style TOS5 fill:#fff3e0,stroke:#e65100
+    style RDS5 fill:#e1bee7,stroke:#6a1b9a
+```
+
+</div>
 </div>
 
 #### Kube: textual comparison
 
-| Aspect | AWS (EKS) | GCP (GKE) |
-|--------|-----------|-----------|
-| **Subsystem A flow** | <span style="background:#e3f2fd;padding:2px 6px;">1. User → CloudFront (HTTPS, SSL at edge). 2. CloudFront → NLB/ELB (HTTP). 3. LB → EKS nodes → fru-api pods. 4. Pods → Aurora.</span> | <span style="background:#e8f5e9;padding:2px 6px;">1. User → Cloud CDN (HTTPS). 2. Cloud CDN → GKE LB Svc or Ingress (HTTP). 3. LB → fru-api pods. 4. Pods → Cloud SQL via VPC.</span> |
-| **Subsystem B flow** | <span style="background:#e3f2fd;padding:2px 6px;">5. Bootstrap Job + CronJob read Delta from S3 (`s3a://fru-dev-delta-{region}/delta/fru_sales`). 6. Both write to `batch_analytics` in Aurora.</span> | <span style="background:#e8f5e9;padding:2px 6px;">5. Bootstrap Job + CronJob read Delta from GCS (`gs://fru-dev-delta-{region}/delta/fru_sales`). 6. Both write to `batch_analytics` in Cloud SQL.</span> |
-| **CDN** | <span style="background:#e3f2fd;padding:2px 6px;">CloudFront</span> | <span style="background:#e8f5e9;padding:2px 6px;">Cloud CDN</span> |
-| **LB** | <span style="background:#e3f2fd;padding:2px 6px;">NLB/ELB</span> | <span style="background:#e8f5e9;padding:2px 6px;">GKE LoadBalancer Service</span> |
-| **Compute** | <span style="background:#e3f2fd;padding:2px 6px;">EKS pods</span> | <span style="background:#e8f5e9;padding:2px 6px;">GKE pods</span> |
-| **DB** | <span style="background:#e3f2fd;padding:2px 6px;">Aurora</span> | <span style="background:#e8f5e9;padding:2px 6px;">Cloud SQL</span> |
-| **Delta storage** | <span style="background:#e3f2fd;padding:2px 6px;">S3</span> | <span style="background:#e8f5e9;padding:2px 6px;">GCS</span> |
-| **Stack order** | durable → durable_with_cooloff → nondurable → kube | Same |
+| Aspect | AWS (EKS) | GCP (GKE) | BytePlus (VKE) — planned |
+|--------|-----------|-----------|--------------------------|
+| **Repo status** | <span style="background:#e3f2fd;padding:2px 6px;">Implemented (`--provider aws --scope kube`)</span> | <span style="background:#e8f5e9;padding:2px 6px;">Implemented (`--provider gcp --scope kube`)</span> | <span style="background:#fff3e0;padding:2px 6px;">**Planned** — [REFACTOR_VKE_BYTEPLUS.md](../../cursor_gen/refactor_plans/REFACTOR_VKE_BYTEPLUS.md); `--scope nonkube` deferred to **VCI**</span> |
+| **Managed K8s** | <span style="background:#e3f2fd;padding:2px 6px;">Amazon EKS</span> | <span style="background:#e8f5e9;padding:2px 6px;">Google GKE</span> | <span style="background:#fff3e0;padding:2px 6px;">**Vital Kubernetes Engine (VKE)** — managed cluster service; worker nodes on **ECS** in **VPC** ([What is VKE](https://docs.byteplus.com/en/docs/vke/What-is-Vital-Kubernetes-Engine), [dependencies](https://docs.byteplus.com/en/docs/vke/Dependencies-between-VKE-and-other-cloud-services))</span> |
+| **Subsystem A flow** | <span style="background:#e3f2fd;padding:2px 6px;">1. User → CloudFront (HTTPS, SSL at edge). 2. CloudFront → NLB/ELB (HTTP). 3. LB → EKS nodes → fru-api pods. 4. Pods → Aurora.</span> | <span style="background:#e8f5e9;padding:2px 6px;">1. User → Cloud CDN (HTTPS). 2. Cloud CDN → GKE LB Svc or Ingress (HTTP). 3. LB → fru-api pods. 4. Pods → Cloud SQL via VPC.</span> | <span style="background:#fff3e0;padding:2px 6px;">1. User → **BytePlus CDN / Pages** or TOS static site (HTTPS; Phase 8). 2. Edge → **CLB/NLB** via VKE **LoadBalancer Service** ([overview](https://docs.byteplus.com/api/docs/vke/LoadBalancer_service_overview)). 3. LB → **VKE** fru-api pods (images from **CR**). 4. Pods → **RDS for PostgreSQL** in VPC.</span> |
+| **Subsystem B flow** | <span style="background:#e3f2fd;padding:2px 6px;">5. Bootstrap Job + CronJob read Delta from S3 (`s3a://fru-dev-delta-{region}/delta/fru_sales`). 6. Both write to `batch_analytics` in Aurora.</span> | <span style="background:#e8f5e9;padding:2px 6px;">5. Bootstrap Job + CronJob read Delta from GCS (`gs://fru-dev-delta-{region}/delta/fru_sales`). 6. Both write to `batch_analytics` in Cloud SQL.</span> | <span style="background:#fff3e0;padding:2px 6px;">5. **Bootstrap Job** + **CronJob** on VKE read Delta from **TOS** (refactor plan: TOS paths in J2 templates; VKE supports Jobs/CronJobs per product docs). 6. Both write to `batch_analytics` in **RDS PostgreSQL** (pgvector column per MODELARK + VKE plan).</span> |
+| **CDN / static UI** | <span style="background:#e3f2fd;padding:2px 6px;">CloudFront + S3</span> | <span style="background:#e8f5e9;padding:2px 6px;">Cloud CDN + GCS</span> | <span style="background:#fff3e0;padding:2px 6px;">**TOS** static website ([TOS static site](https://docs.byteplus.com/en/docs/tos/Set-up-a-static-website)) + **BytePlus CDN / Pages** global delivery ([Pages overview](https://docs.byteplus.com/en/docs/byteplus-cdn/host_static_pages_console_en)) — exact FRU wiring in Phase 8</span> |
+| **LB** | <span style="background:#e3f2fd;padding:2px 6px;">NLB/ELB</span> | <span style="background:#e8f5e9;padding:2px 6px;">GKE LoadBalancer Service</span> | <span style="background:#fff3e0;padding:2px 6px;">VKE **LoadBalancer Service** → **CLB** or **NLB** (Layer-4; annotation-configured)</span> |
+| **Compute** | <span style="background:#e3f2fd;padding:2px 6px;">EKS pods</span> | <span style="background:#e8f5e9;padding:2px 6px;">GKE pods</span> | <span style="background:#fff3e0;padding:2px 6px;">VKE pods (on ECS worker nodes; optional **VCI** virtual nodes — not FRU nonkube MVP)</span> |
+| **Container registry** | <span style="background:#e3f2fd;padding:2px 6px;">ECR</span> | <span style="background:#e8f5e9;padding:2px 6px;">Artifact Registry</span> | <span style="background:#fff3e0;padding:2px 6px;">**Container Registry (CR)** + `cr-credential-controller` add-on ([CR ↔ VKE](https://docs.byteplus.com/en/docs/cr/pull-images-over-the-internal-network-without-providing-credentials))</span> |
+| **DB** | <span style="background:#e3f2fd;padding:2px 6px;">Aurora</span> | <span style="background:#e8f5e9;padding:2px 6px;">Cloud SQL</span> | <span style="background:#fff3e0;padding:2px 6px;">**RDS for PostgreSQL** — managed PostgreSQL ([about](https://docs.byteplus.com/en/docs/RDS_for_PG/about_rds_for_postgresql))</span> |
+| **Delta storage** | <span style="background:#e3f2fd;padding:2px 6px;">S3</span> | <span style="background:#e8f5e9;padding:2px 6px;">GCS</span> | <span style="background:#fff3e0;padding:2px 6px;">**TOS** (Torch Object Storage; VKE **csi-tos** add-on)</span> |
+| **Spark scheduler (kube)** | <span style="background:#e3f2fd;padding:2px 6px;">Kubernetes CronJob</span> | <span style="background:#e8f5e9;padding:2px 6px;">Kubernetes CronJob</span> | <span style="background:#fff3e0;padding:2px 6px;">Kubernetes **CronJob** on VKE (same pattern as AWS/GKE in shared J2 templates)</span> |
+| **Stack order** | durable → durable_with_cooloff → nondurable → kube | Same | **Planned:** durable → durable_with_cooloff → **kube (VKE) only** — no `live_deploy/byteplus/nonkube` in MVP |
+| **Regions (plan)** | e.g. `us-east-2` | e.g. `us-central1` | **Primary:** `ap-southeast-1` (Johor); **secondary:** `cn-beijing` ([refactor plan](../../cursor_gen/refactor_plans/REFACTOR_VKE_BYTEPLUS.md#phase-2-region-config)) |
+
+**EKS ↔ GKE ↔ VKE mapping (verified product names only):**
+
+| Layer | AWS | GCP | BytePlus |
+|-------|-----|-----|----------|
+| Managed Kubernetes | EKS | GKE | **VKE** |
+| VPC | VPC | VPC | **VPC** |
+| Worker nodes | EC2 (EKS) | GCE (GKE) | **ECS** (VKE nodes) |
+| L4 load balancing | NLB/ELB | GKE LB Service | **CLB / NLB** via LoadBalancer Service |
+| L7 ingress (optional) | ALB Ingress / CF | GKE Ingress | **ALB Ingress**, **CLB Ingress**, **NGINX Ingress** (VKE docs) |
+| Object storage | S3 | GCS | **TOS** |
+| Managed RDBMS | Aurora | Cloud SQL | **RDS for PostgreSQL** |
+| Container registry | ECR | Artifact Registry | **CR** |
+| Serverless containers (nonkube) | ECS Fargate | Cloud Run | **VCI** — deferred for FRU |
+
+*Sources: BytePlus [What is VKE](https://docs.byteplus.com/en/docs/vke/What-is-Vital-Kubernetes-Engine), [VKE cloud dependencies](https://docs.byteplus.com/en/docs/vke/Dependencies-between-VKE-and-other-cloud-services), [LoadBalancer Service overview](https://docs.byteplus.com/api/docs/vke/LoadBalancer_service_overview), [RDS for PostgreSQL](https://docs.byteplus.com/en/docs/RDS_for_PG/about_rds_for_postgresql); repo [REFACTOR_VKE_BYTEPLUS.md](../../cursor_gen/refactor_plans/REFACTOR_VKE_BYTEPLUS.md).*
 
 *Extensible: add columns for Azure (AKS), Oracle (OKE), etc.*
 
@@ -291,6 +363,7 @@ When adding Oracle, Azure, Huawei, or another provider:
 
 ## 6. Related Docs
 
+- [REFACTOR_VKE_BYTEPLUS.md](../../cursor_gen/refactor_plans/REFACTOR_VKE_BYTEPLUS.md) — planned BytePlus VKE deploy (kube only; VCI nonkube deferred)
 - [KUBE_LB.md](KUBE_LB.md) — NLB vs Classic ELB for AWS kube
 - [VPC_AND_NETWORK.md](VPC_AND_NETWORK.md) — VPC concepts
 - [ANALYTICS_AND_DATA.md](ANALYTICS_AND_DATA.md) — Shared Delta + batch_analytics

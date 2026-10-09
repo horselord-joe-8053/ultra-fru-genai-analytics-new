@@ -1,0 +1,17 @@
+# Canonical embedding profiles — all keys are write/storage lanes (embedding_sync).
+# EMBEDDING_ACTIVE_PROFILE in .env selects search/read lane only.
+# Column naming: embedding_{model_slug}_{dimension}
+
+openai_1536:
+  provider: openai
+  model_slug: openai
+  model_env: OPENAI_EMBED_MODEL
+  dimension: 1536
+  pgvector_column: embedding_openai_1536
+
+skylark_2048:
+  provider: modelark
+  model_slug: skylark
+  model_env: ARK_EMBEDDING_MODEL_ID
+  dimension: 2048
+  pgvector_column: embedding_skylark_2048

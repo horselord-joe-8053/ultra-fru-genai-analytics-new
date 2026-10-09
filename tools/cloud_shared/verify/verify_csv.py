@@ -17,8 +17,11 @@ def _csv_path() -> str:
 
 def get_total_rec_from_csv() -> int:
     """
-    Return expected total records from CSV (line count minus header).
-    Exits with 1 if CSV not found; verification requires it for QueryStream/analytics checks.
+    Return minimum seeded record count from CSV (line count minus header).
+
+    Live DB may exceed this after Data Management CRUD; verify checks use this as a
+    floor (actual count must be >= this value), not an exact match.
+    Exits with 1 if CSV not found.
     """
     path = _csv_path()
     if not os.path.exists(path):

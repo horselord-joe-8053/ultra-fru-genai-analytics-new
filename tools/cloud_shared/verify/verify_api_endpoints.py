@@ -5,6 +5,7 @@ Used by AWS and GCP verify_all_deploy. Provider param is for VerifyRow only (aws
 HTTP 502/503 and ConnectionError are retriable; 403 = real failure.
 """
 import os
+import re
 import requests
 
 from tools.cloud_shared.logging import logger
@@ -22,6 +23,15 @@ from tools.cloud_shared.verify.verify_sse import (
     is_agent_disabled_by_config,
 )
 from tools.cloud_shared.verify.verify_summary import VerifyRow
+
+
+def _integers_in_text(text: str) -> list[int]:
+    return [int(m) for m in re.findall(r"\b(\d+)\b", text or "")]
+
+
+def _record_count_meets_minimum(observed: int | None, min_rec: int) -> bool:
+    """True when observed count is at least the seeded CSV floor (allows CRUD-added rows)."""
+    return observed is not None and observed >= min_rec
 
 
 def _fetch_agent_init_error(base_url: str) -> str | None:
@@ -57,6 +67,16 @@ def _debug_query_stream_response(resp: requests.Response, total_rec: int) -> Non
         logger.warning(f"DEBUG_VERIFY_QUERY_STREAM write failed: {ex}")
 
 
+# Optional verify presets: extra QueryStream checks beyond default SQL count query.
+VERIFY_PROFILES: dict[str, dict] = {
+    "modelark_pgvector": {
+        "semantic_query": (
+            "/query/stream?query=find%20customer%20feedback%20about%20noise"
+        ),
+    },
+}
+
+
 def verify_api_endpoints(
     base_url: str,
     total_rec: int,
@@ -67,17 +87,46 @@ def verify_api_endpoints(
     query_stream_timeout_sec: int | None = None,
     skip_frontend: bool = False,
     endpoint_names: list[str] | None = None,
+    verify_profile: str | None = None,
 ) -> tuple[bool, list[VerifyRow]]:
     """
     Poll endpoints until all pass or timeout. Returns (ok, rows) for summary table.
     provider: aws or gcp (for VerifyRow). Timeouts default to verify_config values.
+
+    total_rec: minimum seeded row count from CSV; live DB/analytics may be higher after CRUD.
     """
     timeout_secs = timeout_secs or VERIFY_TIMEOUT_SEC
     heartbeat_interval_sec = heartbeat_interval_sec or VERIFY_HEARTBEAT_INTERVAL_SEC
     query_stream_timeout_sec = query_stream_timeout_sec or QUERY_STREAM_TIMEOUT_PER_REQUEST_SEC
+    min_rec = total_rec
 
-    logger.info(f"Validating API Endpoints at: {base_url} (timeout={timeout_secs}s, total_rec={total_rec})")
+    logger.info(
+        f"Validating API Endpoints at: {base_url} "
+        f"(timeout={timeout_secs}s, min_total_rec from CSV={min_rec})"
+    )
     use_agent_disabled_by_config = is_agent_disabled_by_config()
+
+    def check_query_stream_semantic(r, url: str = ""):
+        """Semantic path: complete SSE answer without agent init failure."""
+        if r.status_code != 200:
+            return False
+        if "Agent-based query processing is disabled" in (r.text or ""):
+            err_msg = parse_sse_error_message(r.text) or ""
+            if is_agent_disabled_by_config() or "disabled by configuration" in err_msg.lower():
+                return True
+            real_reason = _fetch_agent_init_error(base_url)
+            if real_reason:
+                raise RuntimeError(f"QueryStreamSemantic init failed: {real_reason} at {url}")
+            return False
+        err_msg = parse_sse_error_message(r.text)
+        if err_msg and is_non_retriable_query_error(err_msg):
+            raise RuntimeError(f"QueryStreamSemantic error: {err_msg[:200]} at {url}")
+        answer = parse_sse_complete_answer(r.text)
+        if answer is None:
+            return False
+        if "An error has occurred while processing your query" in answer:
+            return False
+        return len(answer.strip()) > 0
 
     def check_query_stream(r, url: str = ""):
         if r.status_code != 200:
@@ -119,9 +168,34 @@ def verify_api_endpoints(
             return False
         if "An error has occurred while processing your query" in answer:
             return False
-        if str(total_rec) not in answer:
-            raise RuntimeError(f"QueryStream answer does not contain total_rec={total_rec}: {answer[:100]}... at {url}")
+        nums = _integers_in_text(answer)
+        observed = max(nums) if nums else None
+        if not _record_count_meets_minimum(observed, min_rec):
+            raise RuntimeError(
+                f"QueryStream record count {observed} below seeded minimum {min_rec}: "
+                f"{answer[:100]}... at {url}"
+            )
         return True
+
+    def check_model_catalog(r, url: str = ""):
+        """UI dropdowns call GET /model-catalog — must be JSON with stacks[], not SPA HTML."""
+        if r.status_code != 200:
+            return False
+        ct = (r.headers.get("content-type") or "").lower()
+        if "json" not in ct:
+            raise RuntimeError(
+                f"ModelCatalog returned {ct!r} (expected JSON). "
+                "Rebuild fru-api image — nginx must proxy /model-catalog to Flask."
+            )
+        try:
+            data = r.json()
+        except Exception as ex:
+            raise RuntimeError(f"ModelCatalog body is not JSON at {url}: {ex}") from ex
+        if not isinstance(data.get("stacks"), list):
+            raise RuntimeError(
+                f"ModelCatalog JSON missing stacks[] at {url} — redeploy API with model_profiles.yaml"
+            )
+        return len(data["stacks"]) > 0
 
     def check_analytics(r, url: str = ""):
         if r.status_code != 200:
@@ -133,8 +207,8 @@ def verify_api_endpoints(
                 if "No analytics data available yet" in err:
                     return False
                 raise RuntimeError(f"Analytics error (non-retriable): {err} at {url}")
-            total_records = data.get("total_records") or 0
-            return total_records == total_rec
+            total_records = int(data.get("total_records") or 0)
+            return _record_count_meets_minimum(total_records, min_rec)
         except RuntimeError:
             raise
         except Exception:
@@ -143,10 +217,32 @@ def verify_api_endpoints(
     endpoints = [
         {"path": "/health", "name": "Health", "check": lambda r, url=None: r.status_code == 200, "timeout": 10},
         {"path": "/version", "name": "Version", "check": lambda r, url=None: r.status_code == 200, "timeout": 10},
+        {
+            "path": "/model-catalog",
+            "name": "ModelCatalog",
+            "check": check_model_catalog,
+            "timeout": 15,
+        },
         {"path": "/", "name": "Frontend", "check": lambda r, url=None: r.status_code == 200 and "<html" in r.text.lower(), "timeout": 10},
         {"path": "/query/stream?query=total%20number%20of%20record", "name": "QueryStream", "check": check_query_stream, "timeout": query_stream_timeout_sec},
         {"path": "/analytics", "name": "Analytics", "check": check_analytics, "timeout": 10},
     ]
+    if verify_profile:
+        preset = VERIFY_PROFILES.get(verify_profile)
+        if not preset:
+            raise ValueError(
+                f"Unknown verify_profile={verify_profile!r}; known: {sorted(VERIFY_PROFILES)}"
+            )
+        semantic_path = preset.get("semantic_query")
+        if semantic_path:
+            endpoints.append(
+                {
+                    "path": semantic_path,
+                    "name": "QueryStreamSemantic",
+                    "check": check_query_stream_semantic,
+                    "timeout": query_stream_timeout_sec,
+                }
+            )
     if skip_frontend:
         endpoints = [e for e in endpoints if e["name"] != "Frontend"]
     if endpoint_names is not None:
@@ -241,13 +337,13 @@ def verify_api_endpoints(
                 notes = (
                     "agent disabled by config (USE_AGENT_QUERY=false)"
                     if passed_via_disabled
-                    else f"total_rec={total_rec} in answer"
+                    else f"count>={min_rec} in answer"
                 )
             elif e["name"] == "Analytics":
                 try:
                     data = last_resp.get(e["name"])
                     total_records = data.json().get("total_records", 0) if data else 0
-                    notes = f"total_records={total_records}"
+                    notes = f"total_records={total_records} (min {min_rec})"
                 except Exception:
                     notes = "has data"
         else:

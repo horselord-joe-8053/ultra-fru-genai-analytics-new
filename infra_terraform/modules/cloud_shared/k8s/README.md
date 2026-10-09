@@ -22,6 +22,8 @@ All templates expect `cloud_provider` ("aws" or "gcp"). Platform-specific:
 | Variable | AWS | GCP |
 |----------|-----|-----|
 | `CONTAINER_TYPE` | eks | gke |
+| `DEPLOY_SCOPE` | kube / nonkube | kube / nonkube |
+| `DELTA_TABLE_PATH` | `s3a://{bucket}/delta/{scope}/fru_sales` | `gs://{bucket}/delta/{scope}/fru_sales` |
 | `api-service` | `use_elb` (bool) for NLB vs Classic ELB | — |
 | Spark command | hadoop-aws package | GCS connector jar |
 | Env | AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_BEDROCK_* | CLOUD_PROVIDER, GCP_LLM_PROVIDER, CLAUDE_MODEL, GOOGLE_MODEL |

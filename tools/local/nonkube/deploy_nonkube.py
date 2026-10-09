@@ -10,6 +10,7 @@ import sys
 from tools.cloud_shared.analytics_schedule import get_required_analytics_scheduler_interval_seconds
 from tools.cloud_shared.env import load_dotenv, require
 from tools.cloud_shared.logging import logger
+from tools.local.scope_shared.local_deploy_config import get_compose_delta_volume_name, get_compose_project
 
 load_dotenv()
 
@@ -21,7 +22,11 @@ COMPOSE_PROJECT = "fru_local"
 
 def _run(cmd: list, env: dict | None = None) -> int:
     e = env or os.environ.copy()
-    e.setdefault("PYTHONPATH", PROJECT_ROOT)
+    core_app = os.path.join(PROJECT_ROOT, "core_app")
+    existing = e.get("PYTHONPATH", "")
+    e["PYTHONPATH"] = os.pathsep.join(
+        [p for p in (core_app, PROJECT_ROOT, existing) if p]
+    )
     r = subprocess.run(cmd, cwd=PROJECT_ROOT, env=e)
     return r.returncode
 
@@ -60,14 +65,14 @@ def run_deploy_nonkube(skip_spark: bool = False) -> int:
         spark_cmd = [
             "docker", "run", "--rm",
             "--user", "root",
-            "--network", f"{COMPOSE_PROJECT}_default",
+            "--network", f"{get_compose_project()}_default",
             "-e", "PGHOST=postgres",
             "-e", "PGPORT=5432",
             "-e", "PGUSER=postgres",
             "-e", f"PGPASSWORD={pw}",
             "-e", f"PGDATABASE={os.environ.get('PGDATABASE', 'fru_db')}",
             "-e", "DELTA_TABLE_PATH=file:///tmp/delta/fru_sales",
-            "-v", "fru_delta:/tmp/delta",
+            "-v", f"{get_compose_delta_volume_name()}:/tmp/delta",
             "fru-spark:local",
             "/opt/spark/bin/spark-submit",
             "--packages", packages,
@@ -80,8 +85,10 @@ def run_deploy_nonkube(skip_spark: bool = False) -> int:
             return 1
 
     logger.success("Local nonkube deploy complete")
-    logger.info("API: http://localhost:5001")
-    logger.info("Frontend: http://localhost:5001 (served by API)")
+    from tools.local.scope_shared.local_deploy_config import get_ports_for_scope
+    p = get_ports_for_scope("nonkube")
+    logger.info(f"API (nginx+Flask): http://localhost:{p['api_port']} — bundled production UI+API")
+    logger.info(f"Dev frontend (Vite): http://localhost:{p['frontend_port']} — preferred for local UI work")
     return 0
 
 

@@ -1,6 +1,7 @@
 # Local deployment: separate API + frontend ports per scope (like cloud uses separate containers).
 # Override via LOCAL_DEPLOY_CONFIG in .env if this file is elsewhere.
 # Used by: start_local, verify_all_deploy, deploy (logging).
+# Embedding lane: set EMBEDDING_ACTIVE_PROFILE in .env only (not in this file).
 
 scope-shared:
   # Optional shared defaults (currently unused; kube/nonkube define their own)

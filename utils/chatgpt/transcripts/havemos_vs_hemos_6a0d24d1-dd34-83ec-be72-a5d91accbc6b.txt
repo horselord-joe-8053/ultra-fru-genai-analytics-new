@@ -1,0 +1,84 @@
+----- MESSAGE (role=user) -----
+[image: 1e0b2684-4222-45c8-bc6c-e61fc6b6b6b9.png]
+why there is havemos/hemos two forms for the same verb and same tense for nós?
+
+
+----- MESSAGE (role=assistant) -----
+Great question — and this is one of those things where Portuguese (especially European vs Brazilian) leaks into conjugation tables and confuses learners.
+
+### Short answer:
+- **“havemos”** = the *standard, modern* conjugation of **haver** for **nós**
+- **“hemos”** = an **archaic / literary / regional variant**, mostly from **European Portuguese** and older usage
+
+---
+
+### Let’s break it down
+
+#### ✅ Modern standard (what you should use)
+In both **Brazilian Portuguese** and modern standard usage:
+
+| Pronoun | Verb |
+|--------|------|
+| nós | **havemos** |
+
+Example:
+- **Nós havemos de resolver isso.**  
+(We shall / we have to solve this.)
+
+---
+
+#### ⚠️ “hemos” — what is it?
+
+- It’s a **contracted / historical form** of *havemos*
+- Mostly seen in:
+  - **old texts**
+  - **literary style**
+  - occasionally **European Portuguese (Portugal)**
+
+Example:
+- **Nós hemos de vencer.** (sounds archaic / poetic)
+
+---
+
+### Why does Reverso show both?
+
+Sites like entity["software","Reverso Conjugator","verb conjugation tool"] try to be **complete**, not just practical.
+
+So they include:
+- current forms ✅
+- historical variants ⚠️
+- regional alternatives 🌍
+
+---
+
+### Important practical takeaway (for you)
+
+Since you're learning **Brazilian Portuguese**:
+
+👉 **Ignore “hemos” completely**  
+👉 Always use **havemos**
+
+---
+
+### Bonus insight (this matters more than you think)
+
+In **Brazilian Portuguese**, *haver* is **rarely used with “nós” at all** in everyday speech.
+
+Instead, people prefer:
+- **a gente tem que...** (we have to...)
+- **nós temos que...** (more formal)
+
+Example:
+- Instead of: *nós havemos de ir*  
+- Brazilians say: **a gente vai / a gente tem que ir**
+
+---
+
+### Bottom line
+
+- **havemos** → correct, modern, safe  
+- **hemos** → archaic, ignore for Brazil  
+
+---
+
+If you want, I can show you where *haver* is actually used in real Brazilian speech vs where it’s just “textbook Portuguese” — that distinction is very useful.

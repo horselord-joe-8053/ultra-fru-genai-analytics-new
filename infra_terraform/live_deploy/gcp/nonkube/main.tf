@@ -38,6 +38,8 @@ module "tags" {
   }
 }
 
+data "google_project" "current" { project_id = var.gcp_project_id }
+
 locals {
   delta_bucket = try(data.terraform_remote_state.shared_nondurable.outputs.delta_bucket_name, var.delta_bucket_fallback)
   cloud_sql_connection = (try(data.terraform_remote_state.shared_durable.outputs.cloud_sql_private_ip, "") != "" || try(data.terraform_remote_state.shared_durable.outputs.cloud_sql_connection_name, "") != "") ? {
@@ -52,6 +54,7 @@ locals {
     GOOGLE_AI_API_KEY  = try(data.terraform_remote_state.shared_durable.outputs.google_ai_api_key_secret_id, "")
     CLAUDE_API_KEY     = try(data.terraform_remote_state.shared_durable.outputs.claude_api_key_secret_id, "")
   }
+  ark_api_key_secret_id = try(data.terraform_remote_state.shared_durable.outputs.ark_api_key_secret_id, "")
 }
 
 module "cloud_run" {
@@ -70,6 +73,11 @@ module "cloud_run" {
     CLOUD_PROVIDER                        = "gcp"
     GCP_LLM_PROVIDER                     = var.llm_provider
     LLM_PROVIDER                         = var.llm_provider
+    LLM_INFERENCE_PROVIDER               = var.llm_inference_provider
+    EMBEDDING_ACTIVE_PROFILE             = var.embedding_active_profile
+    DEFAULT_EMBEDDING_PROFILE            = var.default_embedding_profile
+    DEFAULT_CHAT_CHOICE                  = var.default_chat_choice
+    ALLOW_PER_REQUEST_MODEL_OVERRIDE     = var.allow_per_request_model_override
     CLAUDE_MODEL                         = var.claude_model
     CLOUD_REGION                         = var.gcp_region
     LOG_LEVEL                            = var.log_level
@@ -78,15 +86,22 @@ module "cloud_run" {
     OPENAI_EMBED_MODEL                   = var.openai_embed_model
     ENABLE_ANALYTICS_SCHEDULER           = var.enable_analytics_scheduler
     ANALYTICS_SCHEDULER_INTERVAL_SECONDS = tostring(var.analytics_scheduler_interval_seconds)
-    DELTA_TABLE_PATH                     = "gs://${local.delta_bucket}/delta/fru_sales"
+    DELTA_TABLE_PATH                     = "gs://${local.delta_bucket}/delta/nonkube/fru_sales"
     DELTA_LAKE_PACKAGE                   = var.delta_lake_package
     SPARK_HOME                           = var.spark_home
     CONTAINER_TYPE                       = "cloud_run"
     CONTAINER_IMAGE                      = var.app_image
     APP_IMAGE_TAG                       = var.app_image_tag
+    ARK_BASE_URL                         = var.ark_base_url
+    ARK_EMBEDDING_MODEL_ID               = var.ark_embedding_model_id
+    ARK_CHAT_MODEL_ID                    = var.ark_chat_model_id
+    LLM_INFERENCE_PROVIDER               = var.llm_inference_provider
   }, local.cloud_sql_connection)
 
-  secret_ids             = { for k, v in local.secret_ids : k => v if v != "" }
+  secret_ids = merge(
+    { for k, v in local.secret_ids : k => v if v != "" },
+    local.ark_api_key_secret_id != "" ? { ARK_API_KEY = local.ark_api_key_secret_id } : {},
+  )
   min_instance_count     = var.min_instance_count
   max_instance_count     = var.max_instance_count
   allow_unauthenticated  = true
@@ -115,11 +130,18 @@ module "spark_job" {
     CLOUD_PROVIDER    = "gcp"
     DEPLOY_SCOPE      = "nonkube"
     SPARK_EXTRA_CONF  = "spark.fru.delta_root=gs://${local.delta_bucket}/delta"
-    DELTA_TABLE_PATH  = "gs://${local.delta_bucket}/delta/fru_sales"
+    DELTA_TABLE_PATH  = "gs://${local.delta_bucket}/delta/nonkube/fru_sales"
   }, local.cloud_sql_connection)
 
   secret_ids = local.secret_ids["PGPASSWORD"] != "" ? { PGPASSWORD = local.secret_ids["PGPASSWORD"] } : {}
   schedule   = var.spark_schedule_expression
+}
+
+# Cloud Run Spark job writes Delta under gs://.../delta/nonkube/ via the runtime SA.
+resource "google_storage_bucket_iam_member" "nonkube_spark_delta_write" {
+  bucket = local.delta_bucket
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:${data.google_project.current.number}-compute@developer.gserviceaccount.com"
 }
 
 module "frontend" {

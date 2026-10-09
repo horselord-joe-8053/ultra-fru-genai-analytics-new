@@ -32,6 +32,7 @@ Guidelines:
 - For quantitative questions (counts, sums, aggregations), use generate_sql then execute_sql
 - For qualitative questions (feedback, complaints, sentiment), use semantic_search
 - For complex questions requiring both, use multiple tools in sequence
+- For quantitative "how many / a lot / count" questions, prefer generate_sql + execute_sql (COUNT / ILIKE), not semantic_search alone
 - Always explain your reasoning and cite your sources
 - If a tool fails, try an alternative approach
 - Limit yourself to 5 tool calls maximum per query
@@ -43,8 +44,14 @@ CRITICAL: Feedback Rating vs Sentiment Category:
 - For "average rating" queries → use AVG(feedback_rating) on the INTEGER column
 - NEVER use feedback_rating with text comparisons like 'Negative' or 'Positive' - use feedback_sentiment_category instead
 
+CRITICAL: semantic_search INPUT contract:
+- Always set query_text to the specific topic phrase (e.g. "water leaks", "noisy compressor"), not only sentiment filters
+- filters (e.g. feedback_sentiment_category) narrow rows; they do NOT replace vector search text
+- Example INPUT: {{"query_text": "water leaks dispenser", "filters": {{"feedback_sentiment_category": ["Negative"]}}, "limit": 25}}
+
 CRITICAL: Tool Chaining Rules:
-- When using generate_sql → execute_sql:
+- Valid SQL from generate_sql is executed automatically by the system when possible; focus on correct PostgreSQL SELECT queries.
+- When using generate_sql → execute_sql manually in one planning step:
   1. Call generate_sql with your question
   2. The generate_sql tool returns: {{"success": true, "sql": "SELECT ..."}}
   3. Extract the "sql" value from generate_sql output
@@ -53,8 +60,13 @@ CRITICAL: Tool Chaining Rules:
 
 Database Schema:
 - Table: fru_sales_embeddings
-- Key columns: store_name (TEXT), price (NUMERIC) - use SUM(price) for sales totals, NOT sales_amount or sales
-- Other columns: id, customer_id, brand, fridge_model, capacity_liters, sales_date, store_address, customer_feedback, feedback_rating, feedback_sentiment_category
+- Key columns: price (NUMERIC) - use SUM(price) for sales totals, NOT sales_amount or sales
+- store_address (TEXT): US mailing format, comma-separated 3 parts: "<street>, <city>, <ST> <zip>"
+  - Example: "123 Broadway, New York, NY 10001"
+  - City (for city-level sales): TRIM(SPLIT_PART(store_address, ',', 2)) — more deterministic than store_name
+  - State abbreviation: TRIM(SPLIT_PART(TRIM(SPLIT_PART(store_address, ',', 3)), ' ', 1)) — e.g. NY, MO (index 2 is city, NOT state)
+- store_name (TEXT): display label (e.g. "Kansas City Store"); prefer parsed city/state from store_address for geography
+- Other columns: id, customer_id, brand, fridge_model, capacity_liters, sales_date, customer_feedback, feedback_rating, feedback_sentiment_category
 - IMPORTANT: 
   - feedback_rating is INTEGER (1-10) - human-reviewed numeric satisfaction rating. Use for quantitative queries (AVG, SUM, ranges, etc.)
   - feedback_sentiment_category is TEXT (values: 'Positive', 'Neutral', 'Negative') - human-reviewed sentiment category. Use for categorical filtering and sentiment analysis.
@@ -107,12 +119,25 @@ REMEMBER: Your job is to provide ACCURATE answers based on REAL data, not to be 
 """
 
 
+def _summarize_tool_result_for_planning(result: dict) -> str:
+    tool = result.get("tool", "?")
+    output = result.get("output") or {}
+    if not output.get("success"):
+        return f"{tool}: failed"
+    if tool == "semantic_search":
+        rc = output.get("row_count", 0)
+        if rc and rc > 0:
+            return f"{tool}: {rc} rows (do not call semantic_search again)"
+        return f"{tool}: 0 rows"
+    return result.get("summary") or "Completed"
+
+
 def get_planning_prompt(question: str, tools_info: list, previous_results: list = None) -> str:
     """Get prompt for agent planning phase."""
     context = ""
     if previous_results:
         context = "\n\nPrevious Results:\n" + "\n".join([
-            f"- {result['tool']}: {result.get('summary', 'Completed')}"
+            f"- {_summarize_tool_result_for_planning(result)}"
             for result in previous_results
         ])
     

@@ -68,6 +68,12 @@ override.tf.json
 
 # Node (frontend)
 core_app/frontend/node_modules/
+tests/e2e/node_modules/
+demos/playwright_e2e/node_modules/
+tests/e2e/test-results/
+tests/e2e/playwright-report/
+demos/playwright_e2e/test-results/
+demos/playwright_e2e/playwright-report/
 
 # GCP / credentials (sensitive)
 .cred_config/

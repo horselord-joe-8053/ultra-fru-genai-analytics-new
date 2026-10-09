@@ -26,6 +26,9 @@ spec:
       containers:
       - name: api
         image: {{ APP_IMAGE }}
+{% if cloud_provider == "local" %}
+        imagePullPolicy: Never
+{% endif %}
         ports:
         - containerPort: 5001
         livenessProbe:
@@ -102,6 +105,28 @@ spec:
           value: "{{ ALLOWED_ORIGINS }}"
         - name: OPENAI_EMBED_MODEL
           value: "{{ OPENAI_EMBED_MODEL }}"
+        - name: EMBEDDING_ACTIVE_PROFILE
+          value: "{{ EMBEDDING_ACTIVE_PROFILE | default('openai_1536') }}"
+        - name: DEFAULT_EMBEDDING_PROFILE
+          value: "{{ DEFAULT_EMBEDDING_PROFILE | default(EMBEDDING_ACTIVE_PROFILE | default('openai_1536')) }}"
+        - name: DEFAULT_CHAT_CHOICE
+          value: "{{ DEFAULT_CHAT_CHOICE | default('claude_haiku') }}"
+        - name: ALLOW_PER_REQUEST_MODEL_OVERRIDE
+          value: "{{ ALLOW_PER_REQUEST_MODEL_OVERRIDE | default('true') }}"
+        - name: LLM_INFERENCE_PROVIDER
+          value: "{{ LLM_INFERENCE_PROVIDER | default('claude') }}"
+        - name: ARK_BASE_URL
+          value: "{{ ARK_BASE_URL | default('https://ark.ap-southeast.bytepluses.com/api/v3') }}"
+        - name: ARK_EMBEDDING_MODEL_ID
+          value: "{{ ARK_EMBEDDING_MODEL_ID | default('') }}"
+        - name: ARK_CHAT_MODEL_ID
+          value: "{{ ARK_CHAT_MODEL_ID | default('') }}"
+        - name: ARK_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: app-credentials
+              key: ARK_API_KEY
+              optional: true
         - name: USE_AGENT_QUERY
           value: "true"
         - name: DEPLOY_SCOPE

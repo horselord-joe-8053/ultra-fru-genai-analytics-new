@@ -321,8 +321,8 @@ locals {
     [
       { name = "CLOUD_PROVIDER", value = "aws" },
       { name = "DEPLOY_SCOPE", value = "nonkube" },
-      { name = "SPARK_EXTRA_CONF", value = "spark.fru.delta_root=s3a://${var.delta_bucket}/delta" },
-      { name = "DELTA_TABLE_PATH", value = "s3a://${var.delta_bucket}/delta/fru_sales" }
+      { name = "SPARK_EXTRA_CONF", value = "spark.fru.delta_root=s3a://${var.delta_bucket}/delta/nonkube" },
+      { name = "DELTA_TABLE_PATH", value = "s3a://${var.delta_bucket}/delta/nonkube/fru_sales" }
     ],
     var.aurora_endpoint != "" ? [
       { name = "PGHOST", value = var.aurora_endpoint },

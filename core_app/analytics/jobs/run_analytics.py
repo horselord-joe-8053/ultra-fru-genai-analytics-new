@@ -104,6 +104,34 @@ def _read_raw_from_postgres():
         conn.close()
 
 
+def _is_concurrent_delta_error(exc: BaseException) -> bool:
+    msg = str(exc)
+    return "ConcurrentAppend" in msg or "DELTA_CONCURRENT_APPEND" in msg
+
+
+def _write_delta_overwrite_with_retry(df, path: str, max_attempts: int = 4, pause_sec: int = 30) -> None:
+    """Overwrite Delta table; retry on concurrent writes (dev: kube + nonkube share one path)."""
+    import time
+
+    last_err = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            df.write.format("delta").mode("overwrite").save(path)
+            return
+        except Exception as exc:
+            last_err = exc
+            if _is_concurrent_delta_error(exc) and attempt < max_attempts:
+                log_warning(
+                    f"Delta concurrent write (attempt {attempt}/{max_attempts}); "
+                    f"retrying in {pause_sec}s..."
+                )
+                time.sleep(pause_sec)
+                continue
+            raise
+    if last_err:
+        raise last_err
+
+
 def _ensure_fru_sales_exists(spark: SparkSession, delta_path: str) -> str:
     """Create/refresh fru_sales Delta table from fru_sales_raw (PostgreSQL)."""
     path = _to_spark_path(delta_path)
@@ -126,7 +154,7 @@ def _ensure_fru_sales_exists(spark: SparkSession, delta_path: str) -> str:
     df = spark.createDataFrame(rows)
     if "ID" in df.columns:
         df = df.withColumnRenamed("ID", "id")
-    df.write.format("delta").mode("overwrite").save(path)
+    _write_delta_overwrite_with_retry(df, path)
     log_success(f"Created fru_sales from fru_sales_raw ({len(rows)} rows) at {path}")
     return path
 
@@ -323,4 +351,13 @@ def main(delta_path: str = None, output_dir: str = None):
 if __name__ == "__main__":
     delta_path = sys.argv[1] if len(sys.argv) > 1 else None
     output_dir = sys.argv[2] if len(sys.argv) > 2 else None
-    main(delta_path, output_dir)
+    try:
+        main(delta_path, output_dir)
+    except Exception as exc:
+        try:
+            from save_to_db import record_run_attempt
+        except ImportError:
+            record_run_attempt = None
+        if record_run_attempt:
+            record_run_attempt(1, error=str(exc))
+        raise

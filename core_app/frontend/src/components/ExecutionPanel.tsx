@@ -1,15 +1,34 @@
+/**
+ * Execution log panel for MAIN tab: General Query, execution steps, performance stats.
+ * Section 2 renders when tool rows exist or an in-flight step is active (streaming UX).
+ */
 import React, { useEffect, useRef } from "react";
+
+export interface ModelContextInfo {
+  embedding_profile: string;
+  embedding_display: string;
+  chat_choice: string;
+  chat_display: string;
+}
 
 export interface ExecutionState {
   question: string | null;
   method: string | null;
+  modelContext: ModelContextInfo | null;
   toolCalls: Array<{
     iteration: number | null;
     tool: string;
     input: any;
     output: any;
     execution_time_ms: number;
+    status?: "running" | "complete";
   }>;
+  inProgressStep: {
+    iteration: number | null;
+    tool: string;
+    input: any;
+  } | null;
+  currentIteration: number | null;
   iterations: number | null;
   execution_time_ms: number | null;
   token_usage: {
@@ -36,7 +55,7 @@ const ExecutionPanel: React.FC<ExecutionPanelProps> = ({ state, onToggle, isVisi
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [state.toolCalls, state.iterations, state.execution_time_ms, state.token_usage]);
+  }, [state.toolCalls, state.inProgressStep, state.iterations, state.execution_time_ms, state.token_usage]);
 
   const formatValue = (value: any): string => {
     if (value === null || value === undefined) {
@@ -48,16 +67,72 @@ const ExecutionPanel: React.FC<ExecutionPanelProps> = ({ state, onToggle, isVisi
     return String(value);
   };
 
-  const getInputField = (input: any, tool: string): string => {
+  const SQL_PLACEHOLDER_MARKERS = [
+    "(the sql",
+    "the sql query",
+    "[the sql",
+    "[will use",
+    "<will use",
+    "from generate_sql",
+  ];
+
+  const isSqlPlaceholder = (s: string): boolean => {
+    const lower = s.trim().toLowerCase();
+    if (!lower) {
+      return true;
+    }
+    return SQL_PLACEHOLDER_MARKERS.some((marker) => lower.includes(marker));
+  };
+
+  const displayToolName = (tool: string): string => {
+    if (tool === "pseudo_tool#llm_plan") {
+      return "llm_plan";
+    }
+    if (tool === "pseudo_tool#llm_synthesize_answer") {
+      return "llm_synthesize_answer";
+    }
+    return tool;
+  };
+
+  const formatTokenUsage = (usage: any): string => {
+    if (!usage) {
+      return "(no token info from the LLM)";
+    }
+    const inputTokens = usage.input_tokens ?? usage.input ?? 0;
+    const outputTokens = usage.output_tokens ?? usage.output ?? 0;
+    const totalTokens = usage.total_tokens ?? usage.total ?? 0;
+    if (inputTokens > 0 || outputTokens > 0 || totalTokens > 0) {
+      return `${inputTokens} in, ${outputTokens} out, ${totalTokens} total`;
+    }
+    return "(no token info from the LLM)";
+  };
+
+  const getInputField = (input: any, tool: string, output?: any): string => {
     // Try to find the most relevant input field based on tool type
     if (tool === "generate_sql" || tool === "sql_generator") {
       return input?.query || input?.question || formatValue(input);
     }
     if (tool === "execute_sql") {
-      return input?.sql_query || input?.sql || formatValue(input);
+      const raw = input?.sql_query || input?.sql;
+      if (raw && !isSqlPlaceholder(String(raw))) {
+        return String(raw);
+      }
+      if (output?.sql) {
+        return String(output.sql);
+      }
+      return raw ? String(raw) : formatValue(input);
     }
     if (tool === "semantic_search") {
       const parts: string[] = [];
+      if (input?.query_text) {
+        parts.push(`query_text: ${input.query_text}`);
+      }
+      if (input?.filters && typeof input.filters === "object") {
+        parts.push(`filters: ${JSON.stringify(input.filters)}`);
+      }
+      if (input?.query_text_source) {
+        parts.push(`query_text_source: ${input.query_text_source}`);
+      }
       if (input?.feedback_rating_max !== undefined) {
         parts.push(`feedback_rating_max: ${input.feedback_rating_max}`);
       }
@@ -70,6 +145,46 @@ const ExecutionPanel: React.FC<ExecutionPanelProps> = ({ state, onToggle, isVisi
       return parts.length > 0 ? parts.join(", ") : formatValue(input);
     }
     return formatValue(input);
+  };
+
+  const renderSemanticTopPreview = (output: any) => {
+    const preview = output?.top_preview;
+    const matches = preview?.matches;
+    if (!Array.isArray(matches) || matches.length === 0) {
+      return null;
+    }
+    const queryText =
+      preview.query_text ||
+      output?.query_text ||
+      "search";
+    return (
+      <div className="mb-1 ml-1 pl-2 border-l border-gray-300 text-gray-700">
+        <div className="text-gray-500 mb-0.5">
+          output.top_matches for &quot;{queryText}&quot; (lower distance = closer):
+        </div>
+        {matches.map(
+          (m: {
+            rank: number;
+            id?: string;
+            distance: number | null;
+            store_name?: string;
+            feedback_snippet?: string;
+          }) => (
+            <div
+              key={`${m.rank}-${m.id ?? ""}`}
+              className="text-gray-800 truncate"
+              title={m.feedback_snippet}
+            >
+              #{m.rank}
+              {m.id ? ` ${m.id}` : ""}
+              {m.distance != null ? ` · d=${m.distance}` : " · d=?"}
+              {m.store_name ? ` · ${m.store_name}` : ""}
+              {m.feedback_snippet ? ` — "${m.feedback_snippet}"` : ""}
+            </div>
+          )
+        )}
+      </div>
+    );
   };
 
   return (
@@ -118,25 +233,68 @@ const ExecutionPanel: React.FC<ExecutionPanelProps> = ({ state, onToggle, isVisi
                 <span className="text-gray-500">method:</span> {state.method}
               </div>
             )}
+            {state.modelContext && (
+              <div className="text-gray-600 mb-1 text-[0.65rem] space-y-0.5">
+                <div>
+                  <span className="text-gray-500">Embedded Model:</span>{" "}
+                  {state.modelContext.embedding_display ||
+                    state.modelContext.embedding_profile}
+                </div>
+                <div>
+                  <span className="text-gray-500">Chat Model:</span>{" "}
+                  {state.modelContext.chat_display || state.modelContext.chat_choice}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
         {/* Part 2: Tool Calls */}
-        {state.toolCalls.length > 0 && (
+        {(state.toolCalls.length > 0 || state.inProgressStep || state.currentIteration) && (
           <div className="mb-4">
-            <div className="text-gray-600 font-semibold mb-2">=== 2. Tool Calls ===</div>
-            {state.toolCalls.map((toolCall, index) => (
+            <div className="text-gray-600 font-semibold mb-2">=== 2. Execution steps ===</div>
+            {state.currentIteration != null && state.toolCalls.length === 0 && state.inProgressStep && (
+              <div className="mb-2 text-gray-500">Iteration {state.currentIteration} started…</div>
+            )}
+            {state.toolCalls.map((toolCall, index) => {
+              const inputDisplay = getInputField(
+                toolCall.input,
+                toolCall.tool,
+                toolCall.output
+              );
+              const inputTitle =
+                toolCall.tool === "execute_sql" && toolCall.output?.sql
+                  ? String(toolCall.output.sql)
+                  : undefined;
+
+              return (
               <div key={index} className="mb-3 border-l-2 border-gray-300 pl-2">
                 <div className="text-gray-800 mb-1">
                   <span className="text-gray-500">iteration:</span> {toolCall.iteration !== null && toolCall.iteration !== undefined ? toolCall.iteration : "final"}
                 </div>
                 <div className="text-gray-800 mb-1">
-                  <span className="text-gray-500">tool:</span> {toolCall.tool}
+                  <span className="text-gray-500">tool:</span> {displayToolName(toolCall.tool)}
+                  {toolCall.status === "running" && (
+                    <span className="text-blue-600 ml-1">(running…)</span>
+                  )}
                 </div>
                 {toolCall.tool !== "pseudo_tool#llm_synthesize_answer" && (
-                  <div className="text-gray-800 mb-1">
-                    <span className="text-gray-500">input.{toolCall.tool === "generate_sql" ? "query" : toolCall.tool === "execute_sql" ? "sql_query" : "params"}:</span>{" "}
-                    {getInputField(toolCall.input, toolCall.tool)}
+                  <div className="text-gray-800 mb-1" title={inputTitle}>
+                    <span className="text-gray-500">input.
+                      {toolCall.tool === "generate_sql"
+                        ? "query"
+                        : toolCall.tool === "execute_sql"
+                          ? "sql_query"
+                          : toolCall.tool === "semantic_search"
+                            ? "query_text"
+                            : toolCall.tool === "pseudo_tool#llm_plan"
+                              ? "phase"
+                              : "params"}
+                      :
+                    </span>{" "}
+                    {toolCall.tool === "pseudo_tool#llm_plan" && toolCall.status === "running"
+                      ? "Planning (waiting for LLM…)"
+                      : inputDisplay}
                   </div>
                 )}
                 {toolCall.tool === "pseudo_tool#llm_synthesize_answer" && (
@@ -149,26 +307,36 @@ const ExecutionPanel: React.FC<ExecutionPanelProps> = ({ state, onToggle, isVisi
                     <span className="text-gray-500">output.summary:</span> {toolCall.output.summary}
                   </div>
                 )}
+                {toolCall.tool === "semantic_search" &&
+                  toolCall.status !== "running" &&
+                  renderSemanticTopPreview(toolCall.output)}
+                {toolCall.status !== "running" && (
+                <>
                 {toolCall.tool === "pseudo_tool#llm_synthesize_answer" && toolCall.output?.answer && (
                   <div className="text-gray-800 mb-1">
                     <span className="text-gray-500">output.answer:</span> {toolCall.output.answer.substring(0, 200)}{toolCall.output.answer.length > 200 ? "..." : ""}
                   </div>
                 )}
-                {toolCall.tool === "pseudo_tool#llm_synthesize_answer" && toolCall.output?.token_usage && (
-                  <div className="text-gray-800 mb-1">
-                    <span className="text-gray-500">output.token_usage:</span> {toolCall.output.token_usage.input_tokens || 0} input, {toolCall.output.token_usage.output_tokens || 0} output, {toolCall.output.token_usage.total_tokens || 0} total
-                  </div>
-                )}
+                <div className="text-gray-800 mb-1">
+                  <span className="text-gray-500">output.token_usage:</span>{" "}
+                  {formatTokenUsage(toolCall.output?.token_usage)}
+                </div>
                 {toolCall.output?.error && (
                   <div className="text-red-600 mb-1">
                     <span className="text-gray-500">output.error:</span> {toolCall.output.error}
                   </div>
                 )}
                 <div className="text-gray-800 mb-1">
-                  <span className="text-gray-500">execution_time_ms:</span> {toolCall.execution_time_ms.toFixed(2)}
+                  <span className="text-gray-500">execution_time_ms:</span>{" "}
+                  {toolCall.execution_time_ms != null
+                    ? toolCall.execution_time_ms.toFixed(2)
+                    : "—"}
                 </div>
+                </>
+                )}
               </div>
-            ))}
+            );
+            })}
           </div>
         )}
 
@@ -192,7 +360,7 @@ const ExecutionPanel: React.FC<ExecutionPanelProps> = ({ state, onToggle, isVisi
         {/* Part 4: Token Usage */}
         {state.token_usage && (
           <div className="mb-4">
-            <div className="text-gray-600 font-semibold mb-2">=== 4. Token Usage Stats ===</div>
+            <div className="text-gray-600 font-semibold mb-2">=== 4. Token Usage Stats (all LLM steps) ===</div>
             <div className="text-gray-800 mb-1">
               <span className="text-gray-500">token_usage.input_tokens:</span> {state.token_usage.input_tokens}
             </div>

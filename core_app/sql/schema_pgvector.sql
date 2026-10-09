@@ -30,12 +30,13 @@ CREATE TABLE IF NOT EXISTS fru_sales_embeddings (
     customer_feedback TEXT,
     feedback_rating INTEGER,
     feedback_sentiment_category TEXT,
-    embedding VECTOR(1536)
+    embedding_openai_1536 VECTOR(1536),
+    embedding_skylark_2048 VECTOR(2048)
 );
 
-CREATE INDEX IF NOT EXISTS fru_sales_embeddings_ivfflat
+CREATE INDEX IF NOT EXISTS fru_sales_embeddings_ivfflat_openai
 ON fru_sales_embeddings
-USING ivfflat (embedding vector_cosine_ops)
+USING ivfflat (embedding_openai_1536 vector_cosine_ops)
 WITH (lists = 100);
 
 CREATE INDEX IF NOT EXISTS fru_sales_embeddings_customer_id_idx 
@@ -62,6 +63,16 @@ ALTER TABLE batch_analytics ADD COLUMN IF NOT EXISTS deploy_scope TEXT;
 
 CREATE INDEX IF NOT EXISTS batch_analytics_created_at_idx
 ON batch_analytics(created_at DESC);
+
+-- Singleton: last Spark/scheduler attempt for /analytics run_status UI (local + cloud).
+CREATE TABLE IF NOT EXISTS analytics_run_status (
+    id SMALLINT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+    last_attempt_at TIMESTAMPTZ,
+    last_success_at TIMESTAMPTZ,
+    last_error TEXT,
+    last_exit_code INTEGER,
+    deploy_scope TEXT
+);
 
 CREATE INDEX IF NOT EXISTS fru_sales_embeddings_sentiment_category_idx 
 ON fru_sales_embeddings(feedback_sentiment_category);

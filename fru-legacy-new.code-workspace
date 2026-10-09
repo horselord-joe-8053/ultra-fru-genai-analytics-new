@@ -4,7 +4,7 @@
 			"path": "."
 		},
 		{
-			"path": "../fru-genai-analytics-legacy"
+			"path": "../jb_interviews"
 		}
 	],
 	"settings": {}

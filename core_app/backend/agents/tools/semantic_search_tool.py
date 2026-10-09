@@ -11,9 +11,55 @@ from psycopg2.extras import RealDictCursor
 from psycopg2 import Error as Psycopg2Error
 from openai import OpenAI
 
+from backend.env_utils.cloud_shared.embedding_factory import create_embedding_client
+from backend.env_utils.cloud_shared.embedding_profiles import (
+    get_active_pgvector_column,
+    get_active_profile_name,
+    get_profiles,
+    is_embedding_column,
+)
+from backend.utils.env_helpers import get_optional_int_env
+
 from .base_tool import BaseTool
 
 logger = logging.getLogger(__name__)
+
+# Exec log preview: show top N vector hits with distance + short feedback (not all rows).
+TOP_PREVIEW_COUNT = 5
+FEEDBACK_SNIPPET_MAX = 72
+DEFAULT_SEMANTIC_SEARCH_LIMIT = 25
+
+
+def default_semantic_search_limit() -> int:
+    """Rows fetched from pgvector (override via SEMANTIC_SEARCH_DEFAULT_LIMIT in .env)."""
+    return max(1, min(get_optional_int_env("SEMANTIC_SEARCH_DEFAULT_LIMIT", DEFAULT_SEMANTIC_SEARCH_LIMIT), 200))
+
+
+def _truncate_feedback_snippet(text: str, max_len: int = FEEDBACK_SNIPPET_MAX) -> str:
+    """Single-line snippet for execution log (full feedback still in agent rows)."""
+    collapsed = " ".join(str(text or "").split())
+    if len(collapsed) <= max_len:
+        return collapsed
+    return collapsed[: max_len - 1].rstrip() + "…"
+
+
+def _build_top_preview(rows: List[Dict[str, Any]], query_text: str) -> Dict[str, Any]:
+    """Compact proof-of-search for SSE / Execution Log (top matches only)."""
+    matches = []
+    for i, row in enumerate(rows[:TOP_PREVIEW_COUNT], start=1):
+        dist = row.get("distance")
+        matches.append(
+            {
+                "rank": i,
+                "id": (row.get("id") or "").strip(),
+                "distance": round(float(dist), 3) if dist is not None else None,
+                "store_name": (row.get("store_name") or "").strip(),
+                "feedback_snippet": _truncate_feedback_snippet(
+                    row.get("customer_feedback")
+                ),
+            }
+        )
+    return {"query_text": query_text, "matches": matches}
 
 
 class SemanticSearchTool(BaseTool):
@@ -30,7 +76,8 @@ class SemanticSearchTool(BaseTool):
         """
         # Build description dynamically from schema_info if available
         if schema_info and "columns" in schema_info:
-            excluded_columns = {"id", "embedding"}
+            excluded_columns = {c for c in schema_info["columns"] if is_embedding_column(c)}
+            excluded_columns.add("id")
             filterable_cols = [
                 col for col, col_type in schema_info["columns"].items()
                 if col not in excluded_columns and "TEXT" in str(col_type).upper()
@@ -47,16 +94,24 @@ class SemanticSearchTool(BaseTool):
         self.openai_client = openai_client
         self.schema_info = schema_info
     
-    def _embed_text(self, text: str) -> List[float]:
-        """Generate embedding for text using OpenAI."""
-        from core_app.backend.env_utils.cloud_shared.model_config import get_required_env
-        model = get_required_env("OPENAI_EMBED_MODEL", "OpenAI embedding model (e.g., text-embedding-3-small)")
+    def _embed_text(self, text: str, embedding_profile: str | None = None) -> List[float]:
+        """Generate embedding via active or request-scoped profile."""
         try:
-            response = self.openai_client.embeddings.create(
-                model=model,
-                input=text
+            profile = None
+            if embedding_profile:
+                profiles = get_profiles()
+                profile = profiles.get(embedding_profile)
+                if profile is None:
+                    raise ValueError(f"Unknown embedding_profile={embedding_profile!r}")
+            client = create_embedding_client(profile=profile, openai_client=self.openai_client)
+            col = profile.pgvector_column if profile else get_active_pgvector_column()
+            prof_name = profile.name if profile else get_active_profile_name()
+            logger.info(
+                "[SemanticSearchTool] Embedding profile=%s column=%s",
+                prof_name,
+                col,
             )
-            return response.data[0].embedding
+            return client.embed_texts([text])[0]
         except Exception as e:
             logger.error(f"Failed to generate embedding: {e}")
             raise ValueError(f"Embedding generation failed: {e}")
@@ -76,7 +131,7 @@ class SemanticSearchTool(BaseTool):
         query_text: str = None,
         question: str = None,
         query: str = None,
-        limit: int = 50,
+        limit: int | None = None,
         filters: Optional[Dict[str, List[str]]] = None,
         **kwargs
     ) -> Dict[str, Any]:
@@ -111,6 +166,9 @@ class SemanticSearchTool(BaseTool):
         logger.info(f"[SemanticSearchTool] ===== SEMANTIC SEARCH START =====")
         logger.info(f"[SemanticSearchTool] Query text: '{query_text}'")
         logger.info(f"[SemanticSearchTool] Limit: {limit}, Filters: {filters}")
+        embedding_profile = kwargs.get("embedding_profile")
+        if limit is None:
+            limit = default_semantic_search_limit()
         start_time = time.time()
         
         # Validate input
@@ -126,16 +184,10 @@ class SemanticSearchTool(BaseTool):
         try:
             # Generate embedding
             logger.info(f"[SemanticSearchTool] Generating embedding for query...")
-            embedding = self._embed_text(query_text)
+            embedding = self._embed_text(query_text, embedding_profile=embedding_profile)
             logger.info(f"[SemanticSearchTool] Embedding generated (dimension: {len(embedding)})")
             
-            # Build SQL with optional filters
-            base_sql = (
-                "SELECT id, brand, fridge_model, price, sales_date, store_name, "
-                "customer_feedback, feedback_rating, feedback_sentiment_category "
-                "FROM fru_sales_embeddings "
-            )
-            
+            # Build SQL with optional filters + pgvector distance (lower = closer match).
             where_clauses = []
             params = []
             
@@ -146,10 +198,9 @@ class SemanticSearchTool(BaseTool):
                 filterable_columns = set()
                 if self.schema_info and "columns" in self.schema_info:
                     excluded_columns = {
-                        "id",                # Primary key
-                        "embedding",         # Vector column (searched, not filtered)
-                        "customer_feedback"  # This is the text column being searched semantically, not filtered
+                        c for c in self.schema_info["columns"] if is_embedding_column(c)
                     }
+                    excluded_columns.update({"id", "customer_feedback"})
                     for col_name, col_type in self.schema_info["columns"].items():
                         if col_name not in excluded_columns and "TEXT" in str(col_type).upper():
                             filterable_columns.add(col_name)
@@ -168,18 +219,30 @@ class SemanticSearchTool(BaseTool):
                         placeholders = ",".join(["%s"] * len(filter_values))
                         where_clauses.append(f"{filter_key} IN ({placeholders})")
                         params.extend(filter_values)
-            
-            # Build complete SQL
+
+            embed_col = get_active_pgvector_column()
+            if embedding_profile:
+                prof = get_profiles().get(embedding_profile)
+                if prof:
+                    embed_col = prof.pgvector_column
+            distance_expr = f"({embed_col} <-> %s::vector)"
             if where_clauses:
-                sql = base_sql + "WHERE " + " AND ".join(where_clauses) + " "
+                sql = (
+                    "SELECT id, brand, fridge_model, price, sales_date, store_name, "
+                    "customer_feedback, feedback_rating, feedback_sentiment_category, "
+                    f"{distance_expr} AS distance "
+                    "FROM fru_sales_embeddings "
+                    "WHERE " + " AND ".join(where_clauses) + " "
+                )
             else:
-                sql = base_sql
-            
-            # Cast embedding parameter to vector type for pgvector operator
-            # Without ::vector cast, psycopg2 passes Python list as numeric[], causing:
-            # "operator does not exist: vector <-> numeric[]"
-            sql += "ORDER BY embedding <-> %s::vector LIMIT %s;"
-            params.extend([embedding, limit])
+                sql = (
+                    "SELECT id, brand, fridge_model, price, sales_date, store_name, "
+                    "customer_feedback, feedback_rating, feedback_sentiment_category, "
+                    f"{distance_expr} AS distance "
+                    "FROM fru_sales_embeddings "
+                )
+            sql += f"ORDER BY {distance_expr} LIMIT %s;"
+            params.extend([embedding, embedding, limit])
             
             logger.info(f"[SemanticSearchTool] SQL query: {sql[:200]}...")
             logger.info(f"[SemanticSearchTool] Executing semantic search...")
@@ -205,6 +268,7 @@ class SemanticSearchTool(BaseTool):
                     "success": True,
                     "rows": result_rows,
                     "row_count": len(result_rows),
+                    "top_preview": _build_top_preview(result_rows, query_text),
                     "execution_time_ms": execution_time
                 }
         

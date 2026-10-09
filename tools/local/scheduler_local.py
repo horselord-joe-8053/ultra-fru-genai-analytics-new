@@ -15,13 +15,19 @@ import subprocess
 import sys
 import time
 
+_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
+
+from tools.cloud_shared.analytics_run_status import record_run_attempt
 from tools.cloud_shared.analytics_schedule import get_required_analytics_scheduler_interval_seconds
 from tools.cloud_shared.env import load_dotenv, require
+from tools.local.scope_shared.local_deploy_config import (
+    get_compose_delta_volume_name,
+    get_compose_project,
+)
 
 load_dotenv()
-
-# Project root (parent of tools)
-_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 
 def _run_analytics_job() -> int:
@@ -31,7 +37,8 @@ def _run_analytics_job() -> int:
     pw = os.environ.get("PGPASSWORD", "")
     if not pw:
         return 1
-    compose_project = os.environ.get("COMPOSE_PROJECT", "fru_local")
+    compose_project = get_compose_project()
+    delta_volume = get_compose_delta_volume_name()
     delta_pkg = require("DELTA_LAKE_PACKAGE")
     storage_pkg = require("DELTA_STORAGE_PACKAGE")
     packages = f"{delta_pkg},{storage_pkg}"
@@ -45,7 +52,7 @@ def _run_analytics_job() -> int:
         "-e", f"PGPASSWORD={pw}",
         "-e", f"PGDATABASE={os.environ.get('PGDATABASE', 'fru_db')}",
         "-e", "DELTA_TABLE_PATH=file:///tmp/delta/fru_sales",
-        "-v", "fru_delta:/tmp/delta",
+        "-v", f"{delta_volume}:/tmp/delta",
         "fru-spark:local",
         "/opt/spark/bin/spark-submit",
         "--packages", packages,
@@ -53,7 +60,14 @@ def _run_analytics_job() -> int:
         "--conf", "spark.executor.extraJavaOptions=-Duser.home=/tmp",
         "/opt/fru/jobs/run_analytics.py",
     ]
-    r = subprocess.run(spark_cmd, cwd=_PROJECT_ROOT)
+    r = subprocess.run(spark_cmd, cwd=_PROJECT_ROOT, capture_output=True, text=True)
+    if r.returncode != 0:
+        tail = (r.stderr or r.stdout or "").strip()
+        if tail:
+            tail = tail[-500:]
+        record_run_attempt(r.returncode, error=tail or None)
+    else:
+        record_run_attempt(0)
     return r.returncode
 
 

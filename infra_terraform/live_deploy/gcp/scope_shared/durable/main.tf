@@ -81,6 +81,7 @@ output "db_password_secret_id"       { value = try(data.terraform_remote_state.d
 output "db_password_plain_secret_id" { value = try(data.terraform_remote_state.durable_with_cooloff.outputs.db_password_plain_secret_id, "") }
 output "google_ai_api_key_secret_id"  { value = try(data.terraform_remote_state.durable_with_cooloff.outputs.google_ai_api_key_secret_id, "") }
 output "claude_api_key_secret_id"    { value = try(data.terraform_remote_state.durable_with_cooloff.outputs.claude_api_key_secret_id, "") }
+output "ark_api_key_secret_id"       { value = try(data.terraform_remote_state.durable_with_cooloff.outputs.ark_api_key_secret_id, "") }
 
 # Cloud SQL outputs
 output "cloud_sql_connection_name" { value = module.cloud_sql.connection_name }

@@ -89,7 +89,7 @@ flowchart TB
 
     csv -->|"rows + CUSTOMER_FEEDBACK"| setup_db
     setup_db -->|"DB_CLUSTER_ARN, DB_SECRET_ARN"| rds_api
-    rds_api -->|"rows + embeddings (vector)"| fru_emb
+    rds_api -->|"scalars + dual-profile vectors"| fru_emb
 
     csv -.->|"rows + CUSTOMER_FEEDBACK"| psycopg
     psycopg -.->|"PGHOST, PGPASSWORD, rows + embeddings"| fru_emb
@@ -116,9 +116,9 @@ flowchart TB
 |---|------|------|--------------|
 | 1 | CSV → setup_database | Rows + `CUSTOMER_FEEDBACK` | Deploy runs `setup_database.py`; reads CSV from `core_app/data/raw/` |
 | 2 | setup_database → RDS API ETL | `DB_CLUSTER_ARN`, `DB_SECRET_ARN`, `CLOUD_REGION` | Subprocess invokes `load_openai_embeddings_to_pgvector_rds_api.py` with RDS Data API env vars |
-| 3 | RDS API ETL → fru_sales_embeddings | Rows + OpenAI embeddings (1536-dim vector) | Batched inserts via `execute_statement`; no direct TCP |
+| 3 | RDS API ETL → fru_sales_embeddings | Scalars + all credentialed profile columns (`embedding_openai_1536`, `embedding_skylark_2048`) | `load_openai_embeddings_to_pgvector_rds_api.py` → `embedding_sync_rds` |
 | 4 | CSV → psycopg2 ETL *(local branch)* | Rows + `CUSTOMER_FEEDBACK` | When DB is TCP-reachable (local dev, port-forward); uses `load_openai_embeddings_to_pgvector.py` |
-| 5 | psycopg2 ETL → fru_sales_embeddings | `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, rows + embeddings | Direct psycopg2 connection; same schema as RDS API path |
+| 5 | psycopg2 ETL → fru_sales_embeddings | `PGHOST`, scalars + dual-profile sync via `embedding_sync` | Direct psycopg2; same storage rules as RDS path |
 | 6 | S3 Delta → run_analytics | Parquet files (Delta table) | Spark reads `s3a://{bucket}/delta/fru_sales` |
 | 7 | run_analytics → save_to_db | `sales_by_brand`, `store_performance`, `feedback_analysis`, `top_models`, `price_stats`, `total_records`, `total_revenue` | Python dicts/lists; Spark driver calls `save_analytics_to_db()` |
 | 8 | save_to_db → batch_analytics | JSONB (one row per run) | `INSERT INTO batch_analytics` via psycopg2 |
@@ -154,9 +154,9 @@ Both write to the same `fru_sales_embeddings` table; only the connection method 
 | `load_openai_embeddings_to_pgvector.py` | **psycopg2** (PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE) | Local dev, or when direct TCP to DB is available |
 | `load_openai_embeddings_to_pgvector_rds_api.py` | **RDS Data API** (DB_CLUSTER_ARN, DB_SECRET_ARN, CLOUD_REGION) | AWS deploy: `setup_database.py` invokes this |
 
-**Why two?** RDS Data API works over HTTPS—no VPC or direct network to Aurora. Deploy runs from a laptop or CI; Aurora is in a private subnet. psycopg2 requires a reachable host:port. For AWS, we use the RDS API.
+**Why two?** RDS Data API works over HTTPS—no VPC or direct network to Aurora. Deploy runs from a laptop or CI; Aurora is in a private subnet. psycopg2 requires a reachable host:port (local dev, ECS API steady state). For AWS **bootstrap**, we use the RDS API; for **runtime CRUD**, ECS uses psycopg2 + `embedding_sync`.
 
-**Production path:** Only `load_openai_embeddings_to_pgvector_rds_api.py` is used by deploy. The psycopg2 version is for local/testing.
+**AWS bootstrap flow:** `setup_database.py` → `load_openai_embeddings_to_pgvector_rds_api.py` → scalars → `sync_all_embeddings_rds` (all credentialed YAML profiles; ignores `EMBEDDING_ACTIVE_PROFILE`).
 
 ---
 
@@ -166,9 +166,9 @@ Both write to the same `fru_sales_embeddings` table; only the connection method 
 
 1. `CREATE EXTENSION IF NOT EXISTS vector`
 2. Wait for readiness: `SELECT 1 FROM (SELECT '[1,2,3]'::vector) t;`
-3. Run `schema_pgvector.sql` (creates `fru_sales_embeddings` with `embedding VECTOR(1536)`)
-4. Verify: `SELECT EXISTS(... column_name='embedding')` — fail if missing
-5. Load data via RDS Data API ETL
+3. Run `schema_pgvector.sql` + migration `001_embedding_profiles.sql`
+4. Verify: `embedding_openai_1536` column exists
+5. Load data via RDS Data API ETL (scalars + `embedding_sync_rds` dual-profile sync)
 
 **Caveat:** The `embedding` column and pgvector extension must exist before `load_data`. If schema init fails partway, the ETL will fail with "column embedding does not exist". Always run full `setup_database` (or ensure pgvector + schema) before load.
 

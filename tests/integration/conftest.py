@@ -11,7 +11,12 @@ from pathlib import Path
 import pytest
 import requests
 
+from tools.cloud_shared.env import load_dotenv
+
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+
+# Unit tests/conftest.py sets placeholder PG/OpenAI env via setdefault; integration needs real .env.
+load_dotenv(str(REPO_ROOT / ".env"), override=True)
 
 
 def integration_base_url() -> str:
@@ -31,6 +36,7 @@ def stack_is_up(base_url: str, timeout_sec: float = 3.0) -> bool:
 
 
 def expected_total_rec_from_csv() -> int | None:
+    """Minimum seeded row count; live DB may exceed after CRUD."""
     csv_path = REPO_ROOT / "core_app" / "data" / "raw" / "fridge_sales_with_rating.csv"
     if not csv_path.is_file():
         return None

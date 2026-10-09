@@ -75,18 +75,30 @@ def main() -> int:
         base_url = os.environ.get("LOCAL_API_URL") or f"http://localhost:{ports['api_port']}"
         if not base_url.startswith("http"):
             base_url = f"http://{base_url}"
+        if scope == "kube":
+            from tools.local.kube.local_k8s import ensure_kube_api_reachable
+
+            try:
+                base_url = ensure_kube_api_reachable(ports["api_port"], wait_timeout_sec=120)
+            except RuntimeError as e:
+                logger.warning(str(e))
         frontend_url = os.environ.get("LOCAL_FRONTEND_URL") or f"http://localhost:{ports['frontend_port']}"
         frontend_url = frontend_url.rstrip("/")
 
-        logger.step(f"Full Verification Interface (local, scope={scope}, total_rec from CSV: {total_rec})")
+        logger.step(
+            f"Full Verification Interface (local, scope={scope}, "
+            f"min_total_rec from CSV: {total_rec})"
+        )
         logger.phase_start(1, 2, f"Endpoints (local, scope={scope})")
 
+        verify_profile = (os.environ.get("VERIFY_PROFILE") or "").strip() or None
         ok, rows = verify_api_endpoints(
             base_url=base_url,
             total_rec=total_rec,
             scope="local",
             provider="local",
             skip_frontend=True,
+            verify_profile=verify_profile,
         )
 
         # Frontend (local) for this scope

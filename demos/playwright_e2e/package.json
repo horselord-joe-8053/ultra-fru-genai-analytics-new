@@ -1,0 +1,9 @@
+{
+  "name": "fru-analytics-e2e-demos",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@floor35/playwright-e2e": "file:../../utils/playwright_e2e",
+    "@playwright/test": "1.54.2"
+  }
+}

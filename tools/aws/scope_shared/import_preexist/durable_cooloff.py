@@ -26,6 +26,7 @@ def run_import_durable_cooloff(stack_dir: str, env: str, region: str | None = No
         ("aws_secretsmanager_secret.openai_api_key", f"{prefix}/{env}/openai_api_key-{deploy_region}"),
         ("aws_secretsmanager_secret.db_password", f"{prefix}/{env}/db_password-{deploy_region}"),
         ("aws_secretsmanager_secret.db_password_plain", f"{prefix}/{env}/db_password_plain-{deploy_region}"),
+        ("aws_secretsmanager_secret.ark_api_key", f"{prefix}/{env}/ark_api_key-{deploy_region}"),
     ]
     failed += import_batch(stack_dir, secret_specs, region)
 

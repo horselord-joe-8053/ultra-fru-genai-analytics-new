@@ -18,6 +18,10 @@ from tools.cloud_shared.analytics_schedule import (
     get_required_analytics_scheduler_interval_seconds,
     seconds_to_cron,
 )
+from tools.cloud_shared.embedding_deploy_env import (
+    api_deployment_embedding_subs,
+    modelark_secret_entries,
+)
 from tools.cloud_shared.env import load_dotenv
 from tools.cloud_shared.k8s_j2_render import render
 
@@ -37,18 +41,10 @@ def _kubectl(args: list, input_text: str | None = None) -> None:
 
 
 def _ensure_local_k8s_context() -> None:
-    """Ensure kubectl context is Docker Desktop (or compatible local cluster)."""
-    out = subprocess.run(
-        ["kubectl", "config", "current-context"],
-        capture_output=True,
-        text=True,
-    )
-    ctx = (out.stdout or "").strip()
-    if not ctx:
-        print("Error: No kubectl context. Enable Kubernetes in Docker Desktop.", file=sys.stderr)
-        raise SystemExit(1)
-    if "docker" not in ctx.lower() and "kind" not in ctx.lower() and "minikube" not in ctx.lower():
-        print(f"Warning: Context '{ctx}' may not be local. Expected docker-desktop, kind-*, or minikube.")
+    """Ensure kubectl targets Docker Desktop (or kind/minikube) local cluster."""
+    from tools.local.kube.local_k8s import ensure_local_kubectl_context
+
+    ensure_local_kubectl_context()
 
 
 def main() -> None:
@@ -64,7 +60,11 @@ def main() -> None:
     pg_host = os.environ.get("PGHOST", "localhost")
     if pg_host == "localhost" or pg_host == "127.0.0.1":
         pg_host = "host.docker.internal"
-    pg_port = os.environ.get("PGPORT", "5432")
+    # Compose postgres is published on LOCAL_PG_HOST_PORT (default 15432), not 5432.
+    pg_port = (
+        (os.environ.get("PGPORT") or os.environ.get("LOCAL_PG_HOST_PORT") or "15432").strip()
+        or "15432"
+    )
     pg_database = os.environ.get("PGDATABASE", "fru_db")
     pg_user = os.environ.get("PGUSER", "postgres")
     pg_password = os.environ.get("PGPASSWORD", "")
@@ -99,7 +99,9 @@ data:
         openai_key = os.environ.get("OPENAI_API_KEY", "sk-placeholder")
         claude_key = os.environ.get("CLAUDE_API_KEY", openai_key)
         app_secret = {"OPENAI_API_KEY": openai_key, "CLAUDE_API_KEY": claude_key}
+        app_secret.update(modelark_secret_entries())
         app_b64 = {k: base64.b64encode(v.encode()).decode() for k, v in app_secret.items()}
+        secret_data_lines = "\n".join(f"  {k}: {v}" for k, v in app_b64.items())
         app_secret_yml = f"""apiVersion: v1
 kind: Secret
 metadata:
@@ -107,8 +109,7 @@ metadata:
   namespace: {K8S_NAMESPACE}
 type: Opaque
 data:
-  OPENAI_API_KEY: {app_b64['OPENAI_API_KEY']}
-  CLAUDE_API_KEY: {app_b64['CLAUDE_API_KEY']}
+{secret_data_lines}
 """
         _kubectl(["apply", "-f", "-"], input_text=app_secret_yml)
 
@@ -135,7 +136,7 @@ data:
         api_subs = {
             "cloud_provider": "local",
             "APP_IMAGE": args.app_image,
-            "APP_IMAGE_TAG": "local",
+            "APP_IMAGE_TAG": os.environ.get("APP_IMAGE_TAG", "local"),
             "CONTAINER_TYPE": "local-kube",
             "DEPLOY_SCOPE": "kube",
             "CLOUD_PROVIDER": "local",
@@ -153,7 +154,11 @@ data:
             "GOOGLE_MODEL": require_google_model(),
             "ENABLE_ANALYTICS_SCHEDULER": os.environ.get("ENABLE_ANALYTICS_SCHEDULER", "true"),
             "ANALYTICS_SCHEDULER_INTERVAL_SECONDS": str(interval_sec),
+            "OPENAI_EMBED_MODEL": os.environ.get(
+                "OPENAI_EMBED_MODEL", "text-embedding-3-small"
+            ),
         }
+        api_subs.update(api_deployment_embedding_subs())
         _kubectl(["apply", "-f", "-"], input_text=render("api-deployment", api_subs))
         # Restart API pods so they pick up CLAUDE_MODEL/GOOGLE_MODEL from updated deployment
         _kubectl(["rollout", "restart", "deployment/fru-api", "-n", K8S_NAMESPACE])
