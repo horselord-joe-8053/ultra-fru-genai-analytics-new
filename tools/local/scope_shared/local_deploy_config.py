@@ -69,3 +69,17 @@ def get_ports_for_scope(scope: str) -> LocalScopePorts:
 def get_memo_dir() -> str:
     """tools/local/memo directory for port/scope files."""
     return os.path.join(_project_root(), "tools", "local", "memo")
+
+
+def get_compose_project() -> str:
+    """Docker Compose project name (must match -p in compose invocations)."""
+    return (os.environ.get("COMPOSE_PROJECT") or "fru_local").strip() or "fru_local"
+
+
+def get_compose_delta_volume_name() -> str:
+    """Docker volume for local Delta Lake (API container + Spark docker runs).
+
+    compose file declares volume ``fru_delta``; Docker names it ``{project}_fru_delta``.
+    ``docker run -v fru_delta:...`` creates a *different* volume — use this helper so
+    Spark and the nonkube API container share the same Delta data."""
+    return f"{get_compose_project()}_fru_delta"

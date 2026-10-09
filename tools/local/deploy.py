@@ -37,7 +37,12 @@ from tools.cloud_shared.docker.build_context_hash import (
 )
 from tools.cloud_shared.docker.build_skip_decision import decide_build_skip
 from tools.cloud_shared.image_tag import generate_image_tag
-from tools.local.scope_shared.local_deploy_config import get_memo_dir, get_ports_for_scope
+from tools.local.scope_shared.local_deploy_config import (
+    get_compose_delta_volume_name,
+    get_compose_project,
+    get_memo_dir,
+    get_ports_for_scope,
+)
 
 load_dotenv()
 
@@ -149,10 +154,11 @@ def _run_bootstrap_spark() -> int:
     r = subprocess.run(
         [
             "docker", "run", "--rm", "--user", "root",
-            "--network", f"{COMPOSE_PROJECT}_default",
+            "--network", f"{get_compose_project()}_default",
             "-e", "PGHOST=postgres", "-e", "PGPORT=5432", "-e", "PGUSER=postgres",
             "-e", f"PGPASSWORD={pw}", "-e", f"PGDATABASE={os.environ.get('PGDATABASE', 'fru_db')}",
-            "-e", "DELTA_TABLE_PATH=file:///tmp/delta/fru_sales", "-v", "fru_delta:/tmp/delta",
+            "-e", "DELTA_TABLE_PATH=file:///tmp/delta/fru_sales",
+            "-v", f"{get_compose_delta_volume_name()}:/tmp/delta",
             "fru-spark:local",
             "/opt/spark/bin/spark-submit",
             "--packages", packages,

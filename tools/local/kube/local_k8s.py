@@ -204,11 +204,14 @@ def stop_kube_api_port_forward() -> None:
     pid_file.unlink(missing_ok=True)
 
 
-def start_kube_api_port_forward(local_port: int = 30080) -> None:
+def start_kube_api_port_forward(local_port: int = 30080, kubectl_context: str | None = None) -> None:
     """Background kubectl port-forward svc/fru-api-svc local_port:80 (NodePort fallback on Docker Desktop)."""
     stop_kube_api_port_forward()
+    ctx = kubectl_context or ensure_local_kubectl_context()
     cmd = [
         "kubectl",
+        "--context",
+        ctx,
         "port-forward",
         "-n",
         K8S_NAMESPACE,
@@ -245,6 +248,8 @@ def ensure_kube_api_reachable(api_port: int = 30080, wait_timeout_sec: int = 120
     Tries NodePort first; starts kubectl port-forward if connection refused (common on Docker Desktop Mac).
     Returns base URL (http://localhost:{port}).
     """
+    # Port-forward must target local Docker Desktop kube, not whatever kubectl context is active (e.g. AWS EKS).
+    ctx = ensure_local_kubectl_context()
     base = f"http://localhost:{api_port}"
     deadline = time.time() + wait_timeout_sec
     while time.time() < deadline:
@@ -255,7 +260,7 @@ def ensure_kube_api_reachable(api_port: int = 30080, wait_timeout_sec: int = 120
     logger.warning(
         f"NodePort http://localhost:{api_port}/health not reachable; starting kubectl port-forward..."
     )
-    start_kube_api_port_forward(api_port)
+    start_kube_api_port_forward(api_port, kubectl_context=ctx)
     deadline = time.time() + wait_timeout_sec
     while time.time() < deadline:
         if _health_ok(base):
@@ -275,8 +280,8 @@ def ensure_delta_host_path() -> None:
     if check.returncode != 0:
         return
     for cmd in (
-        ["docker", "exec", "desktop-control-plane", "mkdir", "-p", "/tmp/fru-delta"],
-        ["docker", "exec", "desktop-control-plane", "chmod", "777", "/tmp/fru-delta"],
+        ["docker", "exec", "desktop-control-plane", "mkdir", "-p", "/tmp/fru-delta/fru_sales"],
+        ["docker", "exec", "desktop-control-plane", "chmod", "-R", "777", "/tmp/fru-delta"],
     ):
         subprocess.run(cmd, capture_output=True, timeout=30)
 

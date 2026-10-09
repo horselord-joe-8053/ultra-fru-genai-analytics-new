@@ -10,6 +10,7 @@ import sys
 from tools.cloud_shared.analytics_schedule import get_required_analytics_scheduler_interval_seconds
 from tools.cloud_shared.env import load_dotenv, require
 from tools.cloud_shared.logging import logger
+from tools.local.scope_shared.local_deploy_config import get_compose_delta_volume_name, get_compose_project
 
 load_dotenv()
 
@@ -64,14 +65,14 @@ def run_deploy_nonkube(skip_spark: bool = False) -> int:
         spark_cmd = [
             "docker", "run", "--rm",
             "--user", "root",
-            "--network", f"{COMPOSE_PROJECT}_default",
+            "--network", f"{get_compose_project()}_default",
             "-e", "PGHOST=postgres",
             "-e", "PGPORT=5432",
             "-e", "PGUSER=postgres",
             "-e", f"PGPASSWORD={pw}",
             "-e", f"PGDATABASE={os.environ.get('PGDATABASE', 'fru_db')}",
             "-e", "DELTA_TABLE_PATH=file:///tmp/delta/fru_sales",
-            "-v", "fru_delta:/tmp/delta",
+            "-v", f"{get_compose_delta_volume_name()}:/tmp/delta",
             "fru-spark:local",
             "/opt/spark/bin/spark-submit",
             "--packages", packages,

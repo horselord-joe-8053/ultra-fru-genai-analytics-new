@@ -60,7 +60,11 @@ def main() -> None:
     pg_host = os.environ.get("PGHOST", "localhost")
     if pg_host == "localhost" or pg_host == "127.0.0.1":
         pg_host = "host.docker.internal"
-    pg_port = os.environ.get("PGPORT", "5432")
+    # Compose postgres is published on LOCAL_PG_HOST_PORT (default 15432), not 5432.
+    pg_port = (
+        (os.environ.get("PGPORT") or os.environ.get("LOCAL_PG_HOST_PORT") or "15432").strip()
+        or "15432"
+    )
     pg_database = os.environ.get("PGDATABASE", "fru_db")
     pg_user = os.environ.get("PGUSER", "postgres")
     pg_password = os.environ.get("PGPASSWORD", "")

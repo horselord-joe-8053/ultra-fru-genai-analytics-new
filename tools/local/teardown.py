@@ -92,6 +92,10 @@ def main() -> int:
             logger.error("Compose down failed")
             return 1
         subprocess.run(["docker", "volume", "rm", "fru_delta"], capture_output=True)
+        subprocess.run(
+            ["docker", "volume", "rm", f"{COMPOSE_PROJECT}_fru_delta"],
+            capture_output=True,
+        )
         # Remove local Docker images only when --incl-dura or --incl-dura-all (same condition as AWS/GCP)
         if args.incl_dura or args.incl_dura_all:
             for img in LOCAL_IMAGES + (POSTGRES_IMAGE,):
